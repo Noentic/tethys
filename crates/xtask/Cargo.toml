@@ -1,0 +1,17 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+specta.workspace = true
+specta-serde.workspace = true
+specta-typescript.workspace = true
+tethys-schema = { path = "../tethys-schema" }

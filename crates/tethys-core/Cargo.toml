@@ -1,0 +1,12 @@
+[package]
+name = "tethys-core"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+tracing.workspace = true
+tethys-api = { path = "../tethys-api" }
+tethys-schema = { path = "../tethys-schema" }

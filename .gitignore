@@ -1,0 +1,39 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+apps/*/dist/
+packages/*/dist/
+
+# Turborepo
+.turbo/
+
+# Tauri
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/target/
+*.AppImage
+*.dmg
+*.msi
+*.exe
+
+# Vite
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Agents
+.agents/
+skills-lock.json

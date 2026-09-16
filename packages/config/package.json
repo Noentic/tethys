@@ -1,0 +1,7 @@
+{
+  "name": "@tethys/config-ts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": ["tsconfig-base.json"]
+}

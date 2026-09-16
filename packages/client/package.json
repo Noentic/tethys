@@ -1,0 +1,25 @@
+{
+  "name": "@tethys/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": ["src"],
+  "scripts": {
+    "lint": "biome check ./src",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"@tethys/client: no tests yet\""
+  },
+  "dependencies": {
+    "@tethys/bindings": "workspace:*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.1.2",
+    "@tauri-apps/api": "^2.4.0",
+    "typescript": "^5.6.3"
+  },
+  "peerDependencies": {
+    "@tauri-apps/api": "^2"
+  }
+}

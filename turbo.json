@@ -1,0 +1,35 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "codegen": {
+      "inputs": [
+        "$TURBO_ROOT$/crates/tethys-schema/**",
+        "$TURBO_ROOT$/crates/tethys-api/**",
+        "$TURBO_ROOT$/crates/xtask/**"
+      ],
+      "outputs": ["src/generated/**"]
+    },
+    "build": {
+      "dependsOn": ["^build", "codegen"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build", "codegen"]
+    },
+    "lint": {},
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "dev": {
+      "dependsOn": ["codegen"],
+      "cache": false,
+      "persistent": true
+    },
+    "//#cargo:check": {
+      "cache": false
+    },
+    "//#cargo:test": {
+      "cache": false
+    }
+  }
+}
