@@ -1,5 +1,8 @@
 # AGENTS.md
 
+## Design System
+ - Reference AGENTS.md for design system & tokens.
+
 ## Coding Standards
 - **Deep Modules**: Expose minimal interfaces over deep logic; test against the public interface, not internal details.
 - **Pure Data Flow**: Pass dependencies explicitly; return pure results instead of producing uncontrolled side effects.
@@ -10,7 +13,7 @@
 - **Deterministic Tests**: Keep standard tests strictly functional, isolated, and sub-second (< 1s execution).
 
 ## Anti-Patterns
-- 🚫 **Heavy Benchmarks in Tests**: Never generate thousands of files/links in `cargo test` (causes `EMLINK`, disk wear, and slow CI); keep benchmarks in dedicated `benches/`.
-- 🚫 **Platform-Blind Assertions**: Never assume LF endings on Windows checkouts (normalize with `.trim_end()`); never assume instant process reaping on Unix/macOS (poll with timeout).
-- 🚫 **Implicit Concurrency Dependencies**: Never rely on execution order in Turborepo without explicit `dependsOn` (e.g. `lint` depending on `codegen`).
-- 🚫 **Missing Platform Assets**: Never omit required multi-platform icons in `tauri.conf.json` (causes startup panic).
+-  **Heavy Benchmarks in Tests**: Never generate thousands of files/links in `cargo test` (causes `EMLINK`, disk wear, and slow CI); keep benchmarks in dedicated `benches/`.
+-  **Platform-Blind Assertions**: Never assume LF endings on Windows checkouts (normalize with `.trim_end()`); never assume instant process reaping on Unix/macOS (poll with timeout).
+-  **Implicit Concurrency Dependencies**: Never rely on execution order in Turborepo without explicit `dependsOn` (e.g. `lint` depending on `codegen`).
+-  **Missing Platform Assets**: Never omit required multi-platform icons in `tauri.conf.json` (causes startup panic).
