@@ -4,6 +4,13 @@ use std::process::Command;
 use std::time::Instant;
 use tethys_core::git::GitEngine;
 
+struct AutoCleanDir(std::path::PathBuf);
+impl Drop for AutoCleanDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
 #[test]
 fn test_worktree_checkpoint_snapshot_benchmark_100k_files() {
     let tmp_repo = std::env::temp_dir().join(format!("tethys_git_bench_{}", std::process::id()));
@@ -11,6 +18,7 @@ fn test_worktree_checkpoint_snapshot_benchmark_100k_files() {
         let _ = fs::remove_dir_all(&tmp_repo);
     }
     fs::create_dir_all(&tmp_repo).expect("create temp repo dir");
+    let _cleaner = AutoCleanDir(tmp_repo.clone());
 
     // 1. Git init
     assert!(Command::new("git")

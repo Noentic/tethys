@@ -2,12 +2,22 @@ use std::fs;
 use std::time::Instant;
 use tethys_core::storage::EventStore;
 
+struct AutoCleanDb(std::path::PathBuf);
+impl Drop for AutoCleanDb {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+        let _ = fs::remove_file(self.0.with_extension("db-wal"));
+        let _ = fs::remove_file(self.0.with_extension("db-shm"));
+    }
+}
+
 #[test]
 fn test_sqlite_wal_event_log_throughput_and_replay() {
     let tmp_db = std::env::temp_dir().join(format!("tethys_bench_{}.db", std::process::id()));
     if tmp_db.exists() {
         let _ = fs::remove_file(&tmp_db);
     }
+    let _cleaner = AutoCleanDb(tmp_db.clone());
 
     let mut store = EventStore::open(&tmp_db).expect("open sqlite event store");
     let thread_id = "thread_bench_store_01";
