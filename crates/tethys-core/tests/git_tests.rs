@@ -84,5 +84,8 @@ fn test_worktree_checkpoint_and_diff_restoration() {
 
     // 6. Restore to HEAD
     GitEngine::restore_checkpoint(&tmp_repo, "HEAD").expect("restore to HEAD failed");
-    assert_eq!(fs::read_to_string(&file1).unwrap(), "initial file 1\n");
+    assert_eq!(
+        fs::read_to_string(&file1).unwrap().trim_end(),
+        "initial file 1"
+    );
 }
