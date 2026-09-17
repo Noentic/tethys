@@ -1,7 +1,10 @@
 # AGENTS.md
 
 ## Design System
- - Reference AGENTS.md for design system & tokens.
+- Reference AGENTS.md for design system & tokens.
+
+## Context & Documentation
+- Invoke the find-docs skill for up-to-date documentation on any library or module.
 
 ## Coding Standards
 - Use **behavioral naming** for files, functions, classes, variables, and tests — name things after what they *do* or *represent*, not the milestone, phase, sprint, or ticket they came from. If a name references a temporary project stage, rename it before committing.
