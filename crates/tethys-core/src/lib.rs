@@ -1,22 +1,35 @@
-//! Orchestrator stub (domain logic lives here, behind `tethys-api`).
-//!
-//! Module: `tethys-core` — deep module in progress. S0.0 exposes only
-//! `host.info` / `host.health`; Phase 1 grows the thread state machine,
-//! event log, and ConnectionStore behind the same `TethysApi` seam.
+//! Orchestrator and domain core (implements `tethys-api`).
 
+pub mod acp;
+pub mod git;
+pub mod projector;
+pub mod search;
+pub mod storage;
+pub mod supervisor;
+pub mod synthetic;
+
+use parking_lot::RwLock;
+use search::WorktreeSearchIndex;
+use std::sync::Arc;
 use tethys_api::{ApiError, TethysApi};
-use tethys_schema::{HealthStatus, HostInfo};
+use tethys_schema::{DiffHunk, HealthStatus, HostInfo, SearchItem};
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Core {
     version: String,
+    search_index: Arc<RwLock<Option<WorktreeSearchIndex>>>,
 }
 
 impl Core {
     pub fn new(version: impl Into<String>) -> Self {
         Self {
             version: version.into(),
+            search_index: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub fn set_search_index(&self, index: WorktreeSearchIndex) {
+        *self.search_index.write() = Some(index);
     }
 }
 
@@ -33,5 +46,20 @@ impl TethysApi for Core {
             ok: true,
             core_version: self.version.clone(),
         })
+    }
+
+    async fn search_files(&self, query: String, limit: usize) -> Result<Vec<SearchItem>, ApiError> {
+        let guard = self.search_index.read();
+        let index = guard
+            .as_ref()
+            .ok_or_else(|| ApiError::Internal("Search index not initialized".to_string()))?;
+
+        index
+            .query(&query, limit)
+            .map_err(ApiError::Internal)
+    }
+
+    async fn generate_synthetic_diff(&self, line_count: usize) -> Result<Vec<DiffHunk>, ApiError> {
+        Ok(synthetic::generate_synthetic_diff(line_count))
     }
 }

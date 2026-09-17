@@ -7,6 +7,14 @@ license.workspace = true
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
+tokio.workspace = true
+parking_lot = "0.12"
+libc = "0.2"
 tethys-api = { path = "../tethys-api" }
 tethys-schema = { path = "../tethys-schema" }
+fff-search = "0.10.7-nightly.f3647b7"
+agent-client-protocol = "2.1.0"
+toml_edit = "0.25"
+rusqlite = { version = "0.40", features = ["bundled"] }

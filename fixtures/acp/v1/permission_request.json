@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session/permission",
+  "params": {
+    "sessionId": "s_v1_01",
+    "id": "perm_v1_42",
+    "title": "Execute Bash Command",
+    "description": "Agent requests permission to run cargo check",
+    "command": "cargo check"
+  }
+}

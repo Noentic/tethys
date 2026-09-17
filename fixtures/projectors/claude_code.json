@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": ["read", "write"]
+  },
+  "mcpServers": {
+    "existing_server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    }
+  }
+}

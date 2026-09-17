@@ -1,0 +1,11 @@
+# Codex CLI Configuration File
+# Managed by developer
+
+model = "gpt-4o"
+temperature = 0.2
+
+# Pre-existing local database MCP server
+[mcp_servers.postgres]
+type = "stdio"
+command = "postgres-mcp"
+args = ["--db", "local_dev"]
