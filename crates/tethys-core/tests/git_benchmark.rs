@@ -1,5 +1,4 @@
-use std::fs::{self, File};
-use std::io::Write;
+use std::fs;
 use std::process::Command;
 use std::time::Instant;
 use tethys_core::git::GitEngine;
@@ -41,21 +40,23 @@ fn test_worktree_checkpoint_snapshot_benchmark_100k_files() {
         .success());
 
     // 2. Generate 100k files
-    let seed_path = tmp_repo.join("seed.txt");
-    {
-        let mut f = File::create(&seed_path).expect("create seed");
-        writeln!(f, "initial version").expect("write seed");
-    }
-
+    // Use batched seeds (max 500 links each) to prevent hitting filesystem link limits
+    // (NTFS max is 1024, ext4 max is 65000).
     let t_gen = Instant::now();
     let num_dirs = 50;
     let files_per_dir = 2000;
     for d in 0..num_dirs {
         let subdir = tmp_repo.join(format!("pkg_{d:02}"));
         fs::create_dir_all(&subdir).expect("create subdir");
+        let mut batch_seed = None;
         for f in 0..files_per_dir {
             let target = subdir.join(format!("file_{f:04}.txt"));
-            fs::hard_link(&seed_path, target).expect("hardlink");
+            if f % 500 == 0 {
+                fs::write(&target, "initial version\n").expect("write seed");
+                batch_seed = Some(target);
+            } else if let Some(ref seed) = batch_seed {
+                fs::hard_link(seed, target).expect("hardlink");
+            }
         }
     }
     println!("Generated 100k files in {:.2?}", t_gen.elapsed());
