@@ -88,8 +88,8 @@ pub async fn run_stream_benchmark(
 
     Ok(BenchmarkResult {
         total_messages: config.total_messages,
-        elapsed_ms: Some(elapsed_ms),
-        messages_per_sec: Some(msgs_per_sec),
-        p95_latency_ms: Some(elapsed_ms / (config.total_messages as f64).max(1.0)),
+        elapsed_ms,
+        messages_per_sec: msgs_per_sec,
+        p95_latency_ms: elapsed_ms / (config.total_messages as f64).max(1.0),
     })
 }
