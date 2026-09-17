@@ -1,6 +1,6 @@
 use std::process::Command;
 use std::time::Duration;
-use tethys_core::supervisor::{StderrRingBuffer, SupervisedChild};
+use tethys_supervisor::{StderrRingBuffer, SupervisedChild};
 
 #[test]
 fn test_stderr_ring_buffer_bounds() {

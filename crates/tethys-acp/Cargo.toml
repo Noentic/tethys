@@ -1,0 +1,12 @@
+[package]
+name = "tethys-acp"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-client-protocol = "2.1.0"
+serde.workspace = true
+serde_json.workspace = true
+parking_lot = "0.12"

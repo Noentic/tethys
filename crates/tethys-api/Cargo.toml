@@ -9,3 +9,6 @@ license.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tethys-schema = { path = "../tethys-schema" }
+
+[dev-dependencies]
+tokio.workspace = true

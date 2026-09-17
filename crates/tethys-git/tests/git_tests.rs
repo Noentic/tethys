@@ -1,6 +1,6 @@
 use std::fs;
 use std::process::Command;
-use tethys_core::git::GitEngine;
+use tethys_git::GitEngine;
 
 struct AutoCleanDir(std::path::PathBuf);
 impl Drop for AutoCleanDir {

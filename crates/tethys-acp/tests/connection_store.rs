@@ -1,5 +1,5 @@
 use std::time::Duration;
-use tethys_core::acp::{ConnectionStatus, ConnectionStore};
+use tethys_acp::{ConnectionStatus, ConnectionStore};
 
 #[test]
 fn test_connection_store_leases_and_two_phase_reaping() {

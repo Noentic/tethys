@@ -1,18 +1,12 @@
 //! Orchestrator and domain core (implements `tethys-api`).
 
-pub mod acp;
-pub mod git;
-pub mod projector;
-pub mod search;
-pub mod storage;
-pub mod supervisor;
 pub mod synthetic;
 
 use parking_lot::RwLock;
-use search::WorktreeSearchIndex;
 use std::sync::Arc;
 use tethys_api::{ApiError, TethysApi};
 use tethys_schema::{DiffHunk, HealthStatus, HostInfo, SearchItem};
+use tethys_search::WorktreeSearchIndex;
 
 #[derive(Default)]
 pub struct Core {

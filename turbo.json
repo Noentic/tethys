@@ -3,9 +3,7 @@
   "tasks": {
     "codegen": {
       "inputs": [
-        "$TURBO_ROOT$/crates/tethys-schema/**",
-        "$TURBO_ROOT$/crates/tethys-api/**",
-        "$TURBO_ROOT$/crates/xtask/**"
+        "$TURBO_ROOT$/crates/**"
       ],
       "outputs": ["src/generated/**"]
     },

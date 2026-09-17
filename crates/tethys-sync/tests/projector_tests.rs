@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
-use tethys_core::projector::{
+use tethys_sync::{
     ClaudeCodeProjector, CodexProjector, McpServerConfig, OpenCodeProjector, Projector,
 };
 

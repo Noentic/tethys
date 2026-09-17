@@ -4417,29 +4417,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "tethys-acp"
+version = "0.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "parking_lot",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "tethys-agent-servers"
+version = "0.0.0"
+dependencies = [
+ "tethys-schema",
+]
+
+[[package]]
 name = "tethys-api"
 version = "0.0.0"
 dependencies = [
  "serde",
  "tethys-schema",
  "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
 name = "tethys-core"
 version = "0.0.0"
 dependencies = [
- "agent-client-protocol",
- "fff-search",
- "libc",
  "parking_lot",
- "rusqlite",
  "serde",
  "serde_json",
+ "tethys-acp",
+ "tethys-agent-servers",
  "tethys-api",
+ "tethys-git",
  "tethys-schema",
+ "tethys-search",
+ "tethys-store",
+ "tethys-supervisor",
+ "tethys-sync",
+ "tethys-thread",
  "tokio",
- "toml_edit 0.25.15+spec-1.1.0",
  "tracing",
 ]
 
@@ -4461,11 +4482,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "tethys-git"
+version = "0.0.0"
+
+[[package]]
 name = "tethys-schema"
 version = "0.0.0"
 dependencies = [
  "serde",
  "specta",
+]
+
+[[package]]
+name = "tethys-search"
+version = "0.0.0"
+dependencies = [
+ "fff-search",
+ "tethys-schema",
+]
+
+[[package]]
+name = "tethys-store"
+version = "0.0.0"
+dependencies = [
+ "rusqlite",
+]
+
+[[package]]
+name = "tethys-supervisor"
+version = "0.0.0"
+dependencies = [
+ "libc",
+ "parking_lot",
+]
+
+[[package]]
+name = "tethys-sync"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "toml_edit 0.25.15+spec-1.1.0",
+]
+
+[[package]]
+name = "tethys-thread"
+version = "0.0.0"
+dependencies = [
+ "tethys-schema",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 use std::fs;
-use tethys_core::search::WorktreeSearchIndex;
+use tethys_search::WorktreeSearchIndex;
 
 struct AutoCleanDir(std::path::PathBuf);
 impl Drop for AutoCleanDir {

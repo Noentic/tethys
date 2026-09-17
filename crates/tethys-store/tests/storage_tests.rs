@@ -1,5 +1,5 @@
 use std::fs;
-use tethys_core::storage::EventStore;
+use tethys_store::EventStore;
 
 struct AutoCleanDb(std::path::PathBuf);
 impl Drop for AutoCleanDb {

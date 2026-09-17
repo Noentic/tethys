@@ -1,7 +1,7 @@
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
-use tethys_core::acp::{
+use tethys_acp::{
     AcpAdapter, AcpProtocolVersion, PermissionOutcome, Role, SessionState, StopReason,
     ToolCallStatus, TurnEventBody,
 };

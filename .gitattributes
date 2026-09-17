@@ -27,3 +27,6 @@
 *.db binary
 *.db-wal binary
 *.db-shm binary
+
+# Generated files
+packages/bindings/src/generated/bindings.ts linguist-generated merge=ours

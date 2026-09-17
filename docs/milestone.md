@@ -128,11 +128,11 @@ flowchart LR
     M14 --> M15["M1.15 hardening + dogfooding"]
 ```
 
-#### Wave 0 — contract freeze (serial, 1 worktree)
+#### Wave 0 — contract freeze (serial, 1 worktree) (COMPLETED)
 
-| Chunk | Scope | Owns | Requirements | Exit criteria |
-|---|---|---|---|---|
-| **M1.0** Foundation | Split Phase‑0 `tethys-core` spike modules into the domain crates of §3 (`tethys-thread`, `tethys-acp`, `tethys-agent-servers`, `tethys-supervisor`, `tethys-git`, `tethys-sync`, `tethys-search`, `tethys-store`); declare all §12.1 namespaces in `tethys-api` with typed stubs; scaffold empty TS packages (`state`, `ui`, `features`, `composer`, `diff`, `markdown`, `terminal`); wire `codegen`; per‑crate CI jobs | `Cargo.toml`, all `crates/*` skeletons, `packages/*` skeletons, `turbo.json`, CI | — | `cargo test --workspace` green; `pnpm codegen && pnpm typecheck` green; every §12.1 method callable from the webview and returning `UNIMPLEMENTED`; Phase‑0 spike tests still pass in their new crates |
+| Chunk | Scope | Owns | Requirements | Exit criteria | Status |
+|---|---|---|---|---|---|
+| **M1.0** Foundation | Split Phase‑0 `tethys-core` spike modules into the domain crates of §3 (`tethys-thread`, `tethys-acp`, `tethys-agent-servers`, `tethys-supervisor`, `tethys-git`, `tethys-sync`, `tethys-search`, `tethys-store`); declare all §12.1 namespaces in `tethys-api` with typed stubs; scaffold empty TS packages (`state`, `ui`, `features`, `composer`, `diff`, `markdown`, `terminal`); wire `codegen`; per‑crate CI jobs | `Cargo.toml`, all `crates/*` skeletons, `packages/*` skeletons, `turbo.json`, CI | — | `cargo test --workspace` green; `pnpm codegen && pnpm typecheck` green; every §12.1 method callable from the webview and returning `UNIMPLEMENTED`; Phase‑0 spike tests still pass in their new crates | **Done** (17 September 2026) |
 
 #### Wave 1 — domain engines (6 parallel worktrees)
 

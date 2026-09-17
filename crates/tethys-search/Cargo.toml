@@ -1,0 +1,10 @@
+[package]
+name = "tethys-search"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+fff-search = "0.10.7-nightly.f3647b7"
+tethys-schema = { path = "../tethys-schema" }
