@@ -658,19 +658,19 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 
 | ID | Decision | Options | Status / needed by |
 |---|---|---|---|
-| AD‑1 | Node sidecar trigger | Never · documented trigger (proposed) | Phase 0 |
+| AD‑1 | Node sidecar trigger | Never · **documented trigger** | **Decided** (Spike S0.8) |
 | AD‑2 | Managed runtime for npm/Python adapters | Detect only (MVP) · optional managed Node/uv | V1 |
 | AD‑3 | UI framework | **React 19 + TanStack** | **Decided** |
-| AD‑4 | Process model | Per thread · pooled per profile with leases (Zed‑style) | Phase 0 |
-| AD‑5 | Git read library | gix (proposed) · git2 · CLI only | Phase 0 |
+| AD‑4 | Process model | Per thread · **pooled per profile with leases (Zed‑style)** | **Decided** (Spike S0.2b) |
+| AD‑5 | Git read library | **gix for reads + CLI mutations** · git2 · CLI only | **Decided** (Spike S0.4) |
 | AD‑6 | HTTP MCP servers for agents without HTTP support | Skip with warning · local stdio bridge | V1 |
 | AD‑7 | Remote approval notifications | None · webhook · mobile companion | Phase 3 |
-| AD‑8 | ACP versions | v1 + v2 side by side, v2‑shaped internal model, v2 behind flag (proposed) | Phase 0 |
+| AD‑8 | ACP versions | **v1 + v2 side by side, v2‑shaped internal model** | **Decided** (Spike S0.2) |
 | AD‑9 | Composer editor | TipTap · Lexical · custom contenteditable | MVP |
-| AD‑10 | Diff renderer | Custom virtualized over git patches (proposed) · CodeMirror merge only | Phase 0 |
+| AD‑10 | Diff renderer | **Custom virtualized over git patches** · CodeMirror merge only | **Decided** (Spike S0.1) |
 | AD‑11 | Client data layer | Query + Store (proposed) · add TanStack DB when stable | V1 |
 | AD‑12 | v1 client `fs` capability | Off by default, per‑profile opt‑in (proposed) · always on | MVP |
-| AD‑13 | SQLite access | `rusqlite` + `tokio-rusqlite` (proposed) · `sqlx` | Phase 0 |
+| AD‑13 | SQLite access | **`rusqlite` + `tokio-rusqlite`** · `sqlx` | **Decided** (Spike S0.8) |
 | AD‑14 | Agent settings schema source | Community-contributed, following the native schema, version-pinned with warning/error on drift (**decided**) · Tethys-authored only · upstream-official | V1 |
 
 ---

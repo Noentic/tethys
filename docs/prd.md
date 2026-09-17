@@ -232,7 +232,7 @@ SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native conf
 
 | ID | Open product decision | Options |
 |---|---|---|
-| PD‑1 | Sign‑in guidance for Claude via adapter | API key by default · neutral with notice · hide subscription path |
+| PD‑1 | Sign‑in guidance for Claude via adapter | **API key by default with notice** (Decided in Spike S0.7) · neutral with notice · hide subscription path |
 | PD‑2 | Which vendors accept terminal (Class C) hosting | Confirm per vendor; ship only for confirmed ones |
 | PD‑3 | Slash command arguments | Append only · `{{args}}` placeholder (proposed) · positional |
 | PD‑4 | Fork behaviour | New worktree + new session with summary · restore point only |
