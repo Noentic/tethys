@@ -11,6 +11,7 @@ impl Drop for AutoCleanDir {
 }
 
 #[test]
+#[ignore = "benchmark"]
 fn test_worktree_checkpoint_snapshot_benchmark_100k_files() {
     let tmp_repo = std::env::temp_dir().join(format!("tethys_git_bench_{}", std::process::id()));
     if tmp_repo.exists() {

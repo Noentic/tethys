@@ -23,6 +23,7 @@ fn test_stderr_ring_buffer_bounds() {
 
 #[cfg(unix)]
 #[test]
+#[ignore = "stress test"]
 fn test_zero_orphans_after_100_forced_kills() {
     let iterations = 100;
     let mut total_orphans = 0;

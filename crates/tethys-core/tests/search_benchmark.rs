@@ -10,6 +10,7 @@ impl Drop for AutoCleanDir {
 }
 
 #[test]
+#[ignore = "benchmark"]
 fn test_search_warm_query_on_200k_files() {
     let tmp_dir = std::env::temp_dir().join(format!("tethys_search_bench_{}", std::process::id()));
     if tmp_dir.exists() {

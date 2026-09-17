@@ -5,6 +5,7 @@ use tethys_core::synthetic::{generate_stream_chunks, generate_synthetic_diff};
 use tokio::sync::mpsc;
 
 #[tokio::test]
+#[ignore = "benchmark"]
 async fn test_ipc_8_stream_throughput_and_latency() {
     let num_streams: u32 = 8;
     let msgs_per_stream: u32 = 2500;
@@ -81,6 +82,7 @@ async fn test_ipc_8_stream_throughput_and_latency() {
 }
 
 #[test]
+#[ignore = "benchmark"]
 fn test_20k_line_diff_virtualization_dataset() {
     let t0 = Instant::now();
     let total_lines = 20_000;

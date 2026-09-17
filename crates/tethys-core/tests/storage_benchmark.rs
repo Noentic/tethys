@@ -12,6 +12,7 @@ impl Drop for AutoCleanDb {
 }
 
 #[test]
+#[ignore = "benchmark"]
 fn test_sqlite_wal_event_log_throughput_and_replay() {
     let tmp_db = std::env::temp_dir().join(format!("tethys_bench_{}.db", std::process::id()));
     if tmp_db.exists() {
