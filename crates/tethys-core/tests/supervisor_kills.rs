@@ -44,13 +44,19 @@ fn test_zero_orphans_after_100_forced_kills() {
         // Forcibly terminate the entire process group
         child.force_kill_group().expect("force kill failed");
 
-        // Small yield for OS process table update
-        std::thread::sleep(Duration::from_millis(10));
+        // Poll for OS process table update (Darwin/macOS launchd reaping can take up to ~100ms)
+        let mut alive = true;
+        let deadline = std::time::Instant::now() + Duration::from_millis(250);
+        while std::time::Instant::now() < deadline {
+            let res = unsafe { libc::kill(-pgid, 0) };
+            if res != 0 {
+                alive = false;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
 
-        // Verify with kill(-pgid, 0)
-        // If all processes in the group are dead, kill returns ESRCH (-1 with errno 3)
-        let res = unsafe { libc::kill(-pgid, 0) };
-        if res == 0 {
+        if alive {
             total_orphans += 1;
             eprintln!("Iteration {i}: orphaned process group {pgid} detected!");
         }

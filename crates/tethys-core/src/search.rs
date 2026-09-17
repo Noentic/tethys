@@ -29,8 +29,8 @@ impl WorktreeSearchIndex {
             options,
         ).map_err(|e| format!("failed to initialize file picker: {e}"))?;
 
-        // Wait up to 5s for initial scan
-        picker.wait_for_scan(Duration::from_secs(5));
+        // Wait up to 30s for initial scan
+        picker.wait_for_scan(Duration::from_secs(30));
 
         Ok(Self { base_path, picker })
     }
