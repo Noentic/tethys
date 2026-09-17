@@ -50,7 +50,9 @@ The UI design system is user-owned. No product UI implementation should start wi
 
 **Design handoff `D0` is complete when it includes:** design tokens (color, type, spacing, radii, elevation, density, motion), light/dark and platform states, typography and icon rules, the four-region shell and responsive/resizable behavior, component variants and interaction states (loading, empty, error, disabled, focused, selected, destructive), accessibility/keyboard rules, and representative specs for the Inspector, approvals/inbox, diff/review, composer, sync/settings, agent profiles, monitoring, onboarding, and terminal surfaces. The handoff must identify which states are rendered by data from the typed API; it does not need to define backend implementation.
 
-Until `D0` is accepted:
+> **D0 — ACCEPTED (17 September 2026).** Handoff: [`DESIGN.md`](../DESIGN.md) `d0-rc1` (Semantic Theme Contract: primitives → semantic → `--tethys-*` CSS vars; Default Dark Obsidian Zinc + Default Light Clean Zinc/Slate; JSON-only user themes; Geist icons; four-region shell; state matrix; a11y/keyboard map; all representative surfaces with typed-API bindings). Visual implementation (`M1.6` shell and all design-gated UI chunks below) is now unblocked and must consume `packages/ui` tokens/components without forking variants.
+
+Until `D0` was accepted (accepted 17 September 2026 — the rules below governed pre-acceptance work):
 
 - **Can start in parallel:** M1.0–M1.5 and M2.0/M2.C backend work; persistence, state machines, ACP, process control, git, sync, search, command resolution, API/codegen, fixtures, headless tests, performance tests, compliance research, platform work, and packaging plumbing. The backend portions of M1.7–M1.15 and M2.1–M2.12 may also proceed without visual decisions.
 - **Can start only as non-visual infrastructure:** typed frontend clients, state/store reducers, feature contracts, mock data, accessibility test harnesses, markdown/diff/composer parsing, terminal adapters, and notification/update adapters. These worktrees must not choose product styling or screen layout.
