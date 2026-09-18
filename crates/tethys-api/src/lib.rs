@@ -19,6 +19,12 @@ use tethys_schema::{
 
 use thiserror::Error;
 
+pub mod mcp;
+pub mod skills;
+
+pub use mcp::McpApi;
+pub use skills::SkillsApi;
+
 /// Subscription stream returned by `events.subscribe`.
 pub type EventStream = Pin<Box<dyn Stream<Item = EventEnvelope> + Send>>;
 
@@ -71,7 +77,7 @@ pub enum ApiError {
 ///
 /// Helpers (non-§12.1):
 /// - `generate_synthetic_diff` (S0.1 benchmark)
-pub trait TethysApi: Send + Sync {
+pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
     // === host ===
     fn host_info(&self) -> impl std::future::Future<Output = Result<HostInfo, ApiError>> + Send;
     fn host_pair(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
@@ -477,70 +483,6 @@ pub trait TethysApi: Send + Sync {
         query: String,
         limit: usize,
     ) -> impl std::future::Future<Output = Result<Vec<SearchItem>, ApiError>> + Send;
-
-    // === mcp ===
-    fn mcp_registry_list(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.registry_list")) }
-    }
-    fn mcp_registry_set(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.registry_set")) }
-    }
-    fn mcp_registry_delete(
-        &self,
-    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.registry_delete")) }
-    }
-    fn mcp_effective(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.effective")) }
-    }
-    fn mcp_projection_plan(
-        &self,
-    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.projection_plan")) }
-    }
-    fn mcp_projection_apply(
-        &self,
-    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.projection_apply")) }
-    }
-    fn mcp_projection_rollback(
-        &self,
-    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.projection_rollback")) }
-    }
-    fn mcp_import_scan(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.import_scan")) }
-    }
-    fn mcp_import_apply(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.import_apply")) }
-    }
-    fn mcp_health(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("mcp.health")) }
-    }
-
-    // === skills ===
-    fn skills_list(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("skills.list")) }
-    }
-    fn skills_import(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("skills.import")) }
-    }
-    fn skills_update_check(
-        &self,
-    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("skills.update_check")) }
-    }
-    fn skills_update_apply(
-        &self,
-    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("skills.update_apply")) }
-    }
-    fn skills_trust(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("skills.trust")) }
-    }
-    fn skills_enable(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("skills.enable")) }
-    }
 
     // === commands ===
     fn commands_list(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {

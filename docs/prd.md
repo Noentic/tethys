@@ -135,7 +135,7 @@ For non‑developer workspaces the worktree-per-thread model is wrong: there may
 | SYN‑02 | ACP threads receive the effective MCP servers at session start, with no files changed | P0 |
 | SYN‑03 | Push MCP config into Claude Code, Codex, and OpenCode's own config files, with a preview diff, backups, rollback, and conflict detection; Tethys only edits entries it created (verify paths) | P0 |
 | SYN‑04 | Import existing MCP servers from any detected tool during onboarding | P0 |
-| SYN‑05 | Same push for Claude Desktop, Gemini CLI, Cursor, and Kiro (verify paths) | P1 |
+| SYN‑05 | Same push for Antigravity CLI, Kiro CLI, Claude Desktop, Gemini CLI, and Cursor (verify paths); Antigravity CLI and Kiro CLI land first as part of the first full‑support agents | P1 |
 | SYN‑06 | Skill library following the Agent Skills format and the `.agents/skills` convention (global and project); import from a folder, a `.skill` file, or a GitHub link (pinned to a commit, updates shown as a diff) | P0 |
 | SYN‑07 | Skills containing scripts need an explicit trust decision and are excluded from YOLO threads until trusted | P0 |
 | SYN‑08 | Make skills available in agent‑specific skill folders | P1 |
@@ -149,7 +149,7 @@ The sync view is a grid of servers × targets, each cell showing *in sync*, *pen
 
 SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native config file so users never leave Tethys for routine setup:
 
-- Initial targets: OpenCode, Antigravity CLI, Kiro CLI. Each target gets one form over its native json/toml config file.
+- Initial targets — the first agents to reach full support: OpenCode, Antigravity CLI, Kiro CLI. Each target gets one form over its native json/toml config file. Claude Code and Codex full support is post-MVP; their MVP surface is MCP-only projection (SYN‑03).
 - "Full" means the full file the schema knows about, bounded by the agent's official docs/schema. Advanced areas (hooks, steering, plugins, etc.) stay editable but the form links out to the official schema/docs; anything the form doesn't understand stays available via raw text fallback with no data loss.
 - Schemas are community-contributed and must follow the native schema, pinned per agent version (schema id + agent version range + source link).
 - Drift handling: unknown keys preserved on write; version mismatch shows a warning, schema validation failure shows an error and blocks apply until fixed or explicitly applied as raw.

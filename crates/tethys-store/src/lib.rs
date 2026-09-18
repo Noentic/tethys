@@ -13,6 +13,8 @@ pub mod migrations;
 pub mod pool;
 #[doc(hidden)]
 pub mod schema;
+#[doc(hidden)]
+pub mod sync_state;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -21,6 +23,7 @@ use pool::ConnectionPool;
 
 pub use blobs::BlobStore;
 pub use error::StoreError;
+pub use sync_state::{ProjectionRow, SkillRow};
 pub use tethys_schema::store::{
     BlobHash, Entry, EntryKind, EntryPage, EntryUpsert, NewEvent, SeqRange, StoredEvent, ThreadId,
     ThreadView,
@@ -186,5 +189,62 @@ impl EventStore {
             })
             .await?;
         Ok(())
+    }
+
+    /// Inserts or replaces one projection row.
+    pub async fn upsert_projection(&self, row: ProjectionRow) -> Result<(), StoreError> {
+        self.pool
+            .writer()
+            .call(move |conn| sync_state::upsert_projection(conn, &row))
+            .await?;
+        Ok(())
+    }
+
+    /// Reads one projection row.
+    pub async fn projection(
+        &self,
+        target: &str,
+        path: &str,
+    ) -> Result<Option<ProjectionRow>, StoreError> {
+        let target = target.to_string();
+        let path = path.to_string();
+        let row = self
+            .pool
+            .reader()
+            .call(move |conn| sync_state::projection(conn, &target, &path))
+            .await?;
+        Ok(row)
+    }
+
+    /// Deletes one projection row, reporting whether it existed.
+    pub async fn delete_projection(&self, target: &str, path: &str) -> Result<bool, StoreError> {
+        let target = target.to_string();
+        let path = path.to_string();
+        let deleted = self
+            .pool
+            .writer()
+            .call(move |conn| sync_state::delete_projection(conn, &target, &path))
+            .await?;
+        Ok(deleted)
+    }
+
+    /// Inserts or replaces one skill row.
+    pub async fn upsert_skill(&self, row: SkillRow) -> Result<(), StoreError> {
+        self.pool
+            .writer()
+            .call(move |conn| sync_state::upsert_skill(conn, &row))
+            .await?;
+        Ok(())
+    }
+
+    /// Reads one skill row.
+    pub async fn skill(&self, skill_id: &str) -> Result<Option<SkillRow>, StoreError> {
+        let skill_id = skill_id.to_string();
+        let row = self
+            .pool
+            .reader()
+            .call(move |conn| sync_state::skill(conn, &skill_id))
+            .await?;
+        Ok(row)
     }
 }

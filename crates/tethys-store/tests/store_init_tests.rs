@@ -17,7 +17,8 @@ async fn fresh_database_creates_all_tables_and_pragmas() -> Result<(), Box<dyn s
 
     // Verify tables exist in sqlite_master
     let conn = rusqlite::Connection::open(&db_path)?;
-    let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")?;
+    let mut stmt =
+        conn.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")?;
     let tables: Vec<String> = stmt
         .query_map([], |r| r.get(0))?
         .collect::<Result<Vec<_>, _>>()?;
@@ -36,7 +37,8 @@ async fn fresh_database_creates_all_tables_and_pragmas() -> Result<(), Box<dyn s
 }
 
 #[tokio::test]
-async fn foreign_keys_enforce_cascade_and_reject_unknown_threads() -> Result<(), Box<dyn std::error::Error>> {
+async fn foreign_keys_enforce_cascade_and_reject_unknown_threads(
+) -> Result<(), Box<dyn std::error::Error>> {
     let (_dir, db_path) = setup_temp_store_path();
     let store = EventStore::open(&db_path).await?;
 
@@ -55,7 +57,9 @@ async fn foreign_keys_enforce_cascade_and_reject_unknown_threads() -> Result<(),
     );
 
     // Creating the project and thread allows appends
-    store.ensure_project("proj_1", "/tmp/proj", "worktree").await?;
+    store
+        .ensure_project("proj_1", "/tmp/proj", "worktree")
+        .await?;
     store.ensure_thread(&unknown_thread, "proj_1").await?;
 
     let success = store
@@ -79,7 +83,9 @@ async fn in_memory_reaches_same_schema_version() -> Result<(), Box<dyn std::erro
     let store = EventStore::in_memory().await?;
     let thread_id = ThreadId("mem_thread_1".into());
 
-    store.ensure_project("proj_mem", "/tmp/mem", "plain").await?;
+    store
+        .ensure_project("proj_mem", "/tmp/mem", "plain")
+        .await?;
     store.ensure_thread(&thread_id, "proj_mem").await?;
 
     let range = store
@@ -102,15 +108,38 @@ async fn in_memory_reaches_same_schema_version() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn std::error::Error>> {
+fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn std::error::Error>>
+{
     let mut conn = rusqlite::Connection::open_in_memory()?;
 
-    // Step 1: Migrate to latest (version 2: projects, threads, events, entries)
+    // Step 1: Migrate to latest (version 3: projects, threads, events, entries,
+    // projections, skills_state)
     migrate_to_latest(&mut conn)?;
     let v_latest: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_latest, 2);
+    assert_eq!(v_latest, 3);
 
-    // Step 2: Step down to version 1 (entries dropped, events preserved)
+    // Step 2: Step down to version 2 (sync state dropped, entries preserved)
+    migrate_to_version(&mut conn, 2)?;
+    let v_2: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
+    assert_eq!(v_2, 2);
+
+    let projections_exist: i64 = conn.query_row(
+        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='projections'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(
+        projections_exist, 0,
+        "projections should be dropped at version 2"
+    );
+    let entries_exist: i64 = conn.query_row(
+        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='entries'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(entries_exist, 1, "entries table should remain in version 2");
+
+    // Step 3: Step down to version 1 (entries dropped, events preserved)
     migrate_to_version(&mut conn, 1)?;
     let v_1: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
     assert_eq!(v_1, 1);
@@ -120,7 +149,10 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
         [],
         |r| r.get(0),
     )?;
-    assert_eq!(entries_exist, 0, "entries table should be dropped in version 1");
+    assert_eq!(
+        entries_exist, 0,
+        "entries table should be dropped in version 1"
+    );
 
     let events_exist: i64 = conn.query_row(
         "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='events'",
@@ -139,12 +171,15 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
         [],
         |r| r.get(0),
     )?;
-    assert_eq!(any_tables, 0, "no application tables should remain at version 0");
+    assert_eq!(
+        any_tables, 0,
+        "no application tables should remain at version 0"
+    );
 
     // Step 4: Re-apply to latest
     migrate_to_latest(&mut conn)?;
     let v_final: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_final, 2);
+    assert_eq!(v_final, 3);
 
     Ok(())
 }

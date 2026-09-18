@@ -287,7 +287,7 @@ async fn recovery_cancels_live_session_and_restarts_after_transport_loss() {
         .expect("session");
 
     let outcome = store
-        .recover(&key, &session.id, &dir, true)
+        .recover(&key, &session.id, &dir, Vec::new(), true)
         .await
         .expect("live recovery");
     assert_eq!(outcome, RecoveryOutcome::Cancelled);
@@ -308,7 +308,7 @@ async fn recovery_cancels_live_session_and_restarts_after_transport_loss() {
     // No live connection remains: recover respawns. That normally yields
     // ProcessRestarted; Interrupted only when the respawn itself fails.
     let outcome = store
-        .recover(&key, &session.id, &dir, true)
+        .recover(&key, &session.id, &dir, Vec::new(), true)
         .await
         .expect("dead recovery");
     assert!(matches!(
@@ -337,7 +337,7 @@ async fn v2_recovery_cancels_live_session_and_restarts_dead_connection() {
         .expect("v2 session");
 
     let outcome = store
-        .recover(&key, &session.id, &dir, false)
+        .recover(&key, &session.id, &dir, Vec::new(), false)
         .await
         .expect("live v2 recovery");
     assert_eq!(outcome, RecoveryOutcome::Cancelled);
@@ -356,7 +356,7 @@ async fn v2_recovery_cancels_live_session_and_restarts_dead_connection() {
     drop(lease);
 
     let outcome = store
-        .recover(&key, &session.id, &dir, false)
+        .recover(&key, &session.id, &dir, Vec::new(), false)
         .await
         .expect("dead v2 recovery");
     assert_eq!(outcome, RecoveryOutcome::ProcessRestarted);

@@ -513,38 +513,40 @@ The canonical file uses `type` on every entry to match ACP v2. Legacy `sse` entr
 
 ### 11.3 Config projection
 
-Each target implements `Projector` (`detect`, `read`, `plan → Patch`, `apply`, `verify`, plus `schema` for SYN‑11 targets).
+Each target implements `Projector` (`target`, `detect`, `read`, `plan → ProjectionPlan`, `apply`, `verify`, plus `schema` for SYN‑11 targets).
 
 - **Safety:** preview diff first, timestamped backups, and format‑preserving `toml_edit` / JSONC editing (each agent config UI projects json/toml schema for seamless editing).
-- **Ownership:** a manifest (`~/.tethys/projections.json`) records entries Tethys owns; three‑way merge against the last projected hash. Full-file settings forms (SYN‑11) preserve unknown keys and reuse the same preview/backup/rollback path.
-- **Secrets:** use `${VAR}` references where the target supports them; otherwise a secret is written only with explicit consent.
+- **Ownership:** the `projections` table in `~/.tethys/state.db` (§12) records the per‑entry hash of what Tethys last wrote; apply re‑reads the file and refuses a stale plan, and only an owned entry that drifted outside Tethys becomes a conflict. Full-file settings forms (SYN‑11) preserve unknown keys and reuse the same preview/backup/rollback path.
+- **Secrets:** use `${VAR}` / `{env:VAR}` / `bearer_token_env_var` references where the target supports them; otherwise the secret is omitted and the entry is flagged `unsupported`, never written in plain text (G7).
 
 | Target | Config | Format | Skills folder |
 |---|---|---|---|
 | ACP session | `session/new` / `session/resume` `mcpServers` | ACP schema | via composer strategy |
-| Claude Code | `.mcp.json`; `~/.claude.json` | JSON `mcpServers` | `.claude/skills/` |
+| Claude Code | `.mcp.json` (project); `~/.claude.json` (import only) | JSON `mcpServers` | `.claude/skills/` |
 | Claude Desktop | `claude_desktop_config.json` | JSON `mcpServers` | n/a |
 | Codex CLI | `~/.codex/config.toml` | TOML `[mcp_servers.<name>]` | `.agents/skills/` |
-| OpenCode | `opencode.json(c)` | JSON `mcp` | verify |
+| OpenCode | `opencode.json(c)` | JSON `mcp.servers` (legacy flat `mcp` read only) | `.agents/skills/` |
+| Antigravity CLI | `~/.gemini/config/mcp_config.json` (global); `<repo>/.agents/mcp_config.json` (workspace) | JSON `mcpServers` (remote uses `serverUrl`, not `url`) | `.agents/skills/` (workspace); `~/.gemini/antigravity-cli/skills/` (global) |
 | Gemini CLI | `.gemini/settings.json` | JSON `mcpServers` | verify |
 | Cursor | `.cursor/mcp.json` | JSON `mcpServers` | verify |
-| Kiro | `.kiro/settings/mcp.json` | JSON `mcpServers` | verify |
+| Kiro CLI | `.kiro/settings/mcp.json`; `.kiro/agents/*` | JSON `mcpServers` | verify (`skill://` resources) |
 
-All paths **verify**.
+All paths **verify**; skill folders marked `.agents/skills/` are read natively by Codex, OpenCode, and Antigravity CLI (verified 2026‑09‑18). `~/.claude.json` is Claude's private state: read‑only for import, no `${VAR}` expansion there. **First full‑support agents: OpenCode, Antigravity CLI, Kiro CLI** — their projection, skills, and native‑settings paths are verified first and land before the remaining targets. Claude Code and Codex ship MCP-only projection in MVP (SYN-03); their full support (native settings, skills materialization, terminal hosting) is post-MVP.
 
 ### 11.4 Skills
 
-- **Storage:** Agent Skills layout under `~/.agents/skills/<name>/` and `<repo>/.agents/skills/<name>/`.
+- **Storage:** Agent Skills layout under `~/.agents/skills/<name>/` and `<repo>/.agents/skills/<name>/`; this home is the single source of truth and is never moved — updates swap the skill directory atomically in place.
 - **Imports:**
   - `.skill` files are validated and extracted to staging.
   - GitHub imports download the archive of the resolved commit, pinned by SHA.
-- **Validation:** frontmatter, size limits, name collisions, and script detection for trust prompts.
-- **Projection:** symlinks on macOS/Linux; junctions or copies on Windows.
+  - `skills` CLI lockfiles (`skills-lock.json`, `~/.agents/.skill-lock.json`) are read‑only provenance sources (unpinned); Tethys never writes them.
+- **Validation:** frontmatter, size limits, name collisions, script detection for trust prompts, and archive guards (no absolute or `..` paths, no links, entry/size caps).
+- **Projection:** relative symlinks on macOS/Linux (worktree‑safe); junctions or copies on Windows. Agents that read the canonical home natively (Codex, OpenCode, Antigravity CLI workspace) need no copy; Claude Code links `.claude/skills/`, and global Antigravity skills link `~/.gemini/antigravity-cli/skills/`.
 - **Per‑project enablement:** via an allow‑list, never by deleting files.
 
 ### 11.5 Agent native-settings forms (SYN‑11)
 
-Initial full-file targets: OpenCode, Antigravity CLI, Kiro CLI (MCP-only projection in §11.3 stays for the SYN‑03/SYN‑05 targets).
+Initial full-file targets — and the first agents to reach full support: OpenCode, Antigravity CLI, Kiro CLI (MCP-only projection in §11.3 stays for the SYN‑03/SYN‑05 targets). Claude Code and Codex native forms are post-MVP.
 
 - **Schemas are community-contributed and must follow the native schema.** Each schema bundle records `{ schema_id, agent_version_range, source (official docs/schema URL), contributor, updated_at }` and ships with golden files under `fixtures/projectors/<target>/`.
 - **Flow:** `agent.config.schema(target)` → frontend renders a `TanStack Form` from the JSON Schema; advanced sections (hooks, steering, plugins, etc.) show a link to the official docs/schema alongside the fields. Submit → `agent.config.validate` → `plan` (preview diff) → `apply` with backup/rollback. A raw text tab is always available and round-trips unknown keys losslessly.
@@ -617,7 +619,7 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 | `permission` | `respond`, `rules.*` |
 | `git` | `worktree.*`, `checkpoint.*`, `diff.summary`, `diff.file`, `stage`, `unstage`, `discard`, `commit`, `merge`, `push`, `pr.create` (all return `GIT_DISABLED` when the project sets `isolation: plain`) |
 | `search` | `files` |
-| `mcp` | `registry.*`, `effective`, `projection.plan/apply/rollback`, `import.*`, `health` |
+| `mcp` | `registry.*`, `effective`, `projection.plan/apply/verify/rollback`, `import.*`, `health` |
 | `skills` | `list`, `import`, `update.*`, `trust`, `enable` |
 | `commands` | `list`, `expand` |
 | `terminal` | `list`, `attach`, `write`, `resize` |

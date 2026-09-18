@@ -6,9 +6,14 @@
 use std::sync::Arc;
 use tauri::ipc::Channel;
 use tauri::State;
-use tethys_api::TethysApi;
+use tethys_api::{McpApi, SkillsApi, TethysApi};
 use tethys_core::Core;
 use tethys_schema::connection::ConnectionEntry;
+use tethys_schema::sync::{
+    Applied, ImportCandidate, ImportScan, ProjectionPlan, RegistryEntry, RegistryEntryView, Scope,
+    SkillImportSource, SkillInfo, SkillUpdateApplied, SkillUpdateCheck, SkillUpdatePlan, TargetId,
+    VerifyStatus,
+};
 use tethys_schema::thread::{
     ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView,
 };
@@ -419,24 +424,259 @@ pub async fn search_files(
 }
 
 // === mcp ===
-stub_cmd!(mcp_registry_list);
-stub_cmd!(mcp_registry_set);
-stub_cmd!(mcp_registry_delete);
-stub_cmd!(mcp_effective);
-stub_cmd!(mcp_projection_plan);
-stub_cmd!(mcp_projection_apply);
-stub_cmd!(mcp_projection_rollback);
-stub_cmd!(mcp_import_scan);
-stub_cmd!(mcp_import_apply);
+
+/// `mcp.registry.list` — registry entries from global and project scopes.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_registry_list(
+    state: State<'_, CoreState>,
+    project_root: Option<String>,
+) -> Result<Vec<RegistryEntryView>, String> {
+    state
+        .mcp_registry_list(project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.registry.set` — upsert one registry entry.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_registry_set(
+    state: State<'_, CoreState>,
+    name: String,
+    entry: RegistryEntry,
+    scope: Scope,
+    project_root: Option<String>,
+) -> Result<(), String> {
+    state
+        .mcp_registry_set(name, entry, scope, project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.registry.delete` — remove one registry entry.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_registry_delete(
+    state: State<'_, CoreState>,
+    name: String,
+    scope: Scope,
+    project_root: Option<String>,
+) -> Result<bool, String> {
+    state
+        .mcp_registry_delete(name, scope, project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.effective` — merged entries visible to one target.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_effective(
+    state: State<'_, CoreState>,
+    target: TargetId,
+    project_root: Option<String>,
+) -> Result<Vec<RegistryEntryView>, String> {
+    state
+        .mcp_effective(target, project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.projection.plan` — preview a vendor config write.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_projection_plan(
+    state: State<'_, CoreState>,
+    target: TargetId,
+    scope: Scope,
+    project_root: String,
+) -> Result<ProjectionPlan, String> {
+    state
+        .mcp_projection_plan(target, scope, project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.projection.apply` — write a plan after re-checking the file.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_projection_apply(
+    state: State<'_, CoreState>,
+    plan: ProjectionPlan,
+) -> Result<Applied, String> {
+    state
+        .mcp_projection_apply(plan)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.projection.rollback` — restore the newest backup.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_projection_rollback(
+    state: State<'_, CoreState>,
+    target: TargetId,
+    scope: Scope,
+    project_root: String,
+) -> Result<(), String> {
+    state
+        .mcp_projection_rollback(target, scope, project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.projection.verify` — compare a projected file against its manifest.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_projection_verify(
+    state: State<'_, CoreState>,
+    target: TargetId,
+    scope: Scope,
+    project_root: String,
+) -> Result<VerifyStatus, String> {
+    state
+        .mcp_projection_verify(target, scope, project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.import.scan` — read-only detection across installed tools.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_import_scan(
+    state: State<'_, CoreState>,
+    project_root: String,
+) -> Result<ImportScan, String> {
+    state
+        .mcp_import_scan(project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.import.apply` — write the chosen candidates into the registry.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_import_apply(
+    state: State<'_, CoreState>,
+    project_root: String,
+    candidates: Vec<ImportCandidate>,
+    scope: Scope,
+) -> Result<Vec<String>, String> {
+    state
+        .mcp_import_apply(project_root, candidates, scope)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// mcp.health arrives with M2.4.
 stub_cmd!(mcp_health);
 
 // === skills ===
-stub_cmd!(skills_list);
-stub_cmd!(skills_import);
-stub_cmd!(skills_update_check);
-stub_cmd!(skills_update_apply);
-stub_cmd!(skills_trust);
-stub_cmd!(skills_enable);
+
+/// `skills.list` — canonical home scan with trust facts.
+#[tauri::command]
+#[specta::specta]
+pub async fn skills_list(
+    state: State<'_, CoreState>,
+    project_root: String,
+) -> Result<Vec<SkillInfo>, String> {
+    state
+        .skills_list(project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `skills.import` — folder, archive, or GitHub import.
+#[tauri::command]
+#[specta::specta]
+pub async fn skills_import(
+    state: State<'_, CoreState>,
+    project_root: String,
+    scope: Scope,
+    source: SkillImportSource,
+) -> Result<SkillInfo, String> {
+    state
+        .skills_import(project_root, scope, source)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `skills.update.check` — cheap upstream SHA comparison.
+#[tauri::command]
+#[specta::specta]
+pub async fn skills_update_check(
+    state: State<'_, CoreState>,
+    project_root: String,
+    scope: Scope,
+    name: String,
+) -> Result<SkillUpdateCheck, String> {
+    state
+        .skills_update_check(project_root, scope, name)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `skills.update.plan` — download and diff without writing.
+#[tauri::command]
+#[specta::specta]
+pub async fn skills_update_plan(
+    state: State<'_, CoreState>,
+    project_root: String,
+    scope: Scope,
+    name: String,
+) -> Result<SkillUpdatePlan, String> {
+    state
+        .skills_update_plan(project_root, scope, name)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `skills.update.apply` — swap atomically and clear trust.
+#[tauri::command]
+#[specta::specta]
+pub async fn skills_update_apply(
+    state: State<'_, CoreState>,
+    project_root: String,
+    scope: Scope,
+    name: String,
+) -> Result<SkillUpdateApplied, String> {
+    state
+        .skills_update_apply(project_root, scope, name)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `skills.trust` — bind trust to the current content hash.
+#[tauri::command]
+#[specta::specta]
+pub async fn skills_trust(
+    state: State<'_, CoreState>,
+    project_root: String,
+    scope: Scope,
+    name: String,
+) -> Result<SkillInfo, String> {
+    state
+        .skills_trust(project_root, scope, name)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `skills.enable` — toggle without deleting.
+#[tauri::command]
+#[specta::specta]
+pub async fn skills_enable(
+    state: State<'_, CoreState>,
+    project_root: String,
+    scope: Scope,
+    name: String,
+    enabled: bool,
+) -> Result<SkillInfo, String> {
+    state
+        .skills_enable(project_root, scope, name, enabled)
+        .await
+        .map_err(|e| e.to_string())
+}
 
 // === commands ===
 stub_cmd!(commands_list);

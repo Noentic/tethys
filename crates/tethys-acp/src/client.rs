@@ -20,6 +20,7 @@ use agent_client_protocol::{
 };
 use async_trait::async_trait;
 use tethys_schema::connection::{AcpProtocol, AgentInfo, NormalizedCapabilities};
+use tethys_schema::sync::{McpTransports, RegistryValue, SessionServer, TransportKind};
 use tethys_schema::thread::{ContentBlock, PermOutcome, PermissionRequested, TurnEventBody};
 use tethys_thread::{
     AgentConnection, ConnectionError, ConnectionEvent, EventStream, NewSession, PermissionDecision,
@@ -476,7 +477,11 @@ impl AgentConnection for AcpConnection {
                 let response = connection
                     .send_request(
                         acp1::NewSessionRequest::new(request.cwd)
-                            .additional_directories(request.additional_directories),
+                            .additional_directories(request.additional_directories)
+                            .mcp_servers(v1_mcp_servers(
+                                &request.mcp_servers,
+                                &self.capabilities.mcp,
+                            )),
                     )
                     .block_task()
                     .await
@@ -497,7 +502,11 @@ impl AgentConnection for AcpConnection {
                 let response = connection
                     .send_request(
                         acp2::NewSessionRequest::new(request.cwd)
-                            .additional_directories(request.additional_directories),
+                            .additional_directories(request.additional_directories)
+                            .mcp_servers(v2_mcp_servers(
+                                &request.mcp_servers,
+                                &self.capabilities.mcp,
+                            )),
                     )
                     .block_task()
                     .await
@@ -525,10 +534,11 @@ impl AgentConnection for AcpConnection {
         let result = match &self.wire {
             Wire::V1(connection) => {
                 let response = connection
-                    .send_request(acp1::LoadSessionRequest::new(
-                        session_id.clone(),
-                        request.cwd,
-                    ))
+                    .send_request(
+                        acp1::LoadSessionRequest::new(session_id.clone(), request.cwd).mcp_servers(
+                            v1_mcp_servers(&request.mcp_servers, &self.capabilities.mcp),
+                        ),
+                    )
                     .block_task()
                     .await
                     .map_err(map_sdk_error);
@@ -544,7 +554,8 @@ impl AgentConnection for AcpConnection {
             #[cfg(feature = "acp-v2")]
             Wire::V2(connection) => {
                 let mut resume = acp2::ResumeSessionRequest::new(session_id.clone(), request.cwd)
-                    .additional_directories(request.additional_directories);
+                    .additional_directories(request.additional_directories)
+                    .mcp_servers(v2_mcp_servers(&request.mcp_servers, &self.capabilities.mcp));
                 if request.replay {
                     resume = resume
                         .replay_from(acp2::ReplayFrom::Start(acp2::ReplayFromStart::default()));
@@ -715,7 +726,11 @@ fn capabilities_v1(capabilities: &acp1::AgentCapabilities) -> NormalizedCapabili
     NormalizedCapabilities {
         load_session: capabilities.load_session,
         resume: capabilities.load_session,
-        mcp_stdio: true,
+        mcp: McpTransports {
+            stdio: true,
+            http: capabilities.mcp_capabilities.http,
+            sse: capabilities.mcp_capabilities.sse,
+        },
         prompt_embedded_context: capabilities.prompt_capabilities.embedded_context,
     }
 }
@@ -723,14 +738,121 @@ fn capabilities_v1(capabilities: &acp1::AgentCapabilities) -> NormalizedCapabili
 #[cfg(feature = "acp-v2")]
 fn capabilities_v2(capabilities: &acp2::AgentCapabilities) -> NormalizedCapabilities {
     let session = capabilities.session.as_ref();
+    let mcp = session.and_then(|session| session.mcp.as_ref());
     NormalizedCapabilities {
         load_session: false,
         resume: session.is_some(),
-        mcp_stdio: session.and_then(|session| session.mcp.as_ref()).is_some(),
+        mcp: McpTransports {
+            stdio: mcp.and_then(|mcp| mcp.stdio.as_ref()).is_some(),
+            http: mcp.and_then(|mcp| mcp.http.as_ref()).is_some(),
+            sse: false,
+        },
         prompt_embedded_context: session
             .and_then(|session| session.prompt.as_ref())
             .is_some(),
     }
+}
+
+fn parse_session_servers(values: &[serde_json::Value]) -> Vec<SessionServer> {
+    values
+        .iter()
+        .filter_map(|value| serde_json::from_value(value.clone()).ok())
+        .collect()
+}
+
+fn resolved_value(value: &RegistryValue) -> Option<String> {
+    match value {
+        RegistryValue::Plain(text) => Some(text.clone()),
+        RegistryValue::Secret { .. } => None,
+    }
+}
+
+fn v1_mcp_servers(
+    values: &[serde_json::Value],
+    transports: &McpTransports,
+) -> Vec<acp1::McpServer> {
+    parse_session_servers(values)
+        .into_iter()
+        .filter_map(|server| match server.transport {
+            TransportKind::Stdio if transports.stdio => {
+                let command = server.command?;
+                let env = server
+                    .env
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        resolved_value(value).map(|value| acp1::EnvVariable::new(key, value))
+                    })
+                    .collect();
+                Some(acp1::McpServer::Stdio(
+                    acp1::McpServerStdio::new(server.name, command)
+                        .args(server.args)
+                        .env(env),
+                ))
+            }
+            TransportKind::Http if transports.http => {
+                let url = server.url?;
+                let headers = server
+                    .headers
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        resolved_value(value).map(|value| acp1::HttpHeader::new(key, value))
+                    })
+                    .collect();
+                Some(acp1::McpServer::Http(
+                    acp1::McpServerHttp::new(server.name, url).headers(headers),
+                ))
+            }
+            TransportKind::Sse if transports.sse => {
+                let url = server.url?;
+                Some(acp1::McpServer::Sse(acp1::McpServerSse::new(
+                    server.name,
+                    url,
+                )))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[cfg(feature = "acp-v2")]
+fn v2_mcp_servers(
+    values: &[serde_json::Value],
+    transports: &McpTransports,
+) -> Vec<acp2::McpServer> {
+    parse_session_servers(values)
+        .into_iter()
+        .filter_map(|server| match server.transport {
+            TransportKind::Stdio if transports.stdio => {
+                let command = server.command?;
+                let env = server
+                    .env
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        resolved_value(value).map(|value| acp2::EnvVariable::new(key, value))
+                    })
+                    .collect();
+                Some(acp2::McpServer::Stdio(
+                    acp2::McpServerStdio::new(server.name, command)
+                        .args(server.args)
+                        .env(env),
+                ))
+            }
+            TransportKind::Http if transports.http => {
+                let url = server.url?;
+                let headers = server
+                    .headers
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        resolved_value(value).map(|value| acp2::HttpHeader::new(key, value))
+                    })
+                    .collect();
+                Some(acp2::McpServer::Http(
+                    acp2::McpServerHttp::new(server.name, url).headers(headers),
+                ))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 fn agent_info(name: &str, version: &str, title: Option<&str>) -> AgentInfo {
@@ -743,4 +865,92 @@ fn agent_info(name: &str, version: &str, title: Option<&str>) -> AgentInfo {
 
 fn map_sdk_error(error: agent_client_protocol::Error) -> ConnectionError {
     ConnectionError::Protocol(error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn session_servers() -> Vec<serde_json::Value> {
+        vec![
+            json!({
+                "name": "github",
+                "transport": "stdio",
+                "command": "github-mcp-server",
+                "args": ["stdio"],
+                "env": { "GITHUB_TOKEN": "resolved-secret" }
+            }),
+            json!({
+                "name": "linear",
+                "transport": "http",
+                "url": "https://mcp.linear.app/mcp",
+                "headers": { "Authorization": "Bearer resolved-secret" }
+            }),
+            json!({
+                "name": "legacy",
+                "transport": "sse",
+                "url": "https://legacy.example.com/sse"
+            }),
+        ]
+    }
+
+    #[test]
+    fn v1_maps_stdio_http_and_sse_by_capability() {
+        let all = McpTransports {
+            stdio: true,
+            http: true,
+            sse: true,
+        };
+        let mapped = serde_json::to_value(v1_mcp_servers(&session_servers(), &all)).expect("json");
+        assert_eq!(mapped[0]["command"], "github-mcp-server");
+        assert_eq!(mapped[0]["env"][0]["name"], "GITHUB_TOKEN");
+        assert_eq!(mapped[1]["type"], "http");
+        assert_eq!(mapped[1]["headers"][0]["value"], "Bearer resolved-secret");
+        assert_eq!(mapped[2]["type"], "sse");
+
+        let stdio_only = McpTransports {
+            stdio: true,
+            http: false,
+            sse: false,
+        };
+        let mapped = v1_mcp_servers(&session_servers(), &stdio_only);
+        assert_eq!(mapped.len(), 1);
+    }
+
+    #[cfg(feature = "acp-v2")]
+    #[test]
+    fn v2_maps_stdio_and_http_only() {
+        let all = McpTransports {
+            stdio: true,
+            http: true,
+            sse: true,
+        };
+        let mapped = serde_json::to_value(v2_mcp_servers(&session_servers(), &all)).expect("json");
+        assert_eq!(mapped.as_array().expect("array").len(), 2);
+        assert_eq!(mapped[0]["type"], "stdio");
+        assert_eq!(mapped[0]["command"], "github-mcp-server");
+        assert_eq!(mapped[1]["type"], "http");
+
+        let http_only = McpTransports {
+            stdio: false,
+            http: true,
+            sse: false,
+        };
+        let mapped = v2_mcp_servers(&session_servers(), &http_only);
+        assert_eq!(mapped.len(), 1);
+    }
+
+    #[test]
+    fn unresolved_secret_refs_are_never_sent() {
+        let values = vec![json!({
+            "name": "github",
+            "transport": "stdio",
+            "command": "github-mcp-server",
+            "env": { "GITHUB_TOKEN": { "secretRef": "keychain:tethys/github" } }
+        })];
+        let mapped =
+            serde_json::to_value(v1_mcp_servers(&values, &McpTransports::all())).expect("json");
+        assert!(mapped[0]["env"].as_array().expect("env array").is_empty());
+    }
 }

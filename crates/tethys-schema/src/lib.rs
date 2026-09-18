@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use specta::{Type, Types};
 
 pub mod connection;
+pub mod sync;
 pub mod thread;
 
 /// Basic host metadata for the S0.0 shell (`host.info`).
@@ -141,4 +142,28 @@ pub fn registered_types() -> Types {
         .register::<store::EntryPage>()
         .register::<store::ThreadView>()
         .register::<store::StoredEvent>()
+        .register::<sync::TargetId>()
+        .register::<sync::TransportKind>()
+        .register::<sync::Scope>()
+        .register::<sync::RegistryValue>()
+        .register::<sync::EntryMeta>()
+        .register::<sync::RegistryEntry>()
+        .register::<sync::McpTransports>()
+        .register::<sync::SessionServer>()
+        .register::<sync::EntryState>()
+        .register::<sync::EntryProjection>()
+        .register::<sync::ProjectionPlan>()
+        .register::<sync::Applied>()
+        .register::<sync::VerifyStatus>()
+        .register::<sync::ImportCandidate>()
+        .register::<sync::ImportFailure>()
+        .register::<sync::ImportScan>()
+        .register::<sync::SkillOrigin>()
+        .register::<sync::SkillSource>()
+        .register::<sync::SkillInfo>()
+        .register::<sync::SkillUpdateCheck>()
+        .register::<sync::SkillUpdatePlan>()
+        .register::<sync::SkillUpdateApplied>()
+        .register::<sync::RegistryEntryView>()
+        .register::<sync::SkillImportSource>()
 }

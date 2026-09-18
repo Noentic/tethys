@@ -6,6 +6,7 @@
 
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
+  Applied,
   BenchmarkConfig,
   BenchmarkResult,
   CheckpointInfo,
@@ -23,14 +24,27 @@ import type {
   HealthStatus,
   HostInfo,
   HunkRef,
+  ImportCandidate,
+  ImportScan,
   ProjectGitConfig,
+  ProjectionPlan,
+  RegistryEntry,
+  RegistryEntryView,
   RestoreOutcome,
   RestorePolicy,
   RestoreTarget,
+  Scope,
   SearchItem,
   SetupOutcome,
+  SkillImportSource,
+  SkillInfo,
+  SkillUpdateApplied,
+  SkillUpdateCheck,
+  SkillUpdatePlan,
   StreamChunk,
+  TargetId,
   UndoCapture,
+  VerifyStatus,
   WorktreeInfo,
   WorktreeSpec,
 } from "@tethys/bindings";
@@ -177,10 +191,26 @@ export function createClient(options: ClientOptions = {}) {
         call<void>("git_worktree_archive", { threadId }),
       worktree_archive: (threadId: string) =>
         call<void>("git_worktree_archive", { threadId }),
-      checkpointCreate: (threadId: string, turn: number, phase: CheckpointPhase) =>
-        call<CheckpointResult>("git_checkpoint_create", { threadId, turn, phase }),
-      checkpoint_create: (threadId: string, turn: number, phase: CheckpointPhase) =>
-        call<CheckpointResult>("git_checkpoint_create", { threadId, turn, phase }),
+      checkpointCreate: (
+        threadId: string,
+        turn: number,
+        phase: CheckpointPhase,
+      ) =>
+        call<CheckpointResult>("git_checkpoint_create", {
+          threadId,
+          turn,
+          phase,
+        }),
+      checkpoint_create: (
+        threadId: string,
+        turn: number,
+        phase: CheckpointPhase,
+      ) =>
+        call<CheckpointResult>("git_checkpoint_create", {
+          threadId,
+          turn,
+          phase,
+        }),
       checkpointRestore: (target: RestoreTarget, policy?: RestorePolicy) =>
         call<RestoreOutcome>("git_checkpoint_restore", { target, policy }),
       checkpoint_restore: (target: RestoreTarget, policy?: RestorePolicy) =>
@@ -219,36 +249,155 @@ export function createClient(options: ClientOptions = {}) {
 
     // === mcp namespace ===
     mcp: {
-      registryList: () => call<void>("mcp_registry_list"),
-      registry_list: () => call<void>("mcp_registry_list"),
-      registrySet: () => call<void>("mcp_registry_set"),
-      registry_set: () => call<void>("mcp_registry_set"),
-      registryDelete: () => call<void>("mcp_registry_delete"),
-      registry_delete: () => call<void>("mcp_registry_delete"),
-      effective: () => call<void>("mcp_effective"),
-      projectionPlan: () => call<void>("mcp_projection_plan"),
-      projection_plan: () => call<void>("mcp_projection_plan"),
-      projectionApply: () => call<void>("mcp_projection_apply"),
-      projection_apply: () => call<void>("mcp_projection_apply"),
-      projectionRollback: () => call<void>("mcp_projection_rollback"),
-      projection_rollback: () => call<void>("mcp_projection_rollback"),
-      importScan: () => call<void>("mcp_import_scan"),
-      import_scan: () => call<void>("mcp_import_scan"),
-      importApply: () => call<void>("mcp_import_apply"),
-      import_apply: () => call<void>("mcp_import_apply"),
+      registryList: (projectRoot?: string) =>
+        call<RegistryEntryView[]>("mcp_registry_list", { projectRoot }),
+      registry_list: (projectRoot?: string) =>
+        call<RegistryEntryView[]>("mcp_registry_list", { projectRoot }),
+      registrySet: (
+        name: string,
+        entry: RegistryEntry,
+        scope: Scope,
+        projectRoot?: string,
+      ) => call<void>("mcp_registry_set", { name, entry, scope, projectRoot }),
+      registry_set: (
+        name: string,
+        entry: RegistryEntry,
+        scope: Scope,
+        projectRoot?: string,
+      ) => call<void>("mcp_registry_set", { name, entry, scope, projectRoot }),
+      registryDelete: (name: string, scope: Scope, projectRoot?: string) =>
+        call<boolean>("mcp_registry_delete", { name, scope, projectRoot }),
+      registry_delete: (name: string, scope: Scope, projectRoot?: string) =>
+        call<boolean>("mcp_registry_delete", { name, scope, projectRoot }),
+      effective: (target: TargetId, projectRoot?: string) =>
+        call<RegistryEntryView[]>("mcp_effective", { target, projectRoot }),
+      projectionPlan: (target: TargetId, scope: Scope, projectRoot: string) =>
+        call<ProjectionPlan>("mcp_projection_plan", {
+          target,
+          scope,
+          projectRoot,
+        }),
+      projection_plan: (target: TargetId, scope: Scope, projectRoot: string) =>
+        call<ProjectionPlan>("mcp_projection_plan", {
+          target,
+          scope,
+          projectRoot,
+        }),
+      projectionApply: (plan: ProjectionPlan) =>
+        call<Applied>("mcp_projection_apply", { plan }),
+      projection_apply: (plan: ProjectionPlan) =>
+        call<Applied>("mcp_projection_apply", { plan }),
+      projectionRollback: (
+        target: TargetId,
+        scope: Scope,
+        projectRoot: string,
+      ) =>
+        call<void>("mcp_projection_rollback", { target, scope, projectRoot }),
+      projection_rollback: (
+        target: TargetId,
+        scope: Scope,
+        projectRoot: string,
+      ) =>
+        call<void>("mcp_projection_rollback", { target, scope, projectRoot }),
+      projectionVerify: (target: TargetId, scope: Scope, projectRoot: string) =>
+        call<VerifyStatus>("mcp_projection_verify", {
+          target,
+          scope,
+          projectRoot,
+        }),
+      projection_verify: (
+        target: TargetId,
+        scope: Scope,
+        projectRoot: string,
+      ) =>
+        call<VerifyStatus>("mcp_projection_verify", {
+          target,
+          scope,
+          projectRoot,
+        }),
+      importScan: (projectRoot: string) =>
+        call<ImportScan>("mcp_import_scan", { projectRoot }),
+      import_scan: (projectRoot: string) =>
+        call<ImportScan>("mcp_import_scan", { projectRoot }),
+      importApply: (
+        projectRoot: string,
+        candidates: ImportCandidate[],
+        scope: Scope,
+      ) =>
+        call<string[]>("mcp_import_apply", {
+          projectRoot,
+          candidates,
+          scope,
+        }),
+      import_apply: (
+        projectRoot: string,
+        candidates: ImportCandidate[],
+        scope: Scope,
+      ) =>
+        call<string[]>("mcp_import_apply", {
+          projectRoot,
+          candidates,
+          scope,
+        }),
       health: () => call<void>("mcp_health"),
     },
 
     // === skills namespace ===
     skills: {
-      list: () => call<void>("skills_list"),
-      import: () => call<void>("skills_import"),
-      updateCheck: () => call<void>("skills_update_check"),
-      update_check: () => call<void>("skills_update_check"),
-      updateApply: () => call<void>("skills_update_apply"),
-      update_apply: () => call<void>("skills_update_apply"),
-      trust: () => call<void>("skills_trust"),
-      enable: () => call<void>("skills_enable"),
+      list: (projectRoot: string) =>
+        call<SkillInfo[]>("skills_list", { projectRoot }),
+      import: (projectRoot: string, scope: Scope, source: SkillImportSource) =>
+        call<SkillInfo>("skills_import", { projectRoot, scope, source }),
+      updateCheck: (projectRoot: string, scope: Scope, name: string) =>
+        call<SkillUpdateCheck>("skills_update_check", {
+          projectRoot,
+          scope,
+          name,
+        }),
+      update_check: (projectRoot: string, scope: Scope, name: string) =>
+        call<SkillUpdateCheck>("skills_update_check", {
+          projectRoot,
+          scope,
+          name,
+        }),
+      updatePlan: (projectRoot: string, scope: Scope, name: string) =>
+        call<SkillUpdatePlan>("skills_update_plan", {
+          projectRoot,
+          scope,
+          name,
+        }),
+      update_plan: (projectRoot: string, scope: Scope, name: string) =>
+        call<SkillUpdatePlan>("skills_update_plan", {
+          projectRoot,
+          scope,
+          name,
+        }),
+      updateApply: (projectRoot: string, scope: Scope, name: string) =>
+        call<SkillUpdateApplied>("skills_update_apply", {
+          projectRoot,
+          scope,
+          name,
+        }),
+      update_apply: (projectRoot: string, scope: Scope, name: string) =>
+        call<SkillUpdateApplied>("skills_update_apply", {
+          projectRoot,
+          scope,
+          name,
+        }),
+      trust: (projectRoot: string, scope: Scope, name: string) =>
+        call<SkillInfo>("skills_trust", { projectRoot, scope, name }),
+      enable: (
+        projectRoot: string,
+        scope: Scope,
+        name: string,
+        enabled: boolean,
+      ) =>
+        call<SkillInfo>("skills_enable", {
+          projectRoot,
+          scope,
+          name,
+          enabled,
+        }),
     },
 
     // === commands namespace ===

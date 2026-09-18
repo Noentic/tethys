@@ -1,8 +1,11 @@
-use tethys_api::{ApiError, TethysApi};
+use tethys_api::{ApiError, McpApi, SkillsApi, TethysApi};
 use tethys_schema::thread::{CreateThread, ThreadId};
 use tethys_schema::{DiffHunk, HealthStatus, HostInfo, SearchItem};
 
 struct MinimalApi;
+
+impl McpApi for MinimalApi {}
+impl SkillsApi for MinimalApi {}
 
 impl TethysApi for MinimalApi {
     async fn host_info(&self) -> Result<HostInfo, ApiError> {
@@ -79,8 +82,13 @@ async fn test_stub_defaults_return_unimplemented() {
         other => panic!("expected Unimplemented, got {other:?}"),
     }
 
-    match api.mcp_registry_list().await {
+    match api.mcp_registry_list(None).await {
         Err(ApiError::Unimplemented(m)) => assert_eq!(m, "mcp.registry_list"),
+        other => panic!("expected Unimplemented, got {other:?}"),
+    }
+
+    match api.skills_list("/tmp".into()).await {
+        Err(ApiError::Unimplemented(m)) => assert_eq!(m, "skills.list"),
         other => panic!("expected Unimplemented, got {other:?}"),
     }
 

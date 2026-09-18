@@ -12,6 +12,7 @@ impl ConnectionStore {
         key: &ConnectionKey,
         session: &SessionId,
         cwd: &Path,
+        mcp_servers: Vec<serde_json::Value>,
         replay: bool,
     ) -> Result<RecoveryOutcome, StoreError> {
         let Some(connection) = self.live_connection(key)? else {
@@ -32,7 +33,7 @@ impl ConnectionStore {
             session_id: session.clone(),
             cwd: cwd.to_path_buf(),
             additional_directories: Vec::new(),
-            mcp_servers: Vec::new(),
+            mcp_servers,
             replay,
         };
         let resumed = matches!(

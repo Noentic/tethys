@@ -31,7 +31,7 @@ impl FakeConnection {
             capabilities: NormalizedCapabilities {
                 load_session: true,
                 resume: true,
-                mcp_stdio: false,
+                mcp: tethys_schema::sync::McpTransports::default(),
                 prompt_embedded_context: false,
             },
             senders: Mutex::new(HashMap::new()),

@@ -1,8 +1,8 @@
 //! Thread sessions: connection leases, event fan-out, and the materialized
 //! thread state (architecture §6.1, §12; M1.2 in-memory until M1.1 persists).
 
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::collections::{BTreeSet, HashMap};
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -13,9 +13,11 @@ use tethys_acp::AcpConnection;
 use tethys_agent_servers::{ConnectionLease, ConnectionStore, LaunchSpec};
 use tethys_schema::connection::AgentCompat;
 use tethys_schema::connection::{ConnectionEntry, ConnectionKey};
+use tethys_schema::sync::McpTransports;
 use tethys_schema::thread::{
     ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView,
 };
+use tethys_sync::SecretStore;
 use tethys_thread::{
     AgentConnection, EventOrigin, NewSession, PermissionDecision, PermissionResolver,
     ResumeSession, SessionId, ThreadMachine,
@@ -24,6 +26,23 @@ use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
 use crate::ApiError;
+
+/// Everything the spawn path needs to build a session's MCP server set.
+pub struct SyncSource {
+    pub home: PathBuf,
+    pub secrets: Arc<dyn SecretStore>,
+    pub disabled: BTreeSet<String>,
+}
+
+impl SyncSource {
+    pub fn new(home: impl Into<PathBuf>, secrets: Arc<dyn SecretStore>) -> Self {
+        Self {
+            home: home.into(),
+            secrets,
+            disabled: BTreeSet::new(),
+        }
+    }
+}
 
 /// Safe default until the M1.8 policy engine: never approve without an answer.
 pub struct DenyPermissionResolver;
@@ -72,14 +91,16 @@ impl ThreadInner {
 /// Owns the store, per-thread machines, and event subscriptions.
 pub struct ThreadSessions {
     store: Arc<ConnectionStore>,
+    sync: SyncSource,
     profiles: Mutex<HashMap<String, (ConnectionKey, AgentCompat)>>,
     threads: Mutex<HashMap<ThreadId, Arc<ThreadHandle>>>,
 }
 
 impl ThreadSessions {
-    pub fn new(store: Arc<ConnectionStore>) -> Self {
+    pub fn new(store: Arc<ConnectionStore>, sync: SyncSource) -> Self {
         Self {
             store,
+            sync,
             profiles: Mutex::new(HashMap::new()),
             threads: Mutex::new(HashMap::new()),
         }
@@ -87,6 +108,10 @@ impl ThreadSessions {
 
     pub fn store(&self) -> &Arc<ConnectionStore> {
         &self.store
+    }
+
+    pub fn sync(&self) -> &SyncSource {
+        &self.sync
     }
 
     /// Registers a launchable profile. M1.12 replaces this with the profile store.
@@ -252,6 +277,41 @@ impl ThreadSessions {
             .ok_or_else(|| ApiError::NotFound(format!("agent profile {profile_id}")))
     }
 
+    /// Builds the resolved MCP server set for one spawn.
+    ///
+    /// Secrets are resolved here, at spawn time, and never written to disk,
+    /// logs, or events.
+    fn mcp_servers(
+        &self,
+        workdir: &Path,
+        key: &ConnectionKey,
+    ) -> Result<Vec<serde_json::Value>, ApiError> {
+        let resolved = tethys_sync::session::spawn_servers(
+            &self.sync.home,
+            workdir,
+            &self.sync.disabled,
+            &self.transports_for(key),
+            self.sync.secrets.as_ref(),
+        )
+        .map_err(|error| ApiError::Internal(error.to_string()))?;
+        resolved
+            .into_iter()
+            .map(|server| {
+                serde_json::to_value(server).map_err(|error| ApiError::Internal(error.to_string()))
+            })
+            .collect()
+    }
+
+    fn transports_for(&self, key: &ConnectionKey) -> McpTransports {
+        self.store
+            .entries()
+            .into_iter()
+            .find(|entry| &entry.key == key)
+            .and_then(|entry| entry.capabilities)
+            .map(|capabilities| capabilities.mcp)
+            .unwrap_or_default()
+    }
+
     /// Acquires a lease (spawning if needed) and ensures a live session plus
     /// its reader task. New sessions start fresh; replaced connections resume
     /// with replay (D12/D13).
@@ -272,6 +332,8 @@ impl ThreadSessions {
             .await
             .map_err(|error| ApiError::Internal(error.to_string()))?;
 
+        let mcp_servers = self.mcp_servers(&workdir, &key)?;
+
         let session = match existing_session {
             Some(session) => {
                 lease
@@ -280,7 +342,7 @@ impl ThreadSessions {
                         session_id: session.clone(),
                         cwd: workdir,
                         additional_directories: vec![],
-                        mcp_servers: vec![],
+                        mcp_servers: mcp_servers.clone(),
                         replay: true,
                     })
                     .await
@@ -293,7 +355,7 @@ impl ThreadSessions {
                     .new_session(NewSession {
                         cwd: workdir,
                         additional_directories: vec![],
-                        mcp_servers: vec![],
+                        mcp_servers,
                     })
                     .await
                     .map_err(|error| ApiError::Internal(error.to_string()))?

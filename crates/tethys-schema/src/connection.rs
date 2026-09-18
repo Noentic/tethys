@@ -6,6 +6,8 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use crate::sync::McpTransports;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub enum AcpProtocol {
     V1,
@@ -33,7 +35,7 @@ pub struct AgentInfo {
 pub struct NormalizedCapabilities {
     pub load_session: bool,
     pub resume: bool,
-    pub mcp_stdio: bool,
+    pub mcp: McpTransports,
     pub prompt_embedded_context: bool,
 }
 

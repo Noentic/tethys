@@ -1,8 +1,9 @@
 //! SQLite migrations management using `rusqlite_migration`.
 //!
-//! Two migrations:
+//! Three migrations:
 //! - `0001`: Core schema (`projects`, `threads`, `events`, and indexes).
 //! - `0002`: Materialized `entries` table and index for zero-replay thread opens.
+//! - `0003`: Sync state (`projections`, `skills_state`).
 
 use rusqlite::Connection;
 use rusqlite_migration::{Migrations, M};
@@ -62,6 +63,35 @@ pub fn migrations() -> Migrations<'static> {
         .down(
             "DROP INDEX IF EXISTS idx_entries_thread_first_seq;
             DROP TABLE IF EXISTS entries;",
+        ),
+        M::up(
+            "CREATE TABLE projections (
+                target TEXT NOT NULL,
+                path TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                created INTEGER NOT NULL DEFAULT 0,
+                updated_at INTEGER NOT NULL,
+                entries TEXT NOT NULL,
+                PRIMARY KEY (target, path)
+            );
+
+            CREATE TABLE skills_state (
+                skill_id TEXT PRIMARY KEY,
+                scope TEXT NOT NULL,
+                name TEXT NOT NULL,
+                source TEXT NOT NULL,
+                pinned_sha TEXT,
+                content_hash TEXT NOT NULL,
+                trusted_hash TEXT,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                requires_trust INTEGER NOT NULL DEFAULT 0,
+                UNIQUE (scope, name)
+            );",
+        )
+        .down(
+            "DROP TABLE IF EXISTS skills_state;
+            DROP TABLE IF EXISTS projections;",
         ),
     ])
 }

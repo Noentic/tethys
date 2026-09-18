@@ -1,0 +1,12 @@
+{
+    // User overrides
+    "theme": "dark",
+    "mcp": {
+        "servers": {
+            "fetch": {
+                "type": "remote",
+                "url": "https://mcp.example.com/fetch" // hosted endpoint
+            }
+        }
+    }
+}

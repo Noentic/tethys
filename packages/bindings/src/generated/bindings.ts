@@ -21,6 +21,16 @@ export type AgentInfo = {
 	title: string | null,
 };
 
+/**  Manifest record for one applied projection. */
+export type Applied = {
+	target: TargetId,
+	path: string,
+	scope: Scope,
+	file_hash: string,
+	created: boolean,
+	entries?: { [key in string]: string },
+};
+
 /**  Benchmark configuration for S0.1 IPC test harness. */
 export type BenchmarkConfig = {
 	streams: number,
@@ -212,11 +222,31 @@ export type Entry = {
 /**  Category of materialized entry in a thread transcript. */
 export type EntryKind = "message" | "tool_call" | "plan" | "terminal";
 
+/**  Per-entry Tethys metadata (`x-tethys`). */
+export type EntryMeta = {
+	scope?: Scope | null,
+	targets?: TargetId[] | null,
+	enabled?: boolean,
+	legacy?: boolean,
+};
+
 /**  Request parameters for a page of materialized entries. */
 export type EntryPage = {
 	before_first_seq: number | null,
 	limit: number,
 };
+
+/**  One entry's state inside a projection plan. */
+export type EntryProjection = {
+	name: string,
+	state: EntryState,
+	/**  Whether this entry is part of the proposed file content. */
+	projected: boolean,
+	notes?: string[],
+};
+
+/**  Per-entry projection state in a plan. */
+export type EntryState = "pending" | "in-sync" | "drifted" | "conflict" | "unsupported";
 
 /**  Payload for creating or updating a materialized entry alongside an event append. */
 export type EntryUpsert = {
@@ -251,6 +281,34 @@ export type HunkRef = {
 	hunk_index: number,
 };
 
+/**  One MCP server detected in a foreign config file. */
+export type ImportCandidate = {
+	name: string,
+	entry: RegistryEntry,
+	source_path: string,
+	scope: Scope,
+	conflict: boolean,
+};
+
+/**  One source file that could not be scanned. */
+export type ImportFailure = {
+	source_path: string,
+	message: string,
+};
+
+/**  Read-only scan across every detected tool config. */
+export type ImportScan = {
+	candidates: ImportCandidate[],
+	failures: ImportFailure[],
+};
+
+/**  Transports an agent advertised for a session. */
+export type McpTransports = {
+	stdio: boolean,
+	http: boolean,
+	sse: boolean,
+};
+
 export type MessageChunk = {
 	message_id: string,
 	role: Role,
@@ -273,7 +331,7 @@ export type NewEvent = {
 export type NormalizedCapabilities = {
 	load_session: boolean,
 	resume: boolean,
-	mcp_stdio: boolean,
+	mcp: McpTransports,
 	prompt_embedded_context: boolean,
 };
 
@@ -332,6 +390,43 @@ export type ProjectGitConfig = {
 	setup_timeout_ms?: number,
 };
 
+/**  Preview of one projected registry into one target file. */
+export type ProjectionPlan = {
+	target: TargetId,
+	path: string,
+	scope: Scope,
+	base_hash: string,
+	created: boolean,
+	diff: string,
+	content: string,
+	entries: EntryProjection[],
+};
+
+/**  One canonical MCP registry entry. */
+export type RegistryEntry = {
+	type: TransportKind,
+	command?: string | null,
+	args?: string[],
+	env?: { [key in string]: RegistryValue },
+	url?: string | null,
+	headers?: { [key in string]: RegistryValue },
+	"x-tethys"?: EntryMeta,
+};
+
+/**  One registry entry with its scope and name, for the UI. */
+export type RegistryEntryView = {
+	name: string,
+	scope: Scope,
+	entry: RegistryEntry,
+};
+
+/**
+ *  A registry value: a literal string or a keychain reference.
+ * 
+ *  Serializes the canonical `{"secretRef":"keychain:tethys/<name>"}` shape.
+ */
+export type RegistryValue = string | { secretRef: string };
+
 /**  Result of a restore. */
 export type RestoreOutcome = {
 	restored_worktree_tree: string,
@@ -361,6 +456,9 @@ export type RestoreTarget = ({ Checkpoint: {
 
 export type Role = "User" | "Agent" | "Thought";
 
+/**  Registry file location an entry came from. */
+export type Scope = "global" | "project";
+
 /**  A search item result returned by FFF search (`search.files`). */
 export type SearchItem = {
 	relative_path: string,
@@ -378,6 +476,22 @@ export type SessionInfo = {
 	updated_at: string | null,
 };
 
+/**
+ *  One MCP server handed to an agent session.
+ * 
+ *  Values are `Secret` until `resolve_secrets` runs at spawn; a resolved
+ *  server carries only `Plain` values and is never written to disk.
+ */
+export type SessionServer = {
+	name: string,
+	transport: TransportKind,
+	command?: string | null,
+	args?: string[],
+	env?: { [key in string]: RegistryValue },
+	url?: string | null,
+	headers?: { [key in string]: RegistryValue },
+};
+
 export type SessionState = "Running" | { Idle: {
 	stop_reason: StopReason | null,
 } } | "RequiresAction";
@@ -387,6 +501,59 @@ export type SetupOutcome = {
 	exit_code: number | null,
 	stderr: string,
 	timed_out: boolean,
+};
+
+/**  Where `skills.import` should load from. */
+export type SkillImportSource = { kind: "folder"; path: string } | { kind: "archive"; path: string } | { kind: "git-hub"; spec: string };
+
+/**  One skill in the canonical home. */
+export type SkillInfo = {
+	name: string,
+	scope: Scope,
+	path: string,
+	source: SkillSource,
+	enabled: boolean,
+	requires_trust: boolean,
+	trusted: boolean,
+	content_hash: string,
+	pinned_sha?: string | null,
+};
+
+/**  Where a skill came from. */
+export type SkillOrigin = "folder" | "archive" | "git-hub" | "lockfile";
+
+/**  Skill provenance (`skills_state.source` JSON). */
+export type SkillSource = {
+	origin: SkillOrigin,
+	repo?: string | null,
+	reference?: string | null,
+	subdir?: string | null,
+	lock_hash?: string | null,
+	url?: string | null,
+};
+
+/**  Result of applying one skill update. */
+export type SkillUpdateApplied = {
+	name: string,
+	pinned_sha: string,
+	content_hash: string,
+};
+
+/**  Cheap upstream check for one skill. */
+export type SkillUpdateCheck = {
+	name: string,
+	pinned_sha?: string | null,
+	upstream_sha?: string | null,
+	update_available: boolean,
+	error?: string | null,
+};
+
+/**  Download-and-diff preview for one skill update. */
+export type SkillUpdatePlan = {
+	name: string,
+	upstream_sha: string,
+	changed_files: string[],
+	diff: string,
 };
 
 export type StateChanged = {
@@ -412,6 +579,9 @@ export type StreamChunk = {
 	timestamp_ms: number | null,
 	payload: string,
 };
+
+/**  A file surface or session that a registry entry can be projected to. */
+export type TargetId = "session" | "claude-code" | "codex" | "open-code";
 
 /**  Stable thread identifier. */
 export type ThreadId = string;
@@ -443,6 +613,9 @@ export type ToolCallPatch = {
 };
 
 export type ToolCallStatus = "Pending" | "Executing" | "Completed" | "Failed";
+
+/**  MCP transport of a registry entry. */
+export type TransportKind = "stdio" | "http" | "sse";
 
 /**  Normalized event model (architecture §7.3). One v2-shaped stream for all agents. */
 export type TurnEventBody = { type: "StateChanged"; body: StateChanged } | { type: "MessageUpsert"; body: MessageUpsert } | { type: "MessageChunk"; body: MessageChunk } | { type: "ToolCallUpsert"; body: {
@@ -500,6 +673,9 @@ export type UsageSnapshot = {
 	total_tokens: number,
 	cost: number | null,
 };
+
+/**  Result of verifying a projected file against its manifest entry. */
+export type VerifyStatus = "in-sync" | "drifted" | "missing";
 
 /**  Result of materializing a worktree. */
 export type WorktreeInfo = {

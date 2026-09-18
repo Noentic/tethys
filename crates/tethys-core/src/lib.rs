@@ -1,6 +1,8 @@
 //! Orchestrator and domain core (implements `tethys-api`).
 
 mod git_registry;
+pub mod mcp;
+pub mod skills;
 pub mod synthetic;
 pub mod thread_session;
 
@@ -30,6 +32,7 @@ pub struct Core {
     search_index: Arc<RwLock<Option<WorktreeSearchIndex>>>,
     git: Mutex<GitRegistry>,
     sessions: Arc<ThreadSessions>,
+    store: Option<Arc<tethys_store::EventStore>>,
 }
 
 impl Default for Core {
@@ -44,7 +47,10 @@ impl Core {
             AcpProtocol::V1,
             Arc::new(DenyPermissionResolver),
         ));
-        Self::with_sessions(version, Arc::new(ThreadSessions::new(store)))
+        let home = dirs::home_dir().unwrap_or_default();
+        let sync =
+            crate::thread_session::SyncSource::new(home, Arc::new(tethys_sync::KeyringSecrets));
+        Self::with_sessions(version, Arc::new(ThreadSessions::new(store, sync)))
     }
 
     pub fn with_sessions(version: impl Into<String>, sessions: Arc<ThreadSessions>) -> Self {
@@ -53,7 +59,24 @@ impl Core {
             search_index: Arc::new(RwLock::new(None)),
             git: Mutex::new(GitRegistry::default()),
             sessions,
+            store: None,
         }
+    }
+
+    /// Attaches the sync-state store (projection ownership and skill rows).
+    pub fn with_store(mut self, store: Arc<tethys_store::EventStore>) -> Self {
+        self.store = Some(store);
+        self
+    }
+
+    pub(crate) fn sync_store(&self) -> Result<&Arc<tethys_store::EventStore>, ApiError> {
+        self.store
+            .as_ref()
+            .ok_or_else(|| ApiError::Internal("sync store not configured".into()))
+    }
+
+    pub(crate) fn sync_home(&self) -> std::path::PathBuf {
+        self.sessions.sync().home.clone()
     }
 
     pub fn set_search_index(&self, index: WorktreeSearchIndex) {
