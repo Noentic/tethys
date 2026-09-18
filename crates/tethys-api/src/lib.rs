@@ -7,6 +7,7 @@
 
 use futures::stream::Stream;
 use std::pin::Pin;
+use tethys_schema::composer::{CommandInfo, ExpandedCommand};
 use tethys_schema::connection::ConnectionEntry;
 use tethys_schema::thread::{
     ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView,
@@ -36,6 +37,8 @@ pub enum ApiError {
     NotFound(String),
     #[error("UNIMPLEMENTED: {0}")]
     Unimplemented(&'static str),
+    #[error("INDEX_WARMING: {0}")]
+    IndexWarming(String),
     #[error("git: {0}")]
     Git(String),
     #[error("invalid config: {0}")]
@@ -480,15 +483,24 @@ pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
     // === search ===
     fn search_files(
         &self,
+        project_root: String,
         query: String,
         limit: usize,
     ) -> impl std::future::Future<Output = Result<Vec<SearchItem>, ApiError>> + Send;
 
     // === commands ===
-    fn commands_list(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+    fn commands_list(
+        &self,
+        _project_root: Option<String>,
+    ) -> impl std::future::Future<Output = Result<Vec<CommandInfo>, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("commands.list")) }
     }
-    fn commands_expand(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+    fn commands_expand(
+        &self,
+        _command: String,
+        _args_text: String,
+        _project_root: Option<String>,
+    ) -> impl std::future::Future<Output = Result<ExpandedCommand, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("commands.expand")) }
     }
 

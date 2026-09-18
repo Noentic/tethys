@@ -15,9 +15,13 @@ pub use git::*;
 use serde::{Deserialize, Serialize};
 use specta::{Type, Types};
 
+pub mod composer;
 pub mod connection;
+pub mod search;
 pub mod sync;
 pub mod thread;
+
+pub use search::SearchItem;
 
 /// Basic host metadata for the S0.0 shell (`host.info`).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -31,13 +35,6 @@ pub struct HostInfo {
 pub struct HealthStatus {
     pub ok: bool,
     pub core_version: String,
-}
-
-/// A search item result returned by FFF search (`search.files`).
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SearchItem {
-    pub relative_path: String,
-    pub score: i32,
 }
 
 /// A chunk emitted over Tauri IPC streaming channels (S0.1).
@@ -97,7 +94,12 @@ pub fn registered_types() -> Types {
     Types::default()
         .register::<HostInfo>()
         .register::<HealthStatus>()
-        .register::<SearchItem>()
+        .register::<search::SearchItem>()
+        .register::<composer::CommandScope>()
+        .register::<composer::CommandInfo>()
+        .register::<composer::ReferenceKind>()
+        .register::<composer::ComposerReference>()
+        .register::<composer::ExpandedCommand>()
         .register::<StreamChunk>()
         .register::<DiffHunk>()
         .register::<DiffLine>()

@@ -8,6 +8,7 @@ use tauri::ipc::Channel;
 use tauri::State;
 use tethys_api::{McpApi, SkillsApi, TethysApi};
 use tethys_core::Core;
+use tethys_schema::composer::{CommandInfo, ExpandedCommand};
 use tethys_schema::connection::ConnectionEntry;
 use tethys_schema::sync::{
     Applied, ImportCandidate, ImportScan, ProjectionPlan, RegistryEntry, RegistryEntryView, Scope,
@@ -414,11 +415,12 @@ stub_cmd!(git_pr_create);
 #[specta::specta]
 pub async fn search_files(
     state: State<'_, CoreState>,
+    project_root: String,
     query: String,
     limit: usize,
 ) -> Result<Vec<SearchItem>, String> {
     state
-        .search_files(query, limit)
+        .search_files(project_root, query, limit)
         .await
         .map_err(|e| e.to_string())
 }
@@ -679,8 +681,34 @@ pub async fn skills_enable(
 }
 
 // === commands ===
-stub_cmd!(commands_list);
-stub_cmd!(commands_expand);
+
+/// `commands.list` — discovered `/` Tethys commands (CMP-01).
+#[tauri::command]
+#[specta::specta]
+pub async fn commands_list(
+    state: State<'_, CoreState>,
+    project_root: Option<String>,
+) -> Result<Vec<CommandInfo>, String> {
+    state
+        .commands_list(project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `commands.expand` — expands a command body with args and references.
+#[tauri::command]
+#[specta::specta]
+pub async fn commands_expand(
+    state: State<'_, CoreState>,
+    command: String,
+    args_text: String,
+    project_root: Option<String>,
+) -> Result<ExpandedCommand, String> {
+    state
+        .commands_expand(command, args_text, project_root)
+        .await
+        .map_err(|e| e.to_string())
+}
 
 // === terminal ===
 stub_cmd!(terminal_list);

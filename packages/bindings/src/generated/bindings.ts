@@ -77,10 +77,40 @@ export type CheckpointResult = {
 	skipped: string[],
 };
 
+/**  One discovered `/` Tethys command (CMP-01). */
+export type CommandInfo = {
+	name: string,
+	scope: CommandScope,
+	path: string,
+};
+
+/**  Where a discovered Tethys command lives. */
+export type CommandScope = "global" | "project";
+
 /**  Result of a commit on a thread branch. */
 export type CommitResult = {
 	oid: string,
 	summary: string,
+};
+
+/**
+ *  UI metadata for one resolved `$skill` or `@path` reference.
+ * 
+ *  This travels alongside the plaintext prompt for rendering only. `path` is a
+ *  worktree-relative path for `Path` references and a skill directory for
+ *  `Skill` references. `mime`/`size` are `None` for directories.
+ */
+export type ComposerReference = {
+	kind: ReferenceKind,
+	name: string,
+	path: string,
+	is_dir: boolean,
+	mime: string | null,
+	/**
+	 *  Byte size for files; `None` for directories. `f64` keeps the wire type
+	 *  JSON-native (specta forbids exporting `u64`).
+	 */
+	size: number | null,
 };
 
 export type ConfigOption = {
@@ -263,6 +293,12 @@ export type EventEnvelope = {
 	event: TurnEventBody,
 };
 
+/**  The result of expanding a `/` command: the plaintext prompt plus UI metadata. */
+export type ExpandedCommand = {
+	text: string,
+	references: ComposerReference[],
+};
+
 /**  Liveness probe result (`host.health`). */
 export type HealthStatus = {
 	ok: boolean,
@@ -402,6 +438,9 @@ export type ProjectionPlan = {
 	entries: EntryProjection[],
 };
 
+/**  What a resolved composer reference points at. */
+export type ReferenceKind = "skill" | "path";
+
 /**  One canonical MCP registry entry. */
 export type RegistryEntry = {
 	type: TransportKind,
@@ -459,10 +498,16 @@ export type Role = "User" | "Agent" | "Thought";
 /**  Registry file location an entry came from. */
 export type Scope = "global" | "project";
 
-/**  A search item result returned by FFF search (`search.files`). */
+/**
+ *  A search item result returned by FFF search (`search.files`).
+ * 
+ *  `relative_path` is relative to the queried worktree root. `is_dir`
+ *  distinguishes folders from files so `@` chips can render folder icons.
+ */
 export type SearchItem = {
 	relative_path: string,
 	score: number,
+	is_dir: boolean,
 };
 
 /**  Sequence range assigned to a batch of events. */

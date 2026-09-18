@@ -12,6 +12,7 @@ acp-v2 = ["tethys-agent-servers/acp-v2"]
 async-trait.workspace = true
 dirs.workspace = true
 futures.workspace = true
+mime_guess.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

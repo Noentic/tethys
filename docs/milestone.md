@@ -142,7 +142,7 @@ flowchart LR
 | **M1.2** Thread & connections | `AgentConnection` trait, `Thread` state machine (UI‑02 states), ConnectionStore leases + two‑phase reaping, supervisor kill ladder, recovery ladder (cancel → force close → resume+replay → restart → Interrupted), session import/resume | `crates/tethys-thread`, `crates/tethys-acp`, `crates/tethys-agent-servers`, `crates/tethys-supervisor` | AGT‑02, 04, 05, 06 | 4 concurrent threads across 2 repos and 2 vendors; kill agent mid‑turn → thread marked *Interrupted* with history intact and resumes on next prompt; zero orphans; ACP v1 + v2 fixture conformance | **Done** (18 September 2026) |
 | **M1.3** Git engine | Worktree create/remove with branch template, untracked‑file copy + setup script, per‑turn temp‑index checkpoints with undoable restore, turn + cumulative diff pipeline, stage/unstage/discard by file and hunk, commit, archive/delete guards | `crates/tethys-git` | WT‑01 to 06 | Checkpoint ≤ 1 s p95 on a 100k‑file repo; restore‑then‑undo‑restore returns identical tree hash; hunk‑level discard fuzz test; delete blocked while uncommitted work exists | **Done** (18 September 2026) · [m1.3-git-engine-results.md](./m1.3-git-engine-results.md) |
 | **M1.4** Sync engine | Canonical MCP registry (global + project scope, secrets as keychain refs), session‑start injection, projectors for Claude Code / Codex / OpenCode with plan/apply/rollback + ownership verification + conflict detection, onboarding import, skill library (`.agents/skills`, folder / `.skill` / pinned GitHub), script trust gate | `crates/tethys-sync`, `crates/tethys-schema/src/sync.rs`, `crates/tethys-store` (migration `0003` + `sync_state`, trunk PR) | SYN‑01, 02, 03, 04, 06, 07 | Golden round‑trip with zero formatting loss on all three targets; foreign entries never modified; no secret ever written to a config file (assert in test); untrusted script skill excluded from a YOLO thread | — |
-| **M1.5** Search & command resolution | Per‑worktree FFF index with invalidation, `search.files` for files *and* folders, `/` command discovery and expansion (project overrides global, `{{args}}` — closes PD‑3), `$` skill injection strategy per agent capability, `@` path reference resolution | `crates/tethys-search`, `crates/tethys-core/src/composer` | CMP‑01, 02, 03, 04 (backend) | ≤ 30 ms warm query on 200k files; index survives worktree churn; expansion golden tests incl. nested `$`/`@` inside command bodies | — |
+| **M1.5** Search & command resolution | Per‑worktree FFF index with invalidation, `search.files` for files *and* folders, `/` command discovery and expansion (project overrides global, `{{args}}` — closes PD‑3), `$` skill reference resolution (plaintext instruction + path, body never inlined), `@` path reference resolution (plaintext reference, never contents) | `crates/tethys-search`, `crates/tethys-core/src/composer`, `crates/tethys-schema/src/{search.rs,composer.rs}` | CMP‑01, 02, 03, 04 (backend) | ≤ 30 ms warm query on 200k files (**benchmark**, recorded in result doc); index survives worktree churn (**behavioral test**); expansion golden tests incl. nested `$`/`@` inside command bodies (**behavioral test**) | **Done** (18 September 2026) · [m1.5-search-commands-results.md](./m1.5-search-commands-results.md) |
 | **M1.6** Design system & shell | Tokens + shadcn component set, four resizable regions, command palette, full keyboard map, thread‑state chrome, `@tethys/state` rAF‑batched stores against the M1.0 stubs | `packages/ui`, `packages/state`, `apps/desktop/src` shell + layout routes | UI‑01, UI‑02 | Every P0 action reachable by keyboard; axe/a11y clean on the shell; layout stable at 60 fps with a synthetic 8‑stream feed | — |
 
 #### Wave 2 — product surface (6 parallel worktrees)
@@ -176,7 +176,7 @@ The chunk boundaries only hold if the shared, generated, and lock files are hand
 - **Merge order within a wave is arbitrary by construction.** Any chunk that cannot satisfy that property is mis‑scoped and must be re‑split before work starts.
 - **Integration checkpoint at the end of each wave**: full workspace test, codegen determinism check, and the wave's exit criteria re‑run on trunk before the next wave branches.
 
-**Decisions to close during MVP:** PD‑3 (M1.5), PD‑5, PD‑6, PD‑7, PD‑8, AD‑9, AD‑12 (M1.15 write‑ups, decided in the chunk that hits them first).
+**Decisions to close during MVP:** PD‑5, PD‑6, PD‑7, PD‑8, AD‑9, AD‑12 (M1.15 write‑ups, decided in the chunk that hits them first).
 
 **Exit criteria:**
 - Sustained team dogfooding with ≥ 4 concurrent threads without regressions.
@@ -304,8 +304,8 @@ The Phase 1 worktree protocol (§1.2) applies unchanged. Three additional constr
 | When | Decisions |
 |---|---|
 | Already decided | AD‑3 (React + TanStack) |
-| Phase 0 (All Closed) | **AD‑1** (documented trigger), **AD‑4** (pooled with leases), **AD‑5** (gix reads + CLI mutations), **AD‑8** (v1+v2 side-by-side, v2-shaped internal model), **AD‑10** (custom virtualized git diffs), **AD‑13** (rusqlite+tokio-rusqlite), **PD‑1** (API key default) |
-| During MVP | PD‑3, PD‑5, PD‑6, PD‑7, PD‑8, AD‑9, AD‑12 |
+| Phase 0 (All Closed) | **AD‑1** (documented trigger), **AD‑4** (pooled with leases), **AD‑5** (gix reads + CLI mutations), **AD‑8** (v1+v2 side-by-side, v2-shaped internal model), **AD‑10** (custom virtualized git diffs), **AD‑13** (rusqlite+tokio-rusqlite), **PD‑1** (API key default), **PD‑3** (`{{args}}` placeholder) |
+| During MVP | PD‑5, PD‑6, PD‑7, PD‑8, AD‑9, AD‑12 |
 | Before MVP beta | PD‑2 plan confirmed with sources |
 | During V1 | PD‑2 (final), PD‑4, PD‑9, AD‑2, AD‑6, AD‑11, AD‑14 |
 | Phase 3 | AD‑7 |

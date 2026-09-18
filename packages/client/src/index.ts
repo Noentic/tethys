@@ -12,7 +12,9 @@ import type {
   CheckpointInfo,
   CheckpointPhase,
   CheckpointResult,
+  CommandInfo,
   CommitResult,
+  ComposerReference,
   DiffFile,
   DiffFileDetail,
   DiffFileStatus,
@@ -21,6 +23,7 @@ import type {
   DiffLineKind,
   DiffSource,
   DiffSummary,
+  ExpandedCommand,
   HealthStatus,
   HostInfo,
   HunkRef,
@@ -243,8 +246,8 @@ export function createClient(options: ClientOptions = {}) {
 
     // === search namespace ===
     search: {
-      files: (query: string, limit = 20) =>
-        call<SearchItem[]>("search_files", { query, limit }),
+      files: (projectRoot: string, query: string, limit = 20) =>
+        call<SearchItem[]>("search_files", { projectRoot, query, limit }),
     },
 
     // === mcp namespace ===
@@ -402,8 +405,14 @@ export function createClient(options: ClientOptions = {}) {
 
     // === commands namespace ===
     commands: {
-      list: () => call<void>("commands_list"),
-      expand: () => call<void>("commands_expand"),
+      list: (projectRoot?: string) =>
+        call<CommandInfo[]>("commands_list", { projectRoot }),
+      expand: (command: string, argsText = "", projectRoot?: string) =>
+        call<ExpandedCommand>("commands_expand", {
+          command,
+          argsText,
+          projectRoot,
+        }),
     },
 
     // === terminal namespace ===
@@ -420,8 +429,8 @@ export function createClient(options: ClientOptions = {}) {
     /** `host.health` — see `tethys-api::TethysApi`. */
     health: () => call<HealthStatus>("health"),
     /** `search.files` — see `tethys-api::TethysApi`. */
-    searchFiles: (query: string, limit = 20) =>
-      call<SearchItem[]>("search_files", { query, limit }),
+    searchFiles: (projectRoot: string, query: string, limit = 20) =>
+      call<SearchItem[]>("search_files", { projectRoot, query, limit }),
     /** `git.diff.synthetic` — S0.1 diff benchmark generator */
     getSyntheticDiff: (lineCount = 20000) =>
       call<DiffHunk[]>("generate_synthetic_diff", { lineCount }),
@@ -449,7 +458,9 @@ export type {
   CheckpointInfo,
   CheckpointPhase,
   CheckpointResult,
+  CommandInfo,
   CommitResult,
+  ComposerReference,
   DiffFile,
   DiffFileDetail,
   DiffFileStatus,
@@ -458,6 +469,7 @@ export type {
   DiffLineKind,
   DiffSource,
   DiffSummary,
+  ExpandedCommand,
   HealthStatus,
   HostInfo,
   HunkRef,

@@ -23,6 +23,7 @@
 
 ## Anti-Patterns
 -  **Heavy Benchmarks in Tests**: Never generate thousands of files/links in `cargo test` (causes `EMLINK`, disk wear, and slow CI); keep benchmarks in dedicated `benches/`.
+-  **Re-running Recorded Benchmarks**: A milestone benchmark is run once on the author's machine and recorded in its results doc; do not re-run it for review, CI, or future chunks. Dependencies (FFF, gix, rusqlite, …) are already benchmarked and tested by their own maintainers — benchmark only our integration, never the upstream crate.
 - **Libraries if possible**: Never hand-roll primitives when standard libraries are installed
 -  **Platform-Blind Assertions**: Never assume LF endings on Windows checkouts (normalize with `.trim_end()`); never assume instant process reaping on Unix/macOS (poll with timeout).
 -  **Implicit Concurrency Dependencies**: Never rely on execution order in Turborepo without explicit `dependsOn` (e.g. `lint` depending on `codegen`).

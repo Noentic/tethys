@@ -1,19 +1,34 @@
+//! Per-worktree fuzzy file and folder search over FFF.
+
+mod error;
+mod manager;
+
+pub use error::SearchError;
+pub use manager::{SearchIndexManager, WARM_DEADLINE};
+
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
 use fff_search::file_picker::{FilePicker, FilePickerOptions};
-use fff_search::shared::SharedFilePicker;
-use fff_search::{FFFMode, FuzzySearchOptions, PaginationArgs, QueryParser};
+use fff_search::shared::{SharedFilePicker, SharedFrecency};
+use fff_search::{FFFMode, FuzzySearchOptions, MixedItemRef, PaginationArgs, QueryParser};
 use tethys_schema::SearchItem;
 
+/// A single worktree's FFF-backed search index.
+///
+/// Construction spawns FFF's background scan and returns immediately; call
+/// [`WorktreeSearchIndex::wait_ready`] before expecting complete results.
 pub struct WorktreeSearchIndex {
     base_path: PathBuf,
     picker: SharedFilePicker,
+    frecency: SharedFrecency,
 }
 
 impl WorktreeSearchIndex {
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, String> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, SearchError> {
         let base_path = path.as_ref().to_path_buf();
         let picker = SharedFilePicker::default();
+        let frecency = SharedFrecency::default();
 
         let options = FilePickerOptions {
             base_path: base_path.to_string_lossy().to_string(),
@@ -23,21 +38,30 @@ impl WorktreeSearchIndex {
             ..Default::default()
         };
 
-        FilePicker::new_with_shared_state(
-            picker.clone(),
-            Default::default(),
-            options,
-        ).map_err(|e| format!("failed to initialize file picker: {e}"))?;
+        FilePicker::new_with_shared_state(picker.clone(), frecency.clone(), options)
+            .map_err(|e| SearchError::Picker(e.to_string()))?;
 
-        // Wait up to 30s for initial scan
-        picker.wait_for_scan(Duration::from_secs(30));
-
-        Ok(Self { base_path, picker })
+        Ok(Self {
+            base_path,
+            picker,
+            frecency,
+        })
     }
 
-    pub fn query(&self, query_str: &str, limit: usize) -> Result<Vec<SearchItem>, String> {
-        let picker_guard = self.picker.read().map_err(|e| format!("lock error: {e}"))?;
-        let picker = picker_guard.as_ref().ok_or_else(|| "picker not initialized".to_string())?;
+    /// Waits up to `deadline` for the initial scan. Returns `false` on timeout.
+    pub fn wait_ready(&self, deadline: Duration) -> bool {
+        self.picker.wait_for_scan(deadline)
+    }
+
+    /// Queries files **and** folders, interleaved by FFF score.
+    pub fn query(&self, query_str: &str, limit: usize) -> Result<Vec<SearchItem>, SearchError> {
+        let picker_guard = self
+            .picker
+            .read()
+            .map_err(|e| SearchError::Picker(e.to_string()))?;
+        let picker = picker_guard
+            .as_ref()
+            .ok_or_else(|| SearchError::Picker("picker not initialized".to_string()))?;
 
         let parser = QueryParser::default();
         let query = parser.parse(query_str);
@@ -52,22 +76,33 @@ impl WorktreeSearchIndex {
             ..Default::default()
         };
 
-        let results = picker.fuzzy_search(&query, None, search_opts);
+        let results = picker.fuzzy_search_mixed(&query, None, search_opts);
 
         let items = results
             .items
             .into_iter()
             .zip(results.scores)
             .map(|(item, score)| {
-                let rel = item.relative_path(picker);
+                let (relative_path, is_dir) = match item {
+                    MixedItemRef::File(file) => (file.relative_path(picker), false),
+                    MixedItemRef::Dir(dir) => (dir.relative_path(picker), true),
+                };
                 SearchItem {
-                    relative_path: rel.to_string(),
+                    relative_path,
                     score: score.total,
+                    is_dir,
                 }
             })
             .collect();
 
         Ok(items)
+    }
+
+    /// Triggers a full background rescan of this worktree.
+    pub fn invalidate(&self) -> Result<(), SearchError> {
+        self.picker
+            .trigger_full_rescan_async(&self.frecency)
+            .map_err(|e| SearchError::Picker(e.to_string()))
     }
 
     pub fn base_path(&self) -> &Path {

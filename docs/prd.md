@@ -159,10 +159,10 @@ SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native conf
 
 | ID | Requirement | Pri |
 |---|---|---|
-| CMP‑01 | **`/` Tethys commands.** Plain markdown files with no frontmatter, in a global folder and a project folder; the filename is the command name; project overrides global. On send, the body replaces the command; any text after the command is appended, or fills an `{{args}}` placeholder if present (PD‑3). Bodies may contain `$` and `@` references | P0 |
+| CMP‑01 | **`/` Tethys commands.** Plain markdown files with no frontmatter, in a global folder and a project folder; the filename is the command name; project overrides global. On send, the body replaces the command; any text after the command is appended, or fills an `{{args}}` placeholder if present (PD‑3). Bodies may contain `$` and `@` references, which resolve to plaintext references — never content | P0 |
 | CMP‑02 | **`/` agent commands.** Commands the agent advertises are listed separately and passed through unchanged; name clashes show as `/agent:name` | P0 |
-| CMP‑03 | **`$` skills.** Picking a skill guarantees it is used this turn. For agents that load skills themselves, Tethys adds an explicit instruction plus a link to the skill; for others, it includes the skill text. The chosen method is visible on the message | P0 |
-| CMP‑04 | **`@` tags.** Fast fuzzy search over files *and* folders in the thread's worktree (FFF). A tag sends a reference to the path, never its contents | P0 |
+| CMP‑03 | **`$` skills.** Picking a skill guarantees it is used this turn. Tethys adds an explicit plaintext instruction naming the skill and pointing at its `SKILL.md`; the skill body is never inlined for any agent, so the sent turn is identical across capabilities. The reference is visible on the message | P0 |
+| CMP‑04 | **`@` tags.** Fast fuzzy search over files *and* folders in the thread's worktree (FFF). A tag sends a plaintext reference to the path — never its contents; the path's name, size, and MIME are shown on the message, not sent to the agent | P0 |
 | CMP‑05 | Prompts typed while an agent is working are queued, editable, and reorderable | P0 |
 | CMP‑06 | Line ranges on tags (`@src/auth.rs:40-80`) | P1 |
 
@@ -234,7 +234,7 @@ SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native conf
 |---|---|---|
 | PD‑1 | Sign‑in guidance for Claude via adapter | **API key by default with notice** (Decided in Spike S0.7) · neutral with notice · hide subscription path |
 | PD‑2 | Which vendors accept terminal (Class C) hosting | Confirm per vendor; ship only for confirmed ones |
-| PD‑3 | Slash command arguments | Append only · `{{args}}` placeholder (proposed) · positional |
+| PD‑3 | Slash command arguments | **`{{args}}` placeholder, else append** (Decided in M1.5) · positional |
 | PD‑4 | Fork behaviour | New worktree + new session with summary · restore point only |
 | PD‑5 | Resuming agents that can't reload sessions | Start fresh · user‑approved summary of prior turns |
 | PD‑6 | Default worktree location | **`~/.tethys/worktrees/<repo-id>/<slug>`** (Decided in M1.3) · next to the repo |

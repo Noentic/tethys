@@ -7,4 +7,14 @@ license.workspace = true
 
 [dependencies]
 fff-search = "0.10.7-nightly.f3647b7"
+parking_lot.workspace = true
 tethys-schema = { path = "../tethys-schema" }
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[bench]]
+name = "warm_query_200k"
+harness = false
+test = false

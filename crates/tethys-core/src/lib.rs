@@ -1,5 +1,6 @@
 //! Orchestrator and domain core (implements `tethys-api`).
 
+pub mod composer;
 mod git_registry;
 pub mod mcp;
 pub mod skills;
@@ -8,13 +9,14 @@ pub mod thread_session;
 
 pub use git_registry::ThreadRuntimeState;
 
-use parking_lot::{Mutex, RwLock};
-use std::path::Path;
+use parking_lot::Mutex;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tethys_agent_servers::{ConnectionStore, StoreOptions};
 use tethys_api::{ApiError, TethysApi};
 use tethys_git::{default_worktree_path, GitError, GitOptions};
+use tethys_schema::composer::{CommandInfo, ExpandedCommand};
 use tethys_schema::connection::{AcpProtocol, ConnectionEntry};
 use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView};
 use tethys_schema::{
@@ -22,14 +24,15 @@ use tethys_schema::{
     DiffSource, DiffSummary, HealthStatus, HostInfo, HunkRef, RestoreOutcome, RestorePolicy,
     RestoreTarget, SearchItem, WorktreeInfo, WorktreeSpec,
 };
-use tethys_search::WorktreeSearchIndex;
+use tethys_search::{SearchError, SearchIndexManager};
 
+use crate::composer::{expand_command, global_commands_dir, list_commands, SkillCandidate};
 use crate::thread_session::{DenyPermissionResolver, ThreadSessions};
 use git_registry::{load_git_config, GitRegistry, ProcessSetupRunner, RegisteredWorktree};
 
 pub struct Core {
     version: String,
-    search_index: Arc<RwLock<Option<WorktreeSearchIndex>>>,
+    search: SearchIndexManager,
     git: Mutex<GitRegistry>,
     sessions: Arc<ThreadSessions>,
     store: Option<Arc<tethys_store::EventStore>>,
@@ -56,7 +59,7 @@ impl Core {
     pub fn with_sessions(version: impl Into<String>, sessions: Arc<ThreadSessions>) -> Self {
         Self {
             version: version.into(),
-            search_index: Arc::new(RwLock::new(None)),
+            search: SearchIndexManager::new(),
             git: Mutex::new(GitRegistry::default()),
             sessions,
             store: None,
@@ -79,8 +82,29 @@ impl Core {
         self.sessions.sync().home.clone()
     }
 
-    pub fn set_search_index(&self, index: WorktreeSearchIndex) {
-        *self.search_index.write() = Some(index);
+    /// Trusted, enabled skills as composer candidates; empty without a store.
+    async fn skill_candidates(
+        &self,
+        project_root: Option<&Path>,
+    ) -> Result<Vec<SkillCandidate>, ApiError> {
+        let Ok(store) = self.sync_store() else {
+            return Ok(Vec::new());
+        };
+        let home = self.sync_home();
+        let root = project_root.unwrap_or(home.as_path());
+        let listed =
+            tethys_sync::skills::list(store, tethys_sync::skills::SkillHome { root, home: &home })
+                .await
+                .map_err(|error| ApiError::Internal(error.to_string()))?;
+
+        Ok(listed
+            .into_iter()
+            .filter(|skill| skill.enabled && skill.trusted)
+            .map(|skill| SkillCandidate {
+                name: skill.name,
+                path: PathBuf::from(skill.path),
+            })
+            .collect())
     }
 
     pub fn sessions(&self) -> &Arc<ThreadSessions> {
@@ -136,13 +160,37 @@ impl TethysApi for Core {
         })
     }
 
-    async fn search_files(&self, query: String, limit: usize) -> Result<Vec<SearchItem>, ApiError> {
-        let guard = self.search_index.read();
-        let index = guard
-            .as_ref()
-            .ok_or_else(|| ApiError::Internal("Search index not initialized".to_string()))?;
+    async fn search_files(
+        &self,
+        project_root: String,
+        query: String,
+        limit: usize,
+    ) -> Result<Vec<SearchItem>, ApiError> {
+        self.search
+            .query(Path::new(&project_root), &query, limit)
+            .map_err(map_search_error)
+    }
 
-        index.query(&query, limit).map_err(ApiError::Internal)
+    async fn commands_list(
+        &self,
+        project_root: Option<String>,
+    ) -> Result<Vec<CommandInfo>, ApiError> {
+        let home = self.sync_home();
+        let global = global_commands_dir(&home);
+        list_commands(&global, project_root.as_deref().map(Path::new))
+    }
+
+    async fn commands_expand(
+        &self,
+        command: String,
+        args_text: String,
+        project_root: Option<String>,
+    ) -> Result<ExpandedCommand, ApiError> {
+        let home = self.sync_home();
+        let global = global_commands_dir(&home);
+        let root = project_root.as_deref().map(Path::new);
+        let skills = self.skill_candidates(root).await?;
+        expand_command(&global, root, &skills, &command, &args_text)
     }
 
     async fn thread_create(&self, request: CreateThread) -> Result<ThreadSummary, ApiError> {
@@ -263,8 +311,10 @@ impl TethysApi for Core {
         }
         .map_err(map_git_error)?;
         let info = registered.info.clone();
+        let worktree_path = info.path.clone();
         blocking(move || main_engine.worktree_delete(&info, force, leased)).await?;
         self.git.lock().remove(&thread_id);
+        self.search.drop_index(Path::new(&worktree_path));
         Ok(())
     }
 
@@ -274,7 +324,10 @@ impl TethysApi for Core {
 
     async fn git_worktree_archive(&self, thread_id: String) -> Result<(), ApiError> {
         let registered = self.registered(&thread_id)?;
-        blocking(move || registered.engine.worktree_archive(&thread_id)).await
+        let worktree_path = registered.info.path.clone();
+        blocking(move || registered.engine.worktree_archive(&thread_id)).await?;
+        self.search.drop_index(Path::new(&worktree_path));
+        Ok(())
     }
 
     async fn git_checkpoint_create(
@@ -377,6 +430,13 @@ where
         Err(join_error) => Err(ApiError::Internal(format!(
             "blocking git task failed: {join_error}"
         ))),
+    }
+}
+
+fn map_search_error(error: SearchError) -> ApiError {
+    match error {
+        SearchError::IndexWarming { path } => ApiError::IndexWarming(path.display().to_string()),
+        other => ApiError::Internal(other.to_string()),
     }
 }
 

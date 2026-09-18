@@ -24,6 +24,7 @@ impl TethysApi for MinimalApi {
 
     async fn search_files(
         &self,
+        _project_root: String,
         _query: String,
         _limit: usize,
     ) -> Result<Vec<SearchItem>, ApiError> {

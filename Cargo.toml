@@ -14,6 +14,7 @@ blake3 = "1"
 dirs = "6"
 futures = "0.3"
 imara-diff = "0.2"
+mime_guess = "2"
 parking_lot = "0.12"
 process-wrap = { version = "10", features = ["tokio1"] }
 proptest = "1"

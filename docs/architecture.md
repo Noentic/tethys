@@ -83,7 +83,7 @@ tethys/
 │  ├─ tethys-pty/                   # interactive PTYs (Class C)
 │  ├─ tethys-git/                   # worktrees, checkpoints, diff engine, watcher
 │  ├─ tethys-sync/                  # MCP registry, skills, config projectors
-│  ├─ tethys-search/                # FFF wrapper
+│  ├─ tethys-search/                # per-worktree FFF index manager
 │  ├─ tethys-store/                 # SQLite + blobs + migrations
 │  ├─ tethys-mcp/                   # optional Tethys-hosted MCP server (rmcp)
 │  ├─ tethysd/                      # headless daemon binary (WebSocket API)
@@ -369,10 +369,22 @@ It is off by default and injected like any other server.
 
 | Sigil | Resolution |
 |---|---|
-| `/` Tethys | `~/.tethys/commands/<name>.md` or `<repo>/.tethys/commands/<name>.md`, expanded client‑side; nested `$`/`@` resolved in the same pass |
+| `/` Tethys | `~/.tethys/commands/<name>.md` or `<repo>/.tethys/commands/<name>.md`, expanded by the Tethys composer; nested `$`/`@` resolved in the same pass as plaintext references |
 | `/` agent | From `available_commands_update`; command `input` is a tagged union in v2 (unknown types fall back to plain text) |
-| `$` skill | **native**: instruction text + `resource_link` to `SKILL.md`; **inline**: embedded `resource` if `session.prompt.embeddedContext` is present, else text |
-| `@` path | FFF index per worktree → `resource_link` with absolute `file://` URI, name, MIME, size; optional line range echoed in text |
+| `$` skill | Plaintext instruction naming the skill and pointing at its `SKILL.md` (description included when present); the skill body is never inlined, for any agent. The reference is shown on the message |
+| `@` path | FFF index per worktree → plaintext `@<relative-path>` token in the prompt; `name`, `is_dir`, MIME, and size are carried as UI metadata only, never the file contents; optional line range echoed in text (P1) |
+
+**Reference-only rule.** Composer resolution never injects referenced content into the prompt.
+Every block it emits is plaintext (`ContentBlock::Text`): a `/` command body expands (CMP-01), but
+`$` skill bodies and `@` file contents are only referenced. This makes the sent turn uniform across
+all agents regardless of embedded-context or skill-loading capabilities; structured metadata is used
+for chips and method badges, not sent.
+
+**Search index lifecycle.** One FFF index per worktree root, opened lazily and keyed by canonical
+root. Opening does not block on the initial scan: a query waits a short bounded deadline (150 ms)
+and returns `INDEX_WARMING` if the scan is still running, so no command path can stall. FFF watches
+each root by default; `invalidate` forces a rescan and `drop_index` removes an index when the
+worktree is deleted or archived.
 
 ### 7.9 Class C (terminal host)
 
