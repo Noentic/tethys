@@ -16,6 +16,9 @@ export type BenchmarkResult = {
 	p95_latency_ms: number | null,
 };
 
+/**  Content-addressed blob identifier (hex-encoded BLAKE3 hash). */
+export type BlobHash = string;
+
 /**  A diff hunk representation for virtualized rendering (S0.1, AD-10). */
 export type DiffHunk = {
 	old_start: number,
@@ -32,6 +35,34 @@ export type DiffLine = {
 
 export type DiffLineKind = "Context" | "Addition" | "Deletion";
 
+/**  Materialized thread entry representation. */
+export type Entry = {
+	thread_id: ThreadId,
+	kind: EntryKind,
+	entry_id: string,
+	first_seq: number,
+	last_seq: number,
+	turn_index: number | null,
+	payload: string,
+};
+
+/**  Category of materialized entry in a thread transcript. */
+export type EntryKind = "message" | "tool_call" | "plan" | "terminal";
+
+/**  Request parameters for a page of materialized entries. */
+export type EntryPage = {
+	before_first_seq: number | null,
+	limit: number,
+};
+
+/**  Payload for creating or updating a materialized entry alongside an event append. */
+export type EntryUpsert = {
+	kind: EntryKind,
+	entry_id: string,
+	turn_index: number | null,
+	payload: string,
+};
+
 /**  Liveness probe result (`host.health`). */
 export type HealthStatus = {
 	ok: boolean,
@@ -44,10 +75,33 @@ export type HostInfo = {
 	platform: string,
 };
 
+/**  A new event to be appended to a thread's event log. */
+export type NewEvent = {
+	kind: string,
+	payload: string,
+	entry: EntryUpsert | null,
+};
+
 /**  A search item result returned by FFF search (`search.files`). */
 export type SearchItem = {
 	relative_path: string,
 	score: number,
+};
+
+/**  Sequence range assigned to a batch of events. */
+export type SeqRange = {
+	first: number,
+	last: number,
+};
+
+/**  An immutable event stored in the append-only event log. */
+export type StoredEvent = {
+	id: number,
+	thread_id: ThreadId,
+	seq: number,
+	event_type: string,
+	payload: string,
+	created_at: number,
 };
 
 /**  A chunk emitted over Tauri IPC streaming channels (S0.1). */
@@ -56,4 +110,14 @@ export type StreamChunk = {
 	seq: number,
 	timestamp_ms: number | null,
 	payload: string,
+};
+
+/**  Thread identifier. */
+export type ThreadId = string;
+
+/**  Result of opening a thread, containing materialized entries and tail sequence. */
+export type ThreadView = {
+	entries: Entry[],
+	latest_seq: number,
+	has_more: boolean,
 };
