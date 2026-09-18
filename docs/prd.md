@@ -87,7 +87,7 @@ Tethys maintains a published **vendor compliance matrix**: backend class × sign
 | AGT‑04 | Run multiple concurrent threads per repo, across multiple repos | P0 |
 | AGT‑05 | Resume threads after app restart or agent crash; crashed threads are marked *Interrupted* with history intact | P0 |
 | AGT‑06 | Stop a thread, or stop all threads in a repo or host | P0 |
-| AGT‑07 | Sign‑in is always delegated to the vendor's own flow (for example, opening its login command in a terminal) | P0 |
+| AGT‑07 | Sign‑in is always delegated to the vendor's own flow, adapting to whatever the Provider's `initialize` response declares in `authMethods` (env-var form, URL + code, or CLI passthrough in a terminal); hidden entirely when the Provider declares no `authMethods` | P0 |
 | AGT‑08 | Suspend idle threads to free memory and resume them on demand | P1 |
 
 ### 3.2 Permissions
@@ -115,17 +115,17 @@ Tethys maintains a published **vendor compliance matrix**: backend class × sign
 | WT‑08 | Push and open a PR using the user's installed `gh` / `glab`; Tethys never stores forge tokens | P1 |
 | WT‑09 | Line comments on a diff can be sent back to the agent as a follow‑up | P1 |
 | WT‑10 | Submodules and Git LFS: warn in MVP, fully supported in V1 | P1 |
-| WT‑11 | Plain‑directory workspaces: project-level `isolation: worktree \| plain` (default `worktree`); when `plain`, no worktree/branch is created and all git features are disabled for every thread in that workspace | P1 |
+| WT‑11 | Plain-mode opt-out: project-level `isolation: worktree \| plain` (default `worktree`); when `plain`, git UI and actions are hidden for every thread in that workspace even when the folder is git-initialized. Non-git folders are accepted throughout, with git features simply unavailable (see §3.3.1) | P1 |
 
-#### 3.3.1 Plain‑directory workspaces (WT‑11)
+#### 3.3.1 Non‑git folders and plain mode (WT‑11)
 
-For non‑developer workspaces the worktree-per-thread model is wrong: there may be no repo at all, just a folder of docs. Setting `isolation: plain` at project scope is a behavioural kill-switch:
+Git is a feature, not enforcement. Any folder — git-initialized or not — can be added as a workspace and can run threads. What degrades is capability, explicitly, never silently:
 
-- Thread creation skips worktree/branch setup entirely; the thread's root is the workspace folder itself.
-- All git UI and actions are hidden/disabled for those threads: restore points (WT‑03), turn/cumulative diffs (WT‑04), stage/unstage/discard/commit (WT‑05), archive guards that depend on git state (WT‑06), merge (WT‑07), push/PR (WT‑08).
-- No checkpoints means no per‑turn undo. The thread-creation and settings UI must say so explicitly.
-- PRM‑02's "YOLO only in worktrees" guard does not apply in `plain` workspaces (there are no worktrees); YOLO there requires the same explicit opt‑in as a main‑checkout thread.
-- Stored in `<repo>/.tethys/config.json` (or alongside the workspace root for non‑git folders); project overrides the global default. Changing it applies to new threads only — existing worktree threads keep their worktree until archived/deleted.
+- Thread creation in a non-git folder skips worktree/branch setup; the thread's root is the workspace folder itself. Only one thread runs at a time there (no worktree mechanism isolates parallel sessions); the UI states the cap and offers in-place `git init` as a convenience that upgrades the workspace to worktree mode.
+- Diff, checkpoint, restore, stage/unstage/discard/commit, merge, and push/PR UI render only when the folder is git-initialized and the session supports them. Otherwise they are hidden/disabled with an explicit `no git · no revert` explanation. There is no app-managed snapshot fallback in MVP — reversion follows the session's own capabilities.
+- `isolation: plain` is an explicit per-project opt-out for workspaces where git UI is unwanted even when available (non-developer persona): it hides the same git UI/actions as a non-git folder. Changing it applies to new threads only — existing worktree threads keep their worktree until archived/deleted.
+- Stored in `<repo>/.tethys/config.json` (or alongside the workspace root for non‑git folders); project overrides the global default.
+- PRM‑02's "YOLO only in worktrees" guard does not apply in `plain` workspaces or non-git folders (there are no worktrees); YOLO there requires the same explicit opt‑in as a main‑checkout thread.
 
 ### 3.4 MCP and skill sync
 
@@ -203,6 +203,19 @@ SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native conf
 |---|---|---|
 | REM‑01 | Attach to headless Tethys hosts (workstation, VM, dev container) and see them alongside local projects; agents keep running while disconnected | P2 |
 | REM‑02 | Remote approvals from a lightweight companion (notification or mobile) | P2 |
+
+### 3.9 Workspace trust
+
+| ID | Requirement | Pri |
+|---|---|---|
+| TRU‑01 | Adding a folder and trusting it is one flow: no workspace card exists and no Provider process is spawned against a path until trust is granted. Decisions persist keyed by resolved absolute path + host id (permission mode, scope, timestamp); re-prompt when the resolved path or git remote changes underneath; revocable from Settings / General, which removes the card until re-trusted | P0 |
+
+### 3.10 Preferences
+
+| ID | Requirement | Pri |
+|---|---|---|
+| SET‑01 | General preferences: color scheme, JSON theme picker with instant hot-swap, UI/Code/Terminal font pickers, OS-notification toggle | P1 |
+| KEY‑01 | Keybinding rebinding: searchable table (action, scope, combination, conflict badge) with a recorder capturing physical keydown events and instant global dispatch | P1 |
 
 ---
 

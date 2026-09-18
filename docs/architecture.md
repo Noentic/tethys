@@ -184,7 +184,7 @@ TanStack DB is a candidate for client‑side collections once stable; not requir
 
 | Need | Choice | Notes |
 |---|---|---|
-| Components | shadcn/ui + Radix, Tailwind v4, `lucide-react` | Owned code, accessible primitives |
+| Components | shadcn/ui + Radix, Tailwind v4, **Geist Icons** | Owned code, accessible primitives. Icon set is Geist only — never `lucide-react` or any other set (DESIGN §Iconography, decided) |
 | Command palette | `cmdk` | ⌘K / Ctrl+K |
 | Composer editor | TipTap (ProseMirror) or Lexical, with mention‑style chips | AD‑9 |
 | Diff rendering | Custom virtualized renderer over parsed git patches; CodeMirror 6 merge view for single‑file deep dives | AD‑10 |
@@ -192,6 +192,7 @@ TanStack DB is a candidate for client‑side collections once stable; not requir
 | Markdown | Incremental markdown renderer in a worker (evaluate `streamdown` vs `react-markdown` + remark‑gfm) | Must tolerate unterminated blocks while streaming |
 | Terminal | `@xterm/xterm` + fit and web‑links addons | Interactive (Class C) and read‑only (ACP display terminals) |
 | Resizable layout | `react-resizable-panels` | Four‑region layout |
+| ACP UI components | `@acp-components/*`: evaluated 2026‑09‑18, **rejected as runtime deps — reference only** | Its stores run off a JS-side ACP client (bypasses the Rust core, event log, and policy engine); Ant Design icons break the Geist-only rule; LoginDialog lacks URL+code; PermissionPrompt isn't options-driven; session grouping contradicts §0 model. Revisit post‑V1 only if a headless, store-free version ships (M1.6 plan D9) |
 
 ### 5.3 Data flow in the webview
 
@@ -482,13 +483,15 @@ checkpoint at Idle ────────┘                               │
 - At `Idle`, the checkpoint diff is authoritative.
 - Files > 1 MB or > 20 k changed lines load collapsed; binary files, symlinks, and directories render from `changes` metadata only.
 
-### 10.5 Plain‑directory mode (WT‑11, PD‑9)
+### 10.5 Non-git folders and plain mode (WT‑11, PD‑9)
 
-When a project sets `isolation: plain`, `tethys-git` is bypassed for every thread in that workspace:
+Git is a feature, not enforcement: any folder can be a workspace. When a project sets `isolation: plain`, `tethys-git` is bypassed for every thread in that workspace even when the folder is git-initialized:
 
 - No worktree add, no branch, no bootstrap copy/setup script; `Thread.worktree` stays `None` and the thread root is the workspace folder itself (PD‑9 decides root vs. per-thread subfolder).
 - Checkpoint calls are no-ops returning `GIT_DISABLED`; the watcher still feeds live file activity to the UI, but there is no authoritative checkpoint diff and no restore.
 - The `git.*` API namespace returns `GIT_DISABLED` for those threads; the frontend hides the worktree picker, diff/restore actions, and merge/push/PR entries.
+
+The same UI hiding applies to threads in non-git folders without any setting — their git UI is simply unavailable, explained with a `no git · no revert` state, and the hub offers in-place `git init` as the upgrade path. There is no app-managed snapshot fallback in MVP.
 - `@` search still works: the FFF index runs in non‑git mode (no gitignore-aware ranking from worktree metadata).
 
 ---
@@ -591,7 +594,7 @@ pub struct ConnectionEntry {           // ConnectionStore row (per profile + hos
 pub struct Thread {
     id: ThreadId, project_id: ProjectId, title: String,
     agent_profile_id: AgentProfileId, session_id: Option<String>,
-    worktree: Option<WorktreeRef>, // None = main-checkout thread (flagged) OR plain-directory thread (WT-11, git disabled)
+    worktree: Option<WorktreeRef>, // None = main-checkout thread (flagged), non-git folder, or explicit-plain workspace (WT-11)
     state: ThreadState,
     permission_mode: PermissionMode, config_options: Vec<ConfigOption>,
     overrides: ThreadOverrides, forked_from: Option<(ThreadId, TurnIndex)>,
@@ -614,6 +617,7 @@ pub struct Turn {
 | `events` | Append‑only `(thread_id, seq)` |
 | `entries` | Materialized latest state per message, tool call, plan, and terminal ID, so threads open without replaying everything |
 | `permission_rules` | Policy rules |
+| `workspace_trust` | Workspace trust decisions (resolved path + host, mode, scope, timestamp) |
 | `audit` | Decision and action history |
 | `projections`, `skills_state` | Projection manifest and skill trust/enablement |
 
@@ -629,7 +633,7 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 | `thread` | `create`, `list`, `get`, `prompt`, `queue.*`, `cancel`, `resume`, `importSessions`, `fork`, `archive`, `delete`, `setConfigOption`, `setPermissionMode` |
 | `events` | `subscribe {threadId, sinceSeq}`, `unsubscribe`, `inbox.subscribe` |
 | `permission` | `respond`, `rules.*` |
-| `git` | `worktree.*`, `checkpoint.*`, `diff.summary`, `diff.file`, `stage`, `unstage`, `discard`, `commit`, `merge`, `push`, `pr.create` (all return `GIT_DISABLED` when the project sets `isolation: plain`) |
+| `git` | `worktree.*`, `checkpoint.*`, `diff.summary`, `diff.file`, `stage`, `unstage`, `discard`, `commit`, `merge`, `push`, `pr.create` (all return `GIT_DISABLED` when the project sets explicit `isolation: plain`) |
 | `search` | `files` |
 | `mcp` | `registry.*`, `effective`, `projection.plan/apply/verify/rollback`, `import.*`, `health` |
 | `skills` | `list`, `import`, `update.*`, `trust`, `enable` |
