@@ -5,9 +5,9 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::process::Command;
 
 use serde::Deserialize;
 use tethys_api::ApiError;
@@ -137,6 +137,20 @@ pub struct ProcessSetupRunner {
 
 impl SetupRunner for ProcessSetupRunner {
     fn run(&self, script: &str, cwd: &Path) -> Result<SetupOutcome, GitError> {
+        let (handle, _runtime) = match tokio::runtime::Handle::try_current() {
+            Ok(handle) => (handle, None),
+            Err(_) => {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(GitError::Io)?;
+                let handle = rt.handle().clone();
+                (handle, Some(rt))
+            }
+        };
+
+        let _guard = handle.enter();
+
         let mut command = shell_command(script);
         command.current_dir(cwd);
         let mut child = SupervisedChild::spawn(command, 256 * 1024).map_err(GitError::Io)?;
@@ -151,8 +165,8 @@ impl SetupRunner for ProcessSetupRunner {
                     break;
                 }
                 None if Instant::now() >= deadline => {
-                    child
-                        .cancel_ladder(Duration::from_millis(500))
+                    handle
+                        .block_on(child.cancel_ladder(Duration::from_millis(500)))
                         .map_err(GitError::Io)?;
                     timed_out = true;
                     break;

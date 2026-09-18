@@ -4,15 +4,20 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+agent-client-protocol = "2.1.0"
+async-trait = "0.1"
 blake3 = "1"
 dirs = "6"
+futures = "0.3"
 imara-diff = "0.2"
 parking_lot = "0.12"
+process-wrap = { version = "10", features = ["tokio1"] }
 proptest = "1"
+
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 specta = { version = "2.0.0-rc.25", features = ["derive", "collect"] }
@@ -22,6 +27,7 @@ tauri = { version = "2.8.5" }
 tauri-specta = { version = "2.0.0-rc.25", features = ["typescript"] }
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["compat", "rt"] }
 tracing = "0.1"
 anyhow = "1"
 tempfile = "3"

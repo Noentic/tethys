@@ -5,7 +5,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+acp-v2 = ["tethys-agent-servers/acp-v2"]
+
 [dependencies]
+async-trait.workspace = true
+futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -24,3 +29,9 @@ tethys-thread = { path = "../tethys-thread" }
 
 [dev-dependencies]
 tempfile.workspace = true
+tethys-acp = { path = "../tethys-acp", features = ["mock"] }
+
+[[test]]
+name = "thread_flows"
+harness = false
+

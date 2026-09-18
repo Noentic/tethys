@@ -1,4 +1,5 @@
 use tethys_api::{ApiError, TethysApi};
+use tethys_schema::thread::{CreateThread, ThreadId};
 use tethys_schema::{DiffHunk, HealthStatus, HostInfo, SearchItem};
 
 struct MinimalApi;
@@ -46,9 +47,20 @@ async fn test_stub_defaults_return_unimplemented() {
         other => panic!("expected Unimplemented, got {other:?}"),
     }
 
-    match api.thread_create().await {
+    let create = CreateThread {
+        project_id: "p1".into(),
+        agent_profile_id: "a1".into(),
+        workdir: "/tmp".into(),
+    };
+    match api.thread_create(create).await {
         Err(ApiError::Unimplemented(m)) => assert_eq!(m, "thread.create"),
         other => panic!("expected Unimplemented, got {other:?}"),
+    }
+
+    match api.events_subscribe(ThreadId::from("t1"), 0).await {
+        Err(ApiError::Unimplemented(m)) => assert_eq!(m, "events.subscribe"),
+        Err(other) => panic!("expected Unimplemented, got {other:?}"),
+        Ok(_) => panic!("expected Unimplemented, got a stream"),
     }
 
     let spec = tethys_schema::WorktreeSpec {
