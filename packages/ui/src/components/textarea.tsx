@@ -13,10 +13,10 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         ref={ref}
         disabled={disabled}
         className={cn(
-          "w-full rounded-md border border-[var(--tethys-hairline)] bg-transparent p-3 text-sm text-[var(--tethys-text-primary)] placeholder-[var(--tethys-text-muted)] outline-none transition-all duration-150",
-          "focus-visible:border-[var(--tethys-accent-focus)] focus-visible:ring-2 focus-visible:ring-[var(--tethys-accent-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--tethys-canvas)]",
+          "w-full rounded-md border border-(--tethys-hairline) bg-transparent p-3 text-sm text-(--tethys-text-primary) placeholder-(--tethys-text-muted) outline-none transition-all duration-150",
+          "focus-visible:border-(--tethys-accent-focus) focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--tethys-canvas)",
           error &&
-            "border-[var(--tethys-status-danger)] focus-visible:border-[var(--tethys-status-danger)] focus-visible:ring-[var(--tethys-status-danger)]",
+            "border-(--tethys-status-danger) focus-visible:border-(--tethys-status-danger) focus-visible:ring-(--tethys-status-danger)",
           disabled && "opacity-40 pointer-events-none cursor-not-allowed",
           className,
         )}

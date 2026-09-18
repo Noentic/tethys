@@ -13,23 +13,21 @@ export function SettingsKeybindingsView() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-semibold text-[var(--tethys-text-primary)]">
+        <h2 className="text-sm font-semibold text-(--tethys-text-primary)">
           Keyboard Shortcuts
         </h2>
-        <p className="text-xs text-[var(--tethys-text-muted)]">
+        <p className="text-xs text-(--tethys-text-muted)">
           Global navigation and interaction keybindings.
         </p>
       </div>
 
-      <div className="divide-y divide-[var(--tethys-hairline)] rounded-lg border border-[var(--tethys-hairline)] bg-[var(--tethys-surface-card)]">
+      <div className="divide-y divide-(--tethys-hairline) rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-card)">
         {bindings.map((b) => (
           <div
             key={b.action}
             className="flex items-center justify-between p-3 text-xs"
           >
-            <span className="text-[var(--tethys-text-secondary)]">
-              {b.action}
-            </span>
+            <span className="text-(--tethys-text-secondary)">{b.action}</span>
             <KeycapPill>{b.key}</KeycapPill>
           </div>
         ))}

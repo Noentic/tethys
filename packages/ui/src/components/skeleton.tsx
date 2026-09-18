@@ -14,7 +14,7 @@ export function Skeleton({
     <div
       aria-hidden="true"
       className={cn(
-        "bg-[var(--tethys-surface-hover)] motion-safe:animate-pulse",
+        "bg-(--tethys-surface-hover) motion-safe:animate-pulse",
         rounded === "sm" && "rounded-sm",
         rounded === "md" && "rounded-md",
         rounded === "lg" && "rounded-lg",

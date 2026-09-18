@@ -30,13 +30,13 @@ export function SettingsLayout({
     SETTINGS_NAV_ITEMS[0];
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[var(--tethys-canvas)]">
+    <div className="flex h-full w-full overflow-hidden bg-(--tethys-canvas)">
       {/* Left Navigation (220px) */}
       <nav
         aria-label="Settings Navigation"
-        className="flex h-full w-56 flex-col border-r border-[var(--tethys-hairline)] bg-[var(--tethys-surface-panel)] p-3 select-none shrink-0"
+        className="flex h-full w-56 flex-col border-r border-(--tethys-hairline) bg-(--tethys-surface-panel) p-3 select-none shrink-0"
       >
-        <div className="px-3 py-2 text-xs font-semibold text-[var(--tethys-text-primary)]">
+        <div className="px-3 py-2 text-xs font-semibold text-(--tethys-text-primary)">
           Settings
         </div>
 
@@ -48,10 +48,10 @@ export function SettingsLayout({
                 key={item.id}
                 type="button"
                 onClick={() => onNavigateSection?.(item.path)}
-                className={`flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors text-left outline-none focus-visible:ring-1 focus-visible:ring-[var(--tethys-accent-focus)] ${
+                className={`flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors text-left outline-none focus-visible:ring-1 focus-visible:ring-(--tethys-accent-focus) ${
                   isSelected
-                    ? "bg-[var(--tethys-surface-active)] text-[var(--tethys-text-primary)]"
-                    : "text-[var(--tethys-text-secondary)] hover:bg-[var(--tethys-surface-hover)] hover:text-[var(--tethys-text-primary)]"
+                    ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
+                    : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
                 }`}
               >
                 {item.label}
@@ -64,18 +64,18 @@ export function SettingsLayout({
       {/* Main Settings Content Area with Breadcrumb & Header Slot */}
       <div className="flex flex-1 flex-col overflow-y-auto">
         {/* Breadcrumb & Header */}
-        <header className="border-b border-[var(--tethys-hairline)] bg-[var(--tethys-surface-elevated)] px-8 py-4">
+        <header className="border-b border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-8 py-4">
           <nav
             aria-label="Breadcrumb"
-            className="mb-1 flex items-center gap-1.5 text-[11px] text-[var(--tethys-text-muted)]"
+            className="mb-1 flex items-center gap-1.5 text-[11px] text-(--tethys-text-muted)"
           >
             <span>Settings</span>
             <span>/</span>
-            <span className="text-[var(--tethys-text-primary)] font-medium">
+            <span className="text-(--tethys-text-primary) font-medium">
               {currentItem.label}
             </span>
           </nav>
-          <h1 className="text-lg font-semibold text-[var(--tethys-text-primary)]">
+          <h1 className="text-lg font-semibold text-(--tethys-text-primary)">
             {currentItem.label}
           </h1>
         </header>

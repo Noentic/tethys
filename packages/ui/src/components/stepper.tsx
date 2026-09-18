@@ -68,8 +68,8 @@ export const StepperInput = React.forwardRef<HTMLDivElement, StepperInputProps>(
         aria-valuemax={max}
         onKeyDown={handleKeyDown}
         className={cn(
-          "inline-flex h-8 items-center rounded-md border border-[var(--tethys-hairline)] bg-[var(--tethys-surface-panel)] outline-none transition-all",
-          "focus-visible:ring-2 focus-visible:ring-[var(--tethys-accent-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--tethys-canvas)]",
+          "inline-flex h-8 items-center rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-panel) outline-none transition-all",
+          "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--tethys-canvas)",
           disabled && "cursor-not-allowed opacity-40",
           className,
         )}
@@ -80,11 +80,11 @@ export const StepperInput = React.forwardRef<HTMLDivElement, StepperInputProps>(
           disabled={disabled || value <= min}
           onClick={handleDecrement}
           aria-label="Decrement"
-          className="flex h-full w-7 items-center justify-center text-xs font-mono text-[var(--tethys-text-secondary)] hover:bg-[var(--tethys-surface-hover)] disabled:pointer-events-none disabled:opacity-40"
+          className="flex h-full w-7 items-center justify-center text-xs font-mono text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) disabled:pointer-events-none disabled:opacity-40"
         >
           −
         </button>
-        <span className="min-w-[70px] px-2 text-center font-mono text-xs font-medium text-[var(--tethys-text-primary)] select-none">
+        <span className="min-w-[70px] px-2 text-center font-mono text-xs font-medium text-(--tethys-text-primary) select-none">
           {display}
         </span>
         <button
@@ -93,7 +93,7 @@ export const StepperInput = React.forwardRef<HTMLDivElement, StepperInputProps>(
           disabled={disabled || value >= max}
           onClick={handleIncrement}
           aria-label="Increment"
-          className="flex h-full w-7 items-center justify-center text-xs font-mono text-[var(--tethys-text-secondary)] hover:bg-[var(--tethys-surface-hover)] disabled:pointer-events-none disabled:opacity-40"
+          className="flex h-full w-7 items-center justify-center text-xs font-mono text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) disabled:pointer-events-none disabled:opacity-40"
         >
           +
         </button>

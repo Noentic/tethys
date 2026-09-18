@@ -72,7 +72,7 @@ export function Drawer({
       className={cn(
         "fixed inset-0 z-40 flex",
         side === "right" ? "justify-end" : "justify-start",
-        showScrim ? "bg-[var(--tethys-overlay-scrim)]" : "pointer-events-none",
+        showScrim ? "bg-(--tethys-overlay-scrim)" : "pointer-events-none",
       )}
       onClick={(e) => {
         if (showScrim && e.target === e.currentTarget) {
@@ -87,23 +87,23 @@ export function Drawer({
         aria-label={typeof title === "string" ? title : "Drawer"}
         tabIndex={-1}
         className={cn(
-          "pointer-events-auto flex h-full flex-col bg-[var(--tethys-surface-elevated)] outline-none shadow-none transition-transform duration-200",
+          "pointer-events-auto flex h-full flex-col bg-(--tethys-surface-elevated) outline-none shadow-none transition-transform duration-200",
           side === "right"
-            ? "border-l border-[var(--tethys-hairline-strong)]"
-            : "border-r border-[var(--tethys-hairline-strong)]",
+            ? "border-l border-(--tethys-hairline-strong)"
+            : "border-r border-(--tethys-hairline-strong)",
           width,
           className,
         )}
       >
-        <div className="flex h-12 items-center justify-between border-b border-[var(--tethys-hairline)] px-4">
-          <div className="text-sm font-semibold text-[var(--tethys-text-primary)] truncate">
+        <div className="flex h-12 items-center justify-between border-b border-(--tethys-hairline) px-4">
+          <div className="text-sm font-semibold text-(--tethys-text-primary) truncate">
             {title}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close drawer"
-            className="flex h-6 w-6 items-center justify-center rounded text-[var(--tethys-text-muted)] hover:bg-[var(--tethys-surface-hover)] hover:text-[var(--tethys-text-primary)]"
+            className="flex h-6 w-6 items-center justify-center rounded text-(--tethys-text-muted) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
           >
             ×
           </button>

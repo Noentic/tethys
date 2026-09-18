@@ -32,7 +32,7 @@ export function TabStrip({
       role="tablist"
       aria-label="Tabs"
       className={cn(
-        "flex h-10 w-full items-center gap-1 border-b border-[var(--tethys-hairline)] bg-[var(--tethys-surface-rail)] px-2 select-none overflow-x-auto overflow-y-hidden",
+        "flex h-10 w-full items-center gap-1 border-b border-(--tethys-hairline) bg-(--tethys-surface-rail) px-2 select-none overflow-x-auto overflow-y-hidden",
         className,
       )}
     >
@@ -54,26 +54,26 @@ export function TabStrip({
               }}
               className={cn(
                 "group flex h-7 max-w-[220px] items-center gap-1.5 rounded-md px-2.5 text-xs transition-all duration-150 cursor-pointer outline-none shrink-0",
-                "focus-visible:ring-2 focus-visible:ring-[var(--tethys-accent-focus)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--tethys-surface-rail)]",
+                "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-1 focus-visible:ring-offset-(--tethys-surface-rail)",
                 isActive
-                  ? "border border-[var(--tethys-hairline)] bg-[var(--tethys-surface-elevated)] text-[var(--tethys-text-primary)] font-medium"
-                  : "border border-transparent bg-transparent text-[var(--tethys-text-secondary)] hover:bg-[var(--tethys-surface-hover)] hover:text-[var(--tethys-text-primary)]",
+                  ? "border border-(--tethys-hairline) bg-(--tethys-surface-elevated) text-(--tethys-text-primary) font-medium"
+                  : "border border-transparent bg-transparent text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
               )}
             >
               {tab.icon && (
-                <span className="shrink-0 text-[var(--tethys-text-muted)] group-hover:text-current">
+                <span className="shrink-0 text-(--tethys-text-muted) group-hover:text-current">
                   {tab.icon}
                 </span>
               )}
               <span className="truncate">{tab.title}</span>
               {tab.subtitle && (
-                <span className="truncate font-mono text-[10px] text-[var(--tethys-text-muted)]">
+                <span className="truncate font-mono text-[10px] text-(--tethys-text-muted)">
                   {tab.subtitle}
                 </span>
               )}
               {tab.dirty && (
                 <span
-                  className="h-1.5 w-1.5 rounded-full bg-[var(--tethys-status-warning)]"
+                  className="h-1.5 w-1.5 rounded-full bg-(--tethys-status-warning)"
                   title="Unsaved changes"
                 />
               )}
@@ -86,7 +86,7 @@ export function TabStrip({
                     e.stopPropagation();
                     onCloseTab(tab.id);
                   }}
-                  className="ml-auto -mr-1 flex h-4 w-4 items-center justify-center rounded text-[var(--tethys-text-muted)] opacity-0 group-hover:opacity-100 hover:bg-[var(--tethys-surface-hover)] hover:text-[var(--tethys-text-primary)] transition-opacity"
+                  className="ml-auto -mr-1 flex h-4 w-4 items-center justify-center rounded text-(--tethys-text-muted) opacity-0 group-hover:opacity-100 hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary) transition-opacity"
                 >
                   ×
                 </button>

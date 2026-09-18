@@ -44,7 +44,7 @@ export function SessionsColumn({
     return (
       <nav
         aria-label="Sessions"
-        className="flex h-full w-12 flex-col items-center gap-2 border-r border-[var(--tethys-hairline)] bg-[var(--tethys-surface-panel)] py-3 select-none shrink-0 overflow-y-auto"
+        className="flex h-full w-12 flex-col items-center gap-2 border-r border-(--tethys-hairline) bg-(--tethys-surface-panel) py-3 select-none shrink-0 overflow-y-auto"
       >
         <IconButton
           size="compact"
@@ -60,7 +60,7 @@ export function SessionsColumn({
             type="button"
             title={`${sess.title} (${sess.status})`}
             onClick={() => onSelectSession(sess.sessionId)}
-            className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--tethys-surface-hover)] outline-none"
+            className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-(--tethys-surface-hover) outline-none"
           >
             <StatusDot status={sess.status} />
           </button>
@@ -72,10 +72,10 @@ export function SessionsColumn({
   return (
     <nav
       aria-label="Sessions Column"
-      className="flex h-full w-[280px] flex-col border-r border-[var(--tethys-hairline)] bg-[var(--tethys-surface-panel)] select-none shrink-0"
+      className="flex h-full w-[280px] flex-col border-r border-(--tethys-hairline) bg-(--tethys-surface-panel) select-none shrink-0"
     >
-      <div className="flex h-10 items-center justify-between border-b border-[var(--tethys-hairline)] px-3">
-        <span className="text-xs font-semibold text-[var(--tethys-text-primary)]">
+      <div className="flex h-10 items-center justify-between border-b border-(--tethys-hairline) px-3">
+        <span className="text-xs font-semibold text-(--tethys-text-primary)">
           Sessions
         </span>
         {onNewSession && (
@@ -87,7 +87,7 @@ export function SessionsColumn({
 
       <div className="flex-1 overflow-y-auto p-1">
         {groups.length === 0 ? (
-          <div className="p-4 text-center text-xs text-[var(--tethys-text-muted)]">
+          <div className="p-4 text-center text-xs text-(--tethys-text-muted)">
             No active sessions
           </div>
         ) : (

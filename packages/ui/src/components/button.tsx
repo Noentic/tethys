@@ -32,19 +32,19 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           "inline-flex items-center justify-center gap-2 font-medium transition-all duration-150 select-none",
           "rounded-md outline-none",
-          "focus-visible:ring-2 focus-visible:ring-[var(--tethys-accent-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--tethys-canvas)]",
+          "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--tethys-canvas)",
           "active:scale-[0.99]",
           size === "sm" && "h-7 px-2.5 text-xs",
           size === "default" && "h-8 px-3.5 text-sm",
           size === "lg" && "h-9 px-4 text-sm",
           variant === "primary" &&
-            "bg-[var(--tethys-primary)] text-[var(--tethys-on-primary)] hover:opacity-90 active:opacity-100",
+            "bg-(--tethys-primary) text-(--tethys-on-primary) hover:opacity-90 active:opacity-100",
           variant === "secondary" &&
-            "border border-[var(--tethys-hairline)] bg-[var(--tethys-surface-elevated)] text-[var(--tethys-text-primary)] hover:bg-[var(--tethys-surface-hover)]",
+            "border border-(--tethys-hairline) bg-(--tethys-surface-elevated) text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover)",
           variant === "ghost" &&
-            "bg-transparent text-[var(--tethys-text-secondary)] hover:bg-[var(--tethys-surface-hover)] hover:text-[var(--tethys-text-primary)]",
+            "bg-transparent text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
           variant === "destructive" &&
-            "border border-[var(--tethys-status-danger)] text-[var(--tethys-status-danger)] hover:bg-[rgba(239,68,68,0.12)]",
+            "border border-(--tethys-status-danger) text-(--tethys-status-danger) hover:bg-[rgba(239,68,68,0.12)]",
           isDisabled && "pointer-events-none opacity-40 active:scale-100",
           className,
         )}

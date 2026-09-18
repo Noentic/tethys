@@ -38,10 +38,10 @@ export const ToggleSwitch = React.forwardRef<
         onClick={() => !disabled && onCheckedChange?.(!checked)}
         className={cn(
           "relative inline-flex h-[18px] w-[32px] shrink-0 cursor-pointer items-center rounded-full transition-colors duration-150 outline-none",
-          "focus-visible:ring-2 focus-visible:ring-[var(--tethys-accent-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--tethys-canvas)]",
+          "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--tethys-canvas)",
           checked
-            ? "bg-[var(--tethys-accent-toggle)]"
-            : "bg-[var(--tethys-hairline-strong)]",
+            ? "bg-(--tethys-accent-toggle)"
+            : "bg-(--tethys-hairline-strong)",
           disabled && "cursor-not-allowed opacity-40",
           className,
         )}
@@ -49,7 +49,7 @@ export const ToggleSwitch = React.forwardRef<
       >
         <span
           className={cn(
-            "pointer-events-none block h-[14px] w-[14px] rounded-full bg-[var(--tethys-primary)] transition-transform duration-150",
+            "pointer-events-none block h-[14px] w-[14px] rounded-full bg-(--tethys-primary) transition-transform duration-150",
             checked ? "translate-x-[16px]" : "translate-x-[2px]",
           )}
         />

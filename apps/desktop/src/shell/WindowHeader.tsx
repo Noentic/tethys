@@ -25,7 +25,7 @@ export function WindowHeader({
   return (
     <header
       data-tauri-drag-region
-      className="flex h-10 w-full items-center border-b border-[var(--tethys-hairline)] bg-[var(--tethys-surface-rail)] select-none z-10"
+      className="flex h-10 w-full items-center border-b border-(--tethys-hairline) bg-(--tethys-surface-rail) select-none z-10"
     >
       {/* Platform window controls inset (macOS traffic lights drag region) */}
       {platformInset && (
@@ -52,7 +52,7 @@ export function WindowHeader({
         <button
           type="button"
           onClick={onOpenPalette}
-          className="flex h-6 items-center gap-1.5 rounded border border-[var(--tethys-hairline)] bg-[var(--tethys-surface-hover)] px-2 text-[11px] text-[var(--tethys-text-muted)] hover:text-[var(--tethys-text-primary)] transition-colors outline-none"
+          className="flex h-6 items-center gap-1.5 rounded border border-(--tethys-hairline) bg-(--tethys-surface-hover) px-2 text-[11px] text-(--tethys-text-muted) hover:text-(--tethys-text-primary) transition-colors outline-none"
         >
           <MagnifyingGlass className="h-3.5 w-3.5" />
           <span>Search...</span>

@@ -18,9 +18,9 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex h-5 items-center gap-1.5 rounded-[4px] bg-[var(--tethys-surface-hover)] px-1.5 font-mono text-[11px] font-medium text-[var(--tethys-text-secondary)] select-none transition-colors",
+        "inline-flex h-5 items-center gap-1.5 rounded-xs bg-(--tethys-surface-hover) px-1.5 font-mono text-[11px] font-medium text-(--tethys-text-secondary) select-none transition-colors",
         interactive &&
-          "cursor-pointer hover:bg-[var(--tethys-surface-active)] hover:text-[var(--tethys-text-primary)]",
+          "cursor-pointer hover:bg-(--tethys-surface-active) hover:text-(--tethys-text-primary)",
         className,
       )}
       {...props}
@@ -35,7 +35,7 @@ export function Chip({
             e.stopPropagation();
             onRemove();
           }}
-          className="-mr-0.5 flex h-3.5 w-3.5 items-center justify-center rounded hover:bg-[var(--tethys-surface-active)] hover:text-[var(--tethys-text-primary)]"
+          className="-mr-0.5 flex h-3.5 w-3.5 items-center justify-center rounded hover:bg-(--tethys-surface-active) hover:text-(--tethys-text-primary)"
         >
           ×
         </button>

@@ -25,15 +25,15 @@ export function EmptyState({
       {...props}
     >
       {icon && (
-        <div className="mb-3 flex h-10 w-10 items-center justify-center text-[var(--tethys-text-muted)] [&>svg]:h-6 [&>svg]:w-6">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center text-(--tethys-text-muted) [&>svg]:h-6 [&>svg]:w-6">
           {icon}
         </div>
       )}
-      <h3 className="text-sm font-semibold text-[var(--tethys-text-primary)]">
+      <h3 className="text-sm font-semibold text-(--tethys-text-primary)">
         {title}
       </h3>
       {description && (
-        <p className="mt-1 max-w-sm text-xs text-[var(--tethys-text-muted)]">
+        <p className="mt-1 max-w-sm text-xs text-(--tethys-text-muted)">
           {description}
         </p>
       )}

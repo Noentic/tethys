@@ -253,7 +253,7 @@ export function AppShell({
   return (
     <div
       data-window-focused={isWindowFocused}
-      className={`flex h-screen w-screen flex-col overflow-hidden bg-[var(--tethys-canvas)] font-sans text-[var(--tethys-text-primary)] antialiased select-none ${
+      className={`flex h-screen w-screen flex-col overflow-hidden bg-(--tethys-canvas) font-sans text-(--tethys-text-primary) antialiased select-none ${
         !isWindowFocused ? "opacity-95" : ""
       }`}
     >
@@ -306,13 +306,13 @@ export function AppShell({
             />
           </Panel>
 
-          <Separator className="relative flex items-center justify-center w-[1px] bg-[var(--tethys-hairline)] hover:w-[3px] hover:bg-[var(--tethys-accent-focus)] transition-all cursor-col-resize select-none outline-none after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']" />
+          <Separator className="relative flex items-center justify-center w-px bg-(--tethys-hairline) hover:w-[3px] hover:bg-(--tethys-accent-focus) transition-all cursor-col-resize select-none outline-none after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']" />
 
           {/* Center Stage Panel */}
           <Panel
             id="shell-stage"
             minSize={560}
-            className="flex-1 h-full flex flex-col overflow-hidden bg-[var(--tethys-canvas)]"
+            className="flex-1 h-full flex flex-col overflow-hidden bg-(--tethys-canvas)"
           >
             <div className="flex-1 overflow-hidden flex flex-col">
               {children}
@@ -334,7 +334,7 @@ export function AppShell({
           {/* Inspector Panel (360px) - In desktop mode */}
           {activeView === "thread" && !isOverlayInspector && (
             <>
-              <Separator className="relative flex items-center justify-center w-[1px] bg-[var(--tethys-hairline)] hover:w-[3px] hover:bg-[var(--tethys-accent-focus)] transition-all cursor-col-resize select-none outline-none after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']" />
+              <Separator className="relative flex items-center justify-center w-px bg-(--tethys-hairline) hover:w-[3px] hover:bg-(--tethys-accent-focus) transition-all cursor-col-resize select-none outline-none after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']" />
               <Panel
                 id="shell-inspector"
                 defaultSize={360}
@@ -390,7 +390,7 @@ export function AppShell({
       >
         <div className="p-4 flex flex-col gap-3">
           {approvalCount === 0 ? (
-            <div className="py-12 text-center text-xs text-[var(--tethys-text-muted)]">
+            <div className="py-12 text-center text-xs text-(--tethys-text-muted)">
               No pending approval requests.
             </div>
           ) : (
@@ -399,17 +399,17 @@ export function AppShell({
               .map((sess) => (
                 <div
                   key={sess.sessionId}
-                  className="rounded-lg border border-[var(--tethys-hairline)] bg-[var(--tethys-surface-elevated)] p-3 flex flex-col gap-2"
+                  className="rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) p-3 flex flex-col gap-2"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-xs text-[var(--tethys-text-primary)]">
+                    <span className="font-semibold text-xs text-(--tethys-text-primary)">
                       {sess.title}
                     </span>
-                    <span className="text-[10px] text-[var(--tethys-status-warning)] font-mono uppercase">
+                    <span className="text-[10px] text-(--tethys-status-warning) font-mono uppercase">
                       Action Required
                     </span>
                   </div>
-                  <p className="text-xs text-[var(--tethys-text-secondary)]">
+                  <p className="text-xs text-(--tethys-text-secondary)">
                     Session is awaiting tool execution permission.
                   </p>
                   <button
@@ -418,7 +418,7 @@ export function AppShell({
                       setApprovalDrawerOpen(false);
                       onNavigate?.(`/thread/${sess.sessionId}`);
                     }}
-                    className="self-end text-xs text-[var(--tethys-accent-focus)] hover:underline"
+                    className="self-end text-xs text-(--tethys-accent-focus) hover:underline"
                   >
                     Open Session →
                   </button>

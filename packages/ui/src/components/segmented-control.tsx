@@ -26,7 +26,7 @@ export function SegmentedControl<T extends string = string>({
     <div
       role="radiogroup"
       className={cn(
-        "inline-flex items-center rounded-md border border-[var(--tethys-hairline)] bg-[var(--tethys-surface-panel)] p-0.5 select-none",
+        "inline-flex items-center rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-panel) p-0.5 select-none",
         size === "sm" ? "h-7" : "h-8",
         className,
       )}
@@ -43,12 +43,12 @@ export function SegmentedControl<T extends string = string>({
             disabled={option.disabled}
             onClick={() => onChange(option.value)}
             className={cn(
-              "flex h-full items-center justify-center rounded-[6px] px-3 font-medium transition-all duration-150 outline-none",
+              "flex h-full items-center justify-center rounded-sm px-3 font-medium transition-all duration-150 outline-none",
               size === "sm" ? "text-xs" : "text-xs font-medium",
-              "focus-visible:ring-2 focus-visible:ring-[var(--tethys-accent-focus)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--tethys-canvas)]",
+              "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-1 focus-visible:ring-offset-(--tethys-canvas)",
               isSelected
-                ? "border border-[var(--tethys-hairline)] bg-[var(--tethys-surface-elevated)] text-[var(--tethys-text-primary)] shadow-none"
-                : "border border-transparent bg-transparent text-[var(--tethys-text-muted)] hover:text-[var(--tethys-text-secondary)]",
+                ? "border border-(--tethys-hairline) bg-(--tethys-surface-elevated) text-(--tethys-text-primary) shadow-none"
+                : "border border-transparent bg-transparent text-(--tethys-text-muted) hover:text-(--tethys-text-secondary)",
               option.disabled && "pointer-events-none opacity-40",
             )}
           >

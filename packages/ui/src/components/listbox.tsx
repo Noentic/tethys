@@ -32,7 +32,7 @@ export function Listbox<T = string>({
       tabIndex={0}
       className={cn(
         "flex flex-col gap-0.5 rounded-md p-1 outline-none",
-        "focus-visible:ring-1 focus-visible:ring-[var(--tethys-accent-focus)]",
+        "focus-visible:ring-1 focus-visible:ring-(--tethys-accent-focus)",
         className,
       )}
     >
@@ -53,22 +53,22 @@ export function Listbox<T = string>({
               }
             }}
             className={cn(
-              "flex h-8 items-center gap-2 rounded-[6px] px-2.5 text-xs transition-colors duration-150 cursor-pointer select-none",
+              "flex h-8 items-center gap-2 rounded-sm px-2.5 text-xs transition-colors duration-150 cursor-pointer select-none",
               isSelected
-                ? "bg-[var(--tethys-surface-active)] text-[var(--tethys-text-primary)] font-medium"
-                : "text-[var(--tethys-text-secondary)] hover:bg-[var(--tethys-surface-hover)] hover:text-[var(--tethys-text-primary)]",
+                ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-medium"
+                : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
               item.disabled &&
                 "pointer-events-none opacity-40 cursor-not-allowed",
             )}
           >
             {item.icon && (
-              <span className="shrink-0 text-[var(--tethys-text-muted)]">
+              <span className="shrink-0 text-(--tethys-text-muted)">
                 {item.icon}
               </span>
             )}
             <span className="truncate flex-1">{item.label}</span>
             {item.sublabel && (
-              <span className="shrink-0 font-mono text-[10px] text-[var(--tethys-text-muted)]">
+              <span className="shrink-0 font-mono text-[10px] text-(--tethys-text-muted)">
                 {item.sublabel}
               </span>
             )}

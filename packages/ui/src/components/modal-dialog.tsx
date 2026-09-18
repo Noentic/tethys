@@ -70,7 +70,7 @@ export function ModalDialog({
     // biome-ignore lint/a11y/noStaticElementInteractions: backdrop scrim dismissal
     <div
       role="presentation"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--tethys-overlay-scrim)]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-(--tethys-overlay-scrim)"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -85,7 +85,7 @@ export function ModalDialog({
         aria-describedby={description ? "dialog-description" : undefined}
         tabIndex={-1}
         className={cn(
-          "w-full rounded-xl border border-[var(--tethys-hairline-strong)] bg-[var(--tethys-surface-overlay)] p-6 shadow-none outline-none",
+          "w-full rounded-xl border border-(--tethys-hairline-strong) bg-(--tethys-surface-overlay) p-6 shadow-none outline-none",
           maxWidth,
           className,
         )}
@@ -93,7 +93,7 @@ export function ModalDialog({
         {title && (
           <h2
             id="dialog-title"
-            className="text-base font-semibold text-[var(--tethys-text-primary)]"
+            className="text-base font-semibold text-(--tethys-text-primary)"
           >
             {title}
           </h2>
@@ -101,14 +101,14 @@ export function ModalDialog({
         {description && (
           <p
             id="dialog-description"
-            className="mt-1 text-xs text-[var(--tethys-text-muted)]"
+            className="mt-1 text-xs text-(--tethys-text-muted)"
           >
             {description}
           </p>
         )}
         <div className="mt-4">{children}</div>
         {footer && (
-          <div className="mt-6 flex items-center justify-end gap-2 border-t border-[var(--tethys-hairline)] pt-4">
+          <div className="mt-6 flex items-center justify-end gap-2 border-t border-(--tethys-hairline) pt-4">
             {footer}
           </div>
         )}

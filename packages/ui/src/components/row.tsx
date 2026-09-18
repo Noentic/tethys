@@ -26,11 +26,11 @@ export const Row = React.forwardRef<HTMLDivElement, RowProps>(
         aria-disabled={disabled}
         className={cn(
           "flex items-center gap-2 rounded-sm px-3 py-1.5 text-xs transition-colors duration-150 select-none outline-none",
-          "focus-visible:ring-2 focus-visible:ring-[var(--tethys-accent-focus)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--tethys-canvas)]",
+          "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-1 focus-visible:ring-offset-(--tethys-canvas)",
           selected
-            ? "bg-[var(--tethys-surface-active)] text-[var(--tethys-text-primary)] font-medium"
-            : "text-[var(--tethys-text-secondary)] hover:bg-[var(--tethys-surface-hover)] hover:text-[var(--tethys-text-primary)]",
-          borderBottom && "border-b border-[var(--tethys-hairline)]",
+            ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-medium"
+            : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
+          borderBottom && "border-b border-(--tethys-hairline)",
           disabled && "pointer-events-none opacity-40",
           className,
         )}

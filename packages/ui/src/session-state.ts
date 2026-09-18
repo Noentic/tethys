@@ -21,7 +21,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
     case "running":
       return {
         colorVar: "var(--tethys-agent-active)",
-        className: "bg-[var(--tethys-agent-active)] motion-safe:animate-pulse",
+        className: "bg-(--tethys-agent-active) motion-safe:animate-pulse",
         pulse: true,
         label: "Running",
       };
@@ -30,8 +30,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
     case "requires_action":
       return {
         colorVar: "var(--tethys-status-warning)",
-        className:
-          "bg-[var(--tethys-status-warning)] motion-safe:animate-pulse",
+        className: "bg-(--tethys-status-warning) motion-safe:animate-pulse",
         pulse: true,
         label: "Awaiting approval",
       };
@@ -39,35 +38,35 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
     case "failed":
       return {
         colorVar: "var(--tethys-status-danger)",
-        className: "bg-[var(--tethys-status-danger)]",
+        className: "bg-(--tethys-status-danger)",
         pulse: false,
         label: "Error",
       };
     case "interrupted":
       return {
         colorVar: "var(--tethys-text-muted)",
-        className: "bg-[var(--tethys-text-muted)]",
+        className: "bg-(--tethys-text-muted)",
         pulse: false,
         label: "Interrupted",
       };
     case "suspended":
       return {
         colorVar: "var(--tethys-hairline-strong)",
-        className: "bg-[var(--tethys-hairline-strong)]",
+        className: "bg-(--tethys-hairline-strong)",
         pulse: false,
         label: "Suspended",
       };
     case "archived":
       return {
         colorVar: "var(--tethys-hairline)",
-        className: "bg-[var(--tethys-hairline)]",
+        className: "bg-(--tethys-hairline)",
         pulse: false,
         label: "Archived",
       };
     default:
       return {
         colorVar: "var(--tethys-agent-idle)",
-        className: "bg-[var(--tethys-agent-idle)]",
+        className: "bg-(--tethys-agent-idle)",
         pulse: false,
         label: "Idle",
       };
@@ -89,7 +88,7 @@ export function getDaemonHealthDotState(
   if (providers.length === 0) {
     return {
       colorVar: "var(--tethys-status-danger)",
-      className: "bg-[var(--tethys-status-danger)]",
+      className: "bg-(--tethys-status-danger)",
       isHealthy: false,
     };
   }
@@ -98,14 +97,14 @@ export function getDaemonHealthDotState(
   if (anyHealthy) {
     return {
       colorVar: "var(--tethys-status-success)",
-      className: "bg-[var(--tethys-status-success)]",
+      className: "bg-(--tethys-status-success)",
       isHealthy: true,
     };
   }
 
   return {
     colorVar: "var(--tethys-status-danger)",
-    className: "bg-[var(--tethys-status-danger)]",
+    className: "bg-(--tethys-status-danger)",
     isHealthy: false,
   };
 }

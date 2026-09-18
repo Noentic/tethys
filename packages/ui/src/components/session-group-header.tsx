@@ -26,12 +26,12 @@ export function SessionGroupHeader({
       aria-expanded={!collapsed}
       onClick={onToggle}
       className={cn(
-        "flex h-7 w-full items-center justify-between px-3 font-medium text-[11px] text-[var(--tethys-text-muted)] select-none cursor-pointer outline-none transition-colors",
+        "flex h-7 w-full items-center justify-between px-3 font-medium text-[11px] text-(--tethys-text-muted) select-none cursor-pointer outline-none transition-colors",
         level === 1
           ? "bg-transparent uppercase tracking-wider"
           : "pl-5 bg-transparent",
-        "hover:text-[var(--tethys-text-secondary)]",
-        "focus-visible:ring-1 focus-visible:ring-[var(--tethys-accent-focus)]",
+        "hover:text-(--tethys-text-secondary)",
+        "focus-visible:ring-1 focus-visible:ring-(--tethys-accent-focus)",
         className,
       )}
     >
@@ -49,7 +49,7 @@ export function SessionGroupHeader({
         <span className="truncate">{title}</span>
       </div>
       {typeof count === "number" && (
-        <span className="font-mono text-[10px] text-[var(--tethys-text-muted)]">
+        <span className="font-mono text-[10px] text-(--tethys-text-muted)">
           {count}
         </span>
       )}

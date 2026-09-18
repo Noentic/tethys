@@ -40,9 +40,9 @@ export const Splitter = React.forwardRef<HTMLDivElement, SplitterProps>(
         className={cn(
           "group relative flex items-center justify-center transition-colors duration-150 outline-none select-none",
           isVertical
-            ? "w-[6px] -mx-[2.5px] cursor-col-resize h-full z-10"
-            : "h-[6px] -my-[2.5px] cursor-row-resize w-full z-10",
-          "focus-visible:ring-1 focus-visible:ring-[var(--tethys-accent-focus)]",
+            ? "w-[6px] mx-[-2.5px] cursor-col-resize h-full z-10"
+            : "h-[6px] my-[-2.5px] cursor-row-resize w-full z-10",
+          "focus-visible:ring-1 focus-visible:ring-(--tethys-accent-focus)",
           className,
         )}
         {...props}
@@ -51,10 +51,10 @@ export const Splitter = React.forwardRef<HTMLDivElement, SplitterProps>(
         <div
           className={cn(
             "transition-colors duration-150",
-            isVertical ? "h-full w-[1px]" : "w-full h-[1px]",
+            isVertical ? "h-full w-px" : "w-full h-px",
             isDragging
-              ? "bg-[var(--tethys-accent-focus)]"
-              : "bg-[var(--tethys-hairline)] group-hover:bg-[var(--tethys-hairline-strong)]",
+              ? "bg-(--tethys-accent-focus)"
+              : "bg-(--tethys-hairline) group-hover:bg-(--tethys-hairline-strong)",
           )}
         />
       </div>

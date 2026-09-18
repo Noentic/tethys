@@ -20,11 +20,11 @@ export const ActionIconButton = React.forwardRef<
       title={label}
       className={cn(
         "inline-flex h-8 w-8 items-center justify-center rounded-full transition-all duration-150 select-none outline-none",
-        "focus-visible:ring-2 focus-visible:ring-[var(--tethys-accent-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--tethys-canvas)]",
+        "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--tethys-canvas)",
         "active:scale-95",
         ready
-          ? "bg-[var(--tethys-primary)] text-[var(--tethys-on-primary)] hover:opacity-90 active:opacity-100"
-          : "bg-[var(--tethys-surface-hover)] text-[var(--tethys-text-muted)] hover:text-[var(--tethys-text-primary)]",
+          ? "bg-(--tethys-primary) text-(--tethys-on-primary) hover:opacity-90 active:opacity-100"
+          : "bg-(--tethys-surface-hover) text-(--tethys-text-muted) hover:text-(--tethys-text-primary)",
         disabled && "pointer-events-none opacity-40 active:scale-100",
         className,
       )}

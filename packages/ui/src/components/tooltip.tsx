@@ -33,7 +33,7 @@ export function Tooltip({
         <div
           role="tooltip"
           className={cn(
-            "absolute z-50 whitespace-nowrap rounded-[4px] border border-[var(--tethys-hairline-strong)] bg-[var(--tethys-surface-elevated)] px-2 py-1 font-mono text-[11px] text-[var(--tethys-text-primary)] shadow-none pointer-events-none transition-opacity duration-150",
+            "absolute z-50 whitespace-nowrap rounded-xs border border-(--tethys-hairline-strong) bg-(--tethys-surface-elevated) px-2 py-1 font-mono text-[11px] text-(--tethys-text-primary) shadow-none pointer-events-none transition-opacity duration-150",
             side === "top" && "bottom-full left-1/2 mb-1.5 -translate-x-1/2",
             side === "bottom" && "top-full left-1/2 mt-1.5 -translate-x-1/2",
             side === "left" && "right-full top-1/2 mr-1.5 -translate-y-1/2",

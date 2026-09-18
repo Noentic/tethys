@@ -107,14 +107,12 @@ describe("ActionBar Stop Button States", () => {
       <ActionBar cancellationState="grace_elapsed" />,
     );
     const forceKillBtn = screen.getByRole("button", { name: "Force Kill" });
-    expect(forceKillBtn.className).toContain(
-      "text-[var(--tethys-status-danger)]",
-    );
+    expect(forceKillBtn.className).toContain("text-(--tethys-status-danger)");
 
     rerender(<ActionBar cancellationState="terminating" />);
     const termBtn = screen.getByRole("button", {
       name: "Terminating (SIGKILL)",
     });
-    expect(termBtn.className).toContain("text-[var(--tethys-status-danger)]");
+    expect(termBtn.className).toContain("text-(--tethys-status-danger)");
   });
 });

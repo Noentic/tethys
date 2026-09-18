@@ -15,7 +15,7 @@ export function ActivityRail({
   return (
     <aside
       aria-label="Activity Rail"
-      className="flex h-full w-12 flex-col items-center justify-between border-r border-[var(--tethys-hairline)] bg-[var(--tethys-surface-rail)] py-3 select-none shrink-0 z-20"
+      className="flex h-full w-12 flex-col items-center justify-between border-r border-(--tethys-hairline) bg-(--tethys-surface-rail) py-3 select-none shrink-0 z-20"
     >
       {/* Top cluster */}
       <div className="flex flex-col items-center gap-2">
@@ -25,8 +25,8 @@ export function ActivityRail({
           onClick={() => onNavigate("workspaces")}
           className={
             activeView === "workspaces"
-              ? "bg-[var(--tethys-surface-active)] text-[var(--tethys-text-primary)] font-semibold"
-              : "text-[var(--tethys-text-muted)] hover:text-[var(--tethys-text-primary)]"
+              ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-semibold"
+              : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
           }
         >
           <GridSquare className="h-5 w-5" />
@@ -38,8 +38,8 @@ export function ActivityRail({
           onClick={() => onNavigate("thread-new")}
           className={
             activeView === "thread-new"
-              ? "bg-[var(--tethys-surface-active)] text-[var(--tethys-text-primary)] font-semibold"
-              : "text-[var(--tethys-text-muted)] hover:text-[var(--tethys-text-primary)]"
+              ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-semibold"
+              : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
           }
         >
           <Plus className="h-5 w-5" />
@@ -54,8 +54,8 @@ export function ActivityRail({
           onClick={() => onNavigate("settings")}
           className={
             activeView === "settings"
-              ? "bg-[var(--tethys-surface-active)] text-[var(--tethys-text-primary)]"
-              : "text-[var(--tethys-text-muted)] hover:text-[var(--tethys-text-primary)]"
+              ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
+              : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
           }
         >
           <SettingsGear className="h-5 w-5" />

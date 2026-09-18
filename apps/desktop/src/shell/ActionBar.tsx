@@ -29,17 +29,17 @@ export function ActionBar({
 
   return (
     <footer
-      className={`flex h-14 w-full items-center justify-between border-t border-[var(--tethys-hairline)] bg-[var(--tethys-surface-elevated)] px-4 select-none ${className ?? ""}`}
+      className={`flex h-14 w-full items-center justify-between border-t border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-4 select-none ${className ?? ""}`}
     >
       {/* Left cluster: Context & Configuration pills */}
       <div className="flex items-center gap-2">
         <Badge
           variant="outline"
-          className="text-xs cursor-pointer hover:bg-[var(--tethys-surface-hover)]"
+          className="text-xs cursor-pointer hover:bg-(--tethys-surface-hover)"
         >
           <span className="font-semibold">{providerName}</span>
           {configSummary && (
-            <span className="text-[var(--tethys-text-muted)] ml-1">
+            <span className="text-(--tethys-text-muted) ml-1">
               ({configSummary})
             </span>
           )}
@@ -47,7 +47,7 @@ export function ActionBar({
 
         <Badge
           variant="outline"
-          className="text-xs cursor-pointer hover:bg-[var(--tethys-surface-hover)]"
+          className="text-xs cursor-pointer hover:bg-(--tethys-surface-hover)"
         >
           <span>Mode: {mode}</span>
         </Badge>
@@ -64,7 +64,7 @@ export function ActionBar({
         {usageText && (
           <span
             title={`Token usage: ${usageText}`}
-            className="font-mono text-xs text-[var(--tethys-text-muted)]"
+            className="font-mono text-xs text-(--tethys-text-muted)"
           >
             {usageText}
           </span>
@@ -79,7 +79,7 @@ export function ActionBar({
           loading={isPending}
           className={
             isDestructive
-              ? "bg-[rgba(239,68,68,0.15)] border-[var(--tethys-status-danger)] text-[var(--tethys-status-danger)] font-semibold"
+              ? "bg-[rgba(239,68,68,0.15)] border-(--tethys-status-danger) text-(--tethys-status-danger) font-semibold"
               : undefined
           }
         >

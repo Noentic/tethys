@@ -28,12 +28,12 @@ export function UnknownEntryRenderer({
   return (
     <section
       aria-label={`Unknown entry: ${kind}`}
-      className="rounded-md border border-[var(--tethys-hairline)] bg-[var(--tethys-surface-nested)] p-3 text-xs text-[var(--tethys-text-muted)]"
+      className="rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested) p-3 text-xs text-(--tethys-text-muted)"
     >
-      <div className="font-mono text-[11px] text-[var(--tethys-text-secondary)]">
+      <div className="font-mono text-[11px] text-(--tethys-text-secondary)">
         [{kind}]
       </div>
-      <div className="mt-1 font-mono text-[10px] text-[var(--tethys-text-muted)] truncate">
+      <div className="mt-1 font-mono text-[10px] text-(--tethys-text-muted) truncate">
         {JSON.stringify(entry)}
       </div>
     </section>
