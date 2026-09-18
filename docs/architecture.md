@@ -428,12 +428,12 @@ Agent processes usually dominate total memory. The design response is lease‑ba
 
 ### 10.1 Library split (AD‑5)
 
-Mutations (worktree add/remove, commit, merge, rebase, push) use the **git CLI**, so user config, hooks, credentials, LFS, and signing behave as expected. Reads (status, trees, blobs) use **gix**, with CLI `--porcelain=v2 -z` fallback where coverage is thin.
+Mutations (worktree add/remove, commit, merge, rebase, push) use the **git CLI**, so user config, hooks, credentials, LFS, and signing behave as expected. Reads (status, trees, blobs) use **gix**, with CLI `--porcelain=v2 -z` fallback where coverage is thin. *M1.3 deviation (2026‑09‑18): reads ship CLI-only behind a `read.rs` seam; Spike S0.4 measured the full CLI pipeline at 122 ms p95, so the gix port lands when profiling demands it.*
 
 ### 10.2 Worktrees
 
-- Default path `~/.tethys/worktrees/<repo-id>/<slug>` (PD‑6), on branch `tethys/<slug>`.
-- Bootstrap copies configured untracked globs, then runs the setup script in a visible terminal.
+- Default path `~/.tethys/worktrees/<repo-id>/<slug>` (PD‑6), on branch `tethys/<slug>`; `<repo-id>` is a hash of the canonical common git dir, so all worktrees of one repository share it.
+- Bootstrap copies configured untracked globs, then runs the setup script through the supervisor-bound runner (headless until the terminal surface lands).
 - Heavy directories are symlinked only when the user opts in.
 
 ### 10.3 Checkpoints (WT‑03)
@@ -443,15 +443,17 @@ GIT_INDEX_FILE=<tmp> git read-tree HEAD
 GIT_INDEX_FILE=<tmp> git add -A
 tree=$(GIT_INDEX_FILE=<tmp> git write-tree)
 commit=$(git commit-tree $tree -p <prev> -m "tethys turn <n>")
-git update-ref refs/tethys/checkpoints/<thread>/<turn> $commit
+git update-ref refs/tethys/checkpoints/<thread>/<turn>/<start|end> $commit
 ```
 
 - The user's index and branch are untouched, and no hooks run.
-- `refs/tethys/*` are not pushed by default.
+- `refs/tethys/*` are not pushed by default; restore captures an undo pair under
+  `refs/tethys/checkpoints/<thread>/restores/<n>/{worktree,index}` before it writes.
 - Large untracked binaries are skipped, and the UI says so.
 - Refs are pruned on delete and compacted on archive.
 
-**Turn start and end** are taken from `StateChanged(Running)` and `StateChanged(Idle)`.
+**Turn start and end** are taken from `StateChanged(Running)` and from any exit out of
+`Running` (Idle, Error, Interrupted, Suspended), so crashed turns keep their work.
 
 ### 10.4 Diff pipeline
 
@@ -662,7 +664,7 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 | AD‑2 | Managed runtime for npm/Python adapters | Detect only (MVP) · optional managed Node/uv | V1 |
 | AD‑3 | UI framework | **React 19 + TanStack** | **Decided** |
 | AD‑4 | Process model | Per thread · **pooled per profile with leases (Zed‑style)** | **Decided** (Spike S0.2b) |
-| AD‑5 | Git read library | **gix for reads + CLI mutations** · git2 · CLI only | **Decided** (Spike S0.4) |
+| AD‑5 | Git read library | **gix for reads + CLI mutations** · git2 · CLI only | **Decided** (Spike S0.4); M1.3 ships CLI-only reads behind the `read.rs` seam, gix port deferred (revised 2026‑09‑18) |
 | AD‑6 | HTTP MCP servers for agents without HTTP support | Skip with warning · local stdio bridge | V1 |
 | AD‑7 | Remote approval notifications | None · webhook · mobile companion | Phase 3 |
 | AD‑8 | ACP versions | **v1 + v2 side by side, v2‑shaped internal model** | **Decided** (Spike S0.2) |

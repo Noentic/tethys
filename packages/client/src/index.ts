@@ -8,11 +8,31 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   BenchmarkConfig,
   BenchmarkResult,
+  CheckpointInfo,
+  CheckpointPhase,
+  CheckpointResult,
+  CommitResult,
+  DiffFile,
+  DiffFileDetail,
+  DiffFileStatus,
   DiffHunk,
+  DiffLine,
+  DiffLineKind,
+  DiffSource,
+  DiffSummary,
   HealthStatus,
   HostInfo,
+  HunkRef,
+  ProjectGitConfig,
+  RestoreOutcome,
+  RestorePolicy,
+  RestoreTarget,
   SearchItem,
+  SetupOutcome,
   StreamChunk,
+  UndoCapture,
+  WorktreeInfo,
+  WorktreeSpec,
 } from "@tethys/bindings";
 
 export type Transport = "tauri" | "websocket";
@@ -143,26 +163,48 @@ export function createClient(options: ClientOptions = {}) {
 
     // === git namespace ===
     git: {
-      worktreeCreate: () => call<void>("git_worktree_create"),
-      worktree_create: () => call<void>("git_worktree_create"),
-      worktreeRemove: () => call<void>("git_worktree_remove"),
-      worktree_remove: () => call<void>("git_worktree_remove"),
-      worktreeList: () => call<void>("git_worktree_list"),
-      worktree_list: () => call<void>("git_worktree_list"),
-      checkpointCreate: () => call<void>("git_checkpoint_create"),
-      checkpoint_create: () => call<void>("git_checkpoint_create"),
-      checkpointRestore: () => call<void>("git_checkpoint_restore"),
-      checkpoint_restore: () => call<void>("git_checkpoint_restore"),
-      checkpointList: () => call<void>("git_checkpoint_list"),
-      checkpoint_list: () => call<void>("git_checkpoint_list"),
-      diffSummary: () => call<void>("git_diff_summary"),
-      diff_summary: () => call<void>("git_diff_summary"),
-      diffFile: () => call<void>("git_diff_file"),
-      diff_file: () => call<void>("git_diff_file"),
-      stage: () => call<void>("git_stage"),
-      unstage: () => call<void>("git_unstage"),
-      discard: () => call<void>("git_discard"),
-      commit: () => call<void>("git_commit"),
+      worktreeCreate: (spec: WorktreeSpec) =>
+        call<WorktreeInfo>("git_worktree_create", { spec }),
+      worktree_create: (spec: WorktreeSpec) =>
+        call<WorktreeInfo>("git_worktree_create", { spec }),
+      worktreeRemove: (threadId: string, force = false, leased = false) =>
+        call<void>("git_worktree_remove", { threadId, force, leased }),
+      worktree_remove: (threadId: string, force = false, leased = false) =>
+        call<void>("git_worktree_remove", { threadId, force, leased }),
+      worktreeList: () => call<WorktreeInfo[]>("git_worktree_list"),
+      worktree_list: () => call<WorktreeInfo[]>("git_worktree_list"),
+      worktreeArchive: (threadId: string) =>
+        call<void>("git_worktree_archive", { threadId }),
+      worktree_archive: (threadId: string) =>
+        call<void>("git_worktree_archive", { threadId }),
+      checkpointCreate: (threadId: string, turn: number, phase: CheckpointPhase) =>
+        call<CheckpointResult>("git_checkpoint_create", { threadId, turn, phase }),
+      checkpoint_create: (threadId: string, turn: number, phase: CheckpointPhase) =>
+        call<CheckpointResult>("git_checkpoint_create", { threadId, turn, phase }),
+      checkpointRestore: (target: RestoreTarget, policy?: RestorePolicy) =>
+        call<RestoreOutcome>("git_checkpoint_restore", { target, policy }),
+      checkpoint_restore: (target: RestoreTarget, policy?: RestorePolicy) =>
+        call<RestoreOutcome>("git_checkpoint_restore", { target, policy }),
+      checkpointList: (threadId: string) =>
+        call<CheckpointInfo[]>("git_checkpoint_list", { threadId }),
+      checkpoint_list: (threadId: string) =>
+        call<CheckpointInfo[]>("git_checkpoint_list", { threadId }),
+      diffSummary: (source: DiffSource) =>
+        call<DiffSummary>("git_diff_summary", { source }),
+      diff_summary: (source: DiffSource) =>
+        call<DiffSummary>("git_diff_summary", { source }),
+      diffFile: (source: DiffSource, path: string) =>
+        call<DiffFileDetail>("git_diff_file", { source, path }),
+      diff_file: (source: DiffSource, path: string) =>
+        call<DiffFileDetail>("git_diff_file", { source, path }),
+      stage: (threadId: string, paths: string[]) =>
+        call<void>("git_stage", { threadId, paths }),
+      unstage: (threadId: string, paths: string[]) =>
+        call<void>("git_unstage", { threadId, paths }),
+      discard: (threadId: string, source: DiffSource, hunks?: HunkRef[]) =>
+        call<void>("git_discard", { threadId, source, hunks }),
+      commit: (threadId: string, message: string) =>
+        call<CommitResult>("git_commit", { threadId, message }),
       merge: () => call<void>("git_merge"),
       push: () => call<void>("git_push"),
       prCreate: () => call<void>("git_pr_create"),
@@ -255,9 +297,29 @@ export type TethysClient = ReturnType<typeof createClient>;
 export type {
   BenchmarkConfig,
   BenchmarkResult,
+  CheckpointInfo,
+  CheckpointPhase,
+  CheckpointResult,
+  CommitResult,
+  DiffFile,
+  DiffFileDetail,
+  DiffFileStatus,
   DiffHunk,
+  DiffLine,
+  DiffLineKind,
+  DiffSource,
+  DiffSummary,
   HealthStatus,
   HostInfo,
+  HunkRef,
+  ProjectGitConfig,
+  RestoreOutcome,
+  RestorePolicy,
+  RestoreTarget,
   SearchItem,
+  SetupOutcome,
   StreamChunk,
+  UndoCapture,
+  WorktreeInfo,
+  WorktreeSpec,
 };

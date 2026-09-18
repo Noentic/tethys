@@ -8,6 +8,10 @@
 //! Keep this crate dependency-free (serde + specta only): no tokio,
 //! no tauri, no filesystem. That keeps `codegen` fast and cacheable.
 
+pub mod git;
+
+pub use git::*;
+
 use serde::{Deserialize, Serialize};
 use specta::{Type, Types};
 
@@ -42,7 +46,7 @@ pub struct StreamChunk {
 }
 
 /// A diff hunk representation for virtualized rendering (S0.1, AD-10).
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct DiffHunk {
     pub old_start: u32,
     pub old_lines: u32,
@@ -51,7 +55,7 @@ pub struct DiffHunk {
     pub lines: Vec<DiffLine>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct DiffLine {
     pub kind: DiffLineKind,
     pub text: String,
@@ -94,4 +98,22 @@ pub fn registered_types() -> Types {
         .register::<DiffLineKind>()
         .register::<BenchmarkConfig>()
         .register::<BenchmarkResult>()
+        .register::<git::ProjectGitConfig>()
+        .register::<git::WorktreeSpec>()
+        .register::<git::WorktreeInfo>()
+        .register::<git::SetupOutcome>()
+        .register::<git::CheckpointPhase>()
+        .register::<git::CheckpointInfo>()
+        .register::<git::CheckpointResult>()
+        .register::<git::DiffSource>()
+        .register::<git::DiffFileStatus>()
+        .register::<git::DiffFile>()
+        .register::<git::DiffSummary>()
+        .register::<git::DiffFileDetail>()
+        .register::<git::HunkRef>()
+        .register::<git::CommitResult>()
+        .register::<git::RestorePolicy>()
+        .register::<git::RestoreTarget>()
+        .register::<git::UndoCapture>()
+        .register::<git::RestoreOutcome>()
 }

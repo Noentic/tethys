@@ -1,163 +1,185 @@
-use std::path::Path;
-use std::process::Command;
-use std::time::Instant;
+//! Git engine: worktrees, checkpoints, diffs, and discard (`architecture.md` §10).
+//!
+//! The engine is synchronous and side-effect explicit: callers pass specs and
+//! thresholds, the crate never reads app config. Async hosts offload it with
+//! `spawn_blocking`. All mutations are serialized per engine (one worktree).
 
-#[derive(Debug, Clone)]
-pub struct CheckpointResult {
-    pub commit_oid: String,
-    pub ref_name: String,
-    pub elapsed_ms: f64,
+mod archive;
+mod bootstrap;
+mod checkpoint;
+mod commit;
+mod diff;
+mod error;
+mod hunks;
+mod index;
+mod read;
+mod repo;
+mod setup;
+mod worktree;
+
+use parking_lot::Mutex;
+use std::path::Path;
+
+pub use error::{GitError, GitResult};
+pub use repo::GitRepo;
+pub use setup::SetupRunner;
+pub use worktree::default_worktree_path;
+
+use hunks::DiffCache;
+use tethys_schema::{
+    CheckpointInfo, CheckpointPhase, CheckpointResult, CommitResult, DiffFileDetail, DiffSource,
+    DiffSummary, HunkRef, RestoreOutcome, RestorePolicy, RestoreTarget, WorktreeInfo, WorktreeSpec,
+};
+
+/// Tunables the caller resolves from project config.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GitOptions {
+    /// Untracked binaries above this size are skipped by checkpoints.
+    pub skip_untracked_binary_bytes: u64,
 }
 
-pub struct GitEngine;
+impl Default for GitOptions {
+    fn default() -> Self {
+        Self {
+            skip_untracked_binary_bytes: 10 * 1024 * 1024,
+        }
+    }
+}
+
+/// Engine bound to one discovered worktree.
+#[derive(Debug)]
+pub struct GitEngine {
+    repo: GitRepo,
+    options: GitOptions,
+    mutation: Mutex<()>,
+    diff_cache: Mutex<DiffCache>,
+}
 
 impl GitEngine {
-    /// Creates a non-destructive turn checkpoint using a temporary index file.
-    /// Leaves the user's working index and current branch untouched (architecture §10.3).
-    ///
-    /// When `changed_paths` is provided (via file watcher / change detector per §10.4),
-    /// updates only those paths in the temp index, achieving sub-100ms snapshots on 100k+ repos.
-    /// If `None`, falls back to full working tree scan (`git add -A`).
-    pub fn create_checkpoint(
-        worktree_root: &Path,
-        thread_id: &str,
-        turn_index: u32,
-        prev_commit: Option<&str>,
-        changed_paths: Option<&[impl AsRef<Path>]>,
-    ) -> std::io::Result<CheckpointResult> {
-        let t0 = Instant::now();
-        let tmp_index = worktree_root.join(format!(".git/tethys_index_{thread_id}_{turn_index}"));
+    /// Opens the repository containing `root` with default options.
+    pub fn open(root: &Path) -> GitResult<Self> {
+        Self::open_with(root, GitOptions::default())
+    }
 
-        // 1. Initialize temporary index: copy existing stat cache from .git/index if present,
-        // otherwise read-tree HEAD.
-        let base_index = worktree_root.join(".git/index");
-        if base_index.exists() {
-            std::fs::copy(&base_index, &tmp_index)?;
-        } else {
-            let status = Command::new("git")
-                .current_dir(worktree_root)
-                .env("GIT_INDEX_FILE", &tmp_index)
-                .args(["read-tree", "HEAD"])
-                .status()?;
-            if !status.success() {
-                let _ = std::fs::remove_file(&tmp_index);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "git read-tree HEAD failed",
-                ));
-            }
-        }
-
-        // 2. Add changes into temporary index
-        let mut add_cmd = Command::new("git");
-        add_cmd
-            .current_dir(worktree_root)
-            .env("GIT_INDEX_FILE", &tmp_index);
-
-        if let Some(paths) = changed_paths {
-            if paths.is_empty() {
-                add_cmd.args(["add", "-A"]);
-            } else {
-                add_cmd.arg("add").arg("-A").arg("--");
-                for p in paths {
-                    add_cmd.arg(p.as_ref());
-                }
-            }
-        } else {
-            add_cmd.args(["add", "-A"]);
-        }
-
-        let status = add_cmd.status()?;
-        if !status.success() {
-            let _ = std::fs::remove_file(&tmp_index);
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "git add failed",
-            ));
-        }
-
-        // 3. write-tree
-        let output = Command::new("git")
-            .current_dir(worktree_root)
-            .env("GIT_INDEX_FILE", &tmp_index)
-            .args(["write-tree"])
-            .output()?;
-        let tree = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-        // 4. commit-tree
-        let mut commit_cmd = Command::new("git");
-        commit_cmd
-            .current_dir(worktree_root)
-            .args(["commit-tree", &tree]);
-        if let Some(prev) = prev_commit {
-            commit_cmd.args(["-p", prev]);
-        } else if let Ok(head) = Self::rev_parse_head(worktree_root) {
-            commit_cmd.args(["-p", &head]);
-        }
-        commit_cmd.args(["-m", &format!("tethys turn {turn_index}")]);
-
-        let output = commit_cmd.output()?;
-        let commit_oid = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-        // 5. update-ref
-        let ref_name = format!("refs/tethys/checkpoints/{thread_id}/{turn_index}");
-        let status = Command::new("git")
-            .current_dir(worktree_root)
-            .args(["update-ref", &ref_name, &commit_oid])
-            .status()?;
-
-        // Clean up temporary index
-        let _ = std::fs::remove_file(&tmp_index);
-
-        if !status.success() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "git update-ref failed",
-            ));
-        }
-
-        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
-
-        Ok(CheckpointResult {
-            commit_oid,
-            ref_name,
-            elapsed_ms,
+    /// Opens the repository containing `root` with explicit options.
+    pub fn open_with(root: &Path, options: GitOptions) -> GitResult<Self> {
+        Ok(Self {
+            repo: GitRepo::discover(root)?,
+            options,
+            mutation: Mutex::new(()),
+            diff_cache: Mutex::new(DiffCache::default()),
         })
     }
 
-    /// Restores worktree files to a previous checkpoint.
-    pub fn restore_checkpoint(worktree_root: &Path, commit_oid: &str) -> std::io::Result<()> {
-        let status = Command::new("git")
-            .current_dir(worktree_root)
-            .args(["read-tree", "-u", "--reset", commit_oid])
-            .status()?;
-        if !status.success() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "git read-tree reset failed",
-            ));
-        }
-        Ok(())
+    /// Resolved repository locations.
+    pub fn repo(&self) -> &GitRepo {
+        &self.repo
     }
 
-    /// Generates unified git diff between two checkpoints.
-    pub fn get_checkpoint_diff(
-        worktree_root: &Path,
-        from_commit: &str,
-        to_commit: &str,
-    ) -> std::io::Result<String> {
-        let output = Command::new("git")
-            .current_dir(worktree_root)
-            .args(["diff", from_commit, to_commit])
-            .output()?;
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    /// Creates (or registers) a thread worktree.
+    pub fn worktree_create(
+        &self,
+        spec: &WorktreeSpec,
+        runner: &dyn SetupRunner,
+    ) -> GitResult<WorktreeInfo> {
+        let _guard = self.mutation.lock();
+        worktree::create(&self.repo, spec, runner)
     }
 
-    fn rev_parse_head(worktree_root: &Path) -> std::io::Result<String> {
-        let output = Command::new("git")
-            .current_dir(worktree_root)
-            .args(["rev-parse", "HEAD"])
-            .output()?;
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    /// Removes a worktree after the delete guard passes.
+    pub fn worktree_delete(&self, info: &WorktreeInfo, force: bool, leased: bool) -> GitResult<()> {
+        let _guard = self.mutation.lock();
+        archive::delete(&self.repo, info, force, leased)
+    }
+
+    /// Archives a thread's turn refs while keeping the worktree.
+    pub fn worktree_archive(&self, thread_id: &str) -> GitResult<()> {
+        let _guard = self.mutation.lock();
+        archive::archive(&self.repo, thread_id)
+    }
+
+    /// Writes a start or end checkpoint for a turn.
+    pub fn checkpoint_create(
+        &self,
+        thread_id: &str,
+        turn: u32,
+        phase: CheckpointPhase,
+    ) -> GitResult<CheckpointResult> {
+        let _guard = self.mutation.lock();
+        checkpoint::create(
+            &self.repo,
+            thread_id,
+            turn,
+            phase,
+            self.options.skip_untracked_binary_bytes,
+        )
+    }
+
+    /// Lists a thread's checkpoints.
+    pub fn checkpoint_list(&self, thread_id: &str) -> GitResult<Vec<CheckpointInfo>> {
+        checkpoint::list(&self.repo, thread_id)
+    }
+
+    /// Restores a checkpoint (or explicit trees) and returns the undo capture.
+    pub fn restore(
+        &self,
+        target: &RestoreTarget,
+        policy: RestorePolicy,
+    ) -> GitResult<RestoreOutcome> {
+        let _guard = self.mutation.lock();
+        checkpoint::restore(
+            &self.repo,
+            target,
+            policy,
+            self.options.skip_untracked_binary_bytes,
+        )
+    }
+
+    /// Aggregated diff for an anchor pair.
+    pub fn diff_summary(&self, source: &DiffSource) -> GitResult<DiffSummary> {
+        diff::summary(&self.repo, source, self.options.skip_untracked_binary_bytes)
+    }
+
+    /// Full content diff for one path.
+    pub fn diff_file(&self, source: &DiffSource, path: &str) -> GitResult<DiffFileDetail> {
+        let mut cache = self.diff_cache.lock();
+        diff::file_detail(
+            &self.repo,
+            source,
+            path,
+            &mut cache,
+            self.options.skip_untracked_binary_bytes,
+        )
+    }
+
+    /// Stages paths in the real index.
+    pub fn stage(&self, paths: &[String]) -> GitResult<()> {
+        let _guard = self.mutation.lock();
+        index::stage(&self.repo, paths)
+    }
+
+    /// Unstages paths from the real index.
+    pub fn unstage(&self, paths: &[String]) -> GitResult<()> {
+        let _guard = self.mutation.lock();
+        index::unstage(&self.repo, paths)
+    }
+
+    /// Discards selected hunks, or every change in a live anchor.
+    pub fn discard(&self, source: &DiffSource, hunks: Option<&[HunkRef]>) -> GitResult<()> {
+        let _guard = self.mutation.lock();
+        let mut cache = self.diff_cache.lock();
+        index::discard(
+            &self.repo,
+            source,
+            hunks,
+            &mut cache,
+            self.options.skip_untracked_binary_bytes,
+        )
+    }
+
+    /// Commits staged work on the thread branch.
+    pub fn commit(&self, message: &str, paths: Option<&[String]>) -> GitResult<CommitResult> {
+        let _guard = self.mutation.lock();
+        commit::commit(&self.repo, message, paths)
     }
 }

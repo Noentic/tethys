@@ -1,18 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 /// Three-state field for v2 patch semantics (architecture §7.3).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(tag = "type", content = "value")]
 pub enum Patch<T> {
+    #[default]
     Unchanged,
     Clear,
     Set(T),
-}
-
-impl<T> Default for Patch<T> {
-    fn default() -> Self {
-        Self::Unchanged
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

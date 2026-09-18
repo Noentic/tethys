@@ -237,7 +237,7 @@ SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native conf
 | PD‑3 | Slash command arguments | Append only · `{{args}}` placeholder (proposed) · positional |
 | PD‑4 | Fork behaviour | New worktree + new session with summary · restore point only |
 | PD‑5 | Resuming agents that can't reload sessions | Start fresh · user‑approved summary of prior turns |
-| PD‑6 | Default worktree location | `~/.tethys/worktrees` · next to the repo |
+| PD‑6 | Default worktree location | **`~/.tethys/worktrees/<repo-id>/<slug>`** (Decided in M1.3) · next to the repo |
 | PD‑7 | Canonical skill home | `.agents/skills` (proposed) · Tethys folder with links |
 | PD‑8 | Licensing and telemetry | OSS license choice · opt‑in anonymous performance data |
 | PD‑9 | Plain-directory scope and root | Project-only vs. global default + project override (proposed: global `worktree`, project override) · thread root = workspace root vs. per-thread plain subfolder |

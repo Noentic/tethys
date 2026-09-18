@@ -16,6 +16,62 @@ export type BenchmarkResult = {
 	p95_latency_ms: number | null,
 };
 
+/**  One checkpoint ref, newest fields resolved. */
+export type CheckpointInfo = {
+	thread_id: string,
+	turn: number,
+	phase: CheckpointPhase,
+	commit_oid: string,
+	tree_oid: string,
+	created_at_ms: number | null,
+};
+
+/**  Which edge of a turn a checkpoint captures. */
+export type CheckpointPhase = "Start" | "End";
+
+/**  Result of writing a checkpoint. */
+export type CheckpointResult = {
+	thread_id: string,
+	turn: number,
+	phase: CheckpointPhase,
+	ref_name: string,
+	commit_oid: string,
+	tree_oid: string,
+	elapsed_ms: number | null,
+	/**  Untracked binaries too large to capture; they remain on disk. */
+	skipped: string[],
+};
+
+/**  Result of a commit on a thread branch. */
+export type CommitResult = {
+	oid: string,
+	summary: string,
+};
+
+/**  One file in a diff summary. */
+export type DiffFile = {
+	path: string,
+	old_path: string | null,
+	status: DiffFileStatus,
+	additions: number,
+	deletions: number,
+	binary: boolean,
+	/**  True when content is withheld (>1 MB or >20k changed lines). */
+	collapsed: boolean,
+};
+
+/**  Full content diff for a single file. */
+export type DiffFileDetail = {
+	path: string,
+	binary: boolean,
+	collapsed: boolean,
+	additions: number,
+	deletions: number,
+	hunks: DiffHunk[],
+};
+
+export type DiffFileStatus = "Added" | "Modified" | "Deleted" | "Renamed" | "Copied" | "TypeChanged" | "Unmerged" | "Other";
+
 /**  A diff hunk representation for virtualized rendering (S0.1, AD-10). */
 export type DiffHunk = {
 	old_start: number,
@@ -32,6 +88,49 @@ export type DiffLine = {
 
 export type DiffLineKind = "Context" | "Addition" | "Deletion";
 
+/**  Anchor pair a diff is computed between (`architecture.md` §10.1). */
+export type DiffSource = 
+/**  Base commit to the thread's latest end checkpoint. */
+({ BaseLatestEnd: {
+	thread_id: string,
+	base: string,
+} }) & { BaseWorktree?: never; HeadIndex?: never; HeadWorktree?: never; IndexWorktree?: never; TurnStartEnd?: never; TurnStartWorktree?: never } | 
+/**  Base commit to the live worktree (fallback before the first end). */
+({ BaseWorktree: {
+	thread_id: string,
+	base: string,
+} }) & { BaseLatestEnd?: never; HeadIndex?: never; HeadWorktree?: never; IndexWorktree?: never; TurnStartEnd?: never; TurnStartWorktree?: never } | 
+/**  Turn start checkpoint to turn end checkpoint. */
+({ TurnStartEnd: {
+	thread_id: string,
+	turn: number,
+} }) & { BaseLatestEnd?: never; BaseWorktree?: never; HeadIndex?: never; HeadWorktree?: never; IndexWorktree?: never; TurnStartWorktree?: never } | 
+/**  Turn start checkpoint to the live worktree (in-progress turn). */
+({ TurnStartWorktree: {
+	thread_id: string,
+	turn: number,
+} }) & { BaseLatestEnd?: never; BaseWorktree?: never; HeadIndex?: never; HeadWorktree?: never; IndexWorktree?: never; TurnStartEnd?: never } | 
+/**  HEAD to the real index. */
+({ HeadIndex: {
+	thread_id: string,
+} }) & { BaseLatestEnd?: never; BaseWorktree?: never; HeadWorktree?: never; IndexWorktree?: never; TurnStartEnd?: never; TurnStartWorktree?: never } | 
+/**  HEAD to the live worktree. */
+({ HeadWorktree: {
+	thread_id: string,
+} }) & { BaseLatestEnd?: never; BaseWorktree?: never; HeadIndex?: never; IndexWorktree?: never; TurnStartEnd?: never; TurnStartWorktree?: never } | 
+/**  Real index to the live worktree. */
+({ IndexWorktree: {
+	thread_id: string,
+} }) & { BaseLatestEnd?: never; BaseWorktree?: never; HeadIndex?: never; HeadWorktree?: never; TurnStartEnd?: never; TurnStartWorktree?: never };
+
+/**  Aggregated diff for one anchor pair. */
+export type DiffSummary = {
+	source: DiffSource,
+	files: DiffFile[],
+	additions: number,
+	deletions: number,
+};
+
 /**  Liveness probe result (`host.health`). */
 export type HealthStatus = {
 	ok: boolean,
@@ -44,10 +143,64 @@ export type HostInfo = {
 	platform: string,
 };
 
+/**  Identifies one hunk for discard operations. */
+export type HunkRef = {
+	path: string,
+	hunk_index: number,
+};
+
+/**  Per-project git settings loaded from `<repo>/.tethys/config.json`. */
+export type ProjectGitConfig = {
+	/**  Override for the default `~/.tethys/worktrees/<repo-id>/<slug>` location. */
+	worktrees_dir?: string | null,
+	/**  Branch template for new thread worktrees; `{slug}` is substituted. */
+	wt_branch_template?: string,
+	/**  Untracked/ignored globs copied from the main worktree (default `.env*`). */
+	bootstrap_globs?: string[],
+	/**  Untracked binaries larger than this are skipped by checkpoints. */
+	skip_untracked_binary_bytes?: number,
+	/**  Timeout for the optional worktree setup script. */
+	setup_timeout_ms?: number,
+};
+
+/**  Result of a restore. */
+export type RestoreOutcome = {
+	restored_worktree_tree: string,
+	restored_index_tree: string,
+	undo: UndoCapture,
+};
+
+/**  How aggressively restore protects uncommitted state. */
+export type RestorePolicy = 
+/**  Refuse unless worktree and index match the latest end checkpoint. */
+"RequireClean" | 
+/**  Proceed after capturing an undo checkpoint. */
+"Force";
+
+/**  What to restore to. */
+export type RestoreTarget = ({ Checkpoint: {
+	thread_id: string,
+	turn: number,
+	phase: CheckpointPhase,
+} }) & { Trees?: never } | 
+/**  Explicit trees, used to undo a previous restore. */
+({ Trees: {
+	thread_id: string,
+	worktree_tree: string,
+	index_tree: string,
+} }) & { Checkpoint?: never };
+
 /**  A search item result returned by FFF search (`search.files`). */
 export type SearchItem = {
 	relative_path: string,
 	score: number,
+};
+
+/**  Outcome of an optional worktree setup script. */
+export type SetupOutcome = {
+	exit_code: number | null,
+	stderr: string,
+	timed_out: boolean,
 };
 
 /**  A chunk emitted over Tauri IPC streaming channels (S0.1). */
@@ -56,4 +209,46 @@ export type StreamChunk = {
 	seq: number,
 	timestamp_ms: number | null,
 	payload: string,
+};
+
+/**  Refs holding the pre-restore state so restore is itself reversible. */
+export type UndoCapture = {
+	worktree_ref: string,
+	index_ref: string,
+	worktree_tree: string,
+	index_tree: string,
+};
+
+/**  Result of materializing a worktree. */
+export type WorktreeInfo = {
+	thread_id: string,
+	project_root: string,
+	path: string,
+	branch: string,
+	base: string,
+	head: string,
+	main_checkout: boolean,
+	warnings: string[],
+	setup: SetupOutcome | null,
+};
+
+/**  Everything the engine needs to materialize a thread worktree. */
+export type WorktreeSpec = {
+	thread_id: string,
+	/**  Repository root used for discovery (the main checkout). */
+	project_root: string,
+	/**  URL-safe thread slug used for paths and default branch names. */
+	slug: string,
+	/**  Worktree path; empty means "derive from `worktrees_dir`". */
+	path: string,
+	/**  Branch to create; empty means "apply the configured template". */
+	branch: string,
+	/**  Commit-ish the branch starts from. */
+	base: string,
+	/**  Ignored-file globs copied into the new worktree. */
+	bootstrap_globs: string[],
+	/**  Optional synchronization script run inside the new worktree. */
+	setup_script: string | null,
+	/**  When true, register the existing checkout instead of creating a worktree. */
+	main_checkout: boolean,
 };

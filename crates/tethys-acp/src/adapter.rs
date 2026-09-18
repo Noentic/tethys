@@ -121,12 +121,12 @@ impl AcpAdapter {
                         role: Role::Agent,
                         chunk,
                     })
-                } else if let Some(diff) = params.get("git_patch").and_then(|d| d.as_str()) {
-                    Some(TurnEventBody::GitPatchDiff {
-                        patch: diff.to_string(),
-                    })
                 } else {
-                    None
+                    params.get("git_patch").and_then(|d| d.as_str()).map(|diff| {
+                        TurnEventBody::GitPatchDiff {
+                            patch: diff.to_string(),
+                        }
+                    })
                 }
             }
             _ => None,

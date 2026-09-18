@@ -78,6 +78,7 @@ pub fn run() {
             git_worktree_create,
             git_worktree_remove,
             git_worktree_list,
+            git_worktree_archive,
             git_checkpoint_create,
             git_checkpoint_restore,
             git_checkpoint_list,

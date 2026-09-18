@@ -18,7 +18,11 @@ impl TethysApi for MinimalApi {
         })
     }
 
-    async fn search_files(&self, _query: String, _limit: usize) -> Result<Vec<SearchItem>, ApiError> {
+    async fn search_files(
+        &self,
+        _query: String,
+        _limit: usize,
+    ) -> Result<Vec<SearchItem>, ApiError> {
         Ok(vec![])
     }
 
@@ -47,7 +51,18 @@ async fn test_stub_defaults_return_unimplemented() {
         other => panic!("expected Unimplemented, got {other:?}"),
     }
 
-    match api.git_worktree_create().await {
+    let spec = tethys_schema::WorktreeSpec {
+        thread_id: "t".to_string(),
+        project_root: "/tmp".to_string(),
+        slug: "t".to_string(),
+        path: String::new(),
+        branch: String::new(),
+        base: "main".to_string(),
+        bootstrap_globs: Vec::new(),
+        setup_script: None,
+        main_checkout: false,
+    };
+    match api.git_worktree_create(spec).await {
         Err(ApiError::Unimplemented(m)) => assert_eq!(m, "git.worktree_create"),
         other => panic!("expected Unimplemented, got {other:?}"),
     }

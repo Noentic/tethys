@@ -21,3 +21,6 @@ tethys-store = { path = "../tethys-store" }
 tethys-supervisor = { path = "../tethys-supervisor" }
 tethys-sync = { path = "../tethys-sync" }
 tethys-thread = { path = "../tethys-thread" }
+
+[dev-dependencies]
+tempfile.workspace = true
