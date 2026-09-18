@@ -84,6 +84,8 @@ pub struct BenchmarkResult {
     pub p95_latency_ms: f64,
 }
 
+pub mod store;
+
 /// All root types exported to TypeScript. Add new wire types here so
 /// they are included in the generated bindings.
 pub fn registered_types() -> Types {
@@ -108,4 +110,13 @@ pub fn registered_types() -> Types {
         .register::<thread::ThreadState>()
         .register::<thread::TurnEventBody>()
         .register::<thread::EventEnvelope>()
+        .register::<store::BlobHash>()
+        .register::<store::SeqRange>()
+        .register::<store::EntryKind>()
+        .register::<store::EntryUpsert>()
+        .register::<store::NewEvent>()
+        .register::<store::Entry>()
+        .register::<store::EntryPage>()
+        .register::<store::ThreadView>()
+        .register::<store::StoredEvent>()
 }
