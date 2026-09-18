@@ -74,14 +74,31 @@ export function SessionsColumn({
       aria-label="Sessions Column"
       className="flex h-full w-[280px] flex-col border-r border-(--tethys-hairline) bg-(--tethys-surface-panel) select-none shrink-0"
     >
-      <div className="flex h-10 items-center justify-between border-b border-(--tethys-hairline) px-3">
-        <span className="text-xs font-semibold text-(--tethys-text-primary)">
-          Sessions
-        </span>
+      {/* Workspace Header & New Session Button (Matching Image 6) */}
+      <div className="flex flex-col gap-2.5 border-b border-(--tethys-hairline) p-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-7 items-center justify-center rounded-lg bg-(--tethys-surface-active) border border-(--tethys-hairline) text-xs font-bold text-(--tethys-text-primary)">
+            T
+          </div>
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="text-xs font-semibold text-(--tethys-text-primary) truncate">
+              tethys
+            </span>
+            <span className="text-[10px] font-mono text-(--tethys-text-muted) truncate">
+              ~/Code/tethys
+            </span>
+          </div>
+        </div>
+
         {onNewSession && (
-          <IconButton size="compact" label="New Thread" onClick={onNewSession}>
-            <Plus className="h-3.5 w-3.5" />
-          </IconButton>
+          <button
+            type="button"
+            onClick={onNewSession}
+            className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) hover:bg-(--tethys-surface-hover) text-xs font-medium text-(--tethys-text-primary) transition-colors"
+          >
+            <Plus className="size-3.5" />
+            <span>New session</span>
+          </button>
         )}
       </div>
 

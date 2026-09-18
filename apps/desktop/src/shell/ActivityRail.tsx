@@ -21,7 +21,7 @@ export function ActivityRail({
       <div className="flex flex-col items-center gap-2">
         <IconButton
           size="rail"
-          label="Workspaces (Ctrl+1)"
+          label="Projects (Ctrl+1)"
           onClick={() => onNavigate("workspaces")}
           className={
             activeView === "workspaces"

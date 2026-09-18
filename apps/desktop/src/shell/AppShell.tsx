@@ -33,26 +33,49 @@ export interface AppShellProps {
 
 export function AppShell({
   children,
-  activeRoute = "/workspaces",
+  activeRoute = "/thread/new",
   onNavigate,
   platformInset = false,
 }: AppShellProps) {
   // Tabs management
-  const [tabs, setTabs] = useState<TabData[]>([
-    {
-      id: "workspaces",
-      title: "Workspaces",
-      route: "/workspaces",
-      closable: false,
-      pinned: true,
-    },
-  ]);
-  const [activeTabId, setActiveTabId] = useState<string>("workspaces");
+  const [tabs, setTabs] = useState<TabData[]>(() => {
+    if (activeRoute === "/workspaces") {
+      return [
+        {
+          id: "workspaces",
+          title: "Workspaces",
+          route: "/workspaces",
+          closable: false,
+          pinned: true,
+        },
+      ];
+    }
+    return [
+      {
+        id: "workspaces",
+        title: "Workspaces",
+        route: "/workspaces",
+        closable: false,
+        pinned: true,
+      },
+      {
+        id: "thread-new",
+        title: "New Thread",
+        route: "/thread/new",
+        closable: true,
+      },
+    ];
+  });
+  const [activeTabId, setActiveTabId] = useState<string>(
+    activeRoute === "/workspaces" ? "workspaces" : "thread-new",
+  );
 
   // Palette & modal management
   const [paletteOpen, setPaletteOpen] = useState<boolean>(false);
   const [approvalDrawerOpen, setApprovalDrawerOpen] = useState<boolean>(false);
   const [inspectorOverlayOpen, setInspectorOverlayOpen] =
+    useState<boolean>(false);
+  const [sessionsSidebarOpen, setSessionsSidebarOpen] =
     useState<boolean>(false);
 
   // Responsive layout state
@@ -206,6 +229,7 @@ export function AppShell({
   useEffect(() => {
     return setupGlobalKeyboardMap({
       onTogglePalette: () => setPaletteOpen((prev) => !prev),
+      onToggleSidebar: () => setSessionsSidebarOpen((prev) => !prev),
       onFocusTab: (tabIndex: number) => {
         if (tabIndex >= 0 && tabIndex < tabs.length) {
           handleSelectTab(tabs[tabIndex].id);
@@ -227,6 +251,8 @@ export function AppShell({
 
   const isCompactSessions = windowWidth < 800;
   const isOverlayInspector = windowWidth < 1100;
+  const shouldShowSessions =
+    sessionsSidebarOpen || (activeView === "thread" && !isCompactSessions);
 
   // Active session store for Action Bar
   const activeSessionStore = activeSessionId
@@ -267,6 +293,8 @@ export function AppShell({
         onOpenApprovalQueue={() => setApprovalDrawerOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
         platformInset={platformInset}
+        onToggleSidebar={() => setSessionsSidebarOpen((prev) => !prev)}
+        onNewThread={() => onNavigate?.("/thread/new")}
       />
 
       {/* 2. Main Middle Workspace Area */}
@@ -288,25 +316,31 @@ export function AppShell({
           orientation="horizontal"
           className="flex-1 overflow-hidden"
         >
-          {/* Sessions Column (280px / Collapsible) */}
-          <Panel
-            id="shell-sessions"
-            defaultSize={isCompactSessions ? 48 : 280}
-            minSize={isCompactSessions ? 48 : 200}
-            maxSize={isCompactSessions ? 48 : 400}
-            collapsible={!isCompactSessions}
-            className="h-full"
-          >
-            <SessionsColumn
-              sessions={sessions}
-              activeSessionId={activeSessionId}
-              collapsed={isCompactSessions}
-              onSelectSession={(sessId) => onNavigate?.(`/thread/${sessId}`)}
-              onNewSession={() => onNavigate?.("/thread/new")}
-            />
-          </Panel>
+          {/* Sessions Column (280px / Collapsible) - shown when toggled or on active thread */}
+          {shouldShowSessions && (
+            <>
+              <Panel
+                id="shell-sessions"
+                defaultSize={isCompactSessions ? 48 : 280}
+                minSize={isCompactSessions ? 48 : 200}
+                maxSize={isCompactSessions ? 48 : 400}
+                collapsible={!isCompactSessions}
+                className="h-full"
+              >
+                <SessionsColumn
+                  sessions={sessions}
+                  activeSessionId={activeSessionId}
+                  collapsed={isCompactSessions}
+                  onSelectSession={(sessId) =>
+                    onNavigate?.(`/thread/${sessId}`)
+                  }
+                  onNewSession={() => onNavigate?.("/thread/new")}
+                />
+              </Panel>
 
-          <Separator className="relative flex items-center justify-center w-px bg-(--tethys-hairline) hover:w-[3px] hover:bg-(--tethys-accent-focus) transition-all cursor-col-resize select-none outline-none after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']" />
+              <Separator className="relative flex items-center justify-center w-px bg-(--tethys-hairline) hover:w-[3px] hover:bg-(--tethys-accent-focus) transition-all cursor-col-resize select-none outline-none after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']" />
+            </>
+          )}
 
           {/* Center Stage Panel */}
           <Panel

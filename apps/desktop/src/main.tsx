@@ -46,11 +46,11 @@ const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
-// Index redirect -> /workspaces
+// Index redirect -> /thread/new (Main Entry Point)
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: () => <Navigate to="/workspaces" replace />,
+  component: () => <Navigate to="/thread/new" replace />,
 });
 
 // Workspaces Hub

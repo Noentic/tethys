@@ -3,6 +3,7 @@ import { KeycapPill } from "@tethys/ui";
 export function SettingsKeybindingsView() {
   const bindings = [
     { action: "Open Command Palette", key: "Ctrl+K" },
+    { action: "Toggle Sessions Sidebar", key: "Ctrl+B" },
     { action: "New Thread", key: "Ctrl+T" },
     { action: "Close Tab", key: "Ctrl+W" },
     { action: "Open Settings", key: "Ctrl+," },

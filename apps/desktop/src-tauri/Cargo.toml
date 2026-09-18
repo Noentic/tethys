@@ -22,4 +22,4 @@ tethys-core = { path = "../../../crates/tethys-core" }
 tethys-schema = { path = "../../../crates/tethys-schema" }
 
 [build-dependencies]
-tauri-build = "2"
+tauri-build = { version = "2", features = [] }
