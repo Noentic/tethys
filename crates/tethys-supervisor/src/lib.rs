@@ -1,8 +1,15 @@
 use parking_lot::Mutex;
-use std::io::Read;
-use std::process::{Child, Command, Stdio};
+#[cfg(windows)]
+use process_wrap::tokio::JobObject;
+#[cfg(unix)]
+use process_wrap::tokio::ProcessGroup;
+use process_wrap::tokio::{ChildWrapper, CommandWrap, KillOnDrop};
+use std::io;
+use std::process::{ExitStatus, Stdio};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use tokio::io::AsyncReadExt;
+use tokio::process::{ChildStdin, ChildStdout, Command};
 
 /// Circular ring buffer for stderr capture (architecture §7.5: 2 MB limit).
 #[derive(Debug, Clone)]
@@ -50,138 +57,140 @@ impl StderrRingBuffer {
     }
 }
 
-/// A supervised child process with process group isolation, cancellation ladder,
-/// and bounded stderr capture.
+/// A supervised child process with process group isolation (Unix) or job object
+/// containment (Windows), cancellation ladder, stdio pipes, and bounded stderr capture.
 pub struct SupervisedChild {
-    child: Child,
+    child: Box<dyn ChildWrapper>,
+    #[cfg(unix)]
     pgid: u32,
     stderr_buf: StderrRingBuffer,
 }
 
 impl SupervisedChild {
-    /// Spawns a command inside a new process group.
-    pub fn spawn(mut cmd: Command, stderr_cap: usize) -> std::io::Result<Self> {
+    /// Spawns a command inside a new process group (Unix) or job object (Windows),
+    /// exposing stdin/stdout pipes and capturing stderr into a ring buffer.
+    pub fn spawn(cmd: Command, stderr_cap: usize) -> io::Result<Self> {
+        let mut cmd = cmd;
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        let mut command = CommandWrap::from(cmd);
+        command.wrap(KillOnDrop);
         #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            // Create a new process group where pgid == child pid
-            cmd.process_group(0);
-        }
+        command.wrap(ProcessGroup::leader());
+        #[cfg(windows)]
+        command.wrap(JobObject);
 
-        cmd.stderr(Stdio::piped());
-
-        let mut child = cmd.spawn()?;
-        let pid = child.id();
-        let pgid = pid;
+        let mut child = command.spawn()?;
 
         let stderr_buf = StderrRingBuffer::new(stderr_cap);
 
-        if let Some(mut stderr) = child.stderr.take() {
-            let buf_clone = stderr_buf.clone();
-            std::thread::Builder::new()
-                .name(format!("supervisor-stderr-{pid}"))
-                .spawn(move || {
-                    let mut chunk = [0u8; 4096];
-                    while let Ok(n) = stderr.read(&mut chunk) {
-                        if n == 0 {
-                            break;
-                        }
-                        buf_clone.write_bytes(&chunk[..n]);
+        if let Some(mut stderr) = child.stderr().take() {
+            let buf = stderr_buf.clone();
+            tokio::spawn(async move {
+                let mut chunk = [0u8; 4096];
+                loop {
+                    match stderr.read(&mut chunk).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(read) => buf.write_bytes(&chunk[..read]),
                     }
-                })?;
+                }
+            });
         }
 
         Ok(Self {
+            #[cfg(unix)]
+            pgid: child.id().unwrap_or(0),
             child,
-            pgid,
             stderr_buf,
         })
     }
 
     pub fn id(&self) -> u32 {
-        self.child.id()
+        self.child.id().unwrap_or(0)
     }
 
     pub fn pgid(&self) -> u32 {
-        self.pgid
+        #[cfg(unix)]
+        {
+            self.pgid
+        }
+        #[cfg(not(unix))]
+        {
+            self.id()
+        }
     }
 
     pub fn stderr_buffer(&self) -> &StderrRingBuffer {
         &self.stderr_buf
     }
 
+    pub fn take_stdin(&mut self) -> Option<ChildStdin> {
+        self.child.stdin().take()
+    }
+
+    pub fn take_stdout(&mut self) -> Option<ChildStdout> {
+        self.child.stdout().take()
+    }
+
     /// Tries to wait for child completion without blocking.
-    pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+    pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         self.child.try_wait()
+    }
+
+    /// Waits for the child to exit, reaping every process group member on Unix.
+    pub async fn wait(&mut self) -> io::Result<ExitStatus> {
+        self.child.wait().await
     }
 
     /// Executes the cancellation ladder per architecture §7.5:
     /// 1. Cooperative cancel / SIGINT
     /// 2. Grace period wait
     /// 3. Escalation to SIGTERM
-    /// 4. Force termination with SIGKILL on entire process group
-    pub fn cancel_ladder(&mut self, grace_period: Duration) -> std::io::Result<()> {
-        if let Ok(Some(_)) = self.child.try_wait() {
+    /// 4. Force termination with SIGKILL on the entire process group
+    pub async fn cancel_ladder(&mut self, grace_period: Duration) -> io::Result<()> {
+        if self.child.try_wait()?.is_some() {
             return Ok(());
         }
 
         #[cfg(unix)]
         {
-            let pgid_i32 = -(self.pgid as i32);
-            // Step 1: SIGINT to process group
-            unsafe {
-                libc::kill(pgid_i32, libc::SIGINT);
-            }
+            let _ = self.child.signal(libc::SIGINT);
 
-            let start = Instant::now();
-            while start.elapsed() < grace_period {
-                if let Ok(Some(_)) = self.child.try_wait() {
+            let deadline = tokio::time::Instant::now() + grace_period;
+            while tokio::time::Instant::now() < deadline {
+                if self.child.try_wait()?.is_some() {
                     return Ok(());
                 }
-                std::thread::sleep(Duration::from_millis(50));
+                tokio::time::sleep(Duration::from_millis(25)).await;
             }
 
-            // Step 2: SIGTERM
-            unsafe {
-                libc::kill(pgid_i32, libc::SIGTERM);
-            }
-            std::thread::sleep(Duration::from_millis(100));
+            let _ = self.child.signal(libc::SIGTERM);
+            tokio::time::sleep(Duration::from_millis(100)).await;
 
-            // Step 3: SIGKILL to entire process group
-            if self.child.try_wait()?.is_none() {
-                unsafe {
-                    libc::kill(pgid_i32, libc::SIGKILL);
-                }
-                let _ = self.child.wait();
-            }
+            let _ = self.child.signal(libc::SIGKILL);
+            self.child.wait().await?;
         }
 
         #[cfg(not(unix))]
         {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
+            let _ = grace_period;
+            let _ = self.child.start_kill();
+            self.child.wait().await?;
         }
 
         Ok(())
     }
 
-    /// Forcibly kills the entire process group immediately.
-    pub fn force_kill_group(&mut self) -> std::io::Result<()> {
+    /// Forcibly kills the entire process group (Unix) or job (Windows) immediately.
+    pub async fn force_kill_group(&mut self) -> io::Result<()> {
         #[cfg(unix)]
-        {
-            let pgid_i32 = -(self.pgid as i32);
-            unsafe {
-                libc::kill(pgid_i32, libc::SIGKILL);
-            }
-            let _ = self.child.wait();
-        }
-
+        let _ = self.child.signal(libc::SIGKILL);
         #[cfg(not(unix))]
-        {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
-        }
+        let _ = self.child.start_kill();
 
+        self.child.wait().await?;
         Ok(())
     }
 }

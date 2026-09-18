@@ -8,6 +8,10 @@ use tauri::ipc::Channel;
 use tauri::State;
 use tethys_api::TethysApi;
 use tethys_core::Core;
+use tethys_schema::connection::ConnectionEntry;
+use tethys_schema::thread::{
+    ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView,
+};
 use tethys_schema::{
     BenchmarkConfig, BenchmarkResult, DiffHunk, HealthStatus, HostInfo, SearchItem, StreamChunk,
 };
@@ -59,8 +63,30 @@ stub_cmd!(agent_profiles_delete);
 stub_cmd!(agent_registry_list);
 stub_cmd!(agent_registry_install);
 stub_cmd!(agent_registry_update);
-stub_cmd!(agent_connections_list);
-stub_cmd!(agent_connections_restart);
+/// `agent.connections.list` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn agent_connections_list(
+    state: State<'_, CoreState>,
+) -> Result<Vec<ConnectionEntry>, String> {
+    state
+        .agent_connections_list()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `agent.connections.restart` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn agent_connections_restart(
+    state: State<'_, CoreState>,
+    profile_id: String,
+) -> Result<(), String> {
+    state
+        .agent_connections_restart(profile_id)
+        .await
+        .map_err(|e| e.to_string())
+}
 stub_cmd!(agent_login);
 stub_cmd!(agent_logout);
 stub_cmd!(agent_stderr);
@@ -72,26 +98,118 @@ stub_cmd!(agent_config_apply);
 stub_cmd!(agent_config_rollback);
 
 // === thread ===
-stub_cmd!(thread_create);
-stub_cmd!(thread_list);
-stub_cmd!(thread_get);
-stub_cmd!(thread_prompt);
+
+/// `thread.create` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_create(
+    state: State<'_, CoreState>,
+    request: CreateThread,
+) -> Result<ThreadSummary, String> {
+    state
+        .thread_create(request)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `thread.list` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_list(state: State<'_, CoreState>) -> Result<Vec<ThreadSummary>, String> {
+    state.thread_list().await.map_err(|e| e.to_string())
+}
+
+/// `thread.get` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_get(state: State<'_, CoreState>, id: ThreadId) -> Result<ThreadView, String> {
+    state.thread_get(id).await.map_err(|e| e.to_string())
+}
+
+/// `thread.prompt` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_prompt(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+    blocks: Vec<ContentBlock>,
+) -> Result<(), String> {
+    state
+        .thread_prompt(id, blocks)
+        .await
+        .map_err(|e| e.to_string())
+}
 stub_cmd!(thread_queue_list);
 stub_cmd!(thread_queue_add);
 stub_cmd!(thread_queue_remove);
 stub_cmd!(thread_queue_reorder);
-stub_cmd!(thread_cancel);
-stub_cmd!(thread_resume);
+/// `thread.cancel` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_cancel(state: State<'_, CoreState>, id: ThreadId) -> Result<(), String> {
+    state.thread_cancel(id).await.map_err(|e| e.to_string())
+}
+
+/// `thread.resume` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_resume(state: State<'_, CoreState>, id: ThreadId) -> Result<(), String> {
+    state.thread_resume(id).await.map_err(|e| e.to_string())
+}
 stub_cmd!(thread_import_sessions);
 stub_cmd!(thread_fork);
-stub_cmd!(thread_archive);
-stub_cmd!(thread_delete);
+/// `thread.archive` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_archive(state: State<'_, CoreState>, id: ThreadId) -> Result<(), String> {
+    state.thread_archive(id).await.map_err(|e| e.to_string())
+}
+
+/// `thread.delete` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_delete(state: State<'_, CoreState>, id: ThreadId) -> Result<(), String> {
+    state.thread_delete(id).await.map_err(|e| e.to_string())
+}
 stub_cmd!(thread_set_config_option);
 stub_cmd!(thread_set_permission_mode);
 
 // === events ===
-stub_cmd!(events_subscribe);
-stub_cmd!(events_unsubscribe);
+
+/// `events.subscribe` — streams `EventEnvelope`s over a Channel until the
+/// thread is deleted (`architecture.md §12.1`).
+#[tauri::command]
+pub async fn events_subscribe(
+    state: State<'_, CoreState>,
+    thread_id: ThreadId,
+    since_seq: u32,
+    on_event: Channel<EventEnvelope>,
+) -> Result<(), String> {
+    use futures::StreamExt;
+    let mut stream = state
+        .events_subscribe(thread_id, since_seq)
+        .await
+        .map_err(|e| e.to_string())?;
+    while let Some(event) = stream.next().await {
+        if on_event.send(event).is_err() {
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// `events.unsubscribe` — see `architecture.md §12.1`.
+#[tauri::command]
+#[specta::specta]
+pub async fn events_unsubscribe(
+    state: State<'_, CoreState>,
+    thread_id: ThreadId,
+) -> Result<(), String> {
+    state
+        .events_unsubscribe(thread_id)
+        .await
+        .map_err(|e| e.to_string())
+}
 stub_cmd!(events_inbox_subscribe);
 
 // === permission ===
@@ -127,7 +245,10 @@ pub async fn search_files(
     query: String,
     limit: usize,
 ) -> Result<Vec<SearchItem>, String> {
-    state.search_files(query, limit).await.map_err(|e| e.to_string())
+    state
+        .search_files(query, limit)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // === mcp ===

@@ -1,6 +1,4 @@
-use std::process::Command;
-use std::time::Duration;
-use tethys_supervisor::{StderrRingBuffer, SupervisedChild};
+use tethys_supervisor::StderrRingBuffer;
 
 #[test]
 fn test_stderr_ring_buffer_bounds() {
@@ -22,52 +20,90 @@ fn test_stderr_ring_buffer_bounds() {
 }
 
 #[cfg(unix)]
-#[test]
-fn test_force_kill_process_group() {
-    let mut cmd = Command::new("sh");
-    cmd.arg("-c").arg("sleep 30");
+mod unix_tests {
+    use std::time::{Duration, Instant};
+    use tethys_supervisor::SupervisedChild;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::process::Command;
 
-    let mut child = SupervisedChild::spawn(cmd, 1024)
-        .expect("failed to spawn supervised child");
-    let pgid = child.pgid() as i32;
-
-    std::thread::sleep(Duration::from_millis(10));
-    child.force_kill_group().expect("force kill failed");
-
-    let mut alive = true;
-    let deadline = std::time::Instant::now() + Duration::from_millis(250);
-    while std::time::Instant::now() < deadline {
-        let res = unsafe { libc::kill(-pgid, 0) };
-        if res != 0 {
-            alive = false;
-            break;
+    async fn wait_for_group_exit(pgid: i32) -> bool {
+        let deadline = Instant::now() + Duration::from_millis(500);
+        loop {
+            if unsafe { libc::kill(-pgid, 0) } == -1 {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        std::thread::sleep(Duration::from_millis(10));
     }
 
-    assert!(!alive, "process group should be terminated");
-}
+    #[tokio::test]
+    async fn force_kill_group_terminates_process_group() {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg("sleep 30");
 
-#[cfg(unix)]
-#[test]
-fn test_cancellation_ladder_graceful_escalation() {
-    let mut cmd = Command::new("sh");
-    cmd.arg("-c").arg("trap 'echo caught sigint; sleep 10' INT; sleep 30");
+        let mut child =
+            SupervisedChild::spawn(cmd, 1024).expect("failed to spawn supervised child");
+        let pgid = child.pgid() as i32;
 
-    let mut child = SupervisedChild::spawn(cmd, 1024).expect("spawn failed");
-    let pgid = child.pgid() as i32;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        child.force_kill_group().await.expect("force kill failed");
 
-    std::thread::sleep(Duration::from_millis(10));
+        assert!(
+            wait_for_group_exit(pgid).await,
+            "process group should be terminated"
+        );
+    }
 
-    // Cancel ladder with 100ms grace period before escalation
-    let start = std::time::Instant::now();
-    child
-        .cancel_ladder(Duration::from_millis(100))
-        .expect("cancel ladder failed");
+    #[tokio::test]
+    async fn cancellation_ladder_escalates_after_grace() {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c")
+            .arg("trap 'echo caught sigint; sleep 10' INT; sleep 30");
 
-    assert!(start.elapsed() >= Duration::from_millis(100));
+        let mut child = SupervisedChild::spawn(cmd, 1024).expect("spawn failed");
+        let pgid = child.pgid() as i32;
 
-    std::thread::sleep(Duration::from_millis(10));
-    let res = unsafe { libc::kill(-pgid, 0) };
-    assert_eq!(res, -1, "process group should be completely terminated");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let start = Instant::now();
+        child
+            .cancel_ladder(Duration::from_millis(100))
+            .await
+            .expect("cancel ladder failed");
+
+        assert!(start.elapsed() >= Duration::from_millis(100));
+        assert!(
+            wait_for_group_exit(pgid).await,
+            "process group should be completely terminated"
+        );
+    }
+
+    #[tokio::test]
+    async fn stdio_pipes_round_trip() {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg("cat");
+
+        let mut child = SupervisedChild::spawn(cmd, 1024).expect("spawn failed");
+        let mut stdin = child.take_stdin().expect("stdin should be piped");
+        let mut stdout = child.take_stdout().expect("stdout should be piped");
+
+        stdin
+            .write_all(b"hello supervisor\n")
+            .await
+            .expect("write failed");
+        drop(stdin);
+
+        let mut echoed = [0u8; 32];
+        let read = tokio::time::timeout(Duration::from_millis(500), stdout.read(&mut echoed))
+            .await
+            .expect("read timed out")
+            .expect("read failed");
+        assert_eq!(&echoed[..read], b"hello supervisor\n");
+
+        let status = child.wait().await.expect("wait failed");
+        assert!(status.success());
+    }
 }

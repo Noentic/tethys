@@ -41,10 +41,7 @@ impl GitEngine {
                 .status()?;
             if !status.success() {
                 let _ = std::fs::remove_file(&tmp_index);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "git read-tree HEAD failed",
-                ));
+                return Err(std::io::Error::other("git read-tree HEAD failed"));
             }
         }
 
@@ -70,10 +67,7 @@ impl GitEngine {
         let status = add_cmd.status()?;
         if !status.success() {
             let _ = std::fs::remove_file(&tmp_index);
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "git add failed",
-            ));
+            return Err(std::io::Error::other("git add failed"));
         }
 
         // 3. write-tree
@@ -110,10 +104,7 @@ impl GitEngine {
         let _ = std::fs::remove_file(&tmp_index);
 
         if !status.success() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "git update-ref failed",
-            ));
+            return Err(std::io::Error::other("git update-ref failed"));
         }
 
         let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
@@ -132,10 +123,7 @@ impl GitEngine {
             .args(["read-tree", "-u", "--reset", commit_oid])
             .status()?;
         if !status.success() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "git read-tree reset failed",
-            ));
+            return Err(std::io::Error::other("git read-tree reset failed"));
         }
         Ok(())
     }

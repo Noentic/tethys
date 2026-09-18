@@ -1,0 +1,4 @@
+{"sessionId":"v2-session-1","update":{"sessionUpdate":"state_update","state":"running"}}
+{"sessionId":"v2-session-1","update":{"sessionUpdate":"agent_message_chunk","messageId":"v2-msg-1","content":{"type":"text","text":"Hello v2! "}}}
+{"sessionId":"v2-session-1","update":{"sessionUpdate":"agent_message","messageId":"v2-msg-1","content":[{"type":"text","text":"Hello v2!"}]}}
+{"sessionId":"v2-session-1","update":{"sessionUpdate":"state_update","state":"idle","stopReason":"end_turn"}}

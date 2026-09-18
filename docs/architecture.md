@@ -216,7 +216,7 @@ Zed separates external‑agent support into three layers: `agent_servers` launch
 |---|---|---|
 | `agent_servers` (`AcpConnection`) | `tethys-agent-servers` + `tethys-acp` | Launch, handshake, version negotiation, normalization |
 | `acp_thread` (`AgentConnection`, `AcpThread`) | `tethys-thread` | Transport‑independent connection trait; per‑thread state machine and entries |
-| `agent_ui` (`AgentConnectionStore`) | `tethys-core` (`ConnectionStore`) | Connection lifetimes, reconnects, reaping |
+| `agent_ui` (`AgentConnectionStore`) | `tethys-agent-servers` (`ConnectionStore`) | Connection lifetimes, reconnects, reaping |
 
 ```rust
 #[async_trait]

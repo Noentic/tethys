@@ -1,11 +1,20 @@
 {
-  "jsonrpc": "2.0",
-  "method": "session/permission",
-  "params": {
-    "sessionId": "s_v1_01",
-    "id": "perm_v1_42",
-    "title": "Execute Bash Command",
-    "description": "Agent requests permission to run cargo check",
-    "command": "cargo check"
-  }
+  "sessionId": "v1-session-1",
+  "toolCall": {
+    "toolCallId": "tool-1",
+    "status": "pending",
+    "title": "Run tests"
+  },
+  "options": [
+    {
+      "optionId": "allow",
+      "name": "Allow",
+      "kind": "allow_once"
+    },
+    {
+      "optionId": "deny",
+      "name": "Deny",
+      "kind": "reject_once"
+    }
+  ]
 }

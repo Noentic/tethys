@@ -57,7 +57,7 @@ impl WorktreeSearchIndex {
         let items = results
             .items
             .into_iter()
-            .zip(results.scores.into_iter())
+            .zip(results.scores)
             .map(|(item, score)| {
                 let rel = item.relative_path(picker);
                 SearchItem {

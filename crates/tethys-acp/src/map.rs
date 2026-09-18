@@ -1,0 +1,307 @@
+//! ACP v1 → normalized `TurnEventBody` mapping.
+//!
+//! v2 mapping lives in [`crate::map_v2`] behind the `acp-v2` feature.
+
+use agent_client_protocol::schema::v1 as acp1;
+use agent_client_protocol::schema::MaybeUndefined;
+use serde::Serialize;
+use tethys_schema::thread::{
+    AgentCommand, ConfigOption, ContentBlock, MessageChunk, PlanContent, PlanEntry,
+    PlanEntryPriority, PlanEntryStatus, Role, SessionState, StateChanged, StopReason,
+    ToolCallContent, ToolCallPatch, ToolCallStatus, TurnEventBody,
+};
+
+/// Deterministic synthetic message IDs for v1 chunks that omit `messageId`:
+/// one ID per contiguous run of a role (architecture §7.3).
+#[derive(Debug, Default)]
+pub struct SyntheticMessageIds {
+    last_role: Option<Role>,
+    ordinal: u32,
+}
+
+impl SyntheticMessageIds {
+    pub fn id(&mut self, explicit: Option<&str>, role: Role) -> String {
+        if let Some(id) = explicit {
+            self.last_role = None;
+            return id.to_string();
+        }
+        if self.last_role != Some(role) {
+            self.ordinal += 1;
+            self.last_role = Some(role);
+        }
+        format!("v1-synthetic-{}", self.ordinal)
+    }
+}
+
+/// Maps one `session/update` payload to zero or more normalized events
+/// (tool calls may carry inline content that becomes content chunks).
+pub fn v1_update(
+    update: &acp1::SessionUpdate,
+    synthetic: &mut SyntheticMessageIds,
+) -> Vec<TurnEventBody> {
+    match update {
+        acp1::SessionUpdate::UserMessageChunk(chunk) => {
+            vec![message_chunk(chunk, Role::User, synthetic)]
+        }
+        acp1::SessionUpdate::AgentMessageChunk(chunk) => {
+            vec![message_chunk(chunk, Role::Agent, synthetic)]
+        }
+        acp1::SessionUpdate::AgentThoughtChunk(chunk) => {
+            vec![message_chunk(chunk, Role::Thought, synthetic)]
+        }
+        acp1::SessionUpdate::ToolCall(tool_call) => {
+            let tool_call_id = tool_call.tool_call_id.to_string();
+            let mut events = vec![TurnEventBody::ToolCallUpsert {
+                tool_call_id: tool_call_id.clone(),
+                patch: v1_tool_patch(tool_call),
+            }];
+            events.extend(tool_call.content.iter().map(|content| {
+                TurnEventBody::ToolCallContentChunk {
+                    tool_call_id: tool_call_id.clone(),
+                    item: tool_content_v1(content),
+                }
+            }));
+            events
+        }
+        acp1::SessionUpdate::ToolCallUpdate(update) => {
+            let tool_call_id = update.tool_call_id.to_string();
+            let mut events = vec![TurnEventBody::ToolCallUpsert {
+                tool_call_id: tool_call_id.clone(),
+                patch: v1_tool_update_patch(&update.fields),
+            }];
+            if let Some(content) = &update.fields.content {
+                events.extend(
+                    content
+                        .iter()
+                        .map(|item| TurnEventBody::ToolCallContentChunk {
+                            tool_call_id: tool_call_id.clone(),
+                            item: tool_content_v1(item),
+                        }),
+                );
+            }
+            events
+        }
+        acp1::SessionUpdate::Plan(plan) => vec![TurnEventBody::PlanUpsert {
+            plan_id: "default".to_string(),
+            plan: PlanContent {
+                entries: plan.entries.iter().map(plan_entry).collect(),
+            },
+        }],
+        acp1::SessionUpdate::AvailableCommandsUpdate(update) => {
+            vec![TurnEventBody::CommandsAvailable {
+                commands: update.available_commands.iter().map(command).collect(),
+            }]
+        }
+        acp1::SessionUpdate::CurrentModeUpdate(update) => {
+            vec![TurnEventBody::ConfigOptionsChanged {
+                options: vec![ConfigOption {
+                    id: "mode".to_string(),
+                    name: "Mode".to_string(),
+                    description: None,
+                    current_value: update.current_mode_id.to_string(),
+                    values: vec![],
+                }],
+            }]
+        }
+        acp1::SessionUpdate::ConfigOptionUpdate(update) => {
+            vec![TurnEventBody::ConfigOptionsChanged {
+                options: update.config_options.iter().map(config_option).collect(),
+            }]
+        }
+        acp1::SessionUpdate::SessionInfoUpdate(update) => {
+            vec![TurnEventBody::SessionInfo(
+                tethys_schema::thread::SessionInfo {
+                    title: maybe_string(&update.title),
+                    updated_at: maybe_string(&update.updated_at),
+                },
+            )]
+        }
+        acp1::SessionUpdate::UsageUpdate(update) => vec![TurnEventBody::Usage {
+            snapshot: tethys_schema::thread::UsageSnapshot {
+                input_tokens: 0,
+                output_tokens: 0,
+                total_tokens: update.used.min(u32::MAX as u64) as u32,
+                cost: update.cost.as_ref().map(|cost| cost.amount),
+            },
+        }],
+        other => vec![TurnEventBody::Unknown {
+            raw: json_string(other),
+        }],
+    }
+}
+
+fn message_chunk(
+    chunk: &acp1::ContentChunk,
+    role: Role,
+    synthetic: &mut SyntheticMessageIds,
+) -> TurnEventBody {
+    let message_id = synthetic.id(
+        chunk
+            .message_id
+            .as_ref()
+            .map(|id| id.to_string())
+            .as_deref(),
+        role,
+    );
+    TurnEventBody::MessageChunk(MessageChunk {
+        message_id,
+        role,
+        block: content_block(&chunk.content),
+    })
+}
+
+pub(crate) fn v1_tool_patch(tool_call: &acp1::ToolCall) -> ToolCallPatch {
+    ToolCallPatch {
+        title: Some(tool_call.title.clone()),
+        kind: Some(label(&tool_call.kind)),
+        status: Some(tool_status_v1(tool_call.status)),
+        input: tool_call.raw_input.as_ref().map(json_string),
+        output: tool_call.raw_output.as_ref().map(json_string),
+        locations: tool_call.locations.iter().map(location_label).collect(),
+    }
+}
+
+pub(crate) fn v1_tool_update_patch(fields: &acp1::ToolCallUpdateFields) -> ToolCallPatch {
+    ToolCallPatch {
+        title: fields.title.clone(),
+        kind: fields.kind.as_ref().map(label),
+        status: fields.status.map(tool_status_v1),
+        input: fields.raw_input.as_ref().map(json_string),
+        output: fields.raw_output.as_ref().map(json_string),
+        locations: fields
+            .locations
+            .as_ref()
+            .map(|locations| locations.iter().map(location_label).collect())
+            .unwrap_or_default(),
+    }
+}
+
+pub(crate) fn tool_status_v1(status: acp1::ToolCallStatus) -> ToolCallStatus {
+    match status {
+        acp1::ToolCallStatus::Pending => ToolCallStatus::Pending,
+        acp1::ToolCallStatus::InProgress => ToolCallStatus::Executing,
+        acp1::ToolCallStatus::Completed => ToolCallStatus::Completed,
+        acp1::ToolCallStatus::Failed => ToolCallStatus::Failed,
+        _ => ToolCallStatus::Failed,
+    }
+}
+
+pub(crate) fn tool_content_v1(content: &acp1::ToolCallContent) -> ToolCallContent {
+    match content {
+        acp1::ToolCallContent::Content(inner) => ToolCallContent::Text(text_or_raw(&inner.content)),
+        acp1::ToolCallContent::Terminal(terminal) => ToolCallContent::Terminal {
+            terminal_id: terminal.terminal_id.to_string(),
+        },
+        acp1::ToolCallContent::Diff(diff) => ToolCallContent::Unknown(json_string(diff)),
+        other => ToolCallContent::Unknown(json_string(other)),
+    }
+}
+
+pub(crate) fn content_block(block: &acp1::ContentBlock) -> ContentBlock {
+    match block {
+        acp1::ContentBlock::Text(text) => ContentBlock::Text(text.text.clone()),
+        acp1::ContentBlock::ResourceLink(link) => ContentBlock::ResourceLink {
+            uri: link.uri.clone(),
+            name: link.name.clone(),
+            mime_type: link.mime_type.clone(),
+        },
+        acp1::ContentBlock::Image(image) => ContentBlock::Image {
+            mime_type: image.mime_type.clone(),
+            data: image.data.clone(),
+        },
+        other => ContentBlock::Unknown(json_string(other)),
+    }
+}
+
+pub(crate) fn stop_reason(reason: &acp1::StopReason) -> StopReason {
+    match reason {
+        acp1::StopReason::EndTurn => StopReason::EndTurn,
+        acp1::StopReason::MaxTokens => StopReason::MaxTokens,
+        acp1::StopReason::MaxTurnRequests => StopReason::Other("max_turn_requests".to_string()),
+        acp1::StopReason::Refusal => StopReason::Refusal,
+        acp1::StopReason::Cancelled => StopReason::Cancelled,
+        _ => StopReason::Other("unknown".to_string()),
+    }
+}
+
+pub(crate) fn plan_entry(entry: &acp1::PlanEntry) -> PlanEntry {
+    PlanEntry {
+        content: entry.content.clone(),
+        priority: match entry.priority {
+            acp1::PlanEntryPriority::High => PlanEntryPriority::High,
+            acp1::PlanEntryPriority::Medium => PlanEntryPriority::Medium,
+            acp1::PlanEntryPriority::Low => PlanEntryPriority::Low,
+            _ => PlanEntryPriority::Medium,
+        },
+        status: match entry.status {
+            acp1::PlanEntryStatus::Pending => PlanEntryStatus::Pending,
+            acp1::PlanEntryStatus::InProgress => PlanEntryStatus::InProgress,
+            acp1::PlanEntryStatus::Completed => PlanEntryStatus::Completed,
+            _ => PlanEntryStatus::Pending,
+        },
+    }
+}
+
+pub(crate) fn command(command: &acp1::AvailableCommand) -> AgentCommand {
+    AgentCommand {
+        name: command.name.clone(),
+        description: Some(command.description.clone()),
+        input: command.input.as_ref().map(json_string),
+    }
+}
+
+pub(crate) fn config_option(option: &acp1::SessionConfigOption) -> ConfigOption {
+    ConfigOption {
+        id: option.id.to_string(),
+        name: option.name.clone(),
+        description: option.description.clone(),
+        current_value: match &option.kind {
+            acp1::SessionConfigKind::Select(select) => select.current_value.to_string(),
+            acp1::SessionConfigKind::Boolean(boolean) => boolean.current_value.to_string(),
+            _ => String::new(),
+        },
+        values: match &option.kind {
+            acp1::SessionConfigKind::Select(select) => match &select.options {
+                acp1::SessionConfigSelectOptions::Ungrouped(options) => options
+                    .iter()
+                    .map(|option| option.value.to_string())
+                    .collect(),
+                _ => vec![],
+            },
+            acp1::SessionConfigKind::Boolean(_) => {
+                vec!["true".to_string(), "false".to_string()]
+            }
+            _ => vec![],
+        },
+    }
+}
+
+pub(crate) fn label(value: &impl Serialize) -> String {
+    json_string(value).trim_matches('"').to_string()
+}
+
+pub(crate) fn location_label(location: &acp1::ToolCallLocation) -> String {
+    location.path.display().to_string()
+}
+
+fn text_or_raw(block: &acp1::ContentBlock) -> String {
+    match block {
+        acp1::ContentBlock::Text(text) => text.text.clone(),
+        other => json_string(other),
+    }
+}
+
+fn maybe_string(value: &MaybeUndefined<String>) -> Option<String> {
+    match value {
+        MaybeUndefined::Value(text) => Some(text.clone()),
+        MaybeUndefined::Null | MaybeUndefined::Undefined => None,
+    }
+}
+
+pub(crate) fn json_string(value: &impl Serialize) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "null".to_string())
+}
+
+pub(crate) fn state_changed(state: SessionState) -> TurnEventBody {
+    TurnEventBody::StateChanged(StateChanged { state })
+}
