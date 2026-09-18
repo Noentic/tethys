@@ -82,7 +82,8 @@ flowchart TB
 | Package / Crate | Description |
 |---|---|
 | [`apps/desktop`](./apps/desktop) | Tauri v2 desktop shell with React 19, TanStack Router, and Vite |
-| [`crates/tethys-core`](./crates/tethys-core) | Core domain logic: process supervisor, git engine, search, storage, and ACP client |
+| [`crates/tethys-core`](./crates/tethys-core) | Core domain logic and orchestrator: projects, threads, and policies |
+| [`crates/tethys-store`](./crates/tethys-store) | SQLite WAL persistence, append-only event log, materialized entries, and BLAKE3 blob store |
 | [`crates/tethys-schema`](./crates/tethys-schema) | Wire types and schema definitions exported via Specta |
 | [`crates/tethys-api`](./crates/tethys-api) | Typed command router and IPC bridge |
 | [`crates/xtask`](./crates/xtask) | Workspace automation tasks (TypeScript bindings generation) |
