@@ -30,3 +30,4 @@
 
 # Generated files
 packages/bindings/src/generated/bindings.ts linguist-generated merge=ours
+apps/desktop/src/routeTree.gen.ts linguist-generated merge=ours

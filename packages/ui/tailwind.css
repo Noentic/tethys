@@ -1,0 +1,45 @@
+@import "tailwindcss";
+@import "./src/tokens/tokens.css";
+
+@theme inline {
+  --color-canvas: var(--tethys-canvas);
+  --color-surface-rail: var(--tethys-surface-rail);
+  --color-surface-panel: var(--tethys-surface-panel);
+  --color-surface-elevated: var(--tethys-surface-elevated);
+  --color-surface-card: var(--tethys-surface-card);
+  --color-surface-card-hover: var(--tethys-surface-card-hover);
+  --color-surface-nested: var(--tethys-surface-nested);
+  --color-surface-overlay: var(--tethys-surface-overlay);
+  --color-surface-sunken: var(--tethys-surface-sunken);
+  --color-surface-hover: var(--tethys-surface-hover);
+  --color-surface-active: var(--tethys-surface-active);
+  --color-overlay-scrim: var(--tethys-overlay-scrim);
+  --color-hairline: var(--tethys-hairline);
+  --color-hairline-strong: var(--tethys-hairline-strong);
+  --color-grid-dot: var(--tethys-grid-dot);
+  --color-text-primary: var(--tethys-text-primary);
+  --color-text-secondary: var(--tethys-text-secondary);
+  --color-text-muted: var(--tethys-text-muted);
+  --color-text-inverse: var(--tethys-text-inverse);
+  --color-primary: var(--tethys-primary);
+  --color-on-primary: var(--tethys-on-primary);
+  --color-accent-focus: var(--tethys-accent-focus);
+  --color-accent-toggle-active: var(--tethys-accent-toggle);
+  --color-accent-agent-active: var(--tethys-agent-active);
+  --color-accent-agent-idle: var(--tethys-agent-idle);
+  --color-status-active-session: var(--tethys-status-session);
+  --color-status-success: var(--tethys-status-success);
+  --color-status-warning: var(--tethys-status-warning);
+  --color-status-danger: var(--tethys-status-danger);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-full: var(--radius-full);
+}
