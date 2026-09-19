@@ -101,6 +101,7 @@ pub fn run() {
             mcp_registry_set,
             mcp_registry_delete,
             mcp_effective,
+            mcp_attachments,
             mcp_projection_plan,
             mcp_projection_apply,
             mcp_projection_rollback,

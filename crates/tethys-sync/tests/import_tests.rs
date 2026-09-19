@@ -180,6 +180,7 @@ fn apply_writes_metadata_and_preserves_existing_entries() {
         server_b.meta,
         EntryMeta {
             scope: Some(Scope::Workspace),
+            providers: None,
             targets: None,
             enabled: true,
             legacy: false,

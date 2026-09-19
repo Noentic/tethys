@@ -121,6 +121,16 @@ impl TargetId {
     }
 }
 
+impl From<ProjectionTarget> for TargetId {
+    fn from(target: ProjectionTarget) -> Self {
+        match target {
+            ProjectionTarget::ClaudeCode => TargetId::ClaudeCode,
+            ProjectionTarget::Codex => TargetId::Codex,
+            ProjectionTarget::OpenCode => TargetId::OpenCode,
+        }
+    }
+}
+
 /// MCP transport of a registry entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "kebab-case")]
@@ -218,16 +228,70 @@ impl RegistryValue {
 }
 
 /// Per-entry Tethys metadata (`x-tethys`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
 pub struct EntryMeta {
     #[serde(default)]
     pub scope: Option<Scope>,
     #[serde(default)]
+    pub providers: Option<Vec<String>>,
+    #[serde(default, skip_serializing)]
     pub targets: Option<Vec<TargetId>>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
     #[serde(default)]
     pub legacy: bool,
+}
+
+#[derive(Deserialize)]
+struct EntryMetaRaw {
+    #[serde(default)]
+    scope: Option<Scope>,
+    #[serde(default)]
+    providers: Option<Vec<String>>,
+    #[serde(default)]
+    targets: Option<Vec<TargetId>>,
+    #[serde(default = "default_enabled")]
+    enabled: bool,
+    #[serde(default)]
+    legacy: bool,
+}
+
+impl<'de> Deserialize<'de> for EntryMeta {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = EntryMetaRaw::deserialize(deserializer)?;
+        Ok(raw.into())
+    }
+}
+
+impl From<EntryMetaRaw> for EntryMeta {
+    fn from(raw: EntryMetaRaw) -> Self {
+        let providers = match (raw.providers, raw.targets.as_ref()) {
+            (Some(p), _) => Some(p),
+            (None, Some(targets)) => {
+                let p: Vec<String> = targets
+                    .iter()
+                    .filter(|t| **t != TargetId::Session)
+                    .map(|t| t.as_str().to_string())
+                    .collect();
+                if p.is_empty() {
+                    None
+                } else {
+                    Some(p)
+                }
+            }
+            (None, None) => None,
+        };
+        Self {
+            scope: raw.scope,
+            providers,
+            targets: raw.targets,
+            enabled: raw.enabled,
+            legacy: raw.legacy,
+        }
+    }
 }
 
 fn default_enabled() -> bool {
@@ -238,6 +302,7 @@ impl Default for EntryMeta {
     fn default() -> Self {
         Self {
             scope: None,
+            providers: None,
             targets: None,
             enabled: true,
             legacy: false,
@@ -246,11 +311,37 @@ impl Default for EntryMeta {
 }
 
 impl EntryMeta {
+    /// Whether this entry is allowed for `provider_id`.
+    pub fn allows_provider(&self, provider_id: &str) -> bool {
+        match &self.providers {
+            Some(providers) => providers.iter().any(|p| p == provider_id),
+            None => match &self.targets {
+                Some(targets) => {
+                    let non_session: Vec<&str> = targets
+                        .iter()
+                        .filter(|t| **t != TargetId::Session)
+                        .map(|t| t.as_str())
+                        .collect();
+                    if non_session.is_empty() {
+                        true
+                    } else {
+                        non_session.contains(&provider_id)
+                    }
+                }
+                None => true,
+            },
+        }
+    }
+
     /// Whether this entry should be projected to `target`.
     pub fn allows(&self, target: TargetId) -> bool {
-        match &self.targets {
-            None => true,
-            Some(targets) => targets.contains(&target),
+        if let Some(targets) = &self.targets {
+            return targets.contains(&target);
+        }
+        if target == TargetId::Session {
+            true
+        } else {
+            self.allows_provider(target.as_str())
         }
     }
 }
@@ -479,3 +570,54 @@ pub struct SkillUpdateApplied {
     pub pinned_sha: String,
     pub content_hash: String,
 }
+
+/// A row in the attachment grid representing an MCP server.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ServerRow {
+    pub name: String,
+    pub transport: TransportKind,
+    pub scope: Scope,
+}
+
+/// A column in the attachment grid representing an ACP Provider.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ProviderColumn {
+    pub id: String,
+    pub name: String,
+    pub connected: bool,
+    #[serde(default)]
+    pub target: Option<ProjectionTarget>,
+}
+
+/// One cell in the attachment grid.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct AttachmentCell {
+    pub server_name: String,
+    pub provider_id: String,
+    pub state: AttachmentState,
+}
+
+/// Attachment state of an MCP server to a Provider.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum AttachmentState {
+    Attached,
+    UnsupportedTransport {
+        needs: TransportKind,
+    },
+    FileProjection {
+        target: ProjectionTarget,
+        state: EntryState,
+    },
+    Excluded,
+    NotNegotiated,
+}
+
+/// The Servers × Providers attachment grid.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct AttachmentGrid {
+    pub servers: Vec<ServerRow>,
+    pub providers: Vec<ProviderColumn>,
+    pub cells: Vec<AttachmentCell>,
+}
+

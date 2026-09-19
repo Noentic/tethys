@@ -70,7 +70,7 @@ async fn mcp_registry_round_trips_and_effective_returns_data() {
     assert_eq!(listed[0].scope, Scope::Global);
 
     let effective = core
-        .mcp_effective(TargetId::Session, None)
+        .mcp_effective(None, None)
         .await
         .expect("effective");
     assert_eq!(effective.len(), 1);
@@ -222,4 +222,104 @@ async fn skills_import_folder_through_the_api() {
         .expect("import");
     assert_eq!(imported.name, "pdf");
     assert!(home.join(".agents/skills/pdf/SKILL.md").is_file());
+}
+
+#[tokio::test]
+async fn mcp_attachments_returns_grid_through_core() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let home = dir.path().join("home");
+    let root = dir.path().join("repo");
+    fs::create_dir_all(&home).expect("home");
+    fs::create_dir_all(&root).expect("root");
+    let (core, ws_id) = core_with_workspace(&home, &root).await;
+
+    core.mcp_registry_set(
+        "github".into(),
+        stdio_entry(),
+        Scope::Workspace,
+        Some(ws_id.clone()),
+    )
+    .await
+    .expect("set github");
+
+    let mut opencode_entry = stdio_entry();
+    opencode_entry.meta.providers = Some(vec!["agent-opencode".to_string()]);
+    core.mcp_registry_set(
+        "opencode-only".into(),
+        opencode_entry,
+        Scope::Workspace,
+        Some(ws_id.clone()),
+    )
+    .await
+    .expect("set opencode-only");
+
+    // Profile 1: agent-1 with stdio
+    let p1 = core.register_profile(
+        tethys_agent_servers::LaunchSpec::new("agent-1", "/bin/echo"),
+        tethys_schema::connection::AgentCompat {
+            preferred_protocol: Some(AcpProtocol::V1),
+            projection_target: None,
+        },
+    );
+    let key1 = tethys_schema::connection::ConnectionKey::new(&p1, "local");
+    core.sessions().store().set_capabilities_for_test(
+        &key1,
+        Some(tethys_schema::connection::NormalizedCapabilities {
+            load_session: true,
+            resume: true,
+            mcp: tethys_schema::sync::McpTransports {
+                stdio: true,
+                http: false,
+                sse: false,
+            },
+            prompt_embedded_context: false,
+        }),
+    );
+
+    // Profile 2: projected Claude Code fallback
+    let p2 = core.register_profile(
+        tethys_agent_servers::LaunchSpec::new("agent-claude", "/bin/echo"),
+        tethys_schema::connection::AgentCompat {
+            preferred_protocol: Some(AcpProtocol::V1),
+            projection_target: Some(tethys_schema::sync::ProjectionTarget::ClaudeCode),
+        },
+    );
+    let key2 = tethys_schema::connection::ConnectionKey::new(&p2, "local");
+    core.sessions().store().set_capabilities_for_test(
+        &key2,
+        Some(tethys_schema::connection::NormalizedCapabilities {
+            load_session: false,
+            resume: false,
+            mcp: tethys_schema::sync::McpTransports::default(),
+            prompt_embedded_context: false,
+        }),
+    );
+
+    let grid = core.mcp_attachments(ws_id.clone()).await.expect("attachments");
+    assert_eq!(grid.servers.len(), 2);
+    assert_eq!(grid.providers.len(), 2);
+
+    let cell = |s: &str, p: &str| {
+        grid.cells
+            .iter()
+            .find(|c| c.server_name == s && c.provider_id == p)
+            .expect("cell exists")
+            .state
+            .clone()
+    };
+
+    // github on agent-1 -> Attached
+    assert_eq!(cell("github", "agent-1"), tethys_schema::sync::AttachmentState::Attached);
+
+    // opencode-only on agent-1 -> Excluded
+    assert_eq!(cell("opencode-only", "agent-1"), tethys_schema::sync::AttachmentState::Excluded);
+
+    // github on agent-claude -> FileProjection { target: ClaudeCode, state: Pending }
+    assert_eq!(
+        cell("github", "agent-claude"),
+        tethys_schema::sync::AttachmentState::FileProjection {
+            target: tethys_schema::sync::ProjectionTarget::ClaudeCode,
+            state: tethys_schema::sync::EntryState::Pending,
+        }
+    );
 }

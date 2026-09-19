@@ -171,4 +171,10 @@ pub fn registered_types() -> Types {
         .register::<sync::RegistryEntryView>()
         .register::<sync::SkillImportSource>()
         .register::<sync::WorkspaceId>()
+        .register::<sync::ServerRow>()
+        .register::<sync::ProviderColumn>()
+        .register::<sync::AttachmentCell>()
+        .register::<sync::AttachmentState>()
+        .register::<sync::AttachmentGrid>()
 }
+

@@ -7,6 +7,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   Applied,
+  AttachmentGrid,
   BenchmarkConfig,
   BenchmarkResult,
   CheckpointInfo,
@@ -273,8 +274,10 @@ export function createClient(options: ClientOptions = {}) {
         call<boolean>("mcp_registry_delete", { name, scope, workspaceId }),
       registry_delete: (name: string, scope: Scope, workspaceId?: string) =>
         call<boolean>("mcp_registry_delete", { name, scope, workspaceId }),
-      effective: (target: TargetId, workspaceId?: string) =>
-        call<RegistryEntryView[]>("mcp_effective", { target, workspaceId }),
+      effective: (providerId?: string, workspaceId?: string) =>
+        call<RegistryEntryView[]>("mcp_effective", { providerId, workspaceId }),
+      attachments: (workspaceId: string) =>
+        call<AttachmentGrid>("mcp_attachments", { workspaceId }),
       projectionPlan: (target: TargetId, scope: Scope, workspaceId: string) =>
         call<ProjectionPlan>("mcp_projection_plan", {
           target,

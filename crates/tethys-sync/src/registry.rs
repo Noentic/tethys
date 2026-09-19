@@ -11,7 +11,7 @@ use crate::atomic;
 use crate::error::SyncError;
 
 /// Current canonical registry format version.
-pub const REGISTRY_VERSION: u32 = 1;
+pub const REGISTRY_VERSION: u32 = 2;
 
 /// One registry file on disk.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -70,7 +70,9 @@ pub fn write_registry(
     if let Some(home) = backup_home {
         atomic::backup_file(home, path)?;
     }
-    let mut text = serde_json::to_string_pretty(file)?;
+    let mut to_write = file.clone();
+    to_write.version = REGISTRY_VERSION;
+    let mut text = serde_json::to_string_pretty(&to_write)?;
     text.push('\n');
     atomic::write_atomic(path, &text)
 }
@@ -107,6 +109,28 @@ impl Registry {
             })
             .collect()
     }
+
+    /// Entries visible to `provider_id`: global, overridden by workspace, minus
+    /// disabled entries and entries that exclude the provider.
+    pub fn effective_for_provider(
+        &self,
+        provider_id: Option<&str>,
+        disabled: &BTreeSet<String>,
+    ) -> Vec<(String, RegistryEntry)> {
+        let mut merged: BTreeMap<String, RegistryEntry> = self.global.mcp_servers.clone();
+        merged.extend(self.workspace.mcp_servers.clone());
+        merged
+            .into_iter()
+            .filter(|(name, entry)| {
+                let allowed = match provider_id {
+                    Some(pid) => entry.meta.allows_provider(pid),
+                    None => true,
+                };
+                entry.meta.enabled && allowed && !disabled.contains(name)
+            })
+            .collect()
+    }
+
 
     /// Merged view with each entry's scope, for import conflict detection.
     pub fn merged(&self) -> BTreeMap<String, (Scope, RegistryEntry)> {

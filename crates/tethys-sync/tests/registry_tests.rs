@@ -175,18 +175,92 @@ fn resolve_secrets_replaces_refs_and_lists_missing() {
 }
 
 #[test]
-fn registry_round_trips_with_metadata() {
+fn registry_v1_loads_and_resaves_as_v2_with_providers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join(".tethys").join("mcp.json");
     let file: RegistryFile = serde_json::from_str(CANONICAL).expect("parse");
     write_registry(&path, &file, Some(dir.path())).expect("write");
 
     let reloaded = read_registry(&path).expect("read").expect("present");
-    assert_eq!(reloaded, file);
+    assert_eq!(reloaded.version, 2);
 
-    let entry = reloaded.mcp_servers.get("linear").expect("linear");
-    assert_eq!(entry.meta.targets, Some(vec![TargetId::Session]));
-    assert_eq!(entry.meta.scope, None);
+    let github = reloaded.mcp_servers.get("github").expect("github");
+    assert_eq!(
+        github.meta.providers,
+        Some(vec!["claude-code".to_string(), "codex".to_string()])
+    );
+    assert_eq!(github.meta.targets, None);
+    assert_eq!(github.meta.scope, Some(Scope::Global));
+
+    let linear = reloaded.mcp_servers.get("linear").expect("linear");
+    assert_eq!(linear.meta.providers, None);
+    assert_eq!(linear.meta.targets, None);
+    assert_eq!(linear.meta.scope, None);
+}
+
+#[test]
+fn registry_v2_round_trips_byte_for_byte() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join(".tethys").join("mcp.json");
+    fs::create_dir_all(path.parent().unwrap()).expect("create parent");
+    let v2_json = r#"{
+  "version": 2,
+  "mcpServers": {
+    "opencode-tool": {
+      "type": "stdio",
+      "command": "opencode-cmd",
+      "args": [],
+      "env": {},
+      "url": null,
+      "headers": {},
+      "x-tethys": {
+        "scope": null,
+        "providers": [
+          "opencode"
+        ],
+        "enabled": true,
+        "legacy": false
+      }
+    }
+  }
+}
+"#;
+    fs::write(&path, v2_json).expect("write initial");
+    let file = read_registry(&path).expect("read").expect("present");
+    write_registry(&path, &file, None).expect("resave");
+    let reloaded_raw = fs::read_to_string(&path).expect("read raw");
+    assert_eq!(reloaded_raw, v2_json);
+}
+
+#[test]
+fn server_with_opencode_provider_scoping() {
+    let v2_json = r#"{
+  "version": 2,
+  "mcpServers": {
+    "opencode-tool": {
+      "type": "stdio",
+      "command": "opencode-cmd",
+      "x-tethys": {
+        "providers": ["opencode"]
+      }
+    },
+    "shared-tool": {
+      "type": "stdio",
+      "command": "shared-cmd"
+    }
+  }
+}"#;
+    let registry = registry_from(v2_json, "");
+    let opencode_effective = registry.effective_for_provider(Some("opencode"), &BTreeSet::new());
+    let opencode_names: Vec<&str> = opencode_effective
+        .iter()
+        .map(|(n, _)| n.as_str())
+        .collect();
+    assert_eq!(opencode_names, vec!["opencode-tool", "shared-tool"]);
+
+    let other_effective = registry.effective_for_provider(Some("claude-code"), &BTreeSet::new());
+    let other_names: Vec<&str> = other_effective.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(other_names, vec!["shared-tool"]);
 }
 
 #[test]

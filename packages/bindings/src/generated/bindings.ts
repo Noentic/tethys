@@ -13,6 +13,7 @@ export type AgentCommand = {
 export type AgentCompat = {
 	/**  Preferred ACP version. `None` = probe (`ClientProtocolConnector`). */
 	preferred_protocol: AcpProtocol | null,
+	projection_target?: ProjectionTarget | null,
 };
 
 export type AgentInfo = {
@@ -30,6 +31,23 @@ export type Applied = {
 	created: boolean,
 	entries?: { [key in string]: string },
 };
+
+/**  One cell in the attachment grid. */
+export type AttachmentCell = {
+	server_name: string,
+	provider_id: string,
+	state: AttachmentState,
+};
+
+/**  The Servers × Providers attachment grid. */
+export type AttachmentGrid = {
+	servers: ServerRow[],
+	providers: ProviderColumn[],
+	cells: AttachmentCell[],
+};
+
+/**  Attachment state of an MCP server to a Provider. */
+export type AttachmentState = { kind: "attached" } | { kind: "unsupported-transport"; needs: TransportKind } | { kind: "file-projection"; target: ProjectionTarget; state: EntryState } | { kind: "excluded" } | { kind: "not-negotiated" };
 
 /**  Benchmark configuration for S0.1 IPC test harness. */
 export type BenchmarkConfig = {
@@ -255,7 +273,7 @@ export type EntryKind = "message" | "tool_call" | "plan" | "terminal";
 /**  Per-entry Tethys metadata (`x-tethys`). */
 export type EntryMeta = {
 	scope?: Scope | null,
-	targets?: TargetId[] | null,
+	providers?: string[] | null,
 	enabled?: boolean,
 	legacy?: boolean,
 };
@@ -427,6 +445,14 @@ export type ProjectionPlan = {
 /**  A file surface that a registry entry can be projected to. */
 export type ProjectionTarget = "claude-code" | "codex" | "open-code";
 
+/**  A column in the attachment grid representing an ACP Provider. */
+export type ProviderColumn = {
+	id: string,
+	name: string,
+	connected: boolean,
+	target?: ProjectionTarget | null,
+};
+
 /**  What a resolved composer reference points at. */
 export type ReferenceKind = "skill" | "path";
 
@@ -503,6 +529,13 @@ export type SearchItem = {
 export type SeqRange = {
 	first: number,
 	last: number,
+};
+
+/**  A row in the attachment grid representing an MCP server. */
+export type ServerRow = {
+	name: string,
+	transport: TransportKind,
+	scope: Scope,
 };
 
 export type SessionInfo = {

@@ -143,6 +143,16 @@ impl ThreadSessions {
         profile_id
     }
 
+    pub fn profiles_compat(&self) -> Vec<(String, ConnectionKey, AgentCompat)> {
+        let guard = self.profiles.lock();
+        let mut list: Vec<_> = guard
+            .iter()
+            .map(|(id, (key, compat))| (id.clone(), key.clone(), compat.clone()))
+            .collect();
+        list.sort_by(|a, b| a.0.cmp(&b.0));
+        list
+    }
+
     pub async fn create(&self, request: CreateThread) -> Result<ThreadSummary, ApiError> {
         if !self.profiles.lock().contains_key(&request.agent_profile_id) {
             return Err(ApiError::NotFound(format!(
@@ -326,9 +336,10 @@ impl ThreadSessions {
         key: &ConnectionKey,
     ) -> Result<Vec<serde_json::Value>, ApiError> {
         let transports = self.transports_for(key)?;
-        let resolved = tethys_sync::session::spawn_servers(
+        let resolved = tethys_sync::session::spawn_servers_for_provider(
             &self.sync.home,
             workspace_root,
+            Some(key.profile_id.as_str()),
             &self.sync.disabled,
             &transports,
             self.sync.secrets.as_ref(),

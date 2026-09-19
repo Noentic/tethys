@@ -19,7 +19,7 @@ use tethys_agent_servers::{ConnectionStore, StoreOptions};
 use tethys_api::{ApiError, TethysApi};
 use tethys_git::{default_worktree_path, GitError, GitOptions};
 use tethys_schema::composer::{CommandInfo, ExpandedCommand};
-use tethys_schema::connection::{AcpProtocol, ConnectionEntry};
+use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionEntry};
 use tethys_schema::sync::WorkspaceId;
 use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView};
 use tethys_schema::{
@@ -215,6 +215,14 @@ impl Core {
 
     pub fn sessions(&self) -> &Arc<ThreadSessions> {
         &self.sessions
+    }
+
+    pub fn register_profile(
+        &self,
+        spec: tethys_agent_servers::LaunchSpec,
+        compat: AgentCompat,
+    ) -> String {
+        self.sessions.register_profile(spec, compat)
     }
 
     /// Reports a thread runtime transition; Core places start/end checkpoints

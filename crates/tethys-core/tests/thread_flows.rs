@@ -68,6 +68,7 @@ fn build_core(grace: Duration) -> Core {
         .env(tethys_acp::mock::MOCK_ENV, "v1"),
         AgentCompat {
             preferred_protocol: Some(AcpProtocol::V1),
+            ..Default::default()
         },
     );
     #[cfg(feature = "acp-v2")]
@@ -82,6 +83,7 @@ fn build_core(grace: Duration) -> Core {
         .env(tethys_acp::mock::MOCK_ENV, "v2"),
         AgentCompat {
             preferred_protocol: Some(AcpProtocol::V2),
+            ..Default::default()
         },
     );
     Core::with_sessions("test", sessions)

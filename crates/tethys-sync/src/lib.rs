@@ -4,7 +4,9 @@
 //! vendor config file or resolves a secret; nothing above it writes SQL.
 
 pub mod atomic;
+pub mod attachments;
 pub mod diff;
+
 pub mod error;
 pub mod format;
 pub mod import;
@@ -19,7 +21,9 @@ pub mod skills;
 pub mod trust;
 pub mod walk;
 
+pub use attachments::{compute_attachment_grid, ProviderInput};
 pub use error::SyncError;
+
 pub use manifest::{applied_from_row, applied_to_row, entry_digest, file_digest};
 pub use projection::{apply, plan, read_text, rollback, verify, ApplyRequest, PlanRequest};
 pub use projectors::{
@@ -31,4 +35,5 @@ pub use registry::{
     RegistryFile, REGISTRY_VERSION,
 };
 pub use secrets::{KeyringSecrets, MemorySecrets, SecretStore};
-pub use session::{resolve_secrets, session_servers};
+pub use session::{resolve_secrets, session_servers, spawn_servers, spawn_servers_for_provider};
+

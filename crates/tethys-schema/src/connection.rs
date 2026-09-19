@@ -44,6 +44,8 @@ pub struct NormalizedCapabilities {
 pub struct AgentCompat {
     /// Preferred ACP version. `None` = probe (`ClientProtocolConnector`).
     pub preferred_protocol: Option<AcpProtocol>,
+    #[serde(default)]
+    pub projection_target: Option<crate::sync::ProjectionTarget>,
 }
 
 /// ConnectionStore row identity: one connection per profile and host.

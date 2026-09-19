@@ -1,8 +1,8 @@
 //! `mcp.*` namespace (`architecture.md` §12.1).
 
 use tethys_schema::sync::{
-    Applied, ImportCandidate, ImportScan, ProjectionPlan, RegistryEntry, RegistryEntryView, Scope,
-    TargetId, VerifyStatus, WorkspaceId,
+    Applied, AttachmentGrid, ImportCandidate, ImportScan, ProjectionPlan, RegistryEntry,
+    RegistryEntryView, Scope, TargetId, VerifyStatus, WorkspaceId,
 };
 
 use crate::ApiError;
@@ -37,10 +37,17 @@ pub trait McpApi: Send + Sync {
 
     fn mcp_effective(
         &self,
-        _target: TargetId,
+        _provider_id: Option<String>,
         _workspace_id: Option<WorkspaceId>,
     ) -> impl std::future::Future<Output = Result<Vec<RegistryEntryView>, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.effective")) }
+    }
+
+    fn mcp_attachments(
+        &self,
+        _workspace_id: WorkspaceId,
+    ) -> impl std::future::Future<Output = Result<AttachmentGrid, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("mcp.attachments")) }
     }
 
     fn mcp_projection_plan(

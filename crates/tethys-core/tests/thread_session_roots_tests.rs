@@ -57,6 +57,7 @@ async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
         LaunchSpec::new("agent-1", "/bin/echo"),
         AgentCompat {
             preferred_protocol: Some(AcpProtocol::V1),
+            ..Default::default()
         },
     );
     let key = ConnectionKey::new(&profile_id, "local");
@@ -137,6 +138,7 @@ async fn resume_and_recovery_spawn_carry_workspace_root_servers() {
         LaunchSpec::new("agent-2", "/bin/echo"),
         AgentCompat {
             preferred_protocol: Some(AcpProtocol::V1),
+            ..Default::default()
         },
     );
     let key = ConnectionKey::new(&profile_id, "local");
@@ -201,6 +203,7 @@ async fn connection_with_no_negotiated_capabilities_yields_capabilities_not_nego
         LaunchSpec::new("agent-3", "/bin/echo"),
         AgentCompat {
             preferred_protocol: Some(AcpProtocol::V1),
+            ..Default::default()
         },
     );
     let key = ConnectionKey::new(&profile_id, "local");
@@ -247,6 +250,7 @@ fn v1_connection_always_keeps_stdio_servers_http_only_with_mcp_capabilities() {
         LaunchSpec::new("agent-4", "/bin/echo"),
         AgentCompat {
             preferred_protocol: Some(AcpProtocol::V1),
+            ..Default::default()
         },
     );
     let key = ConnectionKey::new(&profile_id, "local");

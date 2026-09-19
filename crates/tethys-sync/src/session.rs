@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use tethys_schema::sync::{
-    McpTransports, RegistryEntry, RegistryValue, SessionServer, TargetId, TransportKind,
+    McpTransports, RegistryEntry, RegistryValue, SessionServer, TransportKind,
 };
 
 use crate::error::SyncError;
@@ -22,11 +22,23 @@ pub fn spawn_servers(
     transports: &McpTransports,
     store: &dyn SecretStore,
 ) -> Result<Vec<SessionServer>, SyncError> {
+    spawn_servers_for_provider(home, workspace_root, None, disabled, transports, store)
+}
+
+/// Loads the registry, filters by provider and transports, and resolves secrets.
+pub fn spawn_servers_for_provider(
+    home: &Path,
+    workspace_root: &Path,
+    provider_id: Option<&str>,
+    disabled: &BTreeSet<String>,
+    transports: &McpTransports,
+    store: &dyn SecretStore,
+) -> Result<Vec<SessionServer>, SyncError> {
     let registry = Registry::load(
         Some(&global_registry_path(home)),
         Some(&workspace_registry_path(workspace_root)),
     )?;
-    let effective = registry.effective(TargetId::Session, disabled);
+    let effective = registry.effective_for_provider(provider_id, disabled);
     let servers = session_servers(&effective, transports);
     resolve_secrets(&servers, store)
 }

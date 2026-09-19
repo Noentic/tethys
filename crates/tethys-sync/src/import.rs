@@ -198,9 +198,8 @@ pub fn apply_import(
         let mut entry = candidate.entry.clone();
         entry.meta = EntryMeta {
             scope: Some(scope),
-            targets: entry.meta.targets.clone(),
             enabled: true,
-            legacy: entry.meta.legacy,
+            ..entry.meta
         };
         file.mcp_servers.insert(candidate.name.clone(), entry);
         names.push(candidate.name.clone());

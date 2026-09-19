@@ -78,8 +78,12 @@ async fn unknown_workspace_id_returns_not_found_and_touches_nothing() {
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_registry_delete: expected NotFound, got {res:?}");
 
     // mcp.effective
-    let res = core.mcp_effective(TargetId::ClaudeCode, Some(unknown_id.clone())).await;
+    let res = core.mcp_effective(None, Some(unknown_id.clone())).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_effective: expected NotFound, got {res:?}");
+
+    // mcp.attachments
+    let res = core.mcp_attachments(unknown_id.clone()).await;
+    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_attachments: expected NotFound, got {res:?}");
 
     // mcp.projection.plan
     let res = core.mcp_projection_plan(TargetId::ClaudeCode, Scope::Workspace, unknown_id.clone()).await;

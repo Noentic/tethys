@@ -11,9 +11,9 @@ use tethys_core::Core;
 use tethys_schema::composer::{CommandInfo, ExpandedCommand};
 use tethys_schema::connection::ConnectionEntry;
 use tethys_schema::sync::{
-    Applied, ImportCandidate, ImportScan, ProjectionPlan, RegistryEntry, RegistryEntryView, Scope,
-    SkillImportSource, SkillInfo, SkillUpdateApplied, SkillUpdateCheck, SkillUpdatePlan, TargetId,
-    VerifyStatus, WorkspaceId,
+    Applied, AttachmentGrid, ImportCandidate, ImportScan, ProjectionPlan, RegistryEntry,
+    RegistryEntryView, Scope, SkillImportSource, SkillInfo, SkillUpdateApplied, SkillUpdateCheck,
+    SkillUpdatePlan, TargetId, VerifyStatus, WorkspaceId,
 };
 use tethys_schema::thread::{
     ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView,
@@ -471,16 +471,29 @@ pub async fn mcp_registry_delete(
         .map_err(|e| e.to_string())
 }
 
-/// `mcp.effective` — merged entries visible to one target.
+/// `mcp.effective` — merged entries visible to one provider.
 #[tauri::command]
 #[specta::specta]
 pub async fn mcp_effective(
     state: State<'_, CoreState>,
-    target: TargetId,
+    provider_id: Option<String>,
     workspace_id: Option<WorkspaceId>,
 ) -> Result<Vec<RegistryEntryView>, String> {
     state
-        .mcp_effective(target, workspace_id)
+        .mcp_effective(provider_id, workspace_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `mcp.attachments` — servers × providers attachment grid.
+#[tauri::command]
+#[specta::specta]
+pub async fn mcp_attachments(
+    state: State<'_, CoreState>,
+    workspace_id: WorkspaceId,
+) -> Result<AttachmentGrid, String> {
+    state
+        .mcp_attachments(workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
