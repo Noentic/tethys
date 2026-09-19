@@ -671,10 +671,10 @@ fn extract_tar(bytes: &[u8], destination: &Path) -> Result<(), SyncError> {
             .path()
             .map_err(|error| SyncError::UnsafeArchive(error.to_string()))?
             .into_owned();
-        if path.is_absolute()
-            || path
-                .components()
-                .any(|component| matches!(component, Component::ParentDir))
+        if path.has_root()
+            || path.components().any(|component| {
+                matches!(component, Component::ParentDir | Component::Prefix(..))
+            })
         {
             return Err(SyncError::UnsafeArchive(format!(
                 "unsafe path {}",
