@@ -1,4 +1,5 @@
 import type React from "react";
+import { nextRovingIndex } from "../lib/roving";
 import { cn } from "../lib/utils";
 
 export interface ListboxItem<T = string> {
@@ -25,17 +26,23 @@ export function Listbox<T = string>({
   className,
   label = "Options",
 }: ListboxProps<T>) {
+  const selectedIndex = items.findIndex((item) => item.id === selectedId);
+  const rovingIndex =
+    selectedIndex >= 0
+      ? selectedIndex
+      : items.findIndex((item) => !item.disabled);
+
   return (
     <div
       role="listbox"
       aria-label={label}
-      tabIndex={0}
+      tabIndex={-1}
       className={cn(
         "focus-ring flex flex-col gap-0.5 rounded-md p-1",
         className,
       )}
     >
-      {items.map((item) => {
+      {items.map((item, index) => {
         const isSelected = item.id === selectedId;
         return (
           <div
@@ -43,13 +50,27 @@ export function Listbox<T = string>({
             role="option"
             aria-selected={isSelected}
             aria-disabled={item.disabled}
-            tabIndex={-1}
+            tabIndex={index === rovingIndex ? 0 : -1}
             onClick={() => !item.disabled && onSelect(item)}
             onKeyDown={(e) => {
               if (!item.disabled && (e.key === "Enter" || e.key === " ")) {
                 e.preventDefault();
                 onSelect(item);
+                return;
               }
+              const next = nextRovingIndex(
+                e.key,
+                index,
+                items.length,
+                (candidate) => !!items[candidate]?.disabled,
+              );
+              if (next === null) return;
+              e.preventDefault();
+              const nodes =
+                e.currentTarget.parentElement?.querySelectorAll<HTMLElement>(
+                  '[role="option"]',
+                );
+              nodes?.[next]?.focus();
             }}
             className={cn(
               "relative flex h-9 cursor-pointer items-center gap-2 rounded-sm px-3 text-body-sm transition-colors duration-150 select-none",

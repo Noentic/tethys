@@ -6,11 +6,12 @@ import {
 import {
   Button,
   IconButton,
+  nextRovingIndex,
   SessionGroupHeader,
   SessionListRow,
   StatusDot,
 } from "@tethys/ui";
-import { useState } from "react";
+import { type KeyboardEvent, useState } from "react";
 
 export interface SessionsColumnProps {
   sessions: SessionState[];
@@ -42,6 +43,24 @@ export function SessionsColumn({
   const workspaceLabel =
     sessions.find((s) => s.sessionId === activeSessionId)?.workspaceId ??
     groups[0]?.workspaceId;
+  const firstSessionId = groups[0]?.providers[0]?.sessions[0]?.sessionId;
+
+  // Roving focus across the flattened visible session list (DESIGN.md §A11y).
+  const handleListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const rows = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>('[role="button"]'),
+    );
+    if (rows.length === 0) return;
+    const focused = rows.indexOf(document.activeElement as HTMLElement);
+    const anchor =
+      focused >= 0
+        ? focused
+        : rows.findIndex((row) => row.getAttribute("aria-pressed") === "true");
+    const next = nextRovingIndex(event.key, anchor, rows.length);
+    if (next === null) return;
+    event.preventDefault();
+    rows[next]?.focus();
+  };
 
   if (collapsed) {
     // Icon strip mode (<800px)
@@ -76,6 +95,7 @@ export function SessionsColumn({
   return (
     <nav
       aria-label="Sessions Column"
+      onKeyDown={handleListKeyDown}
       className="flex h-full w-full flex-col border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) select-none"
     >
       {(workspaceLabel || onNewSession) && (
@@ -159,6 +179,13 @@ export function SessionsColumn({
                                   turnCount={sess.turnCount}
                                   dirty={false}
                                   selected={sess.sessionId === activeSessionId}
+                                  tabIndex={
+                                    sess.sessionId === activeSessionId ||
+                                    (activeSessionId === undefined &&
+                                      sess.sessionId === firstSessionId)
+                                      ? 0
+                                      : -1
+                                  }
                                   onSelect={() =>
                                     onSelectSession(sess.sessionId)
                                   }

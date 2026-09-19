@@ -3,6 +3,7 @@ import axe from "axe-core";
 import { describe, expect, it } from "vitest";
 import { SettingsLayout } from "./routes/settings";
 import { SettingsGeneralView } from "./routes/settings.general";
+import { ThreadView } from "./routes/thread.$id";
 import { ThreadNewView } from "./routes/thread.new";
 import { WorkspacesView } from "./routes/workspaces";
 import { AppShell } from "./shell/AppShell";
@@ -30,6 +31,11 @@ describe("Automated A11y / axe clean audit on Desktop routes & shell", () => {
 
   it("passes axe on ThreadNewView", async () => {
     const { container } = render(<ThreadNewView />);
+    await expectAxeClean(container);
+  });
+
+  it("passes axe on the /thread/:id route", async () => {
+    const { container } = render(<ThreadView sessionId="s-a11y" />);
     await expectAxeClean(container);
   });
 

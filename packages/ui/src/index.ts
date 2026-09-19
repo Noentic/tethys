@@ -29,6 +29,7 @@ export * from "./components/toast";
 export * from "./components/toggle-switch";
 export * from "./components/tooltip";
 export * from "./components/underline-tabs";
+export * from "./lib/roving";
 export * from "./lib/utils";
 export * from "./registry";
 export * from "./session-state";

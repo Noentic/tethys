@@ -11,6 +11,7 @@ import {
   IconButton,
   Input,
   KeycapPill,
+  Listbox,
   ModalDialog,
   registerEntryRenderer,
   SegmentedControl,
@@ -337,5 +338,65 @@ describe("Component Kit & State Matrix (U2 & U6)", () => {
     registerEntryRenderer("custom_kind", CustomRenderer);
 
     expect(getEntryRenderer("custom_kind")).toBe(CustomRenderer);
+  });
+
+  it("TabStrip roving tabindex moves focus with arrows and Home/End", () => {
+    let active = "b";
+    const tabs = [
+      { id: "a", title: "A", pinned: true },
+      { id: "b", title: "B" },
+      { id: "c", title: "C" },
+    ];
+    const view = (activeTabId: string) => (
+      <TabStrip
+        activeTabId={activeTabId}
+        onSelectTab={(id) => {
+          active = id;
+        }}
+        tabs={tabs}
+      />
+    );
+
+    const { rerender } = render(view("b"));
+    expect(
+      screen.getByRole("tab", { name: "B" }).getAttribute("tabindex"),
+    ).toBe("0");
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: "B" }), {
+      key: "ArrowRight",
+    });
+    expect(active).toBe("c");
+    rerender(view(active));
+    const tabC = screen.getByRole("tab", { name: "C" });
+    expect(tabC.getAttribute("tabindex")).toBe("0");
+    expect(document.activeElement).toBe(tabC);
+
+    fireEvent.keyDown(tabC, { key: "Home" });
+    expect(active).toBe("a");
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: "A" }));
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: "A" }), {
+      key: "ArrowLeft",
+    });
+    expect(active).toBe("c");
+  });
+
+  it("Listbox uses roving tabindex and skips disabled options", () => {
+    const items = [
+      { id: "one", value: "one", label: "One" },
+      { id: "two", value: "two", label: "Two", disabled: true },
+      { id: "three", value: "three", label: "Three" },
+    ];
+    render(<Listbox items={items} selectedId="one" onSelect={() => {}} />);
+
+    const one = screen.getByRole("option", { name: "One" });
+    expect(one.getAttribute("tabindex")).toBe("0");
+
+    fireEvent.keyDown(one, { key: "ArrowDown" });
+    const three = screen.getByRole("option", { name: "Three" });
+    expect(document.activeElement).toBe(three);
+
+    fireEvent.keyDown(three, { key: "Home" });
+    expect(document.activeElement).toBe(one);
   });
 });

@@ -1,5 +1,6 @@
 import { Cross } from "@nebutra/icons";
 import type React from "react";
+import { nextRovingIndex } from "../lib/roving";
 import { cn } from "../lib/utils";
 
 export interface TabItemData {
@@ -28,6 +29,9 @@ export function TabStrip({
   children,
   className,
 }: TabStripProps) {
+  const activeIndex = tabs.findIndex((tab) => tab.id === activeTabId);
+  const rovingIndex = activeIndex >= 0 ? activeIndex : 0;
+
   return (
     <div
       role="tablist"
@@ -38,20 +42,30 @@ export function TabStrip({
       )}
     >
       <div className="flex items-center gap-1 flex-1 min-w-0">
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const isActive = tab.id === activeTabId;
           return (
             <div
               key={tab.id}
               role="tab"
               aria-selected={isActive}
-              tabIndex={isActive ? 0 : -1}
+              tabIndex={index === rovingIndex ? 0 : -1}
               onClick={() => onSelectTab(tab.id)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onSelectTab(tab.id);
+                  return;
                 }
+                const next = nextRovingIndex(e.key, index, tabs.length);
+                if (next === null) return;
+                e.preventDefault();
+                onSelectTab(tabs[next].id);
+                const nodes =
+                  e.currentTarget.parentElement?.querySelectorAll<HTMLElement>(
+                    '[role="tab"]',
+                  );
+                nodes?.[next]?.focus();
               }}
               className={cn(
                 "focus-ring group flex h-7 max-w-[220px] shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-body-sm transition-colors duration-150",
