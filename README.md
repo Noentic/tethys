@@ -85,14 +85,27 @@ flowchart TB
 |---|---|
 | [`apps/desktop`](./apps/desktop) | Tauri v2 desktop shell with React 19, TanStack Router, and Vite |
 | [`crates/tethys-core`](./crates/tethys-core) | Core domain logic, state transitions, and IPC command implementation |
-| [`crates/tethys-git`](./crates/tethys-git) | Pure synchronous Git engine: worktrees, checkpoints, diffs, stage/discard |
-| [`crates/tethys-store`](./crates/tethys-store) | SQLite WAL persistence, append-only event log, materialized entries, and BLAKE3 blob store |
+| [`crates/tethys-api`](./crates/tethys-api) | Service traits and typed method routing (the host↔core seam) |
 | [`crates/tethys-schema`](./crates/tethys-schema) | Wire types and schema definitions exported via Specta |
-| [`crates/tethys-api`](./crates/tethys-api) | Typed command router and IPC bridge |
+| [`crates/tethys-store`](./crates/tethys-store) | SQLite WAL persistence, append-only event log, materialized entries, and BLAKE3 blob store |
+| [`crates/tethys-sync`](./crates/tethys-sync) | MCP registry, vendor-file projection, and skill sync/import |
+| [`crates/tethys-git`](./crates/tethys-git) | Pure synchronous Git engine: worktrees, checkpoints, diffs, stage/discard |
+| [`crates/tethys-search`](./crates/tethys-search) | File indexing and fuzzy search |
+| [`crates/tethys-acp`](./crates/tethys-acp) | ACP v1/v2 protocol client and fixtures |
+| [`crates/tethys-agent-servers`](./crates/tethys-agent-servers) | Agent connection store, leases, recovery, and supervision |
+| [`crates/tethys-thread`](./crates/tethys-thread) | Thread state machine and turn lifecycle |
+| [`crates/tethys-supervisor`](./crates/tethys-supervisor) | Process containment and the kill/escalation ladder |
 | [`crates/xtask`](./crates/xtask) | Workspace automation tasks (TypeScript bindings generation) |
 | [`packages/bindings`](./packages/bindings) | Auto-generated TypeScript types and IPC bindings |
 | [`packages/client`](./packages/client) | Typed frontend client wrappers for Tauri commands |
-| [`packages/config-ts`](./packages/config-ts) | Shared TypeScript configurations across the workspace |
+| [`packages/state`](./packages/state) | Per-session TanStack stores, patch reducers, and rAF stream batching |
+| [`packages/ui`](./packages/ui) | Design-system tokens, component primitives, and Wave 2 registries |
+| [`packages/composer`](./packages/composer) | Composer command, skill, and path expansion |
+| [`packages/diff`](./packages/diff) | Diff virtualization and rendering |
+| [`packages/markdown`](./packages/markdown) | Incremental markdown worker |
+| [`packages/terminal`](./packages/terminal) | Terminal surface and attachment wiring |
+| [`packages/features`](./packages/features) | Scaffold for Wave 2 feature surfaces (workspaces, composer, approvals, sync) |
+| [`packages/config`](./packages/config) | Shared TypeScript configurations (published as `@tethys/config-ts`) |
 
 ---
 

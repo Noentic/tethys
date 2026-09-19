@@ -732,6 +732,7 @@ The interface relies exclusively on **Geist Sans** for UI hierarchy, **Geist Mon
 ## Iconography (Geist Icons, Decided)
 
 * **Set**: Geist Icons exclusively (`{icons.set}`). Vendor logos (GitHub/GitLab) are the only non-Geist exception.
+* **Implementation**: `@nebutra/icons` is the sanctioned package that supplies the Geist icon set. UI and app code import glyphs from `@nebutra/icons` and must not introduce another icon family; this ratifies the package rather than silently substituting it.
 * **Scales**: `micro 12px` (inline pills/badges), `ui 16px` (default buttons/rows), `rail 20px` (activity rail), `hero 24px` (empty states). See `{icons.sizes}`.
 * **Stroke**: `1.5px`, round caps, `2px` grid; never fill unless active recording state.
 * **Hit targets**: `compact 28px` (chips/stepper), `default 32px` (rows/buttons), `rail 36px` (rail/tabs). Icon may be smaller than target; padding makes up the difference.

@@ -202,6 +202,16 @@ The chunk boundaries only hold if the shared, generated, and lock files are hand
 - **Merge order within a wave is arbitrary by construction.** Any chunk that cannot satisfy that property is mis‑scoped and must be re‑split before work starts.
 - **Integration checkpoint at the end of each wave**: full workspace test, codegen determinism check, and the wave's exit criteria re‑run on trunk before the next wave branches. At the Wave 2 checkpoint the fixture‑backed hooks (capabilities, workspaces, Provider connections) are swapped for the real resolver, trust store and connection store, and the four capability fixtures are re‑run against them.
 
+**Wave 1 checkpoint — 19 September 2026.** Run on the integrated Wave 1 history of `feat/m1.4-sync-alignment` after closing the four audit blockers (ACP v2 build, server-authoritative `mcp.projection.apply`, jailed `git.worktree_create` path, and the M1.6 roving-keyboard/axe gaps). Command set and results:
+
+- `cargo test --workspace` — **PASS**
+- `cargo clippy --workspace --all-targets` — **clean, zero warnings**
+- `pnpm exec turbo run lint typecheck test --concurrency 100%` — **31/31 tasks pass** (desktop 20, ui 80, state 9)
+- `pnpm codegen` + diff of `packages/bindings/src/generated/bindings.ts` — **byte-identical**
+- `cargo test -p tethys-acp --features acp-v2,mock`, `cargo test -p tethys-agent-servers --features acp-v2`, `cargo test -p tethys-core --features acp-v2` — **PASS** (the three CI ACP v2 jobs, including the two-vendor concurrency run)
+
+The `acp-v2` jobs are part of this checkpoint explicitly: the previous checkpoint relied on the default test profile, which never compiled the feature-gated path and let the red CI job through.
+
 **Decisions to close during MVP:** PD‑5, PD‑6, PD‑7, PD‑8, AD‑9, AD‑12 (M1.15 write‑ups, decided in the chunk that hits them first).
 
 **Exit criteria:**
