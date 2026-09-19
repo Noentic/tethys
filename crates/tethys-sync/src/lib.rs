@@ -27,7 +27,7 @@ pub use projectors::{
     TargetFile,
 };
 pub use registry::{
-    global_registry_path, project_registry_path, read_registry, write_registry, Registry,
+    global_registry_path, read_registry, workspace_registry_path, write_registry, Registry,
     RegistryFile, REGISTRY_VERSION,
 };
 pub use secrets::{KeyringSecrets, MemorySecrets, SecretStore};

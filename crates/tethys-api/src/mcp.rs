@@ -11,7 +11,7 @@ use crate::ApiError;
 pub trait McpApi: Send + Sync {
     fn mcp_registry_list(
         &self,
-        _project_root: Option<String>,
+        _workspace_root: Option<String>,
     ) -> impl std::future::Future<Output = Result<Vec<RegistryEntryView>, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.registry_list")) }
     }
@@ -21,7 +21,7 @@ pub trait McpApi: Send + Sync {
         _name: String,
         _entry: RegistryEntry,
         _scope: Scope,
-        _project_root: Option<String>,
+        _workspace_root: Option<String>,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.registry_set")) }
     }
@@ -30,7 +30,7 @@ pub trait McpApi: Send + Sync {
         &self,
         _name: String,
         _scope: Scope,
-        _project_root: Option<String>,
+        _workspace_root: Option<String>,
     ) -> impl std::future::Future<Output = Result<bool, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.registry_delete")) }
     }
@@ -38,7 +38,7 @@ pub trait McpApi: Send + Sync {
     fn mcp_effective(
         &self,
         _target: TargetId,
-        _project_root: Option<String>,
+        _workspace_root: Option<String>,
     ) -> impl std::future::Future<Output = Result<Vec<RegistryEntryView>, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.effective")) }
     }
@@ -47,7 +47,7 @@ pub trait McpApi: Send + Sync {
         &self,
         _target: TargetId,
         _scope: Scope,
-        _project_root: String,
+        _workspace_root: String,
     ) -> impl std::future::Future<Output = Result<ProjectionPlan, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.projection_plan")) }
     }
@@ -63,7 +63,7 @@ pub trait McpApi: Send + Sync {
         &self,
         _target: TargetId,
         _scope: Scope,
-        _project_root: String,
+        _workspace_root: String,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.projection_rollback")) }
     }
@@ -72,21 +72,21 @@ pub trait McpApi: Send + Sync {
         &self,
         _target: TargetId,
         _scope: Scope,
-        _project_root: String,
+        _workspace_root: String,
     ) -> impl std::future::Future<Output = Result<VerifyStatus, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.projection_verify")) }
     }
 
     fn mcp_import_scan(
         &self,
-        _project_root: String,
+        _workspace_root: String,
     ) -> impl std::future::Future<Output = Result<ImportScan, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.import_scan")) }
     }
 
     fn mcp_import_apply(
         &self,
-        _project_root: String,
+        _workspace_root: String,
         _candidates: Vec<ImportCandidate>,
         _scope: Scope,
     ) -> impl std::future::Future<Output = Result<Vec<String>, ApiError>> + Send {

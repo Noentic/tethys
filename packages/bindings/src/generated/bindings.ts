@@ -85,7 +85,7 @@ export type CommandInfo = {
 };
 
 /**  Where a discovered Tethys command lives. */
-export type CommandScope = "global" | "project";
+export type CommandScope = "global" | "workspace";
 
 /**  Result of a commit on a thread branch. */
 export type CommitResult = {
@@ -412,20 +412,6 @@ export type PlanEntryPriority = "High" | "Medium" | "Low";
 
 export type PlanEntryStatus = "Pending" | "InProgress" | "Completed";
 
-/**  Per-project git settings loaded from `<repo>/.tethys/config.json`. */
-export type ProjectGitConfig = {
-	/**  Override for the default `~/.tethys/worktrees/<repo-id>/<slug>` location. */
-	worktrees_dir?: string | null,
-	/**  Branch template for new thread worktrees; `{slug}` is substituted. */
-	wt_branch_template?: string,
-	/**  Untracked/ignored globs copied from the main worktree (default `.env*`). */
-	bootstrap_globs?: string[],
-	/**  Untracked binaries larger than this are skipped by checkpoints. */
-	skip_untracked_binary_bytes?: number,
-	/**  Timeout for the optional worktree setup script. */
-	setup_timeout_ms?: number,
-};
-
 /**  Preview of one projected registry into one target file. */
 export type ProjectionPlan = {
 	target: TargetId,
@@ -437,6 +423,9 @@ export type ProjectionPlan = {
 	content: string,
 	entries: EntryProjection[],
 };
+
+/**  A file surface that a registry entry can be projected to. */
+export type ProjectionTarget = "claude-code" | "codex" | "open-code";
 
 /**  What a resolved composer reference points at. */
 export type ReferenceKind = "skill" | "path";
@@ -496,7 +485,7 @@ export type RestoreTarget = ({ Checkpoint: {
 export type Role = "User" | "Agent" | "Thought";
 
 /**  Registry file location an entry came from. */
-export type Scope = "global" | "project";
+export type Scope = "global" | "workspace";
 
 /**
  *  A search item result returned by FFF search (`search.files`).
@@ -625,7 +614,7 @@ export type StreamChunk = {
 	payload: string,
 };
 
-/**  A file surface or session that a registry entry can be projected to. */
+/**  A file surface or session that a registry entry can be projected to (legacy). */
 export type TargetId = "session" | "claude-code" | "codex" | "open-code";
 
 /**  Stable thread identifier. */
@@ -722,10 +711,24 @@ export type UsageSnapshot = {
 /**  Result of verifying a projected file against its manifest entry. */
 export type VerifyStatus = "in-sync" | "drifted" | "missing";
 
+/**  Per-project git settings loaded from `<repo>/.tethys/config.json`. */
+export type WorkspaceGitConfig = {
+	/**  Override for the default `~/.tethys/worktrees/<repo-id>/<slug>` location. */
+	worktrees_dir?: string | null,
+	/**  Branch template for new thread worktrees; `{slug}` is substituted. */
+	wt_branch_template?: string,
+	/**  Untracked/ignored globs copied from the main worktree (default `.env*`). */
+	bootstrap_globs?: string[],
+	/**  Untracked binaries larger than this are skipped by checkpoints. */
+	skip_untracked_binary_bytes?: number,
+	/**  Timeout for the optional worktree setup script. */
+	setup_timeout_ms?: number,
+};
+
 /**  Result of materializing a worktree. */
 export type WorktreeInfo = {
 	thread_id: string,
-	project_root: string,
+	workspace_root: string,
 	path: string,
 	branch: string,
 	base: string,
@@ -739,7 +742,7 @@ export type WorktreeInfo = {
 export type WorktreeSpec = {
 	thread_id: string,
 	/**  Repository root used for discovery (the main checkout). */
-	project_root: string,
+	workspace_root: string,
 	/**  URL-safe thread slug used for paths and default branch names. */
 	slug: string,
 	/**  Worktree path; empty means "derive from `worktrees_dir`". */

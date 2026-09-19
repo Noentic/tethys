@@ -8,7 +8,7 @@ use tethys_schema::sync::{
 };
 
 use crate::error::SyncError;
-use crate::registry::{global_registry_path, project_registry_path, Registry};
+use crate::registry::{global_registry_path, workspace_registry_path, Registry};
 use crate::secrets::{parse_secret_ref, SecretStore};
 
 /// Loads the registry, filters by transports, and resolves secrets.
@@ -24,7 +24,7 @@ pub fn spawn_servers(
 ) -> Result<Vec<SessionServer>, SyncError> {
     let registry = Registry::load(
         Some(&global_registry_path(home)),
-        Some(&project_registry_path(workdir)),
+        Some(&workspace_registry_path(workdir)),
     )?;
     let effective = registry.effective(TargetId::Session, disabled);
     let servers = session_servers(&effective, transports);

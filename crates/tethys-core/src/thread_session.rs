@@ -65,7 +65,7 @@ struct ThreadHandle {
 
 struct ThreadInner {
     machine: ThreadMachine,
-    project_id: String,
+    workspace_id: String,
     agent_profile_id: String,
     workdir: PathBuf,
     session: Option<SessionId>,
@@ -78,7 +78,7 @@ impl ThreadInner {
     fn summary(&self) -> ThreadSummary {
         ThreadSummary {
             id: self.machine.id().clone(),
-            project_id: self.project_id.clone(),
+            workspace_id: self.workspace_id.clone(),
             agent_profile_id: self.agent_profile_id.clone(),
             title: self.machine.title().unwrap_or("Untitled").to_string(),
             workdir: self.workdir.display().to_string(),
@@ -135,7 +135,7 @@ impl ThreadSessions {
         let handle = Arc::new(ThreadHandle {
             inner: Mutex::new(ThreadInner {
                 machine: ThreadMachine::new(id.clone()),
-                project_id: request.project_id,
+                workspace_id: request.workspace_id,
                 agent_profile_id: request.agent_profile_id,
                 workdir: PathBuf::from(request.workdir),
                 session: None,

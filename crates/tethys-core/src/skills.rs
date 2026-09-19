@@ -14,10 +14,10 @@ use tethys_sync::SyncError;
 use crate::Core;
 
 impl SkillsApi for Core {
-    async fn skills_list(&self, project_root: String) -> Result<Vec<SkillInfo>, ApiError> {
+    async fn skills_list(&self, workspace_root: String) -> Result<Vec<SkillInfo>, ApiError> {
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&project_root);
+        let root = PathBuf::from(&workspace_root);
         skills::list(
             store,
             SkillHome {
@@ -31,13 +31,13 @@ impl SkillsApi for Core {
 
     async fn skills_import(
         &self,
-        project_root: String,
+        workspace_root: String,
         scope: Scope,
         source: SkillImportSource,
     ) -> Result<SkillInfo, ApiError> {
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&project_root);
+        let root = PathBuf::from(&workspace_root);
         let skill_home = SkillHome {
             root: &root,
             home: &home,
@@ -63,13 +63,13 @@ impl SkillsApi for Core {
 
     async fn skills_update_check(
         &self,
-        project_root: String,
+        workspace_root: String,
         scope: Scope,
         name: String,
     ) -> Result<SkillUpdateCheck, ApiError> {
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&project_root);
+        let root = PathBuf::from(&workspace_root);
         skills::update_check(
             store,
             SkillHome {
@@ -85,13 +85,13 @@ impl SkillsApi for Core {
 
     async fn skills_update_plan(
         &self,
-        project_root: String,
+        workspace_root: String,
         scope: Scope,
         name: String,
     ) -> Result<SkillUpdatePlan, ApiError> {
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&project_root);
+        let root = PathBuf::from(&workspace_root);
         skills::update_plan(
             store,
             SkillHome {
@@ -108,13 +108,13 @@ impl SkillsApi for Core {
 
     async fn skills_update_apply(
         &self,
-        project_root: String,
+        workspace_root: String,
         scope: Scope,
         name: String,
     ) -> Result<SkillUpdateApplied, ApiError> {
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&project_root);
+        let root = PathBuf::from(&workspace_root);
         skills::update_apply(
             store,
             SkillHome {
@@ -131,13 +131,13 @@ impl SkillsApi for Core {
 
     async fn skills_trust(
         &self,
-        project_root: String,
+        workspace_root: String,
         scope: Scope,
         name: String,
     ) -> Result<SkillInfo, ApiError> {
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&project_root);
+        let root = PathBuf::from(&workspace_root);
         skills::trust(
             store,
             SkillHome {
@@ -153,14 +153,14 @@ impl SkillsApi for Core {
 
     async fn skills_enable(
         &self,
-        project_root: String,
+        workspace_root: String,
         scope: Scope,
         name: String,
         enabled: bool,
     ) -> Result<SkillInfo, ApiError> {
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&project_root);
+        let root = PathBuf::from(&workspace_root);
         skills::set_enabled(
             store,
             SkillHome {

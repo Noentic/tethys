@@ -85,13 +85,13 @@ impl Core {
     /// Trusted, enabled skills as composer candidates; empty without a store.
     async fn skill_candidates(
         &self,
-        project_root: Option<&Path>,
+        workspace_root: Option<&Path>,
     ) -> Result<Vec<SkillCandidate>, ApiError> {
         let Ok(store) = self.sync_store() else {
             return Ok(Vec::new());
         };
         let home = self.sync_home();
-        let root = project_root.unwrap_or(home.as_path());
+        let root = workspace_root.unwrap_or(home.as_path());
         let listed =
             tethys_sync::skills::list(store, tethys_sync::skills::SkillHome { root, home: &home })
                 .await
@@ -162,33 +162,33 @@ impl TethysApi for Core {
 
     async fn search_files(
         &self,
-        project_root: String,
+        workspace_root: String,
         query: String,
         limit: usize,
     ) -> Result<Vec<SearchItem>, ApiError> {
         self.search
-            .query(Path::new(&project_root), &query, limit)
+            .query(Path::new(&workspace_root), &query, limit)
             .map_err(map_search_error)
     }
 
     async fn commands_list(
         &self,
-        project_root: Option<String>,
+        workspace_root: Option<String>,
     ) -> Result<Vec<CommandInfo>, ApiError> {
         let home = self.sync_home();
         let global = global_commands_dir(&home);
-        list_commands(&global, project_root.as_deref().map(Path::new))
+        list_commands(&global, workspace_root.as_deref().map(Path::new))
     }
 
     async fn commands_expand(
         &self,
         command: String,
         args_text: String,
-        project_root: Option<String>,
+        workspace_root: Option<String>,
     ) -> Result<ExpandedCommand, ApiError> {
         let home = self.sync_home();
         let global = global_commands_dir(&home);
-        let root = project_root.as_deref().map(Path::new);
+        let root = workspace_root.as_deref().map(Path::new);
         let skills = self.skill_candidates(root).await?;
         expand_command(&global, root, &skills, &command, &args_text)
     }
@@ -246,14 +246,14 @@ impl TethysApi for Core {
     }
 
     async fn git_worktree_create(&self, mut spec: WorktreeSpec) -> Result<WorktreeInfo, ApiError> {
-        let config = load_git_config(&spec.project_root)?;
+        let config = load_git_config(&spec.workspace_root)?;
         let options = GitOptions {
             skip_untracked_binary_bytes: u64::from(config.skip_untracked_binary_bytes),
         };
         let engine = self
             .git
             .lock()
-            .engine(&spec.project_root, options)
+            .engine(&spec.workspace_root, options)
             .map_err(map_git_error)?;
 
         if spec.path.trim().is_empty() {
@@ -262,7 +262,7 @@ impl TethysApi for Core {
                     .join(&spec.slug)
                     .to_string_lossy()
                     .into_owned(),
-                _ => default_worktree_path(Path::new(&spec.project_root), &spec.slug)
+                _ => default_worktree_path(Path::new(&spec.workspace_root), &spec.slug)
                     .map_err(map_git_error)?,
             };
         }
@@ -307,7 +307,7 @@ impl TethysApi for Core {
         // disappears mid-operation.
         let main_engine = {
             let mut registry = self.git.lock();
-            registry.engine(&registered.info.project_root, options)
+            registry.engine(&registered.info.workspace_root, options)
         }
         .map_err(map_git_error)?;
         let info = registered.info.clone();

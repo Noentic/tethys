@@ -1,4 +1,4 @@
-//! Canonical MCP registry (`~/.tethys/mcp.json` + `<repo>/.tethys/mcp.json`).
+//! Canonical MCP registry (`~/.tethys/mcp.json` + `<workspace>/.tethys/mcp.json`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
@@ -41,8 +41,8 @@ pub fn global_registry_path(home: &Path) -> PathBuf {
     home.join(".tethys").join("mcp.json")
 }
 
-/// Project registry path for a repository root.
-pub fn project_registry_path(root: &Path) -> PathBuf {
+/// Workspace registry path for a workspace root.
+pub fn workspace_registry_path(root: &Path) -> PathBuf {
     root.join(".tethys").join("mcp.json")
 }
 
@@ -75,23 +75,23 @@ pub fn write_registry(
     atomic::write_atomic(path, &text)
 }
 
-/// Global and project registries, merged on demand.
+/// Global and workspace registries, merged on demand.
 #[derive(Debug, Clone, Default)]
 pub struct Registry {
     pub global: RegistryFile,
-    pub project: RegistryFile,
+    pub workspace: RegistryFile,
 }
 
 impl Registry {
     /// Loads both scopes; a missing file is an empty registry.
-    pub fn load(global: Option<&Path>, project: Option<&Path>) -> Result<Self, SyncError> {
+    pub fn load(global: Option<&Path>, workspace: Option<&Path>) -> Result<Self, SyncError> {
         Ok(Self {
             global: load_or_default(global)?,
-            project: load_or_default(project)?,
+            workspace: load_or_default(workspace)?,
         })
     }
 
-    /// Entries visible to `target`: global, overridden by project, minus
+    /// Entries visible to `target`: global, overridden by workspace, minus
     /// disabled entries and entries that exclude the target.
     pub fn effective(
         &self,
@@ -99,7 +99,7 @@ impl Registry {
         disabled: &BTreeSet<String>,
     ) -> Vec<(String, RegistryEntry)> {
         let mut merged: BTreeMap<String, RegistryEntry> = self.global.mcp_servers.clone();
-        merged.extend(self.project.mcp_servers.clone());
+        merged.extend(self.workspace.mcp_servers.clone());
         merged
             .into_iter()
             .filter(|(name, entry)| {
@@ -116,8 +116,8 @@ impl Registry {
             .iter()
             .map(|(name, entry)| (name.clone(), (Scope::Global, entry.clone())))
             .collect();
-        for (name, entry) in &self.project.mcp_servers {
-            merged.insert(name.clone(), (Scope::Project, entry.clone()));
+        for (name, entry) in &self.workspace.mcp_servers {
+            merged.insert(name.clone(), (Scope::Workspace, entry.clone()));
         }
         merged
     }

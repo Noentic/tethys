@@ -22,13 +22,13 @@ pub fn run() {
             host_info,
             host_pair,
             health,
-            // project
-            project_list,
-            project_add,
-            project_remove,
-            project_settings_get,
-            project_settings_set,
-            project_status,
+            // workspace
+            workspace_list,
+            workspace_add,
+            workspace_remove,
+            workspace_settings_get,
+            workspace_settings_set,
+            workspace_status,
             // agent
             agent_profiles_list,
             agent_profiles_create,

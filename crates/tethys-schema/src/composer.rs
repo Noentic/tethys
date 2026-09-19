@@ -7,11 +7,27 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 /// Where a discovered Tethys command lives.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommandScope {
     Global,
-    Project,
+    Workspace,
+}
+
+impl<'de> Deserialize<'de> for CommandScope {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "global" => Ok(CommandScope::Global),
+            "workspace" | "project" => Ok(CommandScope::Workspace),
+            _ => Err(serde::de::Error::custom(format!(
+                "unknown command scope: {s}"
+            ))),
+        }
+    }
 }
 
 /// One discovered `/` Tethys command (CMP-01).

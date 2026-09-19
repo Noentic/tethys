@@ -158,7 +158,7 @@ fn sentinel_never_reaches_vendor_files_or_backups() {
     let first = plan(PlanRequest {
         projector: &projector,
         path: &path,
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: None,
         desired: &desired,
         owned: &Default::default(),
@@ -176,7 +176,7 @@ fn sentinel_never_reaches_vendor_files_or_backups() {
     let second = plan(PlanRequest {
         projector: &projector,
         path: &path,
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: Some(&fs::read_to_string(&path).expect("read")),
         desired: &[("github".to_string(), changed)],
         owned: &applied.entries,

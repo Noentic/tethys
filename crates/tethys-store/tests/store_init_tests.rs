@@ -23,7 +23,7 @@ async fn fresh_database_creates_all_tables_and_pragmas() -> Result<(), Box<dyn s
         .query_map([], |r| r.get(0))?
         .collect::<Result<Vec<_>, _>>()?;
 
-    assert!(tables.contains(&"projects".to_string()));
+    assert!(tables.contains(&"workspaces".to_string()));
     assert!(tables.contains(&"threads".to_string()));
     assert!(tables.contains(&"events".to_string()));
     assert!(tables.contains(&"entries".to_string()));
@@ -112,11 +112,23 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
 {
     let mut conn = rusqlite::Connection::open_in_memory()?;
 
-    // Step 1: Migrate to latest (version 3: projects, threads, events, entries,
+    // Step 1: Migrate to latest (version 4: workspaces, threads, events, entries,
     // projections, skills_state)
     migrate_to_latest(&mut conn)?;
     let v_latest: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_latest, 3);
+    assert_eq!(v_latest, 4);
+
+    // Step 1b: Step down to version 3 (projects table restored, workspace_id -> project_id)
+    migrate_to_version(&mut conn, 3)?;
+    let v_3: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
+    assert_eq!(v_3, 3);
+
+    let projects_exist: i64 = conn.query_row(
+        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='projects'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(projects_exist, 1, "projects table should exist at version 3");
 
     // Step 2: Step down to version 2 (sync state dropped, entries preserved)
     migrate_to_version(&mut conn, 2)?;
@@ -161,7 +173,7 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
     )?;
     assert_eq!(events_exist, 1, "events table should remain in version 1");
 
-    // Step 3: Step down to version 0 (empty database)
+    // Step 4: Step down to version 0 (empty database)
     migrate_to_version(&mut conn, 0)?;
     let v_0: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
     assert_eq!(v_0, 0);
@@ -176,10 +188,64 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
         "no application tables should remain at version 0"
     );
 
-    // Step 4: Re-apply to latest
+    // Step 5: Re-apply to latest
     migrate_to_latest(&mut conn)?;
     let v_final: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_final, 3);
+    assert_eq!(v_final, 4);
 
     Ok(())
 }
+
+#[test]
+fn store_upgrades_from_v3_to_v4_preserving_rows() -> Result<(), Box<dyn std::error::Error>> {
+    let mut conn = rusqlite::Connection::open_in_memory()?;
+    migrate_to_version(&mut conn, 3)?;
+    let v_3: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
+    assert_eq!(v_3, 3);
+
+    conn.execute(
+        "INSERT INTO projects (id, root_path, isolation) VALUES (?1, ?2, ?3)",
+        rusqlite::params!["proj_1", "/tmp/p1", "worktree"],
+    )?;
+    conn.execute(
+        "INSERT INTO threads (id, project_id, latest_seq) VALUES (?1, ?2, ?3)",
+        rusqlite::params!["thread_1", "proj_1", 10],
+    )?;
+
+    migrate_to_latest(&mut conn)?;
+    let v_latest: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
+    assert_eq!(v_latest, 4);
+
+    let (id, root, iso): (String, String, String) = conn.query_row(
+        "SELECT id, root_path, isolation FROM workspaces WHERE id = 'proj_1'",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?;
+    assert_eq!(id, "proj_1");
+    assert_eq!(root, "/tmp/p1");
+    assert_eq!(iso, "worktree");
+
+    let (t_id, w_id, seq): (String, String, i64) = conn.query_row(
+        "SELECT id, workspace_id, latest_seq FROM threads WHERE id = 'thread_1'",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?;
+    assert_eq!(t_id, "thread_1");
+    assert_eq!(w_id, "proj_1");
+    assert_eq!(seq, 10);
+
+    // Step down to 3
+    migrate_to_version(&mut conn, 3)?;
+    let v_downgrade: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
+    assert_eq!(v_downgrade, 3);
+
+    let count: i64 = conn.query_row(
+        "SELECT count(*) FROM projects WHERE id = 'proj_1'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(count, 1);
+
+    Ok(())
+}
+

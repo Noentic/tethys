@@ -32,7 +32,7 @@ impl Fixture {
     fn spec(&self, thread: &str) -> WorktreeSpec {
         WorktreeSpec {
             thread_id: thread.to_string(),
-            project_root: self.root.to_string_lossy().into_owned(),
+            workspace_root: self.root.to_string_lossy().into_owned(),
             slug: thread.to_string(),
             path: self
                 .worktrees

@@ -20,22 +20,26 @@ pub fn global_commands_dir(home: &Path) -> PathBuf {
     home.join(".tethys").join("commands")
 }
 
-/// `<repo>/.tethys/commands` (project scope).
-pub fn project_commands_dir(project_root: &Path) -> PathBuf {
-    project_root.join(".tethys").join("commands")
+/// `<workspace>/.tethys/commands` (workspace scope).
+pub fn workspace_commands_dir(workspace_root: &Path) -> PathBuf {
+    workspace_root.join(".tethys").join("commands")
 }
 
-/// Lists available commands, project entries shadowing global by name.
+pub fn project_commands_dir(workspace_root: &Path) -> PathBuf {
+    workspace_commands_dir(workspace_root)
+}
+
+/// Lists available commands, workspace entries shadowing global by name.
 pub fn list_commands(
     global_dir: &Path,
-    project_root: Option<&Path>,
+    workspace_root: Option<&Path>,
 ) -> Result<Vec<CommandInfo>, ApiError> {
     let mut by_name: BTreeMap<String, CommandInfo> = BTreeMap::new();
     for command in discover(global_dir, CommandScope::Global) {
         by_name.insert(command.name.clone(), command);
     }
-    if let Some(root) = project_root {
-        for command in discover(&project_commands_dir(root), CommandScope::Project) {
+    if let Some(root) = workspace_root {
+        for command in discover(&workspace_commands_dir(root), CommandScope::Workspace) {
             by_name.insert(command.name.clone(), command);
         }
     }
@@ -45,12 +49,12 @@ pub fn list_commands(
 /// Expands one command body with `args_text` and nested `$`/`@` references.
 pub fn expand_command(
     global_dir: &Path,
-    project_root: Option<&Path>,
+    workspace_root: Option<&Path>,
     skills: &[SkillCandidate],
     command: &str,
     args_text: &str,
 ) -> Result<ExpandedCommand, ApiError> {
-    let info = list_commands(global_dir, project_root)?
+    let info = list_commands(global_dir, workspace_root)?
         .into_iter()
         .find(|info| info.name == command)
         .ok_or_else(|| ApiError::NotFound(format!("command not found: {command}")))?;
@@ -59,7 +63,7 @@ pub fn expand_command(
         .map_err(|error| ApiError::Internal(format!("read command {}: {error}", info.path)))?;
 
     let with_args = apply_args(&body, args_text);
-    let (text, references) = resolve_tokens(&with_args, project_root, skills);
+    let (text, references) = resolve_tokens(&with_args, workspace_root, skills);
     Ok(ExpandedCommand { text, references })
 }
 
@@ -103,7 +107,7 @@ enum Token<'a> {
 
 fn resolve_tokens(
     text: &str,
-    project_root: Option<&Path>,
+    workspace_root: Option<&Path>,
     skills: &[SkillCandidate],
 ) -> (String, Vec<ComposerReference>) {
     let mut resolved = String::with_capacity(text.len());
@@ -126,7 +130,7 @@ fn resolve_tokens(
             Token::Path(raw) => {
                 let (token, suffix) = split_path_token(raw);
                 let reference =
-                    project_root.and_then(|root| path_reference(root, strip_range(token)));
+                    workspace_root.and_then(|root| path_reference(root, strip_range(token)));
                 match reference {
                     Some((fragment, reference)) => {
                         resolved.push_str(&fragment);

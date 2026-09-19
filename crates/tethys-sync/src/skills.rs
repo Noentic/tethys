@@ -25,7 +25,7 @@ pub struct SkillHome<'a> {
 pub(crate) fn skills_dir(home: &SkillHome<'_>, scope: Scope) -> PathBuf {
     match scope {
         Scope::Global => home.home.join(".agents").join("skills"),
-        Scope::Project => home.root.join(".agents").join("skills"),
+        Scope::Workspace => home.root.join(".agents").join("skills"),
     }
 }
 
@@ -39,10 +39,10 @@ pub fn skill_id(scope: Scope, name: &str) -> String {
     format!("{}:{name}", scope.as_str())
 }
 
-/// Lists disk-discovered skills, project scope overriding global by name.
+/// Lists disk-discovered skills, workspace scope overriding global by name.
 pub async fn list(store: &EventStore, home: SkillHome<'_>) -> Result<Vec<SkillInfo>, SyncError> {
     let mut by_name: BTreeMap<String, SkillInfo> = BTreeMap::new();
-    for scope in [Scope::Project, Scope::Global] {
+    for scope in [Scope::Workspace, Scope::Global] {
         for name in discover(&skills_dir(&home, scope))? {
             let info = load_or_record(store, &home, scope, &name).await?;
             by_name.entry(name).or_insert(info);

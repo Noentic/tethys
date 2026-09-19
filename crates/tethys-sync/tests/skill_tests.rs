@@ -82,7 +82,7 @@ async fn folder_import_lists_and_project_overrides_global() {
     import_folder(
         &store,
         home(&root, &home_dir),
-        Scope::Project,
+        Scope::Workspace,
         Some("pdf"),
         &project_source,
     )
@@ -93,7 +93,7 @@ async fn folder_import_lists_and_project_overrides_global() {
         .await
         .expect("list");
     assert_eq!(listed.len(), 1);
-    assert_eq!(listed[0].scope, Scope::Project);
+    assert_eq!(listed[0].scope, Scope::Workspace);
 }
 
 #[tokio::test]

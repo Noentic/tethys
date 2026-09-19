@@ -82,7 +82,7 @@ fn scan_reads_every_source_without_writing() {
         .iter()
         .find(|candidate| candidate.name == "server_c")
         .expect("server_c");
-    assert_eq!(server_c.scope, Scope::Project);
+    assert_eq!(server_c.scope, Scope::Workspace);
     assert!(server_c.source_path.contains("#projects["));
 
     let server_f = scan
@@ -161,7 +161,7 @@ fn apply_writes_metadata_and_preserves_existing_entries() {
         .cloned()
         .collect();
     let names =
-        apply_import(&registry_path, &selection, Scope::Project, Some(&home)).expect("apply");
+        apply_import(&registry_path, &selection, Scope::Workspace, Some(&home)).expect("apply");
     assert_eq!(names.len(), 2);
 
     let file = read_registry(&registry_path)
@@ -169,7 +169,7 @@ fn apply_writes_metadata_and_preserves_existing_entries() {
         .expect("present");
     assert!(file.mcp_servers.contains_key("keep"));
     let server_a = file.mcp_servers.get("server_a").expect("server_a");
-    assert_eq!(server_a.meta.scope, Some(Scope::Project));
+    assert_eq!(server_a.meta.scope, Some(Scope::Workspace));
     assert!(server_a.meta.enabled);
     assert_eq!(server_a.transport, TransportKind::Stdio);
 
@@ -179,7 +179,7 @@ fn apply_writes_metadata_and_preserves_existing_entries() {
     assert_eq!(
         server_b.meta,
         EntryMeta {
-            scope: Some(Scope::Project),
+            scope: Some(Scope::Workspace),
             targets: None,
             enabled: true,
             legacy: false,

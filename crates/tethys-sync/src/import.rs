@@ -152,7 +152,7 @@ fn scan_claude_user_config(
                     name,
                     entry,
                     source_path: format!("{source}#projects[{key}]"),
-                    scope: Scope::Project,
+                    scope: Scope::Workspace,
                     conflict: false,
                 }
             }));

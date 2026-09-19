@@ -27,7 +27,7 @@ impl Projector for OpenCodeProjector {
         vec![
             TargetFile {
                 path: pick_config(root, "opencode.json"),
-                scope: Scope::Project,
+                scope: Scope::Workspace,
             },
             TargetFile {
                 path: pick_config(&global_dir, "opencode.json"),

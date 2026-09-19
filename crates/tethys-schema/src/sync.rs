@@ -8,7 +8,43 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// A file surface or session that a registry entry can be projected to.
+/// A file surface that a registry entry can be projected to.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Type,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProjectionTarget {
+    ClaudeCode,
+    Codex,
+    OpenCode,
+}
+
+impl ProjectionTarget {
+    pub const FILES: [ProjectionTarget; 3] = [
+        ProjectionTarget::ClaudeCode,
+        ProjectionTarget::Codex,
+        ProjectionTarget::OpenCode,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ProjectionTarget::ClaudeCode => "claude-code",
+            ProjectionTarget::Codex => "codex",
+            ProjectionTarget::OpenCode => "opencode",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "claude-code" => Some(ProjectionTarget::ClaudeCode),
+            "codex" => Some(ProjectionTarget::Codex),
+            "opencode" => Some(ProjectionTarget::OpenCode),
+            _ => None,
+        }
+    }
+}
+
+/// A file surface or session that a registry entry can be projected to (legacy).
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Type,
 )]
@@ -66,25 +102,38 @@ impl TransportKind {
 }
 
 /// Registry file location an entry came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "kebab-case")]
 pub enum Scope {
     Global,
-    Project,
+    Workspace,
+}
+
+impl<'de> Deserialize<'de> for Scope {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match Scope::parse(&s) {
+            Some(scope) => Ok(scope),
+            None => Err(serde::de::Error::custom(format!("unknown scope: {s}"))),
+        }
+    }
 }
 
 impl Scope {
     pub fn as_str(self) -> &'static str {
         match self {
             Scope::Global => "global",
-            Scope::Project => "project",
+            Scope::Workspace => "workspace",
         }
     }
 
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "global" => Some(Scope::Global),
-            "project" => Some(Scope::Project),
+            "workspace" | "project" => Some(Scope::Workspace),
             _ => None,
         }
     }

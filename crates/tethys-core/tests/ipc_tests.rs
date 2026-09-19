@@ -31,10 +31,10 @@ fn test_synthetic_diff_generation() {
 async fn test_core_stub_returns_unimplemented() {
     use tethys_api::{ApiError, TethysApi};
     let core = tethys_core::Core::new("0.0.0");
-    match core.project_list().await {
-        Err(ApiError::Unimplemented(m)) => assert_eq!(m, "project.list"),
+    match core.workspace_list().await {
+        Err(ApiError::Unimplemented(m)) => assert_eq!(m, "workspace.list"),
         other => panic!("expected Unimplemented, got {other:?}"),
     }
-    let err_str = core.project_list().await.map_err(|e| e.to_string()).unwrap_err();
-    assert_eq!(err_str, "UNIMPLEMENTED: project.list");
+    let err_str = core.workspace_list().await.map_err(|e| e.to_string()).unwrap_err();
+    assert_eq!(err_str, "UNIMPLEMENTED: workspace.list");
 }

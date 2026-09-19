@@ -79,7 +79,7 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     core.mcp_registry_set(
         "github".into(),
         stdio_entry(),
-        Scope::Project,
+        Scope::Workspace,
         Some(root.display().to_string()),
     )
     .await
@@ -88,7 +88,7 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     let plan = core
         .mcp_projection_plan(
             TargetId::OpenCode,
-            Scope::Project,
+            Scope::Workspace,
             root.display().to_string(),
         )
         .await
@@ -104,7 +104,7 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     let verified = core
         .mcp_projection_verify(
             TargetId::OpenCode,
-            Scope::Project,
+            Scope::Workspace,
             root.display().to_string(),
         )
         .await
@@ -125,7 +125,7 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     let verified = core
         .mcp_projection_verify(
             TargetId::OpenCode,
-            Scope::Project,
+            Scope::Workspace,
             root.display().to_string(),
         )
         .await
@@ -135,7 +135,7 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
 
     core.mcp_projection_rollback(
         TargetId::OpenCode,
-        Scope::Project,
+        Scope::Workspace,
         root.display().to_string(),
     )
     .await
@@ -167,7 +167,7 @@ async fn skills_list_trust_and_enable_through_the_api() {
     assert!(!listed[0].trusted);
 
     let trusted = core
-        .skills_trust(root.display().to_string(), Scope::Project, "pdf".into())
+        .skills_trust(root.display().to_string(), Scope::Workspace, "pdf".into())
         .await
         .expect("trust");
     assert!(trusted.trusted);
@@ -175,7 +175,7 @@ async fn skills_list_trust_and_enable_through_the_api() {
     let disabled = core
         .skills_enable(
             root.display().to_string(),
-            Scope::Project,
+            Scope::Workspace,
             "pdf".into(),
             false,
         )

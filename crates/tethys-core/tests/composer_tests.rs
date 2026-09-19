@@ -20,12 +20,12 @@ fn global_dir(root: &Path) -> std::path::PathBuf {
     root.join("global")
 }
 
-fn project_dir(root: &Path) -> std::path::PathBuf {
-    root.join("project")
+fn workspace_dir(root: &Path) -> std::path::PathBuf {
+    root.join("workspace")
 }
 
-fn project_command(root: &Path, name: &str) -> std::path::PathBuf {
-    project_dir(root)
+fn workspace_command(root: &Path, name: &str) -> std::path::PathBuf {
+    workspace_dir(root)
         .join(".tethys/commands")
         .join(format!("{name}.md"))
 }
@@ -40,15 +40,15 @@ fn skill(root: &Path, name: &str, skill_md: &str) -> SkillCandidate {
 }
 
 #[test]
-fn project_commands_shadow_global() {
+fn workspace_commands_shadow_global() {
     let tmp = tempfile::tempdir().expect("temp dir");
     let global = global_dir(tmp.path());
     write(&global.join("review.md"), "Review global.");
     write(&global.join("global-only.md"), "Global only.");
-    write(&project_command(tmp.path(), "review"), "Review project.");
-    write(&project_command(tmp.path(), "deploy"), "Deploy.");
+    write(&workspace_command(tmp.path(), "review"), "Review project.");
+    write(&workspace_command(tmp.path(), "deploy"), "Deploy.");
 
-    let commands = list_commands(&global, Some(&project_dir(tmp.path()))).expect("list");
+    let commands = list_commands(&global, Some(&workspace_dir(tmp.path()))).expect("list");
     let names: Vec<&str> = commands.iter().map(|c| c.name.as_str()).collect();
     assert_eq!(names, vec!["deploy", "global-only", "review"]);
 
@@ -56,7 +56,7 @@ fn project_commands_shadow_global() {
         .iter()
         .find(|c| c.name == "review")
         .expect("review");
-    assert_eq!(review.scope, CommandScope::Project);
+    assert_eq!(review.scope, CommandScope::Workspace);
 
     let global_only = commands
         .iter()
@@ -66,7 +66,7 @@ fn project_commands_shadow_global() {
 }
 
 #[test]
-fn list_without_project_returns_globals() {
+fn list_without_workspace_returns_globals() {
     let tmp = tempfile::tempdir().expect("temp dir");
     let global = global_dir(tmp.path());
     write(&global.join("review.md"), "Review.");
@@ -112,8 +112,8 @@ fn missing_command_is_not_found() {
 fn nested_skill_and_path_resolve_to_plaintext() {
     let tmp = tempfile::tempdir().expect("temp dir");
     let global = global_dir(tmp.path());
-    let project = project_dir(tmp.path());
-    write(&project.join("src/auth.rs"), "SECRET_FILE_BYTES");
+    let workspace = workspace_dir(tmp.path());
+    write(&workspace.join("src/auth.rs"), "SECRET_FILE_BYTES");
     write(
         &global.join("check.md"),
         "Check $rust against @src/auth.rs:40-80.",
@@ -124,7 +124,8 @@ fn nested_skill_and_path_resolve_to_plaintext() {
         "---\nname: rust\ndescription: Idiomatic Rust guidance\n---\n\nSENTINEL_SKILL_BODY\n",
     );
 
-    let expanded = expand_command(&global, Some(&project), &[rust], "check", "").expect("expand");
+    let expanded =
+        expand_command(&global, Some(&workspace), &[rust], "check", "").expect("expand");
 
     assert!(expanded.text.contains("Use the skill \"rust\""));
     assert!(expanded.text.contains("Idiomatic Rust guidance"));
@@ -164,11 +165,11 @@ fn unknown_skill_token_stays_literal() {
 fn path_token_preserves_trailing_punctuation() {
     let tmp = tempfile::tempdir().expect("temp dir");
     let global = global_dir(tmp.path());
-    let project = project_dir(tmp.path());
-    write(&project.join("src/main.rs"), "fn main() {}\n");
+    let workspace = workspace_dir(tmp.path());
+    write(&workspace.join("src/main.rs"), "fn main() {}\n");
     write(&global.join("note.md"), "See (@src/main.rs).");
 
-    let expanded = expand_command(&global, Some(&project), &[], "note", "").expect("expand");
+    let expanded = expand_command(&global, Some(&workspace), &[], "note", "").expect("expand");
     assert!(
         expanded.text.contains("(@src/main.rs)."),
         "trailing punctuation lost: {}",
@@ -180,17 +181,17 @@ fn path_token_preserves_trailing_punctuation() {
 #[test]
 fn path_reference_reports_directories_and_blocks_escape() {
     let tmp = tempfile::tempdir().expect("temp dir");
-    let project = project_dir(tmp.path());
-    fs::create_dir_all(project.join("src")).expect("src dir");
+    let workspace = workspace_dir(tmp.path());
+    fs::create_dir_all(workspace.join("src")).expect("src dir");
 
-    let (text, reference) = path_reference(&project, "src").expect("dir reference");
+    let (text, reference) = path_reference(&workspace, "src").expect("dir reference");
     assert_eq!(text, "@src");
     assert!(reference.is_dir);
     assert_eq!(reference.mime, None);
     assert_eq!(reference.size, None);
 
-    assert!(path_reference(&project, "../escape").is_none());
-    assert!(path_reference(&project, "missing.rs").is_none());
+    assert!(path_reference(&workspace, "../escape").is_none());
+    assert!(path_reference(&workspace, "missing.rs").is_none());
 }
 
 #[test]

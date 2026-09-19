@@ -1,9 +1,10 @@
 //! SQLite migrations management using `rusqlite_migration`.
 //!
-//! Three migrations:
+//! Four migrations:
 //! - `0001`: Core schema (`projects`, `threads`, `events`, and indexes).
 //! - `0002`: Materialized `entries` table and index for zero-replay thread opens.
 //! - `0003`: Sync state (`projections`, `skills_state`).
+//! - `0004`: Rename `projects` to `workspaces` and `threads.project_id` to `workspace_id`.
 
 use rusqlite::Connection;
 use rusqlite_migration::{Migrations, M};
@@ -22,7 +23,7 @@ pub fn migrations() -> Migrations<'static> {
 
             CREATE TABLE threads (
                 id TEXT PRIMARY KEY,
-                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                project_id TEXT NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
                 latest_seq INTEGER NOT NULL DEFAULT 0
             );
 
@@ -92,6 +93,18 @@ pub fn migrations() -> Migrations<'static> {
         .down(
             "DROP TABLE IF EXISTS skills_state;
             DROP TABLE IF EXISTS projections;",
+        ),
+        M::up(
+            "ALTER TABLE projects RENAME TO workspaces;
+            ALTER TABLE threads RENAME COLUMN project_id TO workspace_id;
+            DROP INDEX IF EXISTS idx_threads_project;
+            CREATE INDEX idx_threads_workspace ON threads(workspace_id);",
+        )
+        .down(
+            "DROP INDEX IF EXISTS idx_threads_workspace;
+            ALTER TABLE threads RENAME COLUMN workspace_id TO project_id;
+            ALTER TABLE workspaces RENAME TO projects;
+            CREATE INDEX idx_threads_project ON threads(project_id);",
         ),
     ])
 }

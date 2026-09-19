@@ -24,7 +24,7 @@ impl TethysApi for MinimalApi {
 
     async fn search_files(
         &self,
-        _project_root: String,
+        _workspace_root: String,
         _query: String,
         _limit: usize,
     ) -> Result<Vec<SearchItem>, ApiError> {
@@ -41,8 +41,8 @@ async fn test_stub_defaults_return_unimplemented() {
     let api = MinimalApi;
 
     // Check representative stubs across different namespaces
-    match api.project_list().await {
-        Err(ApiError::Unimplemented(m)) => assert_eq!(m, "project.list"),
+    match api.workspace_list().await {
+        Err(ApiError::Unimplemented(m)) => assert_eq!(m, "workspace.list"),
         other => panic!("expected Unimplemented, got {other:?}"),
     }
 
@@ -52,7 +52,7 @@ async fn test_stub_defaults_return_unimplemented() {
     }
 
     let create = CreateThread {
-        project_id: "p1".into(),
+        workspace_id: "p1".into(),
         agent_profile_id: "a1".into(),
         workdir: "/tmp".into(),
     };
@@ -69,7 +69,7 @@ async fn test_stub_defaults_return_unimplemented() {
 
     let spec = tethys_schema::WorktreeSpec {
         thread_id: "t".to_string(),
-        project_root: "/tmp".to_string(),
+        workspace_root: "/tmp".to_string(),
         slug: "t".to_string(),
         path: String::new(),
         branch: String::new(),

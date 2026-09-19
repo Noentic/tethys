@@ -84,7 +84,7 @@ fn build_core(grace: Duration) -> Core {
 
 async fn create(core: &Core, profile: &str, name: &str) -> ThreadId {
     core.thread_create(CreateThread {
-        project_id: "project".into(),
+        workspace_id: "workspace".into(),
         agent_profile_id: profile.into(),
         workdir: workdir(name).display().to_string(),
     })

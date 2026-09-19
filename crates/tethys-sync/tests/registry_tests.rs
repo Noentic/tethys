@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 use tethys_schema::sync::{
-    EntryMeta, McpTransports, RegistryEntry, RegistryValue, TargetId, TransportKind,
+    EntryMeta, McpTransports, RegistryEntry, RegistryValue, Scope, TargetId, TransportKind,
 };
 use tethys_sync::registry::{read_registry, write_registry, Registry, RegistryFile};
 use tethys_sync::secrets::{MemorySecrets, SecretStore};
@@ -209,3 +209,11 @@ fn memory_store_round_trips() {
     store.delete("account").expect("delete");
     assert_eq!(store.get("account").expect("get"), None);
 }
+
+#[test]
+fn legacy_scope_project_still_loads() {
+    let json = r#"{"type":"stdio","command":"cmd","x-tethys":{"scope":"project"}}"#;
+    let entry: RegistryEntry = serde_json::from_str(json).expect("parse entry");
+    assert_eq!(entry.meta.scope, Some(Scope::Workspace));
+}
+

@@ -14,7 +14,7 @@ fn create_worktree(repo: &TestRepo, holder: &tempfile::TempDir, slug: &str) -> F
     let path = holder.path().join(slug);
     let spec = WorktreeSpec {
         thread_id: slug.to_string(),
-        project_root: repo.root.to_string_lossy().into_owned(),
+        workspace_root: repo.root.to_string_lossy().into_owned(),
         slug: slug.to_string(),
         path: path.to_string_lossy().into_owned(),
         branch: format!("tethys/{slug}"),

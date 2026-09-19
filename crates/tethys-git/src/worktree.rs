@@ -11,13 +11,13 @@ use crate::repo::GitRepo;
 use crate::setup::SetupRunner;
 
 /// Default worktree location: `~/.tethys/worktrees/<repo-id>/<slug>`.
-pub fn default_worktree_path(project_root: &Path, slug: &str) -> GitResult<String> {
+pub fn default_worktree_path(workspace_root: &Path, slug: &str) -> GitResult<String> {
     if slug.is_empty() {
         return Err(GitError::InvalidArgument("slug is required".to_string()));
     }
     let home = dirs::home_dir()
         .ok_or_else(|| GitError::InvalidArgument("cannot resolve home directory".to_string()))?;
-    let repo = GitRepo::discover(project_root)?;
+    let repo = GitRepo::discover(workspace_root)?;
     let key = repo.common_dir.to_string_lossy();
     let hex = blake3::hash(key.as_bytes()).to_hex();
     let repo_id = &hex.as_str()[..16];
@@ -39,7 +39,7 @@ pub fn create(
     if spec.main_checkout {
         return Ok(WorktreeInfo {
             thread_id: spec.thread_id.clone(),
-            project_root: repo.worktree_root.to_string_lossy().into_owned(),
+            workspace_root: repo.worktree_root.to_string_lossy().into_owned(),
             path: repo.worktree_root.to_string_lossy().into_owned(),
             branch: repo.branch.clone(),
             base: spec.base.clone(),
@@ -57,7 +57,7 @@ pub fn create(
         return Err(GitError::InvalidArgument("branch is required".to_string()));
     }
     let path = if spec.path.trim().is_empty() {
-        default_worktree_path(Path::new(&spec.project_root), &spec.slug)?
+        default_worktree_path(Path::new(&spec.workspace_root), &spec.slug)?
     } else {
         spec.path.clone()
     };
@@ -102,7 +102,7 @@ pub fn create(
     match prepared {
         Ok((warnings, setup)) => Ok(WorktreeInfo {
             thread_id: spec.thread_id.clone(),
-            project_root: repo.worktree_root.to_string_lossy().into_owned(),
+            workspace_root: repo.worktree_root.to_string_lossy().into_owned(),
             path: path.clone(),
             branch: spec.branch.clone(),
             base: spec.base.clone(),

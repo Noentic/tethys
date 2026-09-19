@@ -380,7 +380,7 @@ impl Entry {
 /// Request for `thread.create`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct CreateThread {
-    pub project_id: String,
+    pub workspace_id: String,
     pub agent_profile_id: String,
     pub workdir: String,
 }
@@ -389,7 +389,7 @@ pub struct CreateThread {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct ThreadSummary {
     pub id: ThreadId,
-    pub project_id: String,
+    pub workspace_id: String,
     pub agent_profile_id: String,
     pub title: String,
     pub workdir: String,

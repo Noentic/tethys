@@ -9,7 +9,7 @@ use specta::Type;
 /// Per-project git settings loaded from `<repo>/.tethys/config.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(default)]
-pub struct ProjectGitConfig {
+pub struct WorkspaceGitConfig {
     /// Override for the default `~/.tethys/worktrees/<repo-id>/<slug>` location.
     pub worktrees_dir: Option<String>,
     /// Branch template for new thread worktrees; `{slug}` is substituted.
@@ -22,7 +22,9 @@ pub struct ProjectGitConfig {
     pub setup_timeout_ms: u32,
 }
 
-impl Default for ProjectGitConfig {
+pub type ProjectGitConfig = WorkspaceGitConfig;
+
+impl Default for WorkspaceGitConfig {
     fn default() -> Self {
         Self {
             worktrees_dir: None,
@@ -39,7 +41,7 @@ impl Default for ProjectGitConfig {
 pub struct WorktreeSpec {
     pub thread_id: String,
     /// Repository root used for discovery (the main checkout).
-    pub project_root: String,
+    pub workspace_root: String,
     /// URL-safe thread slug used for paths and default branch names.
     pub slug: String,
     /// Worktree path; empty means "derive from `worktrees_dir`".
@@ -60,7 +62,7 @@ pub struct WorktreeSpec {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct WorktreeInfo {
     pub thread_id: String,
-    pub project_root: String,
+    pub workspace_root: String,
     pub path: String,
     pub branch: String,
     pub base: String,

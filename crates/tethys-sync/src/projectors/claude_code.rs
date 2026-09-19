@@ -21,7 +21,7 @@ impl Projector for ClaudeCodeProjector {
     fn detect(&self, root: &Path, _home: &Path) -> Vec<TargetFile> {
         vec![TargetFile {
             path: root.join(".mcp.json"),
-            scope: Scope::Project,
+            scope: Scope::Workspace,
         }]
     }
 

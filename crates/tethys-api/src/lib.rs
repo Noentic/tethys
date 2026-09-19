@@ -88,28 +88,28 @@ pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
     }
     fn health(&self) -> impl std::future::Future<Output = Result<HealthStatus, ApiError>> + Send;
 
-    // === project ===
-    fn project_list(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("project.list")) }
+    // === workspace ===
+    fn workspace_list(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("workspace.list")) }
     }
-    fn project_add(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("project.add")) }
+    fn workspace_add(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("workspace.add")) }
     }
-    fn project_remove(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("project.remove")) }
+    fn workspace_remove(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("workspace.remove")) }
     }
-    fn project_settings_get(
+    fn workspace_settings_get(
         &self,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("project.settings_get")) }
+        async { Err(ApiError::Unimplemented("workspace.settings_get")) }
     }
-    fn project_settings_set(
+    fn workspace_settings_set(
         &self,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("project.settings_set")) }
+        async { Err(ApiError::Unimplemented("workspace.settings_set")) }
     }
-    fn project_status(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
-        async { Err(ApiError::Unimplemented("project.status")) }
+    fn workspace_status(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("workspace.status")) }
     }
 
     // === agent ===
@@ -483,7 +483,7 @@ pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
     // === search ===
     fn search_files(
         &self,
-        project_root: String,
+        workspace_root: String,
         query: String,
         limit: usize,
     ) -> impl std::future::Future<Output = Result<Vec<SearchItem>, ApiError>> + Send;
@@ -491,7 +491,7 @@ pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
     // === commands ===
     fn commands_list(
         &self,
-        _project_root: Option<String>,
+        _workspace_root: Option<String>,
     ) -> impl std::future::Future<Output = Result<Vec<CommandInfo>, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("commands.list")) }
     }
@@ -499,7 +499,7 @@ pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
         &self,
         _command: String,
         _args_text: String,
-        _project_root: Option<String>,
+        _workspace_root: Option<String>,
     ) -> impl std::future::Future<Output = Result<ExpandedCommand, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("commands.expand")) }
     }

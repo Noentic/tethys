@@ -12,7 +12,7 @@ use tokio::process::Command;
 use serde::Deserialize;
 use tethys_api::ApiError;
 use tethys_git::{GitEngine, GitError, GitOptions, SetupRunner};
-use tethys_schema::{ProjectGitConfig, SetupOutcome, WorktreeInfo};
+use tethys_schema::{SetupOutcome, WorkspaceGitConfig, WorktreeInfo};
 use tethys_supervisor::SupervisedChild;
 
 /// Runtime state a thread reports; used to place start/end checkpoints.
@@ -31,7 +31,7 @@ pub enum ThreadRuntimeState {
 pub struct RegisteredWorktree {
     pub info: WorktreeInfo,
     pub engine: Arc<GitEngine>,
-    pub config: ProjectGitConfig,
+    pub config: WorkspaceGitConfig,
     pub last_state: ThreadRuntimeState,
 }
 
@@ -58,7 +58,7 @@ impl GitRegistry {
         &mut self,
         info: WorktreeInfo,
         engine: Arc<GitEngine>,
-        config: ProjectGitConfig,
+        config: WorkspaceGitConfig,
     ) {
         self.threads.insert(
             info.thread_id.clone(),
@@ -112,20 +112,20 @@ fn engine_key(root: &str) -> String {
 }
 
 #[derive(Deserialize)]
-struct ProjectConfigFile {
+struct WorkspaceConfigFile {
     #[serde(default)]
-    git: ProjectGitConfig,
+    git: WorkspaceGitConfig,
 }
 
-/// Loads `<repo>/.tethys/config.json`; missing file means defaults.
-pub fn load_git_config(project_root: &str) -> Result<ProjectGitConfig, ApiError> {
-    let path = Path::new(project_root).join(".tethys").join("config.json");
+/// Loads `<workspace>/.tethys/config.json`; missing file means defaults.
+pub fn load_git_config(workspace_root: &str) -> Result<WorkspaceGitConfig, ApiError> {
+    let path = Path::new(workspace_root).join(".tethys").join("config.json");
     if !path.is_file() {
-        return Ok(ProjectGitConfig::default());
+        return Ok(WorkspaceGitConfig::default());
     }
     let raw = std::fs::read_to_string(&path)
         .map_err(|error| ApiError::InvalidConfig(format!("{}: {error}", path.display())))?;
-    let parsed: ProjectConfigFile = serde_json::from_str(&raw)
+    let parsed: WorkspaceConfigFile = serde_json::from_str(&raw)
         .map_err(|error| ApiError::InvalidConfig(format!("{}: {error}", path.display())))?;
     Ok(parsed.git)
 }

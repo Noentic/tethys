@@ -22,29 +22,39 @@ pub fn configure_pragmas(
     Ok(())
 }
 
-/// Ensures project exists (creates minimal project record if absent).
-pub fn ensure_project(
+/// Ensures workspace exists (creates minimal workspace record if absent).
+pub fn ensure_workspace(
     conn: &Connection,
-    project_id: &str,
+    workspace_id: &str,
     root_path: &str,
     isolation: &str,
 ) -> Result<(), StoreError> {
     conn.execute(
-        "INSERT OR IGNORE INTO projects (id, root_path, isolation) VALUES (?1, ?2, ?3)",
-        params![project_id, root_path, isolation],
+        "INSERT OR IGNORE INTO workspaces (id, root_path, isolation) VALUES (?1, ?2, ?3)",
+        params![workspace_id, root_path, isolation],
     )?;
     Ok(())
 }
 
-/// Ensures thread exists within a project.
+/// Compatibility alias for `ensure_workspace`.
+pub fn ensure_project(
+    conn: &Connection,
+    workspace_id: &str,
+    root_path: &str,
+    isolation: &str,
+) -> Result<(), StoreError> {
+    ensure_workspace(conn, workspace_id, root_path, isolation)
+}
+
+/// Ensures thread exists within a workspace.
 pub fn ensure_thread(
     conn: &Connection,
     thread_id: &ThreadId,
-    project_id: &str,
+    workspace_id: &str,
 ) -> Result<(), StoreError> {
     conn.execute(
-        "INSERT OR IGNORE INTO threads (id, project_id, latest_seq) VALUES (?1, ?2, 0)",
-        params![thread_id.as_str(), project_id],
+        "INSERT OR IGNORE INTO threads (id, workspace_id, latest_seq) VALUES (?1, ?2, 0)",
+        params![thread_id.as_str(), workspace_id],
     )?;
     Ok(())
 }

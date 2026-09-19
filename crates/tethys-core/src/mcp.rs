@@ -11,7 +11,7 @@ use tethys_schema::sync::{
 use tethys_sync::import::{self as sync_import, ScanRequest};
 use tethys_sync::projection::{self, ApplyRequest, PlanRequest};
 use tethys_sync::registry::{
-    global_registry_path, project_registry_path, read_registry, write_registry, Registry,
+    global_registry_path, read_registry, workspace_registry_path, write_registry, Registry,
     RegistryFile,
 };
 use tethys_sync::{applied_from_row, applied_to_row, projector_for, read_text, SyncError};
@@ -21,16 +21,16 @@ use crate::Core;
 impl McpApi for Core {
     async fn mcp_registry_list(
         &self,
-        project_root: Option<String>,
+        workspace_root: Option<String>,
     ) -> Result<Vec<RegistryEntryView>, ApiError> {
-        let (global, project) = self.registry_paths(project_root.as_deref());
-        let registry = Registry::load(Some(&global), project.as_deref()).map_err(internal)?;
+        let (global, workspace) = self.registry_paths(workspace_root.as_deref());
+        let registry = Registry::load(Some(&global), workspace.as_deref()).map_err(internal)?;
         let mut views = Vec::new();
         for (name, entry) in &registry.global.mcp_servers {
             views.push(view(name, Scope::Global, entry));
         }
-        for (name, entry) in &registry.project.mcp_servers {
-            views.push(view(name, Scope::Project, entry));
+        for (name, entry) in &registry.workspace.mcp_servers {
+            views.push(view(name, Scope::Workspace, entry));
         }
         Ok(views)
     }
@@ -40,9 +40,9 @@ impl McpApi for Core {
         name: String,
         mut entry: RegistryEntry,
         scope: Scope,
-        project_root: Option<String>,
+        workspace_root: Option<String>,
     ) -> Result<(), ApiError> {
-        let path = self.scope_registry_path(scope, project_root.as_deref())?;
+        let path = self.scope_registry_path(scope, workspace_root.as_deref())?;
         let mut file = read_registry(&path)
             .map_err(internal)?
             .unwrap_or_else(RegistryFile::default);
@@ -55,9 +55,9 @@ impl McpApi for Core {
         &self,
         name: String,
         scope: Scope,
-        project_root: Option<String>,
+        workspace_root: Option<String>,
     ) -> Result<bool, ApiError> {
-        let path = self.scope_registry_path(scope, project_root.as_deref())?;
+        let path = self.scope_registry_path(scope, workspace_root.as_deref())?;
         let Some(mut file) = read_registry(&path).map_err(internal)? else {
             return Ok(false);
         };
@@ -71,10 +71,10 @@ impl McpApi for Core {
     async fn mcp_effective(
         &self,
         target: TargetId,
-        project_root: Option<String>,
+        workspace_root: Option<String>,
     ) -> Result<Vec<RegistryEntryView>, ApiError> {
-        let (global, project) = self.registry_paths(project_root.as_deref());
-        let registry = Registry::load(Some(&global), project.as_deref()).map_err(internal)?;
+        let (global, workspace) = self.registry_paths(workspace_root.as_deref());
+        let registry = Registry::load(Some(&global), workspace.as_deref()).map_err(internal)?;
         let scopes = registry.merged();
         Ok(registry
             .effective(target, &BTreeSet::new())
@@ -93,15 +93,15 @@ impl McpApi for Core {
         &self,
         target: TargetId,
         scope: Scope,
-        project_root: String,
+        workspace_root: String,
     ) -> Result<ProjectionPlan, ApiError> {
         let projector = projector_for(target)
             .ok_or_else(|| ApiError::Internal(format!("{target:?} has no file projector")))?;
-        let path = target_path(projector.as_ref(), &project_root, &self.sync_home(), scope)?;
+        let path = target_path(projector.as_ref(), &workspace_root, &self.sync_home(), scope)?;
         let original = read_text(&path).map_err(internal)?;
 
-        let (global, project) = self.registry_paths(Some(&project_root));
-        let registry = Registry::load(Some(&global), project.as_deref()).map_err(internal)?;
+        let (global, workspace) = self.registry_paths(Some(&workspace_root));
+        let registry = Registry::load(Some(&global), workspace.as_deref()).map_err(internal)?;
         let desired = registry.effective(target, &BTreeSet::new());
 
         let owned = match &self.store {
@@ -149,12 +149,12 @@ impl McpApi for Core {
         &self,
         target: TargetId,
         scope: Scope,
-        project_root: String,
+        workspace_root: String,
     ) -> Result<(), ApiError> {
         let store = self.sync_store()?;
         let projector = projector_for(target)
             .ok_or_else(|| ApiError::Internal(format!("{target:?} has no file projector")))?;
-        let path = target_path(projector.as_ref(), &project_root, &self.sync_home(), scope)?;
+        let path = target_path(projector.as_ref(), &workspace_root, &self.sync_home(), scope)?;
         let path_string = path.display().to_string();
         let row = store
             .projection(target.as_str(), &path_string)
@@ -174,12 +174,12 @@ impl McpApi for Core {
         &self,
         target: TargetId,
         scope: Scope,
-        project_root: String,
+        workspace_root: String,
     ) -> Result<VerifyStatus, ApiError> {
         let store = self.sync_store()?;
         let projector = projector_for(target)
             .ok_or_else(|| ApiError::Internal(format!("{target:?} has no file projector")))?;
-        let path = target_path(projector.as_ref(), &project_root, &self.sync_home(), scope)?;
+        let path = target_path(projector.as_ref(), &workspace_root, &self.sync_home(), scope)?;
         let path_string = path.display().to_string();
         let Some(row) = store
             .projection(target.as_str(), &path_string)
@@ -192,44 +192,44 @@ impl McpApi for Core {
         projection::verify(&path, &applied).map_err(internal)
     }
 
-    async fn mcp_import_scan(&self, project_root: String) -> Result<ImportScan, ApiError> {
+    async fn mcp_import_scan(&self, workspace_root: String) -> Result<ImportScan, ApiError> {
         Ok(sync_import::scan(ScanRequest {
-            root: Path::new(&project_root),
+            root: Path::new(&workspace_root),
             home: &self.sync_home(),
         }))
     }
 
     async fn mcp_import_apply(
         &self,
-        project_root: String,
+        workspace_root: String,
         candidates: Vec<ImportCandidate>,
         scope: Scope,
     ) -> Result<Vec<String>, ApiError> {
-        let path = self.scope_registry_path(scope, Some(&project_root))?;
+        let path = self.scope_registry_path(scope, Some(&workspace_root))?;
         sync_import::apply_import(&path, &candidates, scope, Some(&self.sync_home()))
             .map_err(internal)
     }
 }
 
 impl Core {
-    fn registry_paths(&self, project_root: Option<&str>) -> (PathBuf, Option<PathBuf>) {
+    fn registry_paths(&self, workspace_root: Option<&str>) -> (PathBuf, Option<PathBuf>) {
         (
             global_registry_path(&self.sync_home()),
-            project_root.map(|root| project_registry_path(Path::new(root))),
+            workspace_root.map(|root| workspace_registry_path(Path::new(root))),
         )
     }
 
     fn scope_registry_path(
         &self,
         scope: Scope,
-        project_root: Option<&str>,
+        workspace_root: Option<&str>,
     ) -> Result<PathBuf, ApiError> {
         match scope {
             Scope::Global => Ok(global_registry_path(&self.sync_home())),
-            Scope::Project => project_root
-                .map(|root| project_registry_path(Path::new(root)))
+            Scope::Workspace => workspace_root
+                .map(|root| workspace_registry_path(Path::new(root)))
                 .ok_or_else(|| {
-                    ApiError::InvalidConfig("project scope needs a project root".into())
+                    ApiError::InvalidConfig("workspace scope needs a workspace root".into())
                 }),
         }
     }
@@ -237,12 +237,12 @@ impl Core {
 
 fn target_path(
     projector: &dyn tethys_sync::Projector,
-    project_root: &str,
+    workspace_root: &str,
     home: &Path,
     scope: Scope,
 ) -> Result<PathBuf, ApiError> {
     projector
-        .detect(Path::new(project_root), home)
+        .detect(Path::new(workspace_root), home)
         .into_iter()
         .find(|file| file.scope == scope)
         .map(|file| file.path)

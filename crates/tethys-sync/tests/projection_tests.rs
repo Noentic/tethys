@@ -70,7 +70,7 @@ fn plan_apply_verify_rollback_round_trip() {
     let projection = plan(PlanRequest {
         projector: &projector,
         path: &harness.path(),
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: Some(&original),
         desired: &wanted,
         owned: &owned,
@@ -114,7 +114,7 @@ fn in_sync_entries_are_not_rewritten() {
     let first = plan(PlanRequest {
         projector: &projector,
         path: &harness.path(),
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: Some(&fixture("claude_code.json")),
         desired: &wanted,
         owned: &BTreeMap::new(),
@@ -131,7 +131,7 @@ fn in_sync_entries_are_not_rewritten() {
     let second = plan(PlanRequest {
         projector: &projector,
         path: &harness.path(),
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: Some(&current),
         desired: &wanted,
         owned: &applied.entries,
@@ -152,7 +152,7 @@ fn foreign_entry_name_collision_is_conflict() {
     let projection = plan(PlanRequest {
         projector: &projector,
         path: &harness.path(),
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: Some(&original),
         desired: &wanted,
         owned: &BTreeMap::new(),
@@ -181,7 +181,7 @@ fn owned_drift_is_conflict_and_apply_refuses() {
     let first = plan(PlanRequest {
         projector: &projector,
         path: &harness.path(),
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: Some(&fixture("claude_code.json")),
         desired: &wanted,
         owned: &BTreeMap::new(),
@@ -202,7 +202,7 @@ fn owned_drift_is_conflict_and_apply_refuses() {
     let second = plan(PlanRequest {
         projector: &projector,
         path: &harness.path(),
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: Some(&edited),
         desired: &wanted,
         owned: &applied.entries,
@@ -230,7 +230,7 @@ fn stale_plan_writes_nothing() {
     let projection = plan(PlanRequest {
         projector: &projector,
         path: &harness.path(),
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: Some(&original),
         desired: &wanted,
         owned: &BTreeMap::new(),
@@ -259,7 +259,7 @@ fn created_file_is_deleted_on_rollback() {
     let projection = plan(PlanRequest {
         projector: &projector,
         path: &harness.path(),
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: None,
         desired: &wanted,
         owned: &BTreeMap::new(),
@@ -295,7 +295,7 @@ fn symlinked_config_is_written_through() {
     let projection = plan(PlanRequest {
         projector: &projector,
         path: &harness.path(),
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: Some(&original),
         desired: &wanted,
         owned: &BTreeMap::new(),
@@ -331,7 +331,7 @@ fn write_failure_leaves_no_temp_file() {
     let projection = plan(PlanRequest {
         projector: &projector,
         path: &path,
-        scope: Scope::Project,
+        scope: Scope::Workspace,
         original: None,
         desired: &wanted,
         owned: &BTreeMap::new(),

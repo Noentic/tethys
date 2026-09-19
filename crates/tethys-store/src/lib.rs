@@ -67,38 +67,48 @@ impl EventStore {
         &self.blobs
     }
 
-    /// Ensures a project record exists.
-    pub async fn ensure_project(
+    /// Ensures a workspace record exists.
+    pub async fn ensure_workspace(
         &self,
-        project_id: &str,
+        workspace_id: &str,
         root_path: &str,
         isolation: &str,
     ) -> Result<(), StoreError> {
-        let project_id = project_id.to_string();
+        let workspace_id = workspace_id.to_string();
         let root_path = root_path.to_string();
         let isolation = isolation.to_string();
         self.pool
             .writer()
             .call(move |conn| {
-                schema::ensure_project(conn, &project_id, &root_path, &isolation)?;
+                schema::ensure_workspace(conn, &workspace_id, &root_path, &isolation)?;
                 Ok::<_, StoreError>(())
             })
             .await?;
         Ok(())
     }
 
-    /// Ensures a thread record exists within a project.
+    /// Compatibility alias for `ensure_workspace`.
+    pub async fn ensure_project(
+        &self,
+        workspace_id: &str,
+        root_path: &str,
+        isolation: &str,
+    ) -> Result<(), StoreError> {
+        self.ensure_workspace(workspace_id, root_path, isolation).await
+    }
+
+    /// Ensures a thread record exists within a workspace.
     pub async fn ensure_thread(
         &self,
         thread_id: &ThreadId,
-        project_id: &str,
+        workspace_id: &str,
     ) -> Result<(), StoreError> {
         let thread_id = thread_id.clone();
-        let project_id = project_id.to_string();
+        let workspace_id = workspace_id.to_string();
         self.pool
             .writer()
             .call(move |conn| {
-                schema::ensure_thread(conn, &thread_id, &project_id)?;
+                schema::ensure_thread(conn, &thread_id, &workspace_id)?;
                 Ok::<_, StoreError>(())
             })
             .await?;
