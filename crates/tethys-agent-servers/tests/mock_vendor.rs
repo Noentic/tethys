@@ -325,6 +325,7 @@ async fn v2_recovery_cancels_live_session_and_restarts_dead_connection() {
     let store = store();
     let compat = AgentCompat {
         preferred_protocol: Some(AcpProtocol::V2),
+        projection_target: None,
     };
     let key = register(&store, "recovery-v2", "v2", &dir, compat);
 
