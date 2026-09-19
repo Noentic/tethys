@@ -107,7 +107,14 @@ impl Core {
         let home = dirs::home_dir().unwrap_or_default();
         let sync =
             crate::thread_session::SyncSource::new(home, Arc::new(tethys_sync::KeyringSecrets));
-        Self::with_sessions(version, Arc::new(ThreadSessions::new(store, sync)))
+        Self::with_sessions(
+            version,
+            Arc::new(ThreadSessions::new(
+                store,
+                sync,
+                Arc::new(workspace_roots::StaticWorkspaces::new()),
+            )),
+        )
     }
 
     pub fn with_sessions(version: impl Into<String>, sessions: Arc<ThreadSessions>) -> Self {
@@ -139,8 +146,8 @@ impl Core {
             AcpProtocol::V1,
             Arc::new(DenyPermissionResolver),
         ));
-        let sessions = Arc::new(ThreadSessions::new(agent_store, sync));
         let workspace_roots = Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone()));
+        let sessions = Arc::new(ThreadSessions::new(agent_store, sync, workspace_roots.clone()));
         let core = Self {
             version: env!("CARGO_PKG_VERSION").to_string(),
             search: SearchIndexManager::new(),
@@ -154,12 +161,15 @@ impl Core {
 
     /// Attaches the sync-state store (projection ownership and skill rows).
     pub fn with_store(mut self, store: Arc<tethys_store::EventStore>) -> Self {
-        self.workspace_roots = Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone()));
+        let roots = Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone()));
+        self.sessions.set_roots(roots.clone());
+        self.workspace_roots = roots;
         self.store = Some(store);
         self
     }
 
     pub fn with_workspace_roots(mut self, roots: Arc<dyn WorkspaceRoots>) -> Self {
+        self.sessions.set_roots(roots.clone());
         self.workspace_roots = roots;
         self
     }
@@ -298,7 +308,7 @@ impl TethysApi for Core {
     }
 
     async fn thread_create(&self, request: CreateThread) -> Result<ThreadSummary, ApiError> {
-        self.sessions.create(request)
+        self.sessions.create(request).await
     }
 
     async fn thread_list(&self) -> Result<Vec<ThreadSummary>, ApiError> {

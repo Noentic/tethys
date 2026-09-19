@@ -45,12 +45,17 @@ fn build_core(grace: Duration) -> Core {
         cancel_grace: Duration::from_millis(200),
         ..StoreOptions::new(AcpProtocol::V1, Arc::new(DenyPermissionResolver))
     };
+    let roots = Arc::new(
+        tethys_core::workspace_roots::StaticWorkspaces::new()
+            .with("workspace", workdir("workspace")),
+    );
     let sessions = Arc::new(ThreadSessions::new(
         ConnectionStore::new(options),
         tethys_core::thread_session::SyncSource::new(
             workdir("sync-home"),
             Arc::new(tethys_sync::MemorySecrets::new()),
         ),
+        roots,
     ));
     sessions.register_profile(
         LaunchSpec::new(

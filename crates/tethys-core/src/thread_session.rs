@@ -8,12 +8,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use tethys_acp::AcpConnection;
 use tethys_agent_servers::{ConnectionLease, ConnectionStore, LaunchSpec};
-use tethys_schema::connection::AgentCompat;
-use tethys_schema::connection::{ConnectionEntry, ConnectionKey};
-use tethys_schema::sync::McpTransports;
+use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionEntry, ConnectionKey};
+use tethys_schema::sync::{McpTransports, WorkspaceId};
 use tethys_schema::thread::{
     ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView,
 };
@@ -25,6 +24,7 @@ use tethys_thread::{
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
+use crate::workspace_roots::WorkspaceRoots;
 use crate::ApiError;
 
 /// Everything the spawn path needs to build a session's MCP server set.
@@ -68,6 +68,7 @@ struct ThreadInner {
     workspace_id: String,
     agent_profile_id: String,
     workdir: PathBuf,
+    workspace_root: PathBuf,
     session: Option<SessionId>,
     lease: Option<ConnectionLease>,
     events: Vec<EventEnvelope>,
@@ -92,18 +93,36 @@ impl ThreadInner {
 pub struct ThreadSessions {
     store: Arc<ConnectionStore>,
     sync: SyncSource,
+    roots: RwLock<Arc<dyn WorkspaceRoots>>,
     profiles: Mutex<HashMap<String, (ConnectionKey, AgentCompat)>>,
     threads: Mutex<HashMap<ThreadId, Arc<ThreadHandle>>>,
 }
 
 impl ThreadSessions {
-    pub fn new(store: Arc<ConnectionStore>, sync: SyncSource) -> Self {
+    pub fn new(
+        store: Arc<ConnectionStore>,
+        sync: SyncSource,
+        roots: Arc<dyn WorkspaceRoots>,
+    ) -> Self {
         Self {
             store,
             sync,
+            roots: RwLock::new(roots),
             profiles: Mutex::new(HashMap::new()),
             threads: Mutex::new(HashMap::new()),
         }
+    }
+
+    pub fn with_default_roots(store: Arc<ConnectionStore>, sync: SyncSource) -> Self {
+        Self::new(
+            store,
+            sync,
+            Arc::new(crate::workspace_roots::StaticWorkspaces::new()),
+        )
+    }
+
+    pub fn set_roots(&self, roots: Arc<dyn WorkspaceRoots>) {
+        *self.roots.write() = roots;
     }
 
     pub fn store(&self) -> &Arc<ConnectionStore> {
@@ -124,13 +143,16 @@ impl ThreadSessions {
         profile_id
     }
 
-    pub fn create(&self, request: CreateThread) -> Result<ThreadSummary, ApiError> {
+    pub async fn create(&self, request: CreateThread) -> Result<ThreadSummary, ApiError> {
         if !self.profiles.lock().contains_key(&request.agent_profile_id) {
             return Err(ApiError::NotFound(format!(
                 "agent profile {}",
                 request.agent_profile_id
             )));
         }
+        let workspace_id = WorkspaceId::new(&request.workspace_id);
+        let roots = self.roots.read().clone();
+        let workspace_root = roots.root(&workspace_id).await?;
         let id = ThreadId::new(format!("thread-{}", self.threads.lock().len() + 1));
         let handle = Arc::new(ThreadHandle {
             inner: Mutex::new(ThreadInner {
@@ -138,6 +160,7 @@ impl ThreadSessions {
                 workspace_id: request.workspace_id,
                 agent_profile_id: request.agent_profile_id,
                 workdir: PathBuf::from(request.workdir),
+                workspace_root,
                 session: None,
                 lease: None,
                 events: Vec::new(),
@@ -149,6 +172,22 @@ impl ThreadSessions {
         let summary = handle.inner.lock().summary();
         self.threads.lock().insert(id, handle);
         Ok(summary)
+    }
+
+    pub fn thread_workspace_root(&self, id: &ThreadId) -> Result<PathBuf, ApiError> {
+        let handle = self.handle(id)?;
+        let root = handle.inner.lock().workspace_root.clone();
+        Ok(root)
+    }
+
+    pub fn mcp_servers_for_thread(&self, id: &ThreadId) -> Result<Vec<serde_json::Value>, ApiError> {
+        let handle = self.handle(id)?;
+        let (key, workspace_root) = {
+            let inner = handle.inner.lock();
+            let key = self.profile_key(&inner.agent_profile_id)?;
+            (key, inner.workspace_root.clone())
+        };
+        self.mcp_servers(&workspace_root, &key)
     }
 
     pub fn list(&self) -> Vec<ThreadSummary> {
@@ -283,14 +322,15 @@ impl ThreadSessions {
     /// logs, or events.
     fn mcp_servers(
         &self,
-        workdir: &Path,
+        workspace_root: &Path,
         key: &ConnectionKey,
     ) -> Result<Vec<serde_json::Value>, ApiError> {
+        let transports = self.transports_for(key)?;
         let resolved = tethys_sync::session::spawn_servers(
             &self.sync.home,
-            workdir,
+            workspace_root,
             &self.sync.disabled,
-            &self.transports_for(key),
+            &transports,
             self.sync.secrets.as_ref(),
         )
         .map_err(|error| ApiError::Internal(error.to_string()))?;
@@ -302,24 +342,36 @@ impl ThreadSessions {
             .collect()
     }
 
-    fn transports_for(&self, key: &ConnectionKey) -> McpTransports {
-        self.store
-            .entries()
-            .into_iter()
-            .find(|entry| &entry.key == key)
-            .and_then(|entry| entry.capabilities)
-            .map(|capabilities| capabilities.mcp)
-            .unwrap_or_default()
+    pub fn transports_for(&self, key: &ConnectionKey) -> Result<McpTransports, ApiError> {
+        let entry = self
+            .store
+            .entry(key)
+            .ok_or_else(|| ApiError::NotFound(format!("connection for {}", key.profile_id)))?;
+
+        let capabilities = entry
+            .capabilities
+            .ok_or(ApiError::CapabilitiesNotNegotiated)?;
+
+        let mut transports = capabilities.mcp;
+        if entry.protocol == Some(AcpProtocol::V1) {
+            transports.stdio = true;
+        }
+        Ok(transports)
     }
 
     /// Acquires a lease (spawning if needed) and ensures a live session plus
     /// its reader task. New sessions start fresh; replaced connections resume
     /// with replay (D12/D13).
     async fn ensure_connection(&self, handle: &Arc<ThreadHandle>) -> Result<(), ApiError> {
-        let (key, existing_session, workdir) = {
+        let (key, existing_session, workdir, workspace_root) = {
             let inner = handle.inner.lock();
             let key = self.profile_key(&inner.agent_profile_id)?;
-            (key, inner.session.clone(), inner.workdir.clone())
+            (
+                key,
+                inner.session.clone(),
+                inner.workdir.clone(),
+                inner.workspace_root.clone(),
+            )
         };
 
         if let Ok((_, _)) = live_connection(handle) {
@@ -332,7 +384,7 @@ impl ThreadSessions {
             .await
             .map_err(|error| ApiError::Internal(error.to_string()))?;
 
-        let mcp_servers = self.mcp_servers(&workdir, &key)?;
+        let mcp_servers = self.mcp_servers(&workspace_root, &key)?;
 
         let session = match existing_session {
             Some(session) => {

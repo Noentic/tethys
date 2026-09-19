@@ -17,14 +17,14 @@ use crate::secrets::{parse_secret_ref, SecretStore};
 /// resolved values exist only in memory for one session.
 pub fn spawn_servers(
     home: &Path,
-    workdir: &Path,
+    workspace_root: &Path,
     disabled: &BTreeSet<String>,
     transports: &McpTransports,
     store: &dyn SecretStore,
 ) -> Result<Vec<SessionServer>, SyncError> {
     let registry = Registry::load(
         Some(&global_registry_path(home)),
-        Some(&workspace_registry_path(workdir)),
+        Some(&workspace_registry_path(workspace_root)),
     )?;
     let effective = registry.effective(TargetId::Session, disabled);
     let servers = session_servers(&effective, transports);

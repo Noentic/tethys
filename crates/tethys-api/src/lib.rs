@@ -44,6 +44,8 @@ pub enum ApiError {
     Git(String),
     #[error("invalid config: {0}")]
     InvalidConfig(String),
+    #[error("CAPABILITIES_NOT_NEGOTIATED: connection has not negotiated capabilities yet")]
+    CapabilitiesNotNegotiated,
     #[error("DELETE_BLOCKED: {} uncommitted path(s), {} unpushed commit(s), leased={leased}",
         uncommitted.len(), unpushed.len())]
     DeleteBlocked {

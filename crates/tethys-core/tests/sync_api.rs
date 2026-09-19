@@ -17,7 +17,7 @@ use tethys_sync::MemorySecrets;
 async fn core(home: &Path) -> Core {
     let store = EventStore::in_memory().await.expect("store");
     let options = StoreOptions::new(AcpProtocol::V1, Arc::new(DenyPermissionResolver));
-    let sessions = Arc::new(ThreadSessions::new(
+    let sessions = Arc::new(ThreadSessions::with_default_roots(
         ConnectionStore::new(options),
         SyncSource::new(home, Arc::new(MemorySecrets::new())),
     ));
@@ -32,7 +32,7 @@ async fn core_with_workspace(home: &Path, root: &Path) -> (Core, WorkspaceId) {
         .await
         .expect("ensure");
     let options = StoreOptions::new(AcpProtocol::V1, Arc::new(DenyPermissionResolver));
-    let sessions = Arc::new(ThreadSessions::new(
+    let sessions = Arc::new(ThreadSessions::with_default_roots(
         ConnectionStore::new(options),
         SyncSource::new(home, Arc::new(MemorySecrets::new())),
     ));

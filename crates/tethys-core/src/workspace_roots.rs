@@ -62,6 +62,11 @@ impl StaticWorkspaces {
     pub fn insert(&self, id: impl Into<String>, path: impl Into<PathBuf>) {
         self.roots.write().insert(id.into(), path.into());
     }
+
+    pub fn with(self, id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        self.insert(id, path);
+        self
+    }
 }
 
 #[async_trait::async_trait]

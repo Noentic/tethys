@@ -262,6 +262,38 @@ impl ConnectionStore {
             .unwrap_or(0)
     }
 
+    pub fn entry(&self, key: &ConnectionKey) -> Option<ConnectionEntry> {
+        let mut entries = self.lock_entries();
+        let entry = entries.get_mut(key)?;
+        refresh_liveness(entry);
+        let state = entry.state.exposed().unwrap_or(ConnectionState::Connecting);
+        Some(ConnectionEntry {
+            key: entry.key.clone(),
+            state,
+            protocol: entry.protocol.or(entry.compat.preferred_protocol),
+            info: entry.info.clone(),
+            capabilities: entry.capabilities.clone(),
+            pid: entry.pid,
+            restarts: entry.restarts,
+            stale: entry.state == Lifecycle::Error,
+        })
+    }
+
+    pub fn set_capabilities_for_test(
+        &self,
+        key: &ConnectionKey,
+        capabilities: Option<NormalizedCapabilities>,
+    ) {
+        let mut entries = self.lock_entries();
+        if let Some(entry) = entries.get_mut(key) {
+            entry.capabilities = capabilities;
+            entry.state = Lifecycle::Connected;
+            if entry.protocol.is_none() {
+                entry.protocol = entry.compat.preferred_protocol;
+            }
+        }
+    }
+
     pub(crate) fn live_connection(
         &self,
         key: &ConnectionKey,
