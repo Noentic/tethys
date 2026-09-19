@@ -140,7 +140,7 @@
   border-color: color-mix(in oklab, var(--tethys-status-warning) 45%, transparent);
 }
 
-/* Dot-matrix canvas well (DESIGN.md worktree-topology-canvas: 12px dot grid). */
+/* Dot-matrix canvas well (DESIGN.md session-topology-canvas: 12px dot grid). */
 @utility dot-matrix {
   background-image: radial-gradient(var(--tethys-grid-dot) 1px, transparent 1px);
   background-size: 12px 12px;

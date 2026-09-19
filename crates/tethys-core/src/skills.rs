@@ -1,11 +1,12 @@
 //! `skills.*` namespace implementation.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tethys_api::{ApiError, SkillsApi};
 use tethys_schema::sync::{
     Scope, SkillImportSource, SkillInfo, SkillUpdateApplied, SkillUpdateCheck, SkillUpdatePlan,
+    WorkspaceId,
 };
 use tethys_sync::skill_import::{import_folder, import_github, import_zip, HttpDownloader};
 use tethys_sync::skills::{self, SkillHome};
@@ -14,10 +15,10 @@ use tethys_sync::SyncError;
 use crate::Core;
 
 impl SkillsApi for Core {
-    async fn skills_list(&self, workspace_root: String) -> Result<Vec<SkillInfo>, ApiError> {
+    async fn skills_list(&self, workspace_id: WorkspaceId) -> Result<Vec<SkillInfo>, ApiError> {
+        let root = self.workspace_roots.root(&workspace_id).await?;
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&workspace_root);
         skills::list(
             store,
             SkillHome {
@@ -31,13 +32,13 @@ impl SkillsApi for Core {
 
     async fn skills_import(
         &self,
-        workspace_root: String,
+        workspace_id: WorkspaceId,
         scope: Scope,
         source: SkillImportSource,
     ) -> Result<SkillInfo, ApiError> {
+        let root = self.workspace_roots.root(&workspace_id).await?;
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&workspace_root);
         let skill_home = SkillHome {
             root: &root,
             home: &home,
@@ -63,13 +64,13 @@ impl SkillsApi for Core {
 
     async fn skills_update_check(
         &self,
-        workspace_root: String,
+        workspace_id: WorkspaceId,
         scope: Scope,
         name: String,
     ) -> Result<SkillUpdateCheck, ApiError> {
+        let root = self.workspace_roots.root(&workspace_id).await?;
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&workspace_root);
         skills::update_check(
             store,
             SkillHome {
@@ -85,13 +86,13 @@ impl SkillsApi for Core {
 
     async fn skills_update_plan(
         &self,
-        workspace_root: String,
+        workspace_id: WorkspaceId,
         scope: Scope,
         name: String,
     ) -> Result<SkillUpdatePlan, ApiError> {
+        let root = self.workspace_roots.root(&workspace_id).await?;
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&workspace_root);
         skills::update_plan(
             store,
             SkillHome {
@@ -108,13 +109,13 @@ impl SkillsApi for Core {
 
     async fn skills_update_apply(
         &self,
-        workspace_root: String,
+        workspace_id: WorkspaceId,
         scope: Scope,
         name: String,
     ) -> Result<SkillUpdateApplied, ApiError> {
+        let root = self.workspace_roots.root(&workspace_id).await?;
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&workspace_root);
         skills::update_apply(
             store,
             SkillHome {
@@ -131,13 +132,13 @@ impl SkillsApi for Core {
 
     async fn skills_trust(
         &self,
-        workspace_root: String,
+        workspace_id: WorkspaceId,
         scope: Scope,
         name: String,
     ) -> Result<SkillInfo, ApiError> {
+        let root = self.workspace_roots.root(&workspace_id).await?;
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&workspace_root);
         skills::trust(
             store,
             SkillHome {
@@ -153,14 +154,14 @@ impl SkillsApi for Core {
 
     async fn skills_enable(
         &self,
-        workspace_root: String,
+        workspace_id: WorkspaceId,
         scope: Scope,
         name: String,
         enabled: bool,
     ) -> Result<SkillInfo, ApiError> {
+        let root = self.workspace_roots.root(&workspace_id).await?;
         let store = self.sync_store()?;
         let home = self.sync_home();
-        let root = PathBuf::from(&workspace_root);
         skills::set_enabled(
             store,
             SkillHome {

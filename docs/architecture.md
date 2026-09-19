@@ -18,6 +18,21 @@ This document explains **how** Tethys meets the PRD. Requirement IDs (e.g. `WT�
 4. **The webview renders only.** It never receives more data than it can show.
 5. **One internal event model.** Every agent, whatever protocol version it speaks, is normalized into the same append‑only, upsert‑style event log (§7.3).
 6. **Protocol versions are adapters, not forks.** ACP v1 and v2 are supported side by side behind one internal interface.
+7. **Tethys is a control plane, not a git or forge client.** It orchestrates agents over folders. Git is one capability a folder may have (§10.6), and the UI reads a resolved capability set instead of assuming it. Forge interaction is delegated to the user's own installed `gh` / `glab`: Tethys reads a remote's status for display and never authenticates to, clones from, or browses a forge.
+8. **Address by id, resolve in Rust.** A method that reads or writes the filesystem takes a `WorkspaceId` or `ThreadId`, never a path. Core resolves the root from the workspace table, which holds only folders that were added and trusted (TRU‑01). A path may appear in a request only as a *source* the user chose (a skill folder or archive) or in `workspace.add`, which is the trust flow itself.
+
+### 1.1 Vocabulary
+
+One name per concept, from the database column to the button. The product terms are the ACP three-tier model in [pages-views-spec.md](./pages-views-spec.md) §0.
+
+| Concept | Product / UI term | Schema · API · store | Notes |
+|---|---|---|---|
+| A folder Tethys runs agents in | **Workspace** | `Workspace`, `WorkspaceId`, `workspace.*`, `workspaces` table, `workspace_id` | Formerly `project` / `projects`; retired. `<workspace>` in paths |
+| One ACP connection | **Provider** | `AgentProfile`, `agent.*`, `ConnectionEntry` | Kept: ACP's own word for it is "agent". UI copy says Provider |
+| One ACP conversation | **Session** | `Thread` wraps one `session_id`; `thread.*` | Kept: a Thread is Tethys's wrapper. Hub, tabs and columns say Session |
+| Registry and config scope | global · **workspace** | `Scope::{Global, Workspace}` | Formerly `Project` |
+| A vendor config file surface | *file projection* | `ProjectionTarget` (`claude-code`, `codex`, `opencode`, …) | Files only. The session handoff is not a target |
+| Which Providers receive a server | Provider columns in the MCP grid | `x-tethys.providers` (profile ids; omitted = all) | Replaces `x-tethys.targets` |
 
 ---
 
@@ -75,7 +90,7 @@ tethys/
 ├─ crates/                          # Rust workspace members
 │  ├─ tethys-schema/                # shared types + specta export
 │  ├─ tethys-api/                   # service trait, method routing, subscriptions
-│  ├─ tethys-core/                  # orchestrator: projects, threads, policies, event log
+│  ├─ tethys-core/                  # orchestrator: workspaces, threads, policies, event log
 │  ├─ tethys-thread/                # AgentConnection trait + Thread state machine
 │  ├─ tethys-acp/                   # ACP v1/v2 negotiation + normalization into events
 │  ├─ tethys-agent-servers/         # launch specs, registry, ConnectionStore (leases)
@@ -169,8 +184,8 @@ Versions are indicative; pin exact versions in `Cargo.toml` and verify at setup.
 
 | Library | Role in Tethys |
 |---|---|
-| **TanStack Router** | File‑based, type‑safe routes (`/project/$projectId/thread/$threadId`), search‑param state (diff mode, filters), hash history for the Tauri webview |
-| **TanStack Query** | All request/response data: projects, profiles, thread lists, diff summaries, hunks, sync plans. Query functions call generated Tauri commands. Server‑pushed events invalidate or patch cache entries |
+| **TanStack Router** | File‑based, type‑safe routes (`/workspaces`, `/thread/$threadId`), search‑param state (diff mode, filters), hash history for the Tauri webview |
+| **TanStack Query** | All request/response data: workspaces, profiles, thread lists, diff summaries, hunks, sync plans. Query functions call generated Tauri commands. Server‑pushed events invalidate or patch cache entries |
 | **TanStack Store** | Live, high‑frequency thread state (messages, tool calls, plans, terminals). Kept out of the Query cache so streaming doesn't trigger broad re‑renders; components subscribe with narrow selectors |
 | **TanStack Virtual** | Turn timeline, thread lists, diff lines, `@` results |
 | **TanStack Pacer** | Throttling stream flushes to animation frames; debouncing search and watchers (verify API) |
@@ -370,7 +385,7 @@ It is off by default and injected like any other server.
 
 | Sigil | Resolution |
 |---|---|
-| `/` Tethys | `~/.tethys/commands/<name>.md` or `<repo>/.tethys/commands/<name>.md`, expanded by the Tethys composer; nested `$`/`@` resolved in the same pass as plaintext references |
+| `/` Tethys | `~/.tethys/commands/<name>.md` or `<workspace>/.tethys/commands/<name>.md`, expanded by the Tethys composer; nested `$`/`@` resolved in the same pass as plaintext references |
 | `/` agent | From `available_commands_update`; command `input` is a tagged union in v2 (unknown types fall back to plain text) |
 | `$` skill | Plaintext instruction naming the skill and pointing at its `SKILL.md` (description included when present); the skill body is never inlined, for any agent. The reference is shown on the message |
 | `@` path | FFF index per worktree → plaintext `@<relative-path>` token in the prompt; `name`, `is_dir`, MIME, and size are carried as UI metadata only, never the file contents; optional line range echoed in text (P1) |
@@ -420,6 +435,31 @@ Rules:
 - Byte‑to‑paint latency with 8 concurrent streams.
 
 **Pass criteria:** ≥ 5 k msgs/s at 60 fps and ≤ 50 ms p95 byte‑to‑paint.
+
+### 8.3 UI data bindings
+
+What each surface reads and writes. Surface behaviour is specified in [pages-views-spec.md](./pages-views-spec.md); the methods are the §12.1 namespaces.
+
+| UI | Reads | Writes |
+|---|---|---|
+| Selector provider column | `agent.connections.list`, registry profiles (`AGT‑01/02`), negotiated `initialize` result | — |
+| `session-config-panel` | that Provider's own session-config schema (§7.2); shape varies per Provider | `thread.setConfigOption` (narrowed by policy, `PRM‑04`) |
+| Catalog cards / drawer | `workspace.list/status`, `workspace.capabilities` (§10.6), `thread.list` (Sessions grouped by Provider), `git.worktree.*`, `checkpoint.*`, diff summary | `thread.create` (explicit `cwd` + workspace `mcpServers`; own worktree by default where the capability exists, `WT‑01`), `git.init` (upsell chip), `thread.fork` (V1) |
+| Workspace add / trust | trust store by resolved path + host id (mode, scope, timestamp) | `workspace.add` gated on trust grant; revoke removes the card (`TRU‑01`) |
+| Shell sessions / inspector | `events.subscribe {sinceSeq}`, `entries` materialized, `turns`, local transcript cache (independent of Provider `session/resume` support) | `thread.prompt/queue.*/cancel/resume` |
+| `plan-panel` | `session/update` plan notifications (optional per Provider) | — |
+| Permission requests / inbox | `events` permission requests **including the Provider's `options` array**, `permission.rules.*` | `permission.respond` (selected option id), OS notify |
+| `elicitation-card` | `elicitation/create` request schema (Providers declaring `elicitation`) | elicitation response |
+| `usage-bar` | Session token usage as reported by the Provider (`MON‑03`; hidden when unreported) | — |
+| Diff / review | `git.diff.summary/file`, `checkpoint.*`, gated on `workspace.capabilities` | `git.stage/unstage/discard/commit` |
+| Composer `/ $ @` | `commands.list`, `search.files`, skill strategy | `commands.expand`, `thread.queue.*` |
+| MCP attachment / skills | `mcp.registry/effective` (per Workspace), Provider `mcpCapabilities`, `skills.list` | attach via `mcpServers` on `thread.create`; `mcp.projection.plan/apply/rollback` on the fallback path only; `skills.trust/enable` |
+| Profiles / monitor | `agent.profiles/registry/connections.*`, process sampling | `agent.registry.install/update`, `connections.restart`, `agent.login` |
+| Terminal / onboarding | `terminal.list/attach`, `workspace.list` | `terminal.write/resize`, `workspace.add` |
+| Provider rows | `agent.profiles.*`, `agent.connections.list`, `mcp.health` (`SYN‑09`) | toggle → profile enable; stepper → health interval; exec/protocol/env → launch spec |
+| Provider accordion | `agent.config.schema/get/validate` (`SYN‑11`), negotiated capabilities (`session/resume`, MCP transports, `elicitation`), declared `authMethods` | `agent.config.plan/apply/rollback`; login via `agent.login` per method (`AGT‑07`, `G7`) |
+| General / keybindings settings | theme manifests, font list, trust store, shortcut table | theme id, font prefs, notification toggle, shortcut rebind |
+| Workspaces without git | `workspace.capabilities` (`vcs: none`, `restore: no`, `max_concurrent_sessions: 1`) | `git.init` upsell (convenience); revert/diff/stage UI hidden with a `no git · no revert` explanation when unavailable — no snapshot fallback in MVP |
 
 ---
 
@@ -485,14 +525,40 @@ checkpoint at Idle ────────┘                               │
 
 ### 10.5 Non-git folders and plain mode (WT‑11, PD‑9)
 
-Git is a feature, not enforcement: any folder can be a workspace. When a project sets `isolation: plain`, `tethys-git` is bypassed for every thread in that workspace even when the folder is git-initialized:
+Git is a feature, not enforcement: any folder can be a workspace. When a workspace sets `isolation: plain`, `tethys-git` is bypassed for every thread in that workspace even when the folder is git-initialized:
 
 - No worktree add, no branch, no bootstrap copy/setup script; `Thread.worktree` stays `None` and the thread root is the workspace folder itself (PD‑9 decides root vs. per-thread subfolder).
 - Checkpoint calls are no-ops returning `GIT_DISABLED`; the watcher still feeds live file activity to the UI, but there is no authoritative checkpoint diff and no restore.
-- The `git.*` API namespace returns `GIT_DISABLED` for those threads; the frontend hides the worktree picker, diff/restore actions, and merge/push/PR entries.
+- The `git.*` API namespace returns `GIT_DISABLED` for those threads; the frontend hides the worktree picker, diff/restore actions, and merge/push/PR entries. Both follow from the workspace's resolved capabilities (§10.6), not from the `isolation` setting alone.
 
 The same UI hiding applies to threads in non-git folders without any setting — their git UI is simply unavailable, explained with a `no git · no revert` state, and the hub offers in-place `git init` as the upgrade path. There is no app-managed snapshot fallback in MVP.
 - `@` search still works: the FFF index runs in non‑git mode (no gitignore-aware ranking from worktree metadata).
+
+### 10.6 Workspace capability resolution (AD‑15)
+
+Git, isolation and forge access are properties a workspace *has*, not assumptions the product makes. One resolver in `tethys-core` computes a workspace's capability set, exposed as `workspace.capabilities`; every gate reads it and no surface re-derives VCS status itself.
+
+```rust
+pub struct WorkspaceCapabilities {
+    vcs: Vcs,                          // None | GitLocal | GitRemote { host: GitHost /* GitHub | GitLab | Other */ }
+    restore: bool,                     // checkpoints exist and the session can restore
+    max_concurrent_sessions: Option<u32>, // Some(1) where no worktree mechanism isolates parallel sessions
+    isolation: Isolation,              // Worktree | Plain            (V1 input)
+    forge_cli: ForgeCli,               // None | Gh | Glab             (V1 input)
+}
+```
+
+| Input | Source | Lands |
+|---|---|---|
+| VCS status and remote host | read-only `tethys-git` reads (`git remote get-url` sets `host`; nothing is fetched) | MVP |
+| Session restore support | the Provider's `initialize` result plus checkpoint availability | MVP |
+| `isolation` (`worktree` \| `plain`) and submodule/LFS detection | workspace `.tethys/config.json` (§10.5, WT‑11) | V1 |
+| Forge CLI presence | `which gh` / `which glab` | V1 |
+
+- **`git.*` derives from it.** `GIT_DISABLED` is returned whenever `vcs` is `None` or `isolation` is `Plain`, so the exhaustive namespace test has one rule to assert.
+- **Concurrency is enforced here, not in the UI.** `thread.create` consults `max_concurrent_sessions` and refuses a second session where it is `Some(1)`; the hub's disabled `+ New Thread` reflects the same value. A second window or a direct API caller cannot bypass it.
+- **Forge access is delegated and read-only.** The remote host drives the source badge. Push and PR (`git.push`, `git.pr.create`, WT‑08) shell out to the user's own `gh` / `glab`, are gated on `forge_cli`, register with the permission engine and default to *ask* (§7.6). Tethys stores no forge token and never clones, browses, or authenticates to a forge.
+- **Capability is not the same as backend class.** Class A/B/C (§7) describes the agent process; the capability set describes the folder. They vary independently.
 
 ---
 
@@ -501,7 +567,7 @@ The same UI hiding applies to threads in non-git folders without any setting —
 ### 11.1 Canonical MCP registry
 
 ```jsonc
-// ~/.tethys/mcp.json  (and <repo>/.tethys/mcp.json)
+// ~/.tethys/mcp.json  (and <workspace>/.tethys/mcp.json)
 {
   "mcpServers": {
     "github": {
@@ -509,24 +575,35 @@ The same UI hiding applies to threads in non-git folders without any setting —
       "command": "github-mcp-server",
       "args": ["stdio"],
       "env": { "GITHUB_TOKEN": { "secretRef": "keychain:tethys/github" } },
-      "x-tethys": { "scope": "global", "targets": ["session", "claude-code", "codex"], "enabled": true }
+      "x-tethys": { "scope": "global", "providers": ["claude-code", "codex"], "enabled": true }
     },
-    "linear": { "type": "http", "url": "https://mcp.linear.app/mcp", "x-tethys": { "targets": ["session"] } }
+    "linear": { "type": "http", "url": "https://mcp.linear.app/mcp" }
   }
 }
 ```
 
+`providers` is an allow-list of Provider ids (`AgentProfile.id`); omitted means every Provider. The file carries `"version": 2`. Version 1 used `targets` (including a synthetic `session` value); the reader still accepts it, mapping vendor names to the Provider ids they coincide with, and the writer only emits v2.
+
 The canonical file uses `type` on every entry to match ACP v2. Legacy `sse` entries are imported but flagged, since v2 sessions cannot receive them.
+
+Workspace-level files (`<workspace>/.tethys/…`, `<workspace>/.agents/…`) live at the workspace root, which need not be a git repository. They are "committable" only where the folder is one.
 
 ### 11.2 Session injection
 
-1. **Effective set** = global ∪ project (project overrides by name) − thread disables.
+Attaching servers to `session/new` is the primary path (SYN‑02): it changes no file and needs no apply step. It applies to ACP Classes A and B.
+
+1. **Effective set** = global ∪ workspace (workspace overrides by name), restricted to entries whose `providers` include this Provider, − thread disables. The workspace file is read from the **workspace root** held on the thread, never from the thread's `cwd`: for a git thread `cwd` is a worktree that need not contain an uncommitted or unmerged copy.
 2. **Filter** by the agent's advertised MCP transports:
    - v2: `session.mcp.stdio` / `session.mcp.http`
-   - v1: `mcpCapabilities`
+   - v1: `mcpCapabilities`, with stdio mandatory
+   - A connection with no negotiated capabilities is an error (`CapabilitiesNotNegotiated`), never an empty set.
 3. **Resolve secrets** at spawn time and pass them only to that session.
 
+`mcp.attachments(workspace_id)` returns the Servers × Providers grid the MCP page renders. Each cell is `Attached` (will be passed on the next `session/new`), `UnsupportedTransport { needs }`, `FileProjection { target, state }`, `Excluded` (the server's `providers` list omits this Provider) or `NotNegotiated` (never shown as attached). `FileProjection` appears only for a Provider that negotiated no transport at all and has a `projection_target`; a Provider that accepts stdio but not http is `UnsupportedTransport`.
+
 ### 11.3 Config projection
+
+Projection is the **compatibility path**, not the primary one: it serves Class C terminal-hosted agents (AGT‑03, which have no `session/new` to attach to) and any Provider that cannot accept `mcpServers`, and it is the foundation the native-settings forms (SYN‑11) reuse. A Provider maps to a projection target through `AgentCompat.projection_target`.
 
 Each target implements `Projector` (`target`, `detect`, `read`, `plan → ProjectionPlan`, `apply`, `verify`, plus `schema` for SYN‑11 targets).
 
@@ -537,11 +614,11 @@ Each target implements `Projector` (`target`, `detect`, `read`, `plan → Projec
 | Target | Config | Format | Skills folder |
 |---|---|---|---|
 | ACP session | `session/new` / `session/resume` `mcpServers` | ACP schema | via composer strategy |
-| Claude Code | `.mcp.json` (project); `~/.claude.json` (import only) | JSON `mcpServers` | `.claude/skills/` |
+| Claude Code | `.mcp.json` (workspace); `~/.claude.json` (import only) | JSON `mcpServers` | `.claude/skills/` |
 | Claude Desktop | `claude_desktop_config.json` | JSON `mcpServers` | n/a |
 | Codex CLI | `~/.codex/config.toml` | TOML `[mcp_servers.<name>]` | `.agents/skills/` |
 | OpenCode | `opencode.json(c)` | JSON `mcp.servers` (legacy flat `mcp` read only) | `.agents/skills/` |
-| Antigravity CLI | `~/.gemini/config/mcp_config.json` (global); `<repo>/.agents/mcp_config.json` (workspace) | JSON `mcpServers` (remote uses `serverUrl`, not `url`) | `.agents/skills/` (workspace); `~/.gemini/antigravity-cli/skills/` (global) |
+| Antigravity CLI | `~/.gemini/config/mcp_config.json` (global); `<workspace>/.agents/mcp_config.json` (workspace) | JSON `mcpServers` (remote uses `serverUrl`, not `url`) | `.agents/skills/` (workspace); `~/.gemini/antigravity-cli/skills/` (global) |
 | Gemini CLI | `.gemini/settings.json` | JSON `mcpServers` | verify |
 | Cursor | `.cursor/mcp.json` | JSON `mcpServers` | verify |
 | Kiro CLI | `.kiro/settings/mcp.json`; `.kiro/agents/*` | JSON `mcpServers` | verify (`skill://` resources) |
@@ -550,14 +627,14 @@ All paths **verify**; skill folders marked `.agents/skills/` are read natively b
 
 ### 11.4 Skills
 
-- **Storage:** Agent Skills layout under `~/.agents/skills/<name>/` and `<repo>/.agents/skills/<name>/`; this home is the single source of truth and is never moved — updates swap the skill directory atomically in place.
+- **Storage:** Agent Skills layout under `~/.agents/skills/<name>/` and `<workspace>/.agents/skills/<name>/`; this home is the single source of truth and is never moved — updates swap the skill directory atomically in place.
 - **Imports:**
   - `.skill` files are validated and extracted to staging.
   - GitHub imports download the archive of the resolved commit, pinned by SHA.
   - `skills` CLI lockfiles (`skills-lock.json`, `~/.agents/.skill-lock.json`) are read‑only provenance sources (unpinned); Tethys never writes them.
 - **Validation:** frontmatter, size limits, name collisions, script detection for trust prompts, and archive guards (no absolute or `..` paths, no links, entry/size caps).
 - **Projection:** relative symlinks on macOS/Linux (worktree‑safe); junctions or copies on Windows. Agents that read the canonical home natively (Codex, OpenCode, Antigravity CLI workspace) need no copy; Claude Code links `.claude/skills/`, and global Antigravity skills link `~/.gemini/antigravity-cli/skills/`.
-- **Per‑project enablement:** via an allow‑list, never by deleting files.
+- **Per‑workspace enablement:** via an allow‑list, never by deleting files.
 
 ### 11.5 Agent native-settings forms (SYN‑11)
 
@@ -592,7 +669,7 @@ pub struct ConnectionEntry {           // ConnectionStore row (per profile + hos
 }
 
 pub struct Thread {
-    id: ThreadId, project_id: ProjectId, title: String,
+    id: ThreadId, workspace_id: WorkspaceId, title: String,
     agent_profile_id: AgentProfileId, session_id: Option<String>,
     worktree: Option<WorktreeRef>, // None = main-checkout thread (flagged), non-git folder, or explicit-plain workspace (WT-11)
     state: ThreadState,
@@ -613,7 +690,7 @@ pub struct Turn {
 
 | Table | Contents |
 |---|---|
-| `projects`, `agent_profiles`, `threads`, `turns` | Core metadata |
+| `workspaces`, `agent_profiles`, `threads`, `turns` | Core metadata |
 | `events` | Append‑only `(thread_id, seq)` |
 | `entries` | Materialized latest state per message, tool call, plan, and terminal ID, so threads open without replaying everything |
 | `permission_rules` | Policy rules |
@@ -628,17 +705,19 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 | Namespace | Methods |
 |---|---|
 | `host` | `info`, `pair`, `health` |
-| `project` | `list`, `add`, `remove`, `settings.*`, `status` |
+| `workspace` | `list`, `add`, `remove`, `settings.*`, `status`, `capabilities` (§10.6) |
 | `agent` | `profiles.*`, `registry.list/install/update`, `connections.list/restart`, `login`, `logout`, `stderr`, `config.schema/get/validate/plan/apply/rollback` (SYN‑11; `plan/apply/rollback` reuse the §11.3 safety path) |
 | `thread` | `create`, `list`, `get`, `prompt`, `queue.*`, `cancel`, `resume`, `importSessions`, `fork`, `archive`, `delete`, `setConfigOption`, `setPermissionMode` |
 | `events` | `subscribe {threadId, sinceSeq}`, `unsubscribe`, `inbox.subscribe` |
 | `permission` | `respond`, `rules.*` |
-| `git` | `worktree.*`, `checkpoint.*`, `diff.summary`, `diff.file`, `stage`, `unstage`, `discard`, `commit`, `merge`, `push`, `pr.create` (all return `GIT_DISABLED` when the project sets explicit `isolation: plain`) |
+| `git` | `worktree.*`, `checkpoint.*`, `diff.summary`, `diff.file`, `stage`, `unstage`, `discard`, `commit`, `merge`, `push`, `pr.create` (all return `GIT_DISABLED` where the workspace has no git capability or sets `isolation: plain`, §10.6) |
 | `search` | `files` |
-| `mcp` | `registry.*`, `effective`, `projection.plan/apply/verify/rollback`, `import.*`, `health` |
+| `mcp` | `registry.*`, `effective`, `attachments`, `projection.plan/apply/verify/rollback`, `import.*`, `health` |
 | `skills` | `list`, `import`, `update.*`, `trust`, `enable` |
 | `commands` | `list`, `expand` |
 | `terminal` | `list`, `attach`, `write`, `resize` |
+
+**Addressing.** Every method above that touches the filesystem (`mcp.*`, `skills.*`, `search.files`, `commands.*`, `git.worktree.create`) takes a `workspace_id` or `thread_id` and never a path (principle 8). Core resolves the root, and an unknown id is `NotFound`.
 
 ---
 
@@ -692,6 +771,7 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 | AD‑12 | v1 client `fs` capability | Off by default, per‑profile opt‑in (proposed) · always on | MVP |
 | AD‑13 | SQLite access | **`rusqlite` + `tokio-rusqlite`** · `sqlx` | **Decided** (Spike S0.8) |
 | AD‑14 | Agent settings schema source | Community-contributed, following the native schema, version-pinned with warning/error on drift (**decided**) · Tethys-authored only · upstream-official | V1 |
+| AD‑15 | Where git/forge availability is decided | **One resolved capability set (`workspace.capabilities`, §10.6), read by every gate** · each surface checks VCS status itself | **Decided** in M1.6b — needed before the MVP review and catalog chunks; V1 adds the `isolation` and `forge_cli` inputs |
 
 ---
 

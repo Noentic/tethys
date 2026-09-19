@@ -725,6 +725,9 @@ export type WorkspaceGitConfig = {
 	setup_timeout_ms?: number,
 };
 
+/**  Stable workspace identifier. */
+export type WorkspaceId = string;
+
 /**  Result of materializing a worktree. */
 export type WorktreeInfo = {
 	thread_id: string,
@@ -741,8 +744,8 @@ export type WorktreeInfo = {
 /**  Everything the engine needs to materialize a thread worktree. */
 export type WorktreeSpec = {
 	thread_id: string,
-	/**  Repository root used for discovery (the main checkout). */
-	workspace_root: string,
+	/**  Workspace ID whose root is resolved in Core. */
+	workspace_id: WorkspaceId,
 	/**  URL-safe thread slug used for paths and default branch names. */
 	slug: string,
 	/**  Worktree path; empty means "derive from `worktrees_dir`". */

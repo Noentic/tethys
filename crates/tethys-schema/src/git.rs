@@ -40,8 +40,8 @@ impl Default for WorkspaceGitConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct WorktreeSpec {
     pub thread_id: String,
-    /// Repository root used for discovery (the main checkout).
-    pub workspace_root: String,
+    /// Workspace ID whose root is resolved in Core.
+    pub workspace_id: crate::sync::WorkspaceId,
     /// URL-safe thread slug used for paths and default branch names.
     pub slug: String,
     /// Worktree path; empty means "derive from `worktrees_dir`".

@@ -48,6 +48,7 @@ import type {
   UndoCapture,
   VerifyStatus,
   WorkspaceGitConfig,
+  WorkspaceId,
   WorktreeInfo,
   WorktreeSpec,
 } from "@tethys/bindings";
@@ -246,51 +247,45 @@ export function createClient(options: ClientOptions = {}) {
 
     // === search namespace ===
     search: {
-      files: (workspaceRoot: string, query: string, limit = 20) =>
-        call<SearchItem[]>("search_files", { workspaceRoot, query, limit }),
+      files: (workspaceId: string, query: string, limit = 20) =>
+        call<SearchItem[]>("search_files", { workspaceId, query, limit }),
     },
 
     // === mcp namespace ===
     mcp: {
-      registryList: (workspaceRoot?: string) =>
-        call<RegistryEntryView[]>("mcp_registry_list", { workspaceRoot }),
-      registry_list: (workspaceRoot?: string) =>
-        call<RegistryEntryView[]>("mcp_registry_list", { workspaceRoot }),
+      registryList: (workspaceId?: string) =>
+        call<RegistryEntryView[]>("mcp_registry_list", { workspaceId }),
+      registry_list: (workspaceId?: string) =>
+        call<RegistryEntryView[]>("mcp_registry_list", { workspaceId }),
       registrySet: (
         name: string,
         entry: RegistryEntry,
         scope: Scope,
-        workspaceRoot?: string,
-      ) =>
-        call<void>("mcp_registry_set", { name, entry, scope, workspaceRoot }),
+        workspaceId?: string,
+      ) => call<void>("mcp_registry_set", { name, entry, scope, workspaceId }),
       registry_set: (
         name: string,
         entry: RegistryEntry,
         scope: Scope,
-        workspaceRoot?: string,
-      ) =>
-        call<void>("mcp_registry_set", { name, entry, scope, workspaceRoot }),
-      registryDelete: (name: string, scope: Scope, workspaceRoot?: string) =>
-        call<boolean>("mcp_registry_delete", { name, scope, workspaceRoot }),
-      registry_delete: (name: string, scope: Scope, workspaceRoot?: string) =>
-        call<boolean>("mcp_registry_delete", { name, scope, workspaceRoot }),
-      effective: (target: TargetId, workspaceRoot?: string) =>
-        call<RegistryEntryView[]>("mcp_effective", { target, workspaceRoot }),
-      projectionPlan: (target: TargetId, scope: Scope, workspaceRoot: string) =>
+        workspaceId?: string,
+      ) => call<void>("mcp_registry_set", { name, entry, scope, workspaceId }),
+      registryDelete: (name: string, scope: Scope, workspaceId?: string) =>
+        call<boolean>("mcp_registry_delete", { name, scope, workspaceId }),
+      registry_delete: (name: string, scope: Scope, workspaceId?: string) =>
+        call<boolean>("mcp_registry_delete", { name, scope, workspaceId }),
+      effective: (target: TargetId, workspaceId?: string) =>
+        call<RegistryEntryView[]>("mcp_effective", { target, workspaceId }),
+      projectionPlan: (target: TargetId, scope: Scope, workspaceId: string) =>
         call<ProjectionPlan>("mcp_projection_plan", {
           target,
           scope,
-          workspaceRoot,
+          workspaceId,
         }),
-      projection_plan: (
-        target: TargetId,
-        scope: Scope,
-        workspaceRoot: string,
-      ) =>
+      projection_plan: (target: TargetId, scope: Scope, workspaceId: string) =>
         call<ProjectionPlan>("mcp_projection_plan", {
           target,
           scope,
-          workspaceRoot,
+          workspaceId,
         }),
       projectionApply: (plan: ProjectionPlan) =>
         call<Applied>("mcp_projection_apply", { plan }),
@@ -299,56 +294,52 @@ export function createClient(options: ClientOptions = {}) {
       projectionRollback: (
         target: TargetId,
         scope: Scope,
-        workspaceRoot: string,
+        workspaceId: string,
       ) =>
-        call<void>("mcp_projection_rollback", { target, scope, workspaceRoot }),
+        call<void>("mcp_projection_rollback", { target, scope, workspaceId }),
       projection_rollback: (
         target: TargetId,
         scope: Scope,
-        workspaceRoot: string,
+        workspaceId: string,
       ) =>
-        call<void>("mcp_projection_rollback", { target, scope, workspaceRoot }),
-      projectionVerify: (
-        target: TargetId,
-        scope: Scope,
-        workspaceRoot: string,
-      ) =>
+        call<void>("mcp_projection_rollback", { target, scope, workspaceId }),
+      projectionVerify: (target: TargetId, scope: Scope, workspaceId: string) =>
         call<VerifyStatus>("mcp_projection_verify", {
           target,
           scope,
-          workspaceRoot,
+          workspaceId,
         }),
       projection_verify: (
         target: TargetId,
         scope: Scope,
-        workspaceRoot: string,
+        workspaceId: string,
       ) =>
         call<VerifyStatus>("mcp_projection_verify", {
           target,
           scope,
-          workspaceRoot,
+          workspaceId,
         }),
-      importScan: (workspaceRoot: string) =>
-        call<ImportScan>("mcp_import_scan", { workspaceRoot }),
-      import_scan: (workspaceRoot: string) =>
-        call<ImportScan>("mcp_import_scan", { workspaceRoot }),
+      importScan: (workspaceId: string) =>
+        call<ImportScan>("mcp_import_scan", { workspaceId }),
+      import_scan: (workspaceId: string) =>
+        call<ImportScan>("mcp_import_scan", { workspaceId }),
       importApply: (
-        workspaceRoot: string,
+        workspaceId: string,
         candidates: ImportCandidate[],
         scope: Scope,
       ) =>
         call<string[]>("mcp_import_apply", {
-          workspaceRoot,
+          workspaceId,
           candidates,
           scope,
         }),
       import_apply: (
-        workspaceRoot: string,
+        workspaceId: string,
         candidates: ImportCandidate[],
         scope: Scope,
       ) =>
         call<string[]>("mcp_import_apply", {
-          workspaceRoot,
+          workspaceId,
           candidates,
           scope,
         }),
@@ -357,59 +348,56 @@ export function createClient(options: ClientOptions = {}) {
 
     // === skills namespace ===
     skills: {
-      list: (workspaceRoot: string) =>
-        call<SkillInfo[]>("skills_list", { workspaceRoot }),
-      import: (
-        workspaceRoot: string,
-        scope: Scope,
-        source: SkillImportSource,
-      ) => call<SkillInfo>("skills_import", { workspaceRoot, scope, source }),
-      updateCheck: (workspaceRoot: string, scope: Scope, name: string) =>
+      list: (workspaceId: string) =>
+        call<SkillInfo[]>("skills_list", { workspaceId }),
+      import: (workspaceId: string, scope: Scope, source: SkillImportSource) =>
+        call<SkillInfo>("skills_import", { workspaceId, scope, source }),
+      updateCheck: (workspaceId: string, scope: Scope, name: string) =>
         call<SkillUpdateCheck>("skills_update_check", {
-          workspaceRoot,
+          workspaceId,
           scope,
           name,
         }),
-      update_check: (workspaceRoot: string, scope: Scope, name: string) =>
+      update_check: (workspaceId: string, scope: Scope, name: string) =>
         call<SkillUpdateCheck>("skills_update_check", {
-          workspaceRoot,
+          workspaceId,
           scope,
           name,
         }),
-      updatePlan: (workspaceRoot: string, scope: Scope, name: string) =>
+      updatePlan: (workspaceId: string, scope: Scope, name: string) =>
         call<SkillUpdatePlan>("skills_update_plan", {
-          workspaceRoot,
+          workspaceId,
           scope,
           name,
         }),
-      update_plan: (workspaceRoot: string, scope: Scope, name: string) =>
+      update_plan: (workspaceId: string, scope: Scope, name: string) =>
         call<SkillUpdatePlan>("skills_update_plan", {
-          workspaceRoot,
+          workspaceId,
           scope,
           name,
         }),
-      updateApply: (workspaceRoot: string, scope: Scope, name: string) =>
+      updateApply: (workspaceId: string, scope: Scope, name: string) =>
         call<SkillUpdateApplied>("skills_update_apply", {
-          workspaceRoot,
+          workspaceId,
           scope,
           name,
         }),
-      update_apply: (workspaceRoot: string, scope: Scope, name: string) =>
+      update_apply: (workspaceId: string, scope: Scope, name: string) =>
         call<SkillUpdateApplied>("skills_update_apply", {
-          workspaceRoot,
+          workspaceId,
           scope,
           name,
         }),
-      trust: (workspaceRoot: string, scope: Scope, name: string) =>
-        call<SkillInfo>("skills_trust", { workspaceRoot, scope, name }),
+      trust: (workspaceId: string, scope: Scope, name: string) =>
+        call<SkillInfo>("skills_trust", { workspaceId, scope, name }),
       enable: (
-        workspaceRoot: string,
+        workspaceId: string,
         scope: Scope,
         name: string,
         enabled: boolean,
       ) =>
         call<SkillInfo>("skills_enable", {
-          workspaceRoot,
+          workspaceId,
           scope,
           name,
           enabled,
@@ -418,13 +406,13 @@ export function createClient(options: ClientOptions = {}) {
 
     // === commands namespace ===
     commands: {
-      list: (workspaceRoot?: string) =>
-        call<CommandInfo[]>("commands_list", { workspaceRoot }),
-      expand: (command: string, argsText = "", workspaceRoot?: string) =>
+      list: (workspaceId?: string) =>
+        call<CommandInfo[]>("commands_list", { workspaceId }),
+      expand: (command: string, argsText = "", workspaceId?: string) =>
         call<ExpandedCommand>("commands_expand", {
           command,
           argsText,
-          workspaceRoot,
+          workspaceId,
         }),
     },
 
@@ -442,8 +430,8 @@ export function createClient(options: ClientOptions = {}) {
     /** `host.health` — see `tethys-api::TethysApi`. */
     health: () => call<HealthStatus>("health"),
     /** `search.files` — see `tethys-api::TethysApi`. */
-    searchFiles: (workspaceRoot: string, query: string, limit = 20) =>
-      call<SearchItem[]>("search_files", { workspaceRoot, query, limit }),
+    searchFiles: (workspaceId: string, query: string, limit = 20) =>
+      call<SearchItem[]>("search_files", { workspaceId, query, limit }),
     /** `git.diff.synthetic` — S0.1 diff benchmark generator */
     getSyntheticDiff: (lineCount = 20000) =>
       call<DiffHunk[]>("generate_synthetic_diff", { lineCount }),
@@ -494,6 +482,7 @@ export type {
   StreamChunk,
   UndoCapture,
   WorkspaceGitConfig,
+  WorkspaceId,
   WorktreeInfo,
   WorktreeSpec,
 };

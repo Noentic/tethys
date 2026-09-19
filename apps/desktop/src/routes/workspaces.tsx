@@ -36,6 +36,9 @@ export interface WorkspaceSession {
   status: "running" | "waiting_approval" | "idle" | "error";
 }
 
+// workspace-source-badge values (DESIGN.md). The GitHub/GitLab entries name the host of
+// an existing folder's git remote, as read-only status. They are never an entry point for
+// adding a workspace. See pages-views-spec.md §0.1.
 export type WorkspaceSourceKind =
   | "Git · GitHub"
   | "Git · GitLab"
@@ -53,7 +56,7 @@ export interface WorkspaceItem {
   statusSummary: string;
   sessions: WorkspaceSession[];
   starred?: boolean;
-  permissionMode?: "Supervised" | "Auto" | "YOLO";
+  permissionMode?: "Supervised" | "Auto-edit" | "YOLO";
 }
 
 const DEFAULT_WORKSPACES: WorkspaceItem[] = [

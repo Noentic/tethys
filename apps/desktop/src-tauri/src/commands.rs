@@ -13,7 +13,7 @@ use tethys_schema::connection::ConnectionEntry;
 use tethys_schema::sync::{
     Applied, ImportCandidate, ImportScan, ProjectionPlan, RegistryEntry, RegistryEntryView, Scope,
     SkillImportSource, SkillInfo, SkillUpdateApplied, SkillUpdateCheck, SkillUpdatePlan, TargetId,
-    VerifyStatus,
+    VerifyStatus, WorkspaceId,
 };
 use tethys_schema::thread::{
     ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView,
@@ -415,27 +415,27 @@ stub_cmd!(git_pr_create);
 #[specta::specta]
 pub async fn search_files(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
     query: String,
     limit: usize,
 ) -> Result<Vec<SearchItem>, String> {
     state
-        .search_files(workspace_root, query, limit)
+        .search_files(workspace_id, query, limit)
         .await
         .map_err(|e| e.to_string())
 }
 
 // === mcp ===
 
-/// `mcp.registry.list` — registry entries from global and project scopes.
+/// `mcp.registry.list` — registry entries from global and workspace scopes.
 #[tauri::command]
 #[specta::specta]
 pub async fn mcp_registry_list(
     state: State<'_, CoreState>,
-    workspace_root: Option<String>,
+    workspace_id: Option<WorkspaceId>,
 ) -> Result<Vec<RegistryEntryView>, String> {
     state
-        .mcp_registry_list(workspace_root)
+        .mcp_registry_list(workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -448,10 +448,10 @@ pub async fn mcp_registry_set(
     name: String,
     entry: RegistryEntry,
     scope: Scope,
-    workspace_root: Option<String>,
+    workspace_id: Option<WorkspaceId>,
 ) -> Result<(), String> {
     state
-        .mcp_registry_set(name, entry, scope, workspace_root)
+        .mcp_registry_set(name, entry, scope, workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -463,10 +463,10 @@ pub async fn mcp_registry_delete(
     state: State<'_, CoreState>,
     name: String,
     scope: Scope,
-    workspace_root: Option<String>,
+    workspace_id: Option<WorkspaceId>,
 ) -> Result<bool, String> {
     state
-        .mcp_registry_delete(name, scope, workspace_root)
+        .mcp_registry_delete(name, scope, workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -477,10 +477,10 @@ pub async fn mcp_registry_delete(
 pub async fn mcp_effective(
     state: State<'_, CoreState>,
     target: TargetId,
-    workspace_root: Option<String>,
+    workspace_id: Option<WorkspaceId>,
 ) -> Result<Vec<RegistryEntryView>, String> {
     state
-        .mcp_effective(target, workspace_root)
+        .mcp_effective(target, workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -492,10 +492,10 @@ pub async fn mcp_projection_plan(
     state: State<'_, CoreState>,
     target: TargetId,
     scope: Scope,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
 ) -> Result<ProjectionPlan, String> {
     state
-        .mcp_projection_plan(target, scope, workspace_root)
+        .mcp_projection_plan(target, scope, workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -520,10 +520,10 @@ pub async fn mcp_projection_rollback(
     state: State<'_, CoreState>,
     target: TargetId,
     scope: Scope,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
 ) -> Result<(), String> {
     state
-        .mcp_projection_rollback(target, scope, workspace_root)
+        .mcp_projection_rollback(target, scope, workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -535,10 +535,10 @@ pub async fn mcp_projection_verify(
     state: State<'_, CoreState>,
     target: TargetId,
     scope: Scope,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
 ) -> Result<VerifyStatus, String> {
     state
-        .mcp_projection_verify(target, scope, workspace_root)
+        .mcp_projection_verify(target, scope, workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -548,10 +548,10 @@ pub async fn mcp_projection_verify(
 #[specta::specta]
 pub async fn mcp_import_scan(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
 ) -> Result<ImportScan, String> {
     state
-        .mcp_import_scan(workspace_root)
+        .mcp_import_scan(workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -561,12 +561,12 @@ pub async fn mcp_import_scan(
 #[specta::specta]
 pub async fn mcp_import_apply(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
     candidates: Vec<ImportCandidate>,
     scope: Scope,
 ) -> Result<Vec<String>, String> {
     state
-        .mcp_import_apply(workspace_root, candidates, scope)
+        .mcp_import_apply(workspace_id, candidates, scope)
         .await
         .map_err(|e| e.to_string())
 }
@@ -581,10 +581,10 @@ stub_cmd!(mcp_health);
 #[specta::specta]
 pub async fn skills_list(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
 ) -> Result<Vec<SkillInfo>, String> {
     state
-        .skills_list(workspace_root)
+        .skills_list(workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -594,12 +594,12 @@ pub async fn skills_list(
 #[specta::specta]
 pub async fn skills_import(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
     scope: Scope,
     source: SkillImportSource,
 ) -> Result<SkillInfo, String> {
     state
-        .skills_import(workspace_root, scope, source)
+        .skills_import(workspace_id, scope, source)
         .await
         .map_err(|e| e.to_string())
 }
@@ -609,12 +609,12 @@ pub async fn skills_import(
 #[specta::specta]
 pub async fn skills_update_check(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
     scope: Scope,
     name: String,
 ) -> Result<SkillUpdateCheck, String> {
     state
-        .skills_update_check(workspace_root, scope, name)
+        .skills_update_check(workspace_id, scope, name)
         .await
         .map_err(|e| e.to_string())
 }
@@ -624,12 +624,12 @@ pub async fn skills_update_check(
 #[specta::specta]
 pub async fn skills_update_plan(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
     scope: Scope,
     name: String,
 ) -> Result<SkillUpdatePlan, String> {
     state
-        .skills_update_plan(workspace_root, scope, name)
+        .skills_update_plan(workspace_id, scope, name)
         .await
         .map_err(|e| e.to_string())
 }
@@ -639,12 +639,12 @@ pub async fn skills_update_plan(
 #[specta::specta]
 pub async fn skills_update_apply(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
     scope: Scope,
     name: String,
 ) -> Result<SkillUpdateApplied, String> {
     state
-        .skills_update_apply(workspace_root, scope, name)
+        .skills_update_apply(workspace_id, scope, name)
         .await
         .map_err(|e| e.to_string())
 }
@@ -654,12 +654,12 @@ pub async fn skills_update_apply(
 #[specta::specta]
 pub async fn skills_trust(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
     scope: Scope,
     name: String,
 ) -> Result<SkillInfo, String> {
     state
-        .skills_trust(workspace_root, scope, name)
+        .skills_trust(workspace_id, scope, name)
         .await
         .map_err(|e| e.to_string())
 }
@@ -669,13 +669,13 @@ pub async fn skills_trust(
 #[specta::specta]
 pub async fn skills_enable(
     state: State<'_, CoreState>,
-    workspace_root: String,
+    workspace_id: WorkspaceId,
     scope: Scope,
     name: String,
     enabled: bool,
 ) -> Result<SkillInfo, String> {
     state
-        .skills_enable(workspace_root, scope, name, enabled)
+        .skills_enable(workspace_id, scope, name, enabled)
         .await
         .map_err(|e| e.to_string())
 }
@@ -687,10 +687,10 @@ pub async fn skills_enable(
 #[specta::specta]
 pub async fn commands_list(
     state: State<'_, CoreState>,
-    workspace_root: Option<String>,
+    workspace_id: Option<WorkspaceId>,
 ) -> Result<Vec<CommandInfo>, String> {
     state
-        .commands_list(workspace_root)
+        .commands_list(workspace_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -702,10 +702,10 @@ pub async fn commands_expand(
     state: State<'_, CoreState>,
     command: String,
     args_text: String,
-    workspace_root: Option<String>,
+    workspace_id: Option<WorkspaceId>,
 ) -> Result<ExpandedCommand, String> {
     state
-        .commands_expand(command, args_text, workspace_root)
+        .commands_expand(command, args_text, workspace_id)
         .await
         .map_err(|e| e.to_string())
 }

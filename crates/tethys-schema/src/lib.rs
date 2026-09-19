@@ -22,6 +22,7 @@ pub mod sync;
 pub mod thread;
 
 pub use search::SearchItem;
+pub use sync::WorkspaceId;
 
 /// Basic host metadata for the S0.0 shell (`host.info`).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -169,4 +170,5 @@ pub fn registered_types() -> Types {
         .register::<sync::SkillUpdateApplied>()
         .register::<sync::RegistryEntryView>()
         .register::<sync::SkillImportSource>()
+        .register::<sync::WorkspaceId>()
 }

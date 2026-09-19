@@ -9,7 +9,7 @@ use tethys_core::thread_session::{DenyPermissionResolver, SyncSource, ThreadSess
 use tethys_core::Core;
 use tethys_schema::connection::AcpProtocol;
 use tethys_schema::sync::{
-    RegistryEntry, RegistryValue, Scope, TargetId, TransportKind, VerifyStatus,
+    RegistryEntry, RegistryValue, Scope, TargetId, TransportKind, VerifyStatus, WorkspaceId,
 };
 use tethys_store::EventStore;
 use tethys_sync::MemorySecrets;
@@ -22,6 +22,22 @@ async fn core(home: &Path) -> Core {
         SyncSource::new(home, Arc::new(MemorySecrets::new())),
     ));
     Core::with_sessions("test", sessions).with_store(Arc::new(store))
+}
+
+async fn core_with_workspace(home: &Path, root: &Path) -> (Core, WorkspaceId) {
+    let store = EventStore::in_memory().await.expect("store");
+    let ws_id = "ws-repo";
+    store
+        .ensure_workspace(ws_id, &root.display().to_string(), "plain")
+        .await
+        .expect("ensure");
+    let options = StoreOptions::new(AcpProtocol::V1, Arc::new(DenyPermissionResolver));
+    let sessions = Arc::new(ThreadSessions::new(
+        ConnectionStore::new(options),
+        SyncSource::new(home, Arc::new(MemorySecrets::new())),
+    ));
+    let core = Core::with_sessions("test", sessions).with_store(Arc::new(store));
+    (core, WorkspaceId::new(ws_id))
 }
 
 fn stdio_entry() -> RegistryEntry {
@@ -74,13 +90,13 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     let root = dir.path().join("repo");
     fs::create_dir_all(&home).expect("home");
     fs::create_dir_all(&root).expect("root");
-    let core = core(&home).await;
+    let (core, ws_id) = core_with_workspace(&home, &root).await;
 
     core.mcp_registry_set(
         "github".into(),
         stdio_entry(),
         Scope::Workspace,
-        Some(root.display().to_string()),
+        Some(ws_id.clone()),
     )
     .await
     .expect("set");
@@ -89,7 +105,7 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
         .mcp_projection_plan(
             TargetId::OpenCode,
             Scope::Workspace,
-            root.display().to_string(),
+            ws_id.clone(),
         )
         .await
         .expect("plan");
@@ -105,14 +121,14 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
         .mcp_projection_verify(
             TargetId::OpenCode,
             Scope::Workspace,
-            root.display().to_string(),
+            ws_id.clone(),
         )
         .await
         .expect("verify");
     assert_eq!(verified, VerifyStatus::InSync);
 
     let scan = core
-        .mcp_import_scan(root.display().to_string())
+        .mcp_import_scan(ws_id.clone())
         .await
         .expect("scan");
     assert!(scan
@@ -126,7 +142,7 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
         .mcp_projection_verify(
             TargetId::OpenCode,
             Scope::Workspace,
-            root.display().to_string(),
+            ws_id.clone(),
         )
         .await
         .expect("verify drifted");
@@ -136,7 +152,7 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     core.mcp_projection_rollback(
         TargetId::OpenCode,
         Scope::Workspace,
-        root.display().to_string(),
+        ws_id.clone(),
     )
     .await
     .expect("rollback");
@@ -157,9 +173,9 @@ async fn skills_list_trust_and_enable_through_the_api() {
     .expect("SKILL.md");
     fs::write(skill.join("scripts/run.sh"), "echo hi").expect("script");
 
-    let core = core(&home).await;
+    let (core, ws_id) = core_with_workspace(&home, &root).await;
     let listed = core
-        .skills_list(root.display().to_string())
+        .skills_list(ws_id.clone())
         .await
         .expect("list");
     assert_eq!(listed.len(), 1);
@@ -167,14 +183,14 @@ async fn skills_list_trust_and_enable_through_the_api() {
     assert!(!listed[0].trusted);
 
     let trusted = core
-        .skills_trust(root.display().to_string(), Scope::Workspace, "pdf".into())
+        .skills_trust(ws_id.clone(), Scope::Workspace, "pdf".into())
         .await
         .expect("trust");
     assert!(trusted.trusted);
 
     let disabled = core
         .skills_enable(
-            root.display().to_string(),
+            ws_id.clone(),
             Scope::Workspace,
             "pdf".into(),
             false,
@@ -193,10 +209,10 @@ async fn skills_import_folder_through_the_api() {
     fs::create_dir_all(&source).expect("source");
     fs::write(source.join("SKILL.md"), "---\nname: pdf\n---\n").expect("SKILL.md");
 
-    let core = core(&home).await;
+    let (core, ws_id) = core_with_workspace(&home, &root).await;
     let imported = core
         .skills_import(
-            root.display().to_string(),
+            ws_id.clone(),
             Scope::Global,
             tethys_schema::sync::SkillImportSource::Folder {
                 path: source.display().to_string(),

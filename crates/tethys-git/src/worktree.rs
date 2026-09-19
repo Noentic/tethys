@@ -57,7 +57,7 @@ pub fn create(
         return Err(GitError::InvalidArgument("branch is required".to_string()));
     }
     let path = if spec.path.trim().is_empty() {
-        default_worktree_path(Path::new(&spec.workspace_root), &spec.slug)?
+        default_worktree_path(&repo.worktree_root, &spec.slug)?
     } else {
         spec.path.clone()
     };

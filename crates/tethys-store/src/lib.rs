@@ -23,6 +23,7 @@ use pool::ConnectionPool;
 
 pub use blobs::BlobStore;
 pub use error::StoreError;
+pub use schema::WorkspaceRow;
 pub use sync_state::{ProjectionRow, SkillRow};
 pub use tethys_schema::store::{
     BlobHash, Entry, EntryKind, EntryPage, EntryUpsert, NewEvent, SeqRange, StoredEvent, ThreadId,
@@ -65,6 +66,17 @@ impl EventStore {
     /// Access the associated blob store.
     pub fn blobs(&self) -> &BlobStore {
         &self.blobs
+    }
+
+    /// Retrieves a workspace record by id.
+    pub async fn workspace(&self, id: &str) -> Result<Option<WorkspaceRow>, StoreError> {
+        let id = id.to_string();
+        let row = self
+            .pool
+            .reader()
+            .call(move |conn| schema::get_workspace(conn, &id))
+            .await?;
+        Ok(row)
     }
 
     /// Ensures a workspace record exists.

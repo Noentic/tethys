@@ -32,7 +32,7 @@ impl Fixture {
     fn spec(&self, thread: &str) -> WorktreeSpec {
         WorktreeSpec {
             thread_id: thread.to_string(),
-            workspace_root: self.root.to_string_lossy().into_owned(),
+            workspace_id: self.root.to_string_lossy().into_owned().into(),
             slug: thread.to_string(),
             path: self
                 .worktrees
@@ -46,6 +46,12 @@ impl Fixture {
             setup_script: None,
             main_checkout: false,
         }
+    }
+
+    fn core(&self) -> Core {
+        let roots = tethys_core::StaticWorkspaces::new();
+        roots.insert(self.root.to_string_lossy().into_owned(), &self.root);
+        Core::new("test").with_workspace_roots(std::sync::Arc::new(roots))
     }
 }
 
@@ -65,7 +71,7 @@ fn git(cwd: &std::path::Path, args: &[&str]) {
 #[tokio::test]
 async fn worktree_flow_covers_registry_checkpoints_and_diffs() {
     let fixture = Fixture::init();
-    let core = Core::new("test");
+    let core = fixture.core();
     let info = core
         .git_worktree_create(fixture.spec("t1"))
         .await
@@ -152,7 +158,7 @@ async fn worktree_flow_covers_registry_checkpoints_and_diffs() {
 #[tokio::test]
 async fn in_progress_turn_falls_back_to_live_worktree_diff() {
     let fixture = Fixture::init();
-    let core = Core::new("test");
+    let core = fixture.core();
     let info = core
         .git_worktree_create(fixture.spec("t2"))
         .await
@@ -181,7 +187,7 @@ async fn in_progress_turn_falls_back_to_live_worktree_diff() {
 async fn default_bootstrap_globs_copy_ignored_env_files() {
     let fixture = Fixture::init();
     std::fs::write(fixture.root.join(".env.local"), "SECRET=1\n").expect("env file");
-    let core = Core::new("test");
+    let core = fixture.core();
     let info = core
         .git_worktree_create(fixture.spec("t3"))
         .await
@@ -208,7 +214,7 @@ async fn configured_worktrees_dir_is_honored() {
     let mut spec = fixture.spec("t5");
     spec.path = String::new();
 
-    let core = Core::new("test");
+    let core = fixture.core();
     let info = core
         .git_worktree_create(spec)
         .await
@@ -226,7 +232,7 @@ async fn malformed_project_config_returns_typed_error() {
     let fixture = Fixture::init();
     std::fs::create_dir_all(fixture.root.join(".tethys")).expect("config dir");
     std::fs::write(fixture.root.join(".tethys/config.json"), "{ not json").expect("config");
-    let core = Core::new("test");
+    let core = fixture.core();
     let error = core
         .git_worktree_create(fixture.spec("t4"))
         .await

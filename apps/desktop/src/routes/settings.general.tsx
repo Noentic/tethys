@@ -13,7 +13,7 @@ interface TrustedFolder {
   id: string;
   path: string;
   sourceKind: string;
-  permissionMode: "Supervised" | "Auto-approve reads" | "YOLO";
+  permissionMode: "Supervised" | "Auto-edit" | "YOLO";
   dateTrusted: string;
 }
 

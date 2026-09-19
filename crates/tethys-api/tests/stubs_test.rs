@@ -24,7 +24,7 @@ impl TethysApi for MinimalApi {
 
     async fn search_files(
         &self,
-        _workspace_root: String,
+        _workspace_id: tethys_schema::sync::WorkspaceId,
         _query: String,
         _limit: usize,
     ) -> Result<Vec<SearchItem>, ApiError> {
@@ -69,7 +69,7 @@ async fn test_stub_defaults_return_unimplemented() {
 
     let spec = tethys_schema::WorktreeSpec {
         thread_id: "t".to_string(),
-        workspace_root: "/tmp".to_string(),
+        workspace_id: "w".into(),
         slug: "t".to_string(),
         path: String::new(),
         branch: String::new(),
@@ -88,7 +88,7 @@ async fn test_stub_defaults_return_unimplemented() {
         other => panic!("expected Unimplemented, got {other:?}"),
     }
 
-    match api.skills_list("/tmp".into()).await {
+    match api.skills_list("w1".into()).await {
         Err(ApiError::Unimplemented(m)) => assert_eq!(m, "skills.list"),
         other => panic!("expected Unimplemented, got {other:?}"),
     }

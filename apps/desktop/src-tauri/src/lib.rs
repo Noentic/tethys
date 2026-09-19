@@ -7,13 +7,16 @@
 mod commands;
 
 use std::sync::Arc;
-use tethys_core::Core;
+use tethys_core::{Core, CorePaths};
 
 use commands::*;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let core: CoreState = Arc::new(Core::new(env!("CARGO_PKG_VERSION")));
+    let core: CoreState = Arc::new(
+        tauri::async_runtime::block_on(Core::open(CorePaths::from_home_or_default()))
+            .expect("open core"),
+    );
 
     tauri::Builder::default()
         .manage(core)

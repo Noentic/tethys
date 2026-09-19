@@ -6,8 +6,10 @@ pub mod mcp;
 pub mod skills;
 pub mod synthetic;
 pub mod thread_session;
+pub mod workspace_roots;
 
 pub use git_registry::ThreadRuntimeState;
+pub use workspace_roots::{StaticWorkspaces, StoreWorkspaceRoots, WorkspaceRoots};
 
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
@@ -18,6 +20,7 @@ use tethys_api::{ApiError, TethysApi};
 use tethys_git::{default_worktree_path, GitError, GitOptions};
 use tethys_schema::composer::{CommandInfo, ExpandedCommand};
 use tethys_schema::connection::{AcpProtocol, ConnectionEntry};
+use tethys_schema::sync::WorkspaceId;
 use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView};
 use tethys_schema::{
     CheckpointInfo, CheckpointPhase, CheckpointResult, CommitResult, DiffFileDetail, DiffHunk,
@@ -30,12 +33,63 @@ use crate::composer::{expand_command, global_commands_dir, list_commands, SkillC
 use crate::thread_session::{DenyPermissionResolver, ThreadSessions};
 use git_registry::{load_git_config, GitRegistry, ProcessSetupRunner, RegisteredWorktree};
 
+/// Resolved paths used to bootstrap Core and open persistent state.
+#[derive(Debug, Clone)]
+pub struct CorePaths {
+    pub home: PathBuf,
+}
+
+impl CorePaths {
+    pub fn new(home: impl Into<PathBuf>) -> Self {
+        Self { home: home.into() }
+    }
+
+    pub fn from_home_or_default() -> Self {
+        Self {
+            home: dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")),
+        }
+    }
+
+    pub fn tethys_dir(&self) -> PathBuf {
+        self.home.join(".tethys")
+    }
+
+    pub fn db_path(&self) -> PathBuf {
+        self.tethys_dir().join("state.db")
+    }
+}
+
+impl From<PathBuf> for CorePaths {
+    fn from(home: PathBuf) -> Self {
+        Self { home }
+    }
+}
+
+impl From<&Path> for CorePaths {
+    fn from(home: &Path) -> Self {
+        Self { home: home.to_path_buf() }
+    }
+}
+
+impl From<&PathBuf> for CorePaths {
+    fn from(home: &PathBuf) -> Self {
+        Self { home: home.clone() }
+    }
+}
+
+impl From<&str> for CorePaths {
+    fn from(home: &str) -> Self {
+        Self { home: PathBuf::from(home) }
+    }
+}
+
 pub struct Core {
     version: String,
     search: SearchIndexManager,
     git: Mutex<GitRegistry>,
     sessions: Arc<ThreadSessions>,
     store: Option<Arc<tethys_store::EventStore>>,
+    workspace_roots: Arc<dyn WorkspaceRoots>,
 }
 
 impl Default for Core {
@@ -63,16 +117,58 @@ impl Core {
             git: Mutex::new(GitRegistry::default()),
             sessions,
             store: None,
+            workspace_roots: Arc::new(workspace_roots::StaticWorkspaces::new()),
         }
+    }
+
+    /// Bootstraps Core at the configured paths, opening SQLite store and wiring sync state.
+    pub async fn open(paths: impl Into<CorePaths>) -> Result<Self, ApiError> {
+        let paths = paths.into();
+        let home = paths.home.clone();
+        let db_path = paths.db_path();
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        let store = Arc::new(
+            tethys_store::EventStore::open(&db_path)
+                .await
+                .map_err(|e| ApiError::Internal(e.to_string()))?,
+        );
+        let sync = crate::thread_session::SyncSource::new(home, Arc::new(tethys_sync::KeyringSecrets));
+        let agent_store = ConnectionStore::new(StoreOptions::new(
+            AcpProtocol::V1,
+            Arc::new(DenyPermissionResolver),
+        ));
+        let sessions = Arc::new(ThreadSessions::new(agent_store, sync));
+        let workspace_roots = Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone()));
+        let core = Self {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            search: SearchIndexManager::new(),
+            git: Mutex::new(GitRegistry::default()),
+            sessions,
+            store: Some(store),
+            workspace_roots,
+        };
+        Ok(core)
     }
 
     /// Attaches the sync-state store (projection ownership and skill rows).
     pub fn with_store(mut self, store: Arc<tethys_store::EventStore>) -> Self {
+        self.workspace_roots = Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone()));
         self.store = Some(store);
         self
     }
 
-    pub(crate) fn sync_store(&self) -> Result<&Arc<tethys_store::EventStore>, ApiError> {
+    pub fn with_workspace_roots(mut self, roots: Arc<dyn WorkspaceRoots>) -> Self {
+        self.workspace_roots = roots;
+        self
+    }
+
+    pub fn workspace_roots(&self) -> &Arc<dyn WorkspaceRoots> {
+        &self.workspace_roots
+    }
+
+    pub fn sync_store(&self) -> Result<&Arc<tethys_store::EventStore>, ApiError> {
         self.store
             .as_ref()
             .ok_or_else(|| ApiError::Internal("sync store not configured".into()))
@@ -162,35 +258,43 @@ impl TethysApi for Core {
 
     async fn search_files(
         &self,
-        workspace_root: String,
+        workspace_id: WorkspaceId,
         query: String,
         limit: usize,
     ) -> Result<Vec<SearchItem>, ApiError> {
+        let root = self.workspace_roots.root(&workspace_id).await?;
         self.search
-            .query(Path::new(&workspace_root), &query, limit)
+            .query(&root, &query, limit)
             .map_err(map_search_error)
     }
 
     async fn commands_list(
         &self,
-        workspace_root: Option<String>,
+        workspace_id: Option<WorkspaceId>,
     ) -> Result<Vec<CommandInfo>, ApiError> {
         let home = self.sync_home();
         let global = global_commands_dir(&home);
-        list_commands(&global, workspace_root.as_deref().map(Path::new))
+        let root = match workspace_id {
+            Some(ref id) => Some(self.workspace_roots.root(id).await?),
+            None => None,
+        };
+        list_commands(&global, root.as_deref())
     }
 
     async fn commands_expand(
         &self,
         command: String,
         args_text: String,
-        workspace_root: Option<String>,
+        workspace_id: Option<WorkspaceId>,
     ) -> Result<ExpandedCommand, ApiError> {
         let home = self.sync_home();
         let global = global_commands_dir(&home);
-        let root = workspace_root.as_deref().map(Path::new);
-        let skills = self.skill_candidates(root).await?;
-        expand_command(&global, root, &skills, &command, &args_text)
+        let root = match workspace_id {
+            Some(ref id) => Some(self.workspace_roots.root(id).await?),
+            None => None,
+        };
+        let skills = self.skill_candidates(root.as_deref()).await?;
+        expand_command(&global, root.as_deref(), &skills, &command, &args_text)
     }
 
     async fn thread_create(&self, request: CreateThread) -> Result<ThreadSummary, ApiError> {
@@ -246,14 +350,16 @@ impl TethysApi for Core {
     }
 
     async fn git_worktree_create(&self, mut spec: WorktreeSpec) -> Result<WorktreeInfo, ApiError> {
-        let config = load_git_config(&spec.workspace_root)?;
+        let root = self.workspace_roots.root(&spec.workspace_id).await?;
+        let root_str = root.display().to_string();
+        let config = load_git_config(&root_str)?;
         let options = GitOptions {
             skip_untracked_binary_bytes: u64::from(config.skip_untracked_binary_bytes),
         };
         let engine = self
             .git
             .lock()
-            .engine(&spec.workspace_root, options)
+            .engine(&root_str, options)
             .map_err(map_git_error)?;
 
         if spec.path.trim().is_empty() {
@@ -262,8 +368,7 @@ impl TethysApi for Core {
                     .join(&spec.slug)
                     .to_string_lossy()
                     .into_owned(),
-                _ => default_worktree_path(Path::new(&spec.workspace_root), &spec.slug)
-                    .map_err(map_git_error)?,
+                _ => default_worktree_path(&root, &spec.slug).map_err(map_git_error)?,
             };
         }
         if spec.branch.trim().is_empty() {

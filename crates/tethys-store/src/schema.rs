@@ -22,6 +22,31 @@ pub fn configure_pragmas(
     Ok(())
 }
 
+/// A stored workspace record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceRow {
+    pub id: String,
+    pub root_path: String,
+    pub isolation: String,
+}
+
+/// Retrieves a workspace by id if present.
+pub fn get_workspace(conn: &Connection, workspace_id: &str) -> Result<Option<WorkspaceRow>, StoreError> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT id, root_path, isolation FROM workspaces WHERE id = ?1",
+    )?;
+    let mut rows = stmt.query(params![workspace_id])?;
+    if let Some(row) = rows.next()? {
+        Ok(Some(WorkspaceRow {
+            id: row.get(0)?,
+            root_path: row.get(1)?,
+            isolation: row.get(2)?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 /// Ensures workspace exists (creates minimal workspace record if absent).
 pub fn ensure_workspace(
     conn: &Connection,

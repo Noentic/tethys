@@ -12,6 +12,7 @@ use tethys_schema::connection::ConnectionEntry;
 use tethys_schema::thread::{
     ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView,
 };
+use tethys_schema::sync::WorkspaceId;
 use tethys_schema::{
     CheckpointInfo, CheckpointPhase, CheckpointResult, CommitResult, DiffFileDetail, DiffHunk,
     DiffSource, DiffSummary, HealthStatus, HostInfo, HunkRef, RestoreOutcome, RestorePolicy,
@@ -483,7 +484,7 @@ pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
     // === search ===
     fn search_files(
         &self,
-        workspace_root: String,
+        workspace_id: WorkspaceId,
         query: String,
         limit: usize,
     ) -> impl std::future::Future<Output = Result<Vec<SearchItem>, ApiError>> + Send;
@@ -491,7 +492,7 @@ pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
     // === commands ===
     fn commands_list(
         &self,
-        _workspace_root: Option<String>,
+        _workspace_id: Option<WorkspaceId>,
     ) -> impl std::future::Future<Output = Result<Vec<CommandInfo>, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("commands.list")) }
     }
@@ -499,7 +500,7 @@ pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
         &self,
         _command: String,
         _args_text: String,
-        _workspace_root: Option<String>,
+        _workspace_id: Option<WorkspaceId>,
     ) -> impl std::future::Future<Output = Result<ExpandedCommand, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("commands.expand")) }
     }

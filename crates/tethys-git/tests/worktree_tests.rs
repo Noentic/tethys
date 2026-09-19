@@ -7,7 +7,7 @@ use tethys_schema::WorktreeSpec;
 fn spec(repo: &TestRepo, path: &str, slug: &str, branch: &str) -> WorktreeSpec {
     WorktreeSpec {
         thread_id: format!("thread-{slug}"),
-        workspace_root: repo.root.to_string_lossy().into_owned(),
+        workspace_id: repo.root.to_string_lossy().into_owned().into(),
         slug: slug.to_string(),
         path: path.to_string(),
         branch: branch.to_string(),
