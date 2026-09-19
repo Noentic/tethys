@@ -12,7 +12,7 @@
     "test": "turbo run test",
     "codegen": "turbo run codegen",
     "cargo:check": "cargo check --workspace --all-targets",
-    "cargo:test": "cargo test --workspace"
+    "cargo:test": "cargo test --workspace --no-fail-fast"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.2",
