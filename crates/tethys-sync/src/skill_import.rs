@@ -53,10 +53,74 @@ pub struct GitHubSpec {
 }
 
 /// Parses a GitHub import spec.
+///
+/// Accepts both shorthand `owner/repo[/subdir][@ref]` and full URL
+/// `https://github.com/<owner>/<repo>[/tree/<ref>[/<subdir>]]`.
+/// Any non-GitHub URL returns `SyncError::UnsupportedSource`.
 pub fn parse_github_spec(spec: &str) -> Result<GitHubSpec, SyncError> {
-    let (path_part, reference) = match spec.split_once('@') {
+    let trimmed = spec.trim();
+    if let Some(rest) = trimmed
+        .strip_prefix("https://")
+        .or_else(|| trimmed.strip_prefix("http://"))
+    {
+        let (host, path) = match rest.split_once('/') {
+            Some((h, p)) => (h, p),
+            None => (rest, ""),
+        };
+        let host = host.split(':').next().unwrap_or(host);
+        if host != "github.com" && host != "www.github.com" {
+            return Err(SyncError::UnsupportedSource(spec.to_string()));
+        }
+        let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+        if segments.len() < 2 {
+            return Err(SyncError::Registry(format!(
+                "github spec must be owner/repo[/subdir]@ref, got {spec}"
+            )));
+        }
+        let owner = segments[0];
+        let mut repo = segments[1];
+        if let Some(stripped) = repo.strip_suffix(".git") {
+            repo = stripped;
+        }
+        if segments.len() == 2 {
+            return Ok(GitHubSpec {
+                owner: owner.to_string(),
+                repo: repo.to_string(),
+                subdir: None,
+                reference: None,
+            });
+        }
+        if segments[2] == "tree" {
+            let reference = segments.get(3).map(|s| s.to_string());
+            let subdir = if segments.len() > 4 {
+                Some(segments[4..].join("/"))
+            } else {
+                None
+            };
+            return Ok(GitHubSpec {
+                owner: owner.to_string(),
+                repo: repo.to_string(),
+                subdir,
+                reference,
+            });
+        } else {
+            let subdir = Some(segments[2..].join("/"));
+            return Ok(GitHubSpec {
+                owner: owner.to_string(),
+                repo: repo.to_string(),
+                subdir,
+                reference: None,
+            });
+        }
+    }
+
+    if trimmed.contains("://") {
+        return Err(SyncError::UnsupportedSource(spec.to_string()));
+    }
+
+    let (path_part, reference) = match trimmed.split_once('@') {
         Some((path, reference)) => (path, Some(reference.to_string())),
-        None => (spec, None),
+        None => (trimmed, None),
     };
     let mut parts = path_part.splitn(3, '/');
     let owner = parts.next().unwrap_or_default();

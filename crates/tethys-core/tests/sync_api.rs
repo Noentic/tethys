@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use tethys_agent_servers::{ConnectionStore, StoreOptions};
-use tethys_api::{McpApi, SkillsApi};
+use tethys_api::{ApiError, McpApi, SkillsApi};
 use tethys_core::thread_session::{DenyPermissionResolver, SyncSource, ThreadSessions};
 use tethys_core::Core;
 use tethys_schema::connection::AcpProtocol;
@@ -222,6 +222,35 @@ async fn skills_import_folder_through_the_api() {
         .expect("import");
     assert_eq!(imported.name, "pdf");
     assert!(home.join(".agents/skills/pdf/SKILL.md").is_file());
+
+    let source_ws = dir.path().join("source/pdf-ws");
+    fs::create_dir_all(&source_ws).expect("source ws");
+    fs::write(source_ws.join("SKILL.md"), "---\nname: pdf-ws\n---\n").expect("SKILL.md");
+
+    let imported_ws = core
+        .skills_import(
+            ws_id.clone(),
+            Scope::Workspace,
+            tethys_schema::sync::SkillImportSource::Folder {
+                path: source_ws.display().to_string(),
+            },
+        )
+        .await
+        .expect("import ws");
+    assert_eq!(imported_ws.name, "pdf-ws");
+    assert!(root.join(".agents/skills/pdf-ws/SKILL.md").is_file());
+
+    let err = core
+        .skills_import(
+            ws_id.clone(),
+            Scope::Workspace,
+            tethys_schema::sync::SkillImportSource::GitHub {
+                spec: "https://gitlab.com/owner/repo".into(),
+            },
+        )
+        .await
+        .expect_err("gitlab should error");
+    assert!(matches!(err, ApiError::Internal(_)));
 }
 
 #[tokio::test]

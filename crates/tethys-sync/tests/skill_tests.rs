@@ -225,6 +225,51 @@ fn github_spec_parsing_and_missing_git() {
     assert!(matches!(error, SyncError::GitMissing));
 }
 
+#[test]
+fn github_spec_url_parsing_and_normalization() {
+    // Bare repo
+    let url_bare = parse_github_spec("https://github.com/owner/repo").expect("bare url");
+    let short_bare = parse_github_spec("owner/repo").expect("bare shorthand");
+    assert_eq!(url_bare, short_bare);
+    assert_eq!(url_bare.owner, "owner");
+    assert_eq!(url_bare.repo, "repo");
+    assert_eq!(url_bare.subdir, None);
+    assert_eq!(url_bare.reference, None);
+
+    // Bare repo with trailing slash
+    let url_bare_slash = parse_github_spec("https://github.com/owner/repo/").expect("bare url slash");
+    assert_eq!(url_bare_slash, short_bare);
+
+    // Bare repo with .git
+    let url_bare_git = parse_github_spec("https://github.com/owner/repo.git").expect("bare url git");
+    assert_eq!(url_bare_git, short_bare);
+
+    // Tree main
+    let url_tree = parse_github_spec("https://github.com/owner/repo/tree/main").expect("tree main");
+    let short_tree = parse_github_spec("owner/repo@main").expect("short main");
+    assert_eq!(url_tree, short_tree);
+    assert_eq!(url_tree.owner, "owner");
+    assert_eq!(url_tree.repo, "repo");
+    assert_eq!(url_tree.subdir, None);
+    assert_eq!(url_tree.reference.as_deref(), Some("main"));
+
+    // Tree with ref and subdir: /tree/v1/skills/x
+    let url_subdir = parse_github_spec("https://github.com/owner/repo/tree/v1/skills/x").expect("tree subdir");
+    let short_subdir = parse_github_spec("owner/repo/skills/x@v1").expect("short subdir");
+    assert_eq!(url_subdir, short_subdir);
+    assert_eq!(url_subdir.owner, "owner");
+    assert_eq!(url_subdir.repo, "repo");
+    assert_eq!(url_subdir.subdir.as_deref(), Some("skills/x"));
+    assert_eq!(url_subdir.reference.as_deref(), Some("v1"));
+
+    // Non-GitHub URL returns SyncError::UnsupportedSource
+    let err_gitlab = parse_github_spec("https://gitlab.com/owner/repo").expect_err("gitlab");
+    assert!(matches!(err_gitlab, SyncError::UnsupportedSource(_)));
+
+    let err_other = parse_github_spec("https://example.com/skills/x").expect_err("other");
+    assert!(matches!(err_other, SyncError::UnsupportedSource(_)));
+}
+
 #[tokio::test]
 async fn github_import_records_sha_and_subdir() {
     let (dir, home_dir, root) = setup();

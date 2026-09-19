@@ -14,6 +14,9 @@ pub enum SyncError {
     #[error("unsupported: {0}")]
     Unsupported(String),
 
+    #[error("unsupported source: {0}")]
+    UnsupportedSource(String),
+
     #[error("stale plan for {path}: the file changed after the plan was created")]
     StalePlan { path: String },
 
