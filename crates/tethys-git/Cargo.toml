@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 blake3.workspace = true
 dirs.workspace = true
+dunce.workspace = true
 imara-diff.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true

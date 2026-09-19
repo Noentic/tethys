@@ -97,7 +97,11 @@ fn main_checkout_registers_without_creating_a_worktree() {
         .expect("register main checkout");
 
     assert!(info.main_checkout);
-    assert_eq!(info.path, repo.root.to_string_lossy());
+    assert_eq!(
+        std::fs::canonicalize(&info.path).expect("canonical registered path"),
+        std::fs::canonicalize(&repo.root).expect("canonical root"),
+        "the main checkout registers under the real workspace root (macOS /var -> /private/var)"
+    );
     assert_eq!(info.branch, "main");
 }
 

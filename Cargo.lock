@@ -5381,6 +5381,7 @@ version = "0.0.0"
 dependencies = [
  "blake3",
  "dirs 6.0.0",
+ "dunce",
  "imara-diff",
  "parking_lot",
  "proptest",

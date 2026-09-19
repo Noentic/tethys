@@ -124,8 +124,11 @@ impl GitRepo {
     }
 }
 
+/// Resolves symlinks for stable path comparison. Uses `dunce` so Windows paths
+/// keep their plain drive form: the `\\?\` verbatim prefix `std::fs::canonicalize`
+/// returns is rejected by git when used as `GIT_INDEX_FILE`.
 fn normalize(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Runs git in `cwd`, failing on non-zero exit.

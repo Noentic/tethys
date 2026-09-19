@@ -216,8 +216,8 @@ async fn configured_worktrees_dir_is_honored() {
     std::fs::write(
         fixture.root.join(".tethys/config.json"),
         format!(
-            "{{\"git\": {{\"worktrees_dir\": \"{}\"}}}}",
-            worktrees_dir.display()
+            "{{\"git\": {{\"worktrees_dir\": {:?}}}}}",
+            worktrees_dir.to_string_lossy()
         ),
     )
     .expect("config");
@@ -229,12 +229,14 @@ async fn configured_worktrees_dir_is_honored() {
         .git_worktree_create(spec)
         .await
         .expect("create with configured dir");
+    let resolved = std::fs::canonicalize(&info.path).expect("canonical worktree path");
+    let expected = std::fs::canonicalize(&worktrees_dir).expect("canonical worktrees dir");
     assert!(
-        PathBuf::from(&info.path).starts_with(&worktrees_dir),
+        resolved.starts_with(&expected),
         "resolved path: {}",
         info.path
     );
-    assert!(PathBuf::from(&info.path).is_dir());
+    assert!(resolved.is_dir());
 }
 
 #[tokio::test]
