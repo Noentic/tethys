@@ -1,0 +1,11 @@
+{
+  "sessionId": "v2-session-1",
+  "title": "Run tests",
+  "options": [
+    {
+      "optionId": "allow",
+      "name": "Allow",
+      "kind": "allow_once"
+    }
+  ]
+}

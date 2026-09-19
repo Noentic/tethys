@@ -5,16 +5,35 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+acp-v2 = ["tethys-agent-servers/acp-v2"]
+
 [dependencies]
+async-trait.workspace = true
+dirs.workspace = true
+futures.workspace = true
+mime_guess.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 parking_lot = "0.12"
-libc = "0.2"
 tethys-api = { path = "../tethys-api" }
 tethys-schema = { path = "../tethys-schema" }
-fff-search = "0.10.7-nightly.f3647b7"
-agent-client-protocol = "2.1.0"
-toml_edit = "0.25"
-rusqlite = { version = "0.40", features = ["bundled"] }
+tethys-acp = { path = "../tethys-acp" }
+tethys-agent-servers = { path = "../tethys-agent-servers" }
+tethys-git = { path = "../tethys-git" }
+tethys-search = { path = "../tethys-search" }
+tethys-store = { path = "../tethys-store" }
+tethys-supervisor = { path = "../tethys-supervisor" }
+tethys-sync = { path = "../tethys-sync" }
+tethys-thread = { path = "../tethys-thread" }
+
+[dev-dependencies]
+tempfile.workspace = true
+tethys-acp = { path = "../tethys-acp", features = ["mock"] }
+
+[[test]]
+name = "thread_flows"
+harness = false
+

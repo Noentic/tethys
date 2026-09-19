@@ -9,3 +9,4 @@ temperature = 0.2
 type = "stdio"
 command = "postgres-mcp"
 args = ["--db", "local_dev"]
+env = { PGDATABASE = "local_dev" }

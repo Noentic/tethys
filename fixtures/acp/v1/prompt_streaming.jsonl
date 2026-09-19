@@ -1,0 +1,5 @@
+{"sessionId":"v1-session-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Hello! "},"messageId":"v1-msg-1"}}
+{"sessionId":"v1-session-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Working on it."}}}
+{"sessionId":"v1-session-1","update":{"sessionUpdate":"tool_call","toolCallId":"tool-1","title":"Read file","kind":"read","status":"in_progress","locations":[{"path":"src/main.rs"}]}}
+{"sessionId":"v1-session-1","update":{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"test","description":"Run the tests"}]}}
+{"sessionId":"v1-session-1","update":{"sessionUpdate":"plan","entries":[{"content":"Do the thing","priority":"high","status":"in_progress"}]}}

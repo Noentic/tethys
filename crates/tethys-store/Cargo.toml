@@ -1,0 +1,20 @@
+[package]
+name = "tethys-store"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+tethys-schema = { path = "../tethys-schema" }
+rusqlite = { version = "0.40", features = ["bundled", "hooks"] }
+tokio-rusqlite = "0.8"
+rusqlite_migration = "2.6"
+blake3 = "1"
+tempfile = "3"
+thiserror.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "fs"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }

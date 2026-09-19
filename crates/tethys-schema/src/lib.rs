@@ -8,8 +8,21 @@
 //! Keep this crate dependency-free (serde + specta only): no tokio,
 //! no tauri, no filesystem. That keeps `codegen` fast and cacheable.
 
+pub mod git;
+
+pub use git::*;
+
 use serde::{Deserialize, Serialize};
 use specta::{Type, Types};
+
+pub mod composer;
+pub mod connection;
+pub mod search;
+pub mod sync;
+pub mod thread;
+
+pub use search::SearchItem;
+pub use sync::WorkspaceId;
 
 /// Basic host metadata for the S0.0 shell (`host.info`).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -25,13 +38,6 @@ pub struct HealthStatus {
     pub core_version: String,
 }
 
-/// A search item result returned by FFF search (`search.files`).
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SearchItem {
-    pub relative_path: String,
-    pub score: i32,
-}
-
 /// A chunk emitted over Tauri IPC streaming channels (S0.1).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct StreamChunk {
@@ -42,7 +48,7 @@ pub struct StreamChunk {
 }
 
 /// A diff hunk representation for virtualized rendering (S0.1, AD-10).
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct DiffHunk {
     pub old_start: u32,
     pub old_lines: u32,
@@ -51,7 +57,7 @@ pub struct DiffHunk {
     pub lines: Vec<DiffLine>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct DiffLine {
     pub kind: DiffLineKind,
     pub text: String,
@@ -81,17 +87,94 @@ pub struct BenchmarkResult {
     pub p95_latency_ms: f64,
 }
 
+pub mod store;
+
 /// All root types exported to TypeScript. Add new wire types here so
 /// they are included in the generated bindings.
 pub fn registered_types() -> Types {
     Types::default()
         .register::<HostInfo>()
         .register::<HealthStatus>()
-        .register::<SearchItem>()
+        .register::<search::SearchItem>()
+        .register::<composer::CommandScope>()
+        .register::<composer::CommandInfo>()
+        .register::<composer::ReferenceKind>()
+        .register::<composer::ComposerReference>()
+        .register::<composer::ExpandedCommand>()
         .register::<StreamChunk>()
         .register::<DiffHunk>()
         .register::<DiffLine>()
         .register::<DiffLineKind>()
         .register::<BenchmarkConfig>()
         .register::<BenchmarkResult>()
+        .register::<git::WorkspaceGitConfig>()
+        .register::<git::WorktreeSpec>()
+        .register::<git::WorktreeInfo>()
+        .register::<git::SetupOutcome>()
+        .register::<git::CheckpointPhase>()
+        .register::<git::CheckpointInfo>()
+        .register::<git::CheckpointResult>()
+        .register::<git::DiffSource>()
+        .register::<git::DiffFileStatus>()
+        .register::<git::DiffFile>()
+        .register::<git::DiffSummary>()
+        .register::<git::DiffFileDetail>()
+        .register::<git::HunkRef>()
+        .register::<git::CommitResult>()
+        .register::<git::RestorePolicy>()
+        .register::<git::RestoreTarget>()
+        .register::<git::UndoCapture>()
+        .register::<git::RestoreOutcome>()
+        .register::<connection::AcpProtocol>()
+        .register::<connection::ConnectionState>()
+        .register::<connection::AgentInfo>()
+        .register::<connection::NormalizedCapabilities>()
+        .register::<connection::AgentCompat>()
+        .register::<connection::ConnectionKey>()
+        .register::<connection::ConnectionEntry>()
+        .register::<thread::ThreadId>()
+        .register::<thread::ThreadState>()
+        .register::<thread::TurnEventBody>()
+        .register::<thread::EventEnvelope>()
+        .register::<store::BlobHash>()
+        .register::<store::SeqRange>()
+        .register::<store::EntryKind>()
+        .register::<store::EntryUpsert>()
+        .register::<store::NewEvent>()
+        .register::<store::Entry>()
+        .register::<store::EntryPage>()
+        .register::<store::ThreadView>()
+        .register::<store::StoredEvent>()
+        .register::<sync::ProjectionTarget>()
+        .register::<sync::TargetId>()
+        .register::<sync::TransportKind>()
+        .register::<sync::Scope>()
+        .register::<sync::RegistryValue>()
+        .register::<sync::EntryMeta>()
+        .register::<sync::RegistryEntry>()
+        .register::<sync::McpTransports>()
+        .register::<sync::SessionServer>()
+        .register::<sync::EntryState>()
+        .register::<sync::EntryProjection>()
+        .register::<sync::ProjectionPlan>()
+        .register::<sync::Applied>()
+        .register::<sync::VerifyStatus>()
+        .register::<sync::ImportCandidate>()
+        .register::<sync::ImportFailure>()
+        .register::<sync::ImportScan>()
+        .register::<sync::SkillOrigin>()
+        .register::<sync::SkillSource>()
+        .register::<sync::SkillInfo>()
+        .register::<sync::SkillUpdateCheck>()
+        .register::<sync::SkillUpdatePlan>()
+        .register::<sync::SkillUpdateApplied>()
+        .register::<sync::RegistryEntryView>()
+        .register::<sync::SkillImportSource>()
+        .register::<sync::WorkspaceId>()
+        .register::<sync::ServerRow>()
+        .register::<sync::ProviderColumn>()
+        .register::<sync::AttachmentCell>()
+        .register::<sync::AttachmentState>()
+        .register::<sync::AttachmentGrid>()
 }
+

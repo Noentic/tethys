@@ -1,9 +1,14 @@
 {
   "theme": "dark",
   "mcp": {
-    "git": {
-      "type": "stdio",
-      "command": "git-mcp"
+    "servers": {
+      "git": {
+        "type": "local",
+        "command": ["git-mcp"],
+        "environment": {
+          "GIT_AUTHOR_NAME": "Tethys"
+        }
+      }
     }
   }
 }

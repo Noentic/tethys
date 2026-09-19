@@ -1,6 +1,6 @@
 # Tethys
 
-Native, ACP-first desktop workspace for running many coding agents across many repos in parallel.
+Native, ACP-first desktop workspace for running many coding agents across many workspaces in parallel.
 
 [![Turborepo](https://img.shields.io/badge/monorepo-turborepo-ef4444.svg?style=flat-square)](https://turbo.build/repo)
 [![Tauri v2](https://img.shields.io/badge/desktop-tauri%20v2-24c8db.svg?style=flat-square)](https://v2.tauri.app/)
@@ -14,16 +14,18 @@ Native, ACP-first desktop workspace for running many coding agents across many r
 
 ## Overview
 
-Tethys is a lightweight, high-performance desktop application designed to run, supervise, and review autonomous coding agents from any vendor across any number of repositories simultaneously.
+Tethys is a lightweight, high-performance desktop application designed to run, supervise, and review autonomous coding agents from any vendor across any number of workspaces simultaneously. A workspace is any folder, git-tracked or not.
 
-Instead of managing multiple disconnected terminals, risking branch collisions, or relying on fragile terminal scrapers, Tethys acts as a robust local control plane. It wraps official agent processes with isolated git worktrees, per-turn diff review and undo, structured permissions, and a synchronized registry for Model Context Protocol (MCP) servers and agent skills.
+Instead of managing multiple disconnected terminals, risking branch collisions, or relying on fragile terminal scrapers, Tethys acts as a robust local control plane. It wraps official agent processes with structured permissions and a synchronized registry for Model Context Protocol (MCP) servers and agent skills, and, wherever a workspace is a git repository, with isolated git worktrees and per-turn diff review and undo.
+
+Git is a feature, not a requirement. A plain folder is a first-class workspace, with the git features simply unavailable and one session at a time. Tethys is a control plane, not a git client: GitHub and GitLab appear only as remote status, and pushing or opening a PR is delegated to your own `gh` / `glab`.
 
 ---
 
 ## Features
 
-- **Parallel Worktrees, Zero Collisions**: Write-capable threads execute in dedicated git worktrees by default, preventing agents from dirtying your primary checkout or conflicting with one another.
-- **Turn-by-Turn Checkpoints and Instant Rollback**: Temporary-index snapshots capture worktree state before and after every turn in under 150 ms, providing safe undo without polluting git commit history.
+- **Parallel Worktrees, Zero Collisions**: In a git workspace, write-capable threads execute in dedicated git worktrees by default, preventing agents from dirtying your primary checkout or conflicting with one another.
+- **Turn-by-Turn Checkpoints and Instant Rollback**: In a git workspace, temporary-index snapshots capture worktree state before and after every turn in under 150 ms, providing safe undo without polluting git commit history.
 - **Protocol-First Agent Integration**: Connects via the standard [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) (v1 and v2) with adapters for leading developer agents (Claude Code, Codex, OpenCode).
 - **The Credential Principle**: Vendor subscriptions and credentials are never read, stored, proxied, or reissued. Agents authenticate using their own official login flows and platform keyrings.
 - **Unified MCP and Skill Synchronization**: Configure MCP servers and `.agents/skills` centrally. Tethys projects configuration into vendor configs (JSON/TOML) with lossless two-way formatting preservation.
@@ -82,13 +84,28 @@ flowchart TB
 | Package / Crate | Description |
 |---|---|
 | [`apps/desktop`](./apps/desktop) | Tauri v2 desktop shell with React 19, TanStack Router, and Vite |
-| [`crates/tethys-core`](./crates/tethys-core) | Core domain logic: process supervisor, git engine, search, storage, and ACP client |
+| [`crates/tethys-core`](./crates/tethys-core) | Core domain logic, state transitions, and IPC command implementation |
+| [`crates/tethys-api`](./crates/tethys-api) | Service traits and typed method routing (the host↔core seam) |
 | [`crates/tethys-schema`](./crates/tethys-schema) | Wire types and schema definitions exported via Specta |
-| [`crates/tethys-api`](./crates/tethys-api) | Typed command router and IPC bridge |
+| [`crates/tethys-store`](./crates/tethys-store) | SQLite WAL persistence, append-only event log, materialized entries, and BLAKE3 blob store |
+| [`crates/tethys-sync`](./crates/tethys-sync) | MCP registry, vendor-file projection, and skill sync/import |
+| [`crates/tethys-git`](./crates/tethys-git) | Pure synchronous Git engine: worktrees, checkpoints, diffs, stage/discard |
+| [`crates/tethys-search`](./crates/tethys-search) | File indexing and fuzzy search |
+| [`crates/tethys-acp`](./crates/tethys-acp) | ACP v1/v2 protocol client and fixtures |
+| [`crates/tethys-agent-servers`](./crates/tethys-agent-servers) | Agent connection store, leases, recovery, and supervision |
+| [`crates/tethys-thread`](./crates/tethys-thread) | Thread state machine and turn lifecycle |
+| [`crates/tethys-supervisor`](./crates/tethys-supervisor) | Process containment and the kill/escalation ladder |
 | [`crates/xtask`](./crates/xtask) | Workspace automation tasks (TypeScript bindings generation) |
 | [`packages/bindings`](./packages/bindings) | Auto-generated TypeScript types and IPC bindings |
 | [`packages/client`](./packages/client) | Typed frontend client wrappers for Tauri commands |
-| [`packages/config-ts`](./packages/config-ts) | Shared TypeScript configurations across the workspace |
+| [`packages/state`](./packages/state) | Per-session TanStack stores, patch reducers, and rAF stream batching |
+| [`packages/ui`](./packages/ui) | Design-system tokens, component primitives, and Wave 2 registries |
+| [`packages/composer`](./packages/composer) | Composer command, skill, and path expansion |
+| [`packages/diff`](./packages/diff) | Diff virtualization and rendering |
+| [`packages/markdown`](./packages/markdown) | Incremental markdown worker |
+| [`packages/terminal`](./packages/terminal) | Terminal surface and attachment wiring |
+| [`packages/features`](./packages/features) | Scaffold for Wave 2 feature surfaces (workspaces, composer, approvals, sync) |
+| [`packages/config`](./packages/config) | Shared TypeScript configurations (published as `@tethys/config-ts`) |
 
 ---
 
@@ -159,6 +176,8 @@ All core infrastructure has been validated against real-world and synthetic work
 ## Documentation
 
 - [Product Requirements Document (PRD)](./docs/prd.md) — Product vision, functional requirements, and persona workflows.
+- [Design Contract](./DESIGN.md) — Tokens, scales, and per-component metrics.
+- [Pages & Views Specification](./docs/pages-views-spec.md) — Page composition, component behaviour, copy, and flows.
 - [Architecture Specification](./docs/architecture.md) — System design, memory targets, IPC protocols, and architectural decisions.
 - [Milestone Roadmap](./docs/milestone.md) — Milestone gates, exit criteria, and implementation sequencing.
 - [Spike Validation Reports](./docs/spikes/) — In-depth benchmark methodologies and empirical findings.
