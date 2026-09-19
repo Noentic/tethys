@@ -26,7 +26,7 @@ fn setup() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
             r#"{{
   "mcpServers": {{"server_b": {{"type": "http", "url": "https://b.example.com"}}}},
   "projects": {{
-    "{}": {{"mcpServers": {{"server_c": {{"type": "stdio", "command": "c"}}}}}}
+    {:?}: {{"mcpServers": {{"server_c": {{"type": "stdio", "command": "c"}}}}}}
   }}
 }}"#,
             root.display()

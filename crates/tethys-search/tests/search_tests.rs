@@ -74,14 +74,25 @@ fn invalidate_refreshes_after_churn() {
     fs::write(dir.path().join("fresh.txt"), "y").expect("fresh");
     manager.invalidate(dir.path()).expect("invalidate");
 
-    assert!(manager
-        .wait_ready(dir.path(), READY_TIMEOUT)
-        .expect("rescan"));
-    let after = manager.query(dir.path(), "fresh", 10).expect("query");
-    assert!(
-        after.iter().any(|i| i.relative_path.contains("fresh.txt")),
-        "rescanned index did not see the new file: {after:?}"
-    );
+    // invalidate() only schedules FFF's rescan, so poll until the new file
+    // lands instead of assuming the first query after wait_ready sees it.
+    let deadline = std::time::Instant::now() + READY_TIMEOUT;
+    let mut last = Vec::new();
+    loop {
+        assert!(
+            manager.wait_ready(dir.path(), READY_TIMEOUT).expect("rescan"),
+            "index never became ready again"
+        );
+        last = manager.query(dir.path(), "fresh", 10).expect("query");
+        if last.iter().any(|i| i.relative_path.contains("fresh.txt")) {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "rescanned index did not see the new file: {last:?}"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
 }
 
 #[test]
