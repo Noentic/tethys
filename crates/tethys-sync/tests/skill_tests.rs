@@ -616,3 +616,19 @@ fn lockfiles_are_read_only_and_map_provenance() {
     assert_eq!(global.source.lock_hash.as_deref(), Some("xyz"));
     drop(dir);
 }
+
+#[tokio::test]
+#[ignore = "manual real-network test"]
+async fn real_network_github_skill_import() {
+    let (_dir, home_dir, root) = setup();
+    let store = EventStore::in_memory().await.expect("store");
+    // Public repository test with GitHub URL format
+    let res = tethys_sync::skill_import::import_github(
+        &store,
+        home(&root, &home_dir),
+        Scope::Workspace,
+        "https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo",
+    )
+    .await;
+    println!("Real-network import result: {res:?}");
+}

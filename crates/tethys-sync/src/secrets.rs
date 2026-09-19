@@ -102,3 +102,35 @@ impl SecretStore for MemorySecrets {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_secret_ref_extracts_account() {
+        assert_eq!(parse_secret_ref("keychain:tethys/github"), Some("github"));
+        assert_eq!(parse_secret_ref("keychain:tethys/"), None);
+        assert_eq!(parse_secret_ref("plain_value"), None);
+    }
+
+    #[test]
+    #[ignore = "manual platform keychain check"]
+    fn manual_keyring_platform_test() {
+        let store = KeyringSecrets;
+        let test_account = "test_manual_account";
+        let test_val = "super_secret_value_123";
+        match store.set(test_account, test_val) {
+            Ok(()) => {
+                let retrieved = store.get(test_account).expect("get");
+                assert_eq!(retrieved.as_deref(), Some(test_val));
+                store.delete(test_account).expect("delete");
+                let after_del = store.get(test_account).expect("get after delete");
+                assert_eq!(after_del, None);
+            }
+            Err(e) => {
+                println!("Platform keychain returned: {e}");
+            }
+        }
+    }
+}

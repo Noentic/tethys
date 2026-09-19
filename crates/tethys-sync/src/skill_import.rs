@@ -31,15 +31,26 @@ pub struct HttpDownloader;
 #[cfg(feature = "github")]
 impl Downloader for HttpDownloader {
     fn get(&self, url: &str) -> Result<Vec<u8>, SyncError> {
-        let response =
-            reqwest::blocking::get(url).map_err(|error| SyncError::Network(error.to_string()))?;
-        if !response.status().is_success() {
-            return Err(SyncError::Network(format!("{url}: {}", response.status())));
-        }
-        response
-            .bytes()
-            .map(|bytes| bytes.to_vec())
-            .map_err(|error| SyncError::Network(error.to_string()))
+        let url_string = url.to_string();
+        std::thread::spawn(move || {
+            let client = reqwest::blocking::Client::builder()
+                .user_agent("tethys")
+                .build()
+                .map_err(|error| SyncError::Network(error.to_string()))?;
+            let response = client
+                .get(&url_string)
+                .send()
+                .map_err(|error| SyncError::Network(error.to_string()))?;
+            if !response.status().is_success() {
+                return Err(SyncError::Network(format!("{url_string}: {}", response.status())));
+            }
+            response
+                .bytes()
+                .map(|bytes| bytes.to_vec())
+                .map_err(|error| SyncError::Network(error.to_string()))
+        })
+        .join()
+        .map_err(|_| SyncError::Network("download thread panicked".into()))?
     }
 }
 
