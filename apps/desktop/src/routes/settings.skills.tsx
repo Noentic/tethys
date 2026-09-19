@@ -7,7 +7,17 @@ import {
   Plus,
   ShieldCheck,
 } from "@nebutra/icons";
-import { Badge, Button, Popover, ToggleSwitch } from "@tethys/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  PageHeader,
+  Popover,
+  SegmentedControl,
+  ToggleSwitch,
+  UnderlineTabs,
+} from "@tethys/ui";
 import { useState } from "react";
 
 interface SkillItem {
@@ -105,97 +115,54 @@ export function SettingsSkillsView() {
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Title */}
-      <h1 className="text-2xl font-bold tracking-tight text-(--tethys-text-primary)">
-        Skills & Commands
-      </h1>
+    <div className="flex flex-col gap-xl">
+      <PageHeader title="Skills & Commands" />
 
       {/* Tabs and Toolbar Row (§5.3) */}
-      <div className="flex items-center justify-between border-b border-(--tethys-hairline) pb-3">
-        <div className="flex items-center gap-6">
-          <div className="flex gap-4 text-xs font-medium">
-            <button
-              type="button"
-              onClick={() => setActiveTab("skills")}
-              className={`pb-1 transition-colors ${
-                activeTab === "skills"
-                  ? "border-b-2 border-(--tethys-accent-focus) text-(--tethys-text-primary) font-semibold"
-                  : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-              }`}
-            >
-              Skills
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("connectors")}
-              className={`pb-1 transition-colors ${
-                activeTab === "connectors"
-                  ? "border-b-2 border-(--tethys-accent-focus) text-(--tethys-text-primary) font-semibold"
-                  : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-              }`}
-            >
-              Connectors
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("plugins")}
-              className={`pb-1 transition-colors ${
-                activeTab === "plugins"
-                  ? "border-b-2 border-(--tethys-accent-focus) text-(--tethys-text-primary) font-semibold"
-                  : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-              }`}
-            >
-              Plugins
-            </button>
-          </div>
+      <div className="flex items-center justify-between gap-lg border-b border-(--tethys-hairline) pb-md">
+        <div className="flex items-center gap-xl">
+          <UnderlineTabs
+            label="Catalog"
+            value={activeTab}
+            onChange={setActiveTab}
+            tabs={[
+              { value: "skills", label: "Skills" },
+              { value: "connectors", label: "Connectors" },
+              { value: "plugins", label: "Plugins" },
+            ]}
+          />
 
-          {/* Yours / Discover Pill Filter */}
-          <div className="flex rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) p-0.5 text-xs">
-            <button
-              type="button"
-              onClick={() => setScopeFilter("yours")}
-              className={`rounded-md px-3 py-1 font-medium transition-colors ${
-                scopeFilter === "yours"
-                  ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) shadow-sm"
-                  : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-              }`}
-            >
-              Workspace (.agents)
-            </button>
-            <button
-              type="button"
-              onClick={() => setScopeFilter("discover")}
-              className={`rounded-md px-3 py-1 font-medium transition-colors ${
-                scopeFilter === "discover"
-                  ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) shadow-sm"
-                  : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-              }`}
-            >
-              Global / Installed
-            </button>
-          </div>
+          {/* Yours / Discover segmented sub-filter */}
+          <SegmentedControl
+            size="sm"
+            value={scopeFilter}
+            onChange={setScopeFilter}
+            options={[
+              { value: "yours", label: "Workspace (.agents)" },
+              { value: "discover", label: "Global / Installed" },
+            ]}
+          />
         </div>
 
         {/* Search & Add Menu */}
-        <div className="flex items-center gap-3">
-          <div className="relative flex items-center">
-            <MagnifyingGlass className="absolute left-3 size-3.5 text-(--tethys-text-muted)" />
-            <input
+        <div className="flex items-center gap-md">
+          <div className="w-56">
+            <Input
               type="text"
               aria-label="Search skills"
               placeholder="Search skills..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 w-48 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-panel) pl-8 pr-3 text-xs text-(--tethys-text-primary) placeholder:text-(--tethys-text-muted) focus:border-(--tethys-hairline-strong) focus:outline-none transition-colors"
+              leadingIcon={<MagnifyingGlass className="size-3.5" />}
             />
           </div>
 
           <div className="relative">
             <Button
               size="sm"
+              variant="primary"
               onClick={() => setAddMenuOpen((prev) => !prev)}
-              className="flex items-center gap-1 text-xs bg-(--tethys-accent-primary) text-white"
+              className="h-8"
             >
               <Plus className="size-3.5" />
               <span>Add</span>
@@ -207,23 +174,23 @@ export function SettingsSkillsView() {
               onClose={() => setAddMenuOpen(false)}
               className="right-0 mt-1"
             >
-              <div className="flex w-52 flex-col p-1 text-xs">
-                <button
-                  type="button"
+              <div className="flex w-56 flex-col">
+                <Button
+                  variant="ghost"
                   onClick={() => setAddMenuOpen(false)}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-(--tethys-surface-hover) text-(--tethys-text-primary)"
+                  className="h-9 w-full justify-start font-normal"
                 >
                   <FolderClosed className="size-4 text-(--tethys-text-muted)" />
                   <span>Import from folder…</span>
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => setAddMenuOpen(false)}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-(--tethys-surface-hover) text-(--tethys-text-primary)"
+                  className="h-9 w-full justify-start font-normal"
                 >
                   <GitBranch className="size-4 text-(--tethys-text-muted)" />
                   <span>Import from GitHub repo…</span>
-                </button>
+                </Button>
               </div>
             </Popover>
           </div>
@@ -231,53 +198,51 @@ export function SettingsSkillsView() {
       </div>
 
       {/* Sync Status Banner */}
-      <div className="flex items-center justify-between rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated)/40 px-4 py-2.5 text-xs text-(--tethys-text-secondary)">
-        <div className="flex items-center gap-2">
-          <Check className="size-4 text-emerald-500" />
-          <span>
-            Two-way sync active: local files in{" "}
-            <code className="font-mono text-[11px] bg-(--tethys-surface-panel) px-1 rounded">
-              .agents/skills
-            </code>{" "}
-            are projected directly to connected ACP providers.
-          </span>
-        </div>
-      </div>
+      <Card className="flex items-center gap-sm bg-(--tethys-surface-nested) px-lg py-md text-body-sm text-(--tethys-text-secondary)">
+        <Check className="size-4 shrink-0 text-(--tethys-status-success)" />
+        <span>
+          Two-way sync active: local files in{" "}
+          <code className="rounded-xs bg-(--tethys-surface-panel) px-1 font-mono text-mono-code">
+            .agents/skills
+          </code>{" "}
+          are projected directly to connected ACP providers.
+        </span>
+      </Card>
 
       {/* Skill List (§5.3) */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-md">
         {filteredSkills.map((skill) => (
-          <div
+          <Card
             key={skill.id}
-            className="flex items-center justify-between rounded-xl border border-(--tethys-hairline) bg-(--tethys-surface-panel) p-4 transition-all hover:border-(--tethys-hairline-strong)"
+            className="flex items-center justify-between gap-lg p-lg transition-colors hover:border-(--tethys-hairline-strong)"
           >
-            <div className="flex flex-col gap-1 min-w-0 pr-4">
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-semibold text-sm text-(--tethys-text-primary)">
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex items-center gap-sm">
+                <span className="font-mono text-body-sm font-medium text-(--tethys-text-primary)">
                   {skill.name}
                 </span>
-                <Badge variant="muted" className="text-[10px] px-1.5 py-0">
+                <Badge variant="muted" size="sm">
                   {skill.category}
                 </Badge>
-                <span className="text-[10px] text-(--tethys-text-muted)">
+                <span className="text-label-sm text-(--tethys-text-muted)">
                   {skill.author}
                 </span>
               </div>
-              <p className="text-xs text-(--tethys-text-secondary) leading-relaxed">
+              <p className="text-body-sm text-(--tethys-text-secondary)">
                 {skill.description}
               </p>
             </div>
 
-            <div className="flex items-center gap-4 shrink-0">
-              <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-lg">
+              <div className="flex items-center gap-sm">
                 <ShieldCheck
                   className={`size-4 ${
                     skill.trusted
-                      ? "text-emerald-500"
+                      ? "text-(--tethys-status-success)"
                       : "text-(--tethys-text-muted)"
                   }`}
                 />
-                <span className="text-xs text-(--tethys-text-muted)">
+                <span className="text-label-md font-normal text-(--tethys-text-muted)">
                   {skill.trusted ? "Auto-run trusted" : "Prompt on run"}
                 </span>
               </div>
@@ -288,7 +253,7 @@ export function SettingsSkillsView() {
                 onCheckedChange={(trusted) => toggleTrust(skill.id, trusted)}
               />
             </div>
-          </div>
+          </Card>
         ))}
       </div>
     </div>

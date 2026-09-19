@@ -37,8 +37,7 @@ export const ToggleSwitch = React.forwardRef<
         disabled={disabled}
         onClick={() => !disabled && onCheckedChange?.(!checked)}
         className={cn(
-          "relative inline-flex h-[18px] w-[32px] shrink-0 cursor-pointer items-center rounded-full transition-colors duration-150 outline-none",
-          "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--tethys-canvas)",
+          "focus-ring relative inline-flex h-[18px] w-[32px] shrink-0 cursor-pointer items-center rounded-full transition-colors duration-150",
           checked
             ? "bg-(--tethys-accent-toggle)"
             : "bg-(--tethys-hairline-strong)",

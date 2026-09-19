@@ -4,6 +4,7 @@ import {
   selectWorkspaceProviderSessionGroups,
 } from "@tethys/state";
 import {
+  Button,
   IconButton,
   SessionGroupHeader,
   SessionListRow,
@@ -38,13 +39,16 @@ export function SessionsColumn({
   };
 
   const groups = selectWorkspaceProviderSessionGroups(sessions);
+  const workspaceLabel =
+    sessions.find((s) => s.sessionId === activeSessionId)?.workspaceId ??
+    groups[0]?.workspaceId;
 
   if (collapsed) {
     // Icon strip mode (<800px)
     return (
       <nav
         aria-label="Sessions"
-        className="flex h-full w-12 flex-col items-center gap-2 border-r border-(--tethys-hairline) bg-(--tethys-surface-panel) py-3 select-none shrink-0 overflow-y-auto"
+        className="flex h-full w-rail shrink-0 flex-col items-center gap-sm overflow-y-auto border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) py-3 select-none"
       >
         <IconButton
           size="compact"
@@ -60,7 +64,7 @@ export function SessionsColumn({
             type="button"
             title={`${sess.title} (${sess.status})`}
             onClick={() => onSelectSession(sess.sessionId)}
-            className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-(--tethys-surface-hover) outline-none"
+            className="focus-ring flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-(--tethys-surface-hover)"
           >
             <StatusDot status={sess.status} />
           </button>
@@ -72,39 +76,40 @@ export function SessionsColumn({
   return (
     <nav
       aria-label="Sessions Column"
-      className="flex h-full w-[280px] flex-col border-r border-(--tethys-hairline) bg-(--tethys-surface-panel) select-none shrink-0"
+      className="flex h-full w-full flex-col border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) select-none"
     >
-      {/* Workspace Header & New Session Button (Matching Image 6) */}
-      <div className="flex flex-col gap-2.5 border-b border-(--tethys-hairline) p-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-7 items-center justify-center rounded-lg bg-(--tethys-surface-active) border border-(--tethys-hairline) text-xs font-bold text-(--tethys-text-primary)">
-            T
-          </div>
-          <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-xs font-semibold text-(--tethys-text-primary) truncate">
-              tethys
-            </span>
-            <span className="text-[10px] font-mono text-(--tethys-text-muted) truncate">
-              ~/Code/tethys
-            </span>
-          </div>
-        </div>
+      {(workspaceLabel || onNewSession) && (
+        <div className="flex flex-col gap-md border-b border-(--tethys-hairline) p-md">
+          {workspaceLabel && (
+            <div className="flex items-center gap-2.5">
+              <div
+                aria-hidden="true"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-active) text-label-md text-(--tethys-text-primary) uppercase"
+              >
+                {workspaceLabel.charAt(0)}
+              </div>
+              <span className="min-w-0 flex-1 truncate text-body-sm text-(--tethys-text-primary)">
+                {workspaceLabel}
+              </span>
+            </div>
+          )}
 
-        {onNewSession && (
-          <button
-            type="button"
-            onClick={onNewSession}
-            className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) hover:bg-(--tethys-surface-hover) text-xs font-medium text-(--tethys-text-primary) transition-colors"
-          >
-            <Plus className="size-3.5" />
-            <span>New session</span>
-          </button>
-        )}
-      </div>
+          {onNewSession && (
+            <Button
+              variant="secondary"
+              onClick={onNewSession}
+              className="w-full"
+            >
+              <Plus className="size-3.5" />
+              <span>New session</span>
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-1">
         {groups.length === 0 ? (
-          <div className="p-4 text-center text-xs text-(--tethys-text-muted)">
+          <div className="p-lg text-center text-body-sm text-(--tethys-text-muted)">
             No active sessions
           </div>
         ) : (

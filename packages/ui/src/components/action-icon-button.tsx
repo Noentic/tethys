@@ -19,13 +19,13 @@ export const ActionIconButton = React.forwardRef<
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-full transition-all duration-150 select-none outline-none",
-        "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--tethys-canvas)",
+        "inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 select-none",
+        "focus-ring",
         "active:scale-95",
         ready
           ? "bg-(--tethys-primary) text-(--tethys-on-primary) hover:opacity-90 active:opacity-100"
-          : "bg-(--tethys-surface-hover) text-(--tethys-text-muted) hover:text-(--tethys-text-primary)",
-        disabled && "pointer-events-none opacity-40 active:scale-100",
+          : "bg-(--tethys-surface-active) text-(--tethys-text-muted) hover:text-(--tethys-text-primary)",
+        disabled && "pointer-events-none active:scale-100",
         className,
       )}
       {...props}

@@ -10,12 +10,19 @@ import {
   Warning,
 } from "@nebutra/icons";
 import {
+  Badge,
   Button,
+  Card,
   Drawer,
   EmptyState,
   IconButton,
+  Input,
+  KeycapPill,
   ModalDialog,
+  SegmentedControl,
+  Select,
   StatusDot,
+  UnderlineTabs,
 } from "@tethys/ui";
 import type React from "react";
 import { useState } from "react";
@@ -156,79 +163,57 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
       {/* Top Header Bar */}
       <section
         aria-label="Workspaces toolbar"
-        className="flex h-16 items-center justify-between border-b border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-8 shrink-0 gap-4"
+        className="flex h-16 shrink-0 items-center justify-between gap-lg border-b border-(--tethys-hairline) px-2xl"
       >
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold tracking-tight text-(--tethys-text-primary)">
+        <div className="flex items-center gap-lg">
+          <h1 className="text-heading-lg text-(--tethys-text-primary)">
             Workspaces
           </h1>
 
           {/* Local vs Remote Segmented Control */}
-          <div className="flex rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-panel) p-0.5 text-xs">
-            <button
-              type="button"
-              onClick={() => setEnvironmentFilter("local")}
-              className={`rounded-md px-3 py-1 font-medium transition-colors ${
-                environmentFilter === "local"
-                  ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) shadow-sm"
-                  : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-              }`}
-            >
-              Local
-            </button>
-            <button
-              type="button"
-              onClick={() => setEnvironmentFilter("remote")}
-              className={`rounded-md px-3 py-1 font-medium transition-colors ${
-                environmentFilter === "remote"
-                  ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) shadow-sm"
-                  : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-              }`}
-            >
-              Remote
-            </button>
-          </div>
+          <SegmentedControl
+            value={environmentFilter}
+            onChange={setEnvironmentFilter}
+            options={[
+              { value: "local", label: "Local" },
+              { value: "remote", label: "Remote" },
+            ]}
+          />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-md">
           {/* Search bar with Ctrl+K pill */}
-          <div className="relative flex items-center">
-            <MagnifyingGlass className="absolute left-3 size-3.5 text-(--tethys-text-muted)" />
-            <input
+          <div className="w-64">
+            <Input
               type="text"
               aria-label="Search workspaces"
               placeholder="Search workspaces..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 w-60 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-panel) pl-9 pr-12 text-xs text-(--tethys-text-primary) placeholder:text-(--tethys-text-muted) focus:border-(--tethys-hairline-strong) focus:outline-none transition-colors"
+              leadingIcon={<MagnifyingGlass className="size-3.5" />}
+              trailingIcon={<KeycapPill>Ctrl+K</KeycapPill>}
             />
-            <kbd className="absolute right-2.5 font-mono text-[10px] text-(--tethys-text-muted) bg-(--tethys-surface-elevated) px-1 rounded border border-(--tethys-hairline)">
-              Ctrl+K
-            </kbd>
           </div>
 
           {/* Needs Attention Filter Chip */}
           {attentionCount > 0 && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              aria-pressed={filterNeedsAttention}
               onClick={() => setFilterNeedsAttention((prev) => !prev)}
-              className={`flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors ${
+              className={
                 filterNeedsAttention
-                  ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
-                  : "border-(--tethys-hairline) bg-(--tethys-surface-panel) text-(--tethys-text-secondary) hover:text-(--tethys-text-primary)"
-              }`}
+                  ? "border-warning-soft tint-warning text-(--tethys-text-primary)"
+                  : undefined
+              }
             >
-              <span className="size-2 rounded-full bg-amber-400 animate-pulse" />
+              <StatusDot status="awaiting_approval" />
               <span>Needs attention ({attentionCount})</span>
-            </button>
+            </Button>
           )}
 
           {/* Primary + New button */}
-          <Button
-            size="sm"
-            onClick={() => setTrustDialogOpen(true)}
-            className="bg-(--tethys-accent-primary) hover:opacity-90 text-white font-medium rounded-lg px-3.5 py-1 text-xs flex items-center gap-1.5 shadow-sm"
-          >
+          <Button variant="primary" onClick={() => setTrustDialogOpen(true)}>
             <Plus className="size-3.5" />
             <span>New Workspace</span>
           </Button>
@@ -236,26 +221,26 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
       </section>
 
       {/* Sub-bar: Count, Sort dropdown, and View Mode Toggles */}
-      <div className="flex h-11 items-center justify-between border-b border-(--tethys-hairline) px-8 shrink-0 text-xs text-(--tethys-text-muted)">
-        <div className="flex items-center gap-4">
-          <span className="font-medium text-(--tethys-text-secondary)">
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-(--tethys-hairline) px-2xl text-label-md font-normal text-(--tethys-text-muted)">
+        <div className="flex items-center gap-lg">
+          <span className="text-label-md text-(--tethys-text-secondary)">
             {filteredWorkspaces.length} Workspaces
           </span>
 
-          <div className="flex items-center gap-1">
-            <span className="text-(--tethys-text-muted)">Sort:</span>
-            <select
+          <div className="flex items-center gap-sm">
+            <span>Sort</span>
+            <Select
               aria-label="Sort workspaces"
               value={sortOption}
               onChange={(e) =>
                 setSortOption(e.target.value as "recent" | "name" | "sessions")
               }
-              className="bg-transparent border-0 text-(--tethys-text-secondary) hover:text-(--tethys-text-primary) text-xs outline-none cursor-pointer"
+              className="h-7 text-label-md"
             >
               <option value="recent">Recent Activity</option>
               <option value="name">Alphabetical</option>
               <option value="sessions">Active Sessions</option>
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -266,8 +251,8 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
             onClick={() => setViewMode("grid")}
             className={
               viewMode === "grid"
-                ? "text-(--tethys-text-primary) bg-(--tethys-surface-active)"
-                : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
+                ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
+                : "text-(--tethys-text-muted)"
             }
           >
             <GridSquare className="size-4" />
@@ -279,8 +264,8 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
             onClick={() => setViewMode("list")}
             className={
               viewMode === "list"
-                ? "text-(--tethys-text-primary) bg-(--tethys-surface-active)"
-                : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
+                ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
+                : "text-(--tethys-text-muted)"
             }
           >
             <ListUnordered className="size-4" />
@@ -291,7 +276,7 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
       {/* Main Grid / Catalog Area */}
       <main
         aria-label="Workspace Catalog"
-        className="flex-1 overflow-y-auto p-8"
+        className="flex-1 overflow-y-auto p-2xl"
       >
         <h2 className="sr-only">Workspace List</h2>
         {filteredWorkspaces.length === 0 ? (
@@ -302,7 +287,7 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
               action={
                 <Button
                   size="sm"
-                  className="bg-(--tethys-accent-primary) text-white"
+                  variant="primary"
                   onClick={() => {
                     setSearchQuery("");
                     setFilterNeedsAttention(false);
@@ -318,78 +303,78 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
           <div
             className={
               viewMode === "grid"
-                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
-                : "flex flex-col gap-2.5 max-w-4xl"
+                ? "grid grid-cols-1 gap-lg md:grid-cols-2 lg:grid-cols-3"
+                : "flex max-w-4xl flex-col gap-md"
             }
           >
             {filteredWorkspaces.map((ws) => (
-              <div
+              <Card
                 key={ws.id}
-                className={`group flex flex-col justify-between h-52 rounded-xl border bg-(--tethys-surface-panel) p-4 transition-all hover:border-(--tethys-hairline-strong) hover:bg-(--tethys-surface-card-hover) hover:shadow-lg relative ${
-                  ws.needsAttention
-                    ? "border-amber-500/40"
-                    : "border-(--tethys-hairline)"
+                className={`group relative flex h-[220px] flex-col justify-between p-lg transition-colors hover:border-(--tethys-hairline-strong) hover:bg-(--tethys-surface-card-hover) ${
+                  ws.needsAttention ? "border-warning-soft" : ""
                 }`}
               >
                 {/* Card Top: Source badge + Name + Star */}
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="rounded bg-(--tethys-surface-elevated) px-1.5 py-0.5 font-mono text-[10px] text-(--tethys-text-muted) border border-(--tethys-hairline) shrink-0">
+                <div className="flex w-full items-center justify-between">
+                  <div className="flex items-center gap-sm truncate">
+                    <Badge variant="muted" className="shrink-0">
                       {ws.sourceKind}
-                    </span>
+                    </Badge>
                     <button
                       type="button"
                       onClick={() => handleOpenWorkspace(ws)}
-                      className="text-sm font-semibold text-(--tethys-text-primary) hover:underline truncate outline-none text-left"
+                      className="focus-ring truncate rounded-xs text-left text-heading-md text-(--tethys-text-primary) hover:underline"
                     >
                       {ws.name}
                     </button>
                     {ws.needsAttention && (
-                      <span
+                      <StatusDot
+                        status="awaiting_approval"
+                        className="shrink-0"
                         title="1 session awaiting your approval"
-                        className="flex size-2 rounded-full bg-amber-400 animate-pulse shrink-0"
                       />
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    aria-label={
-                      ws.starred ? "Unstar workspace" : "Star workspace"
-                    }
+                  <IconButton
+                    size="compact"
+                    label={ws.starred ? "Unstar workspace" : "Star workspace"}
                     onClick={(e) => toggleStar(e, ws.id)}
-                    className="p-1 rounded text-(--tethys-text-muted) hover:text-amber-400 transition-colors shrink-0"
+                    className={`shrink-0 ${
+                      ws.starred
+                        ? "text-(--tethys-status-warning)"
+                        : "text-(--tethys-text-muted)"
+                    }`}
                   >
                     <Star
-                      className={`size-3.5 ${
-                        ws.starred ? "text-amber-400 fill-amber-400" : ""
-                      }`}
+                      className={`size-3.5 ${ws.starred ? "fill-current" : ""}`}
                     />
-                  </button>
+                  </IconButton>
                 </div>
 
                 {/* Path line */}
-                <span className="font-mono text-[11px] text-(--tethys-text-muted) truncate">
+                <span className="truncate font-mono text-mono-code text-(--tethys-text-muted)">
                   {ws.path}
                 </span>
 
                 {/* Center Canvas: Git topology or Session chips or Single-node */}
-                <div className="flex-1 my-2 rounded-lg bg-(--tethys-surface-elevated) border border-(--tethys-hairline) p-2.5 flex flex-col justify-center gap-1.5 overflow-hidden">
+                <div className="dot-matrix my-sm flex flex-1 flex-col justify-center gap-1.5 overflow-hidden rounded-md border border-(--tethys-hairline) bg-(--tethys-canvas) p-2.5">
                   {ws.sourceKind === "Folder · no VCS" ? (
-                    <div className="flex items-center justify-between gap-2 px-1">
-                      <div className="flex items-center gap-2 text-xs text-(--tethys-text-muted)">
+                    <div className="flex items-center justify-between gap-sm px-1">
+                      <div className="flex items-center gap-sm text-(--tethys-text-muted)">
                         <TerminalWindow className="size-4 opacity-70" />
-                        <span className="text-[11px]">
+                        <span className="text-label-md font-normal">
                           Single-session folder
                         </span>
                       </div>
-                      <button
-                        type="button"
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         onClick={(e) => handleInitGit(e, ws.id)}
-                        className="rounded bg-(--tethys-surface-active) px-2 py-0.5 text-[11px] font-medium text-(--tethys-accent-focus) hover:underline transition-colors"
+                        className="h-6 px-2 text-(--tethys-accent-focus)"
                       >
                         Initialize git →
-                      </button>
+                      </Button>
                     </div>
                   ) : ws.sessions.length > 0 ? (
                     <div className="flex flex-col gap-1.5">
@@ -398,21 +383,23 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
                           key={sess.id}
                           type="button"
                           onClick={() => onNavigate?.(`/thread/${sess.id}`)}
-                          className={`flex items-center justify-between rounded-md border px-2 py-1 text-left text-xs transition-colors hover:border-(--tethys-hairline-strong) ${
+                          className={`focus-ring flex items-center justify-between rounded-sm border px-2 py-1 text-left transition-colors hover:border-(--tethys-hairline-strong) ${
                             sess.status === "waiting_approval"
-                              ? "border-amber-500/40 bg-amber-500/5 text-amber-300"
+                              ? "border-warning-soft tint-warning text-(--tethys-text-primary)"
                               : "border-(--tethys-hairline) bg-(--tethys-surface-panel) text-(--tethys-text-primary)"
                           }`}
                         >
                           <div className="flex items-center gap-1.5 truncate">
-                            <GitBranch className="size-3 text-(--tethys-text-muted) shrink-0" />
-                            <span className="font-mono text-[11px] font-medium truncate">
+                            <GitBranch className="size-3 shrink-0 text-(--tethys-text-muted)" />
+                            <span className="truncate font-mono text-mono-micro">
                               {sess.branch}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] text-(--tethys-text-muted) shrink-0">
-                            <span className="font-mono">{sess.diffStat}</span>
-                            <span className="rounded bg-(--tethys-surface-elevated) px-1 py-0.2 font-mono">
+                          <div className="flex shrink-0 items-center gap-sm text-(--tethys-text-muted)">
+                            <span className="font-mono text-mono-micro">
+                              {sess.diffStat}
+                            </span>
+                            <span className="rounded-xs bg-(--tethys-surface-hover) px-1 font-mono text-mono-micro">
                               {sess.turn}
                             </span>
                           </div>
@@ -420,9 +407,9 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
                       ))}
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center gap-2 text-xs text-(--tethys-text-muted)">
+                    <div className="flex items-center justify-center gap-sm text-(--tethys-text-muted)">
                       <GitBranch className="size-3.5 opacity-50" />
-                      <span className="text-[11px]">
+                      <span className="text-label-md font-normal">
                         Trunk main · ready for new thread
                       </span>
                     </div>
@@ -430,185 +417,169 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
                 </div>
 
                 {/* Card Footer: Status dot + summary + New Thread action */}
-                <div className="flex items-center justify-between pt-1 text-[11px] text-(--tethys-text-muted)">
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-between text-label-md font-normal text-(--tethys-text-muted)">
+                  <div className="flex min-w-0 items-center gap-1.5">
                     <StatusDot
                       status={
                         ws.needsAttention
-                          ? "warning"
-                          : ws.sessions.length > 0
-                            ? "healthy"
+                          ? "awaiting_approval"
+                          : ws.sessions.some(
+                                (sess) => sess.status === "running",
+                              )
+                            ? "running"
                             : "idle"
                       }
                     />
                     <span className="truncate">{ws.statusSummary}</span>
                   </div>
 
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     onClick={() => onNavigate?.("/thread/new")}
-                    className="flex items-center gap-1 text-[11px] font-medium text-(--tethys-accent-focus) hover:underline"
+                    className="h-6 px-2 text-(--tethys-accent-focus)"
                   >
                     <Plus className="size-3" />
                     <span>Thread</span>
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}
       </main>
 
-      {/* Workspace Peek Drawer (380px) */}
+      {/* Workspace Peek Drawer */}
       <Drawer
         open={peekDrawerOpen}
         onClose={() => setPeekDrawerOpen(false)}
         title={selectedWorkspace?.name ?? "Workspace Details"}
         side="right"
-        width="w-[380px]"
+        width="w-(--layout-drawer-peek)"
       >
         {selectedWorkspace && (
-          <div className="flex h-full flex-col">
-            <div className="border-b border-(--tethys-hairline) p-4 flex flex-col gap-1.5">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-(--tethys-text-muted)">
-                  {selectedWorkspace.sourceKind}
-                </span>
-                <span className="font-bold text-sm text-(--tethys-text-primary)">
+          <div className="flex h-full flex-col gap-lg">
+            <div className="flex flex-col gap-1.5 border-b border-(--tethys-hairline) pb-lg">
+              <div className="flex items-center gap-sm">
+                <Badge variant="muted">{selectedWorkspace.sourceKind}</Badge>
+                <span className="text-heading-md text-(--tethys-text-primary)">
                   {selectedWorkspace.name}
                 </span>
               </div>
-              <span className="font-mono text-xs text-(--tethys-text-secondary)">
+              <span className="font-mono text-mono-code text-(--tethys-text-secondary)">
                 {selectedWorkspace.path}
               </span>
             </div>
 
-            <div className="flex border-b border-(--tethys-hairline) px-3 pt-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setPeekTab("sessions")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors ${
-                  peekTab === "sessions"
-                    ? "border-b-2 border-(--tethys-accent-focus) text-(--tethys-text-primary)"
-                    : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-                }`}
-              >
-                Sessions ({selectedWorkspace.sessions.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setPeekTab("approvals")}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors ${
-                  peekTab === "approvals"
-                    ? "border-b-2 border-(--tethys-accent-focus) text-(--tethys-text-primary)"
-                    : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-                }`}
-              >
-                <span>Approvals</span>
-                {selectedWorkspace.needsAttention && (
-                  <span className="size-1.5 rounded-full bg-amber-400" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPeekTab("trust")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors ${
-                  peekTab === "trust"
-                    ? "border-b-2 border-(--tethys-accent-focus) text-(--tethys-text-primary)"
-                    : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
-                }`}
-              >
-                Policy
-              </button>
-            </div>
+            <UnderlineTabs
+              label="Workspace details"
+              value={peekTab}
+              onChange={setPeekTab}
+              className="border-b border-(--tethys-hairline)"
+              tabs={[
+                {
+                  value: "sessions",
+                  label: `Sessions (${selectedWorkspace.sessions.length})`,
+                },
+                {
+                  value: "approvals",
+                  label: "Approvals",
+                  adornment: selectedWorkspace.needsAttention ? (
+                    <StatusDot status="awaiting_approval" inline />
+                  ) : undefined,
+                },
+                { value: "trust", label: "Policy" },
+              ]}
+            />
 
-            <div className="flex-1 p-4 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto">
               {peekTab === "sessions" ? (
                 selectedWorkspace.sessions.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-(--tethys-text-muted)">
+                  <div className="py-2xl text-center text-body-sm text-(--tethys-text-muted)">
                     No active sessions running in this workspace.
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-md">
                     {selectedWorkspace.sessions.map((sess) => (
-                      <div
+                      <Card
                         key={sess.id}
-                        className="rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) p-3 flex flex-col gap-2"
+                        className="flex flex-col gap-sm bg-(--tethys-surface-nested) p-md"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs font-semibold text-(--tethys-text-primary)">
+                          <span className="font-mono text-mono-code text-(--tethys-text-primary)">
                             {sess.branch}
                           </span>
-                          <span className="text-[10px] text-(--tethys-text-muted)">
+                          <span className="text-label-sm text-(--tethys-text-muted)">
                             {sess.provider}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-(--tethys-text-secondary)">
+                        <div className="flex items-center justify-between text-body-sm text-(--tethys-text-secondary)">
                           <span>Turn {sess.turn}</span>
-                          <span className="font-mono">{sess.diffStat}</span>
+                          <span className="font-mono text-mono-code">
+                            {sess.diffStat}
+                          </span>
                         </div>
                         <Button
                           size="sm"
+                          variant="secondary"
                           onClick={() => {
                             setPeekDrawerOpen(false);
                             onNavigate?.(`/thread/${sess.id}`);
                           }}
-                          className="mt-1 text-xs self-end"
+                          className="self-end"
                         >
                           Open Session →
                         </Button>
-                      </div>
+                      </Card>
                     ))}
                   </div>
                 )
               ) : peekTab === "approvals" ? (
                 selectedWorkspace.needsAttention ? (
-                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 flex flex-col gap-3">
-                    <div className="flex items-center gap-2 text-amber-300 font-semibold text-xs">
+                  <Card className="flex flex-col gap-md border-warning-soft tint-warning p-lg">
+                    <div className="flex items-center gap-sm text-label-md text-(--tethys-status-warning)">
                       <Warning className="size-4" />
                       <span>Permission Request: session s-m16</span>
                     </div>
-                    <p className="text-xs text-(--tethys-text-secondary) leading-relaxed">
-                      Provider <strong>Claude Code</strong> requests permission
-                      to edit{" "}
-                      <code className="font-mono text-[11px] bg-(--tethys-surface-elevated) px-1 rounded">
+                    <p className="text-body-sm text-(--tethys-text-secondary)">
+                      Provider{" "}
+                      <strong className="text-(--tethys-text-primary)">
+                        Claude Code
+                      </strong>{" "}
+                      requests permission to edit{" "}
+                      <code className="rounded-xs bg-(--tethys-surface-nested) px-1 font-mono text-mono-code">
                         apps/desktop/src/routes/workspaces.tsx
                       </code>
                     </p>
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        size="sm"
-                        className="text-xs bg-(--tethys-accent-primary) text-white"
-                      >
+                    <div className="flex gap-sm pt-sm">
+                      <Button size="sm" variant="primary">
                         Allow Once
                       </Button>
-                      <Button size="sm" variant="secondary" className="text-xs">
+                      <Button size="sm" variant="secondary">
                         Reject
                       </Button>
                     </div>
-                  </div>
+                  </Card>
                 ) : (
-                  <div className="py-12 text-center text-xs text-(--tethys-text-muted)">
+                  <div className="py-2xl text-center text-body-sm text-(--tethys-text-muted)">
                     No pending approvals for this workspace.
                   </div>
                 )
               ) : (
-                <div className="flex flex-col gap-4 text-xs">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-semibold text-(--tethys-text-primary)">
-                      Permission Mode
-                    </span>
-                    <span className="text-(--tethys-text-muted)">
-                      Current policy:{" "}
-                      <strong>
-                        {selectedWorkspace.permissionMode ?? "Supervised"}
-                      </strong>
-                    </span>
-                    <p className="text-[11px] text-(--tethys-text-secondary) mt-1">
-                      Supervised mode requests explicit confirmation for write
-                      tool calls.
-                    </p>
-                  </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-heading-md text-(--tethys-text-primary)">
+                    Permission Mode
+                  </span>
+                  <span className="text-body-sm text-(--tethys-text-muted)">
+                    Current policy:{" "}
+                    <strong className="text-(--tethys-text-primary)">
+                      {selectedWorkspace.permissionMode ?? "Supervised"}
+                    </strong>
+                  </span>
+                  <p className="mt-1 text-body-sm text-(--tethys-text-secondary)">
+                    Supervised mode requests explicit confirmation for write
+                    tool calls.
+                  </p>
                 </div>
               )}
             </div>
@@ -621,41 +592,37 @@ export function WorkspacesView({ onNavigate }: WorkspacesViewProps) {
         open={trustDialogOpen}
         onClose={() => setTrustDialogOpen(false)}
         title="Trust this workspace folder?"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setTrustDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={() => setTrustDialogOpen(false)}>
+              Trust & Add Workspace
+            </Button>
+          </>
+        }
       >
-        <div className="flex flex-col gap-4 p-4 text-xs text-(--tethys-text-secondary)">
-          <div className="flex items-center gap-2 text-(--tethys-status-warning)">
+        <div className="flex flex-col gap-lg text-body-sm text-(--tethys-text-secondary)">
+          <div className="flex items-center gap-sm text-(--tethys-status-warning)">
             <Shield className="size-5 shrink-0" />
-            <span className="font-medium">
+            <span className="text-label-md">
               Coding agents will be able to read, edit, and run commands inside
               this folder.
             </span>
           </div>
 
-          <div className="rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) p-3 font-mono text-[11px]">
+          <div className="rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested) p-md font-mono text-mono-code">
             Target: ~/Code/new-project
           </div>
 
-          <p className="leading-relaxed">
+          <p>
             Tethys creates an isolated git worktree per thread so parallel
             agents cannot collide.
           </p>
-
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-(--tethys-hairline)">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setTrustDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              className="bg-(--tethys-accent-primary) text-white"
-              onClick={() => setTrustDialogOpen(false)}
-            >
-              Trust & Add Workspace
-            </Button>
-          </div>
         </div>
       </ModalDialog>
     </div>

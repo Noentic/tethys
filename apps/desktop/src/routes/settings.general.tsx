@@ -1,4 +1,12 @@
-import { Button, ToggleSwitch } from "@tethys/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  PageHeader,
+  Select,
+  ToggleSwitch,
+} from "@tethys/ui";
+import type React from "react";
 import { useState } from "react";
 
 interface TrustedFolder {
@@ -19,6 +27,76 @@ const INITIAL_TRUSTED_FOLDERS: TrustedFolder[] = [
   },
 ];
 
+// Picker label -> CSS font stack. The first entry of each list is the shipped
+// default and is applied by removing the override rather than restating it.
+const UI_FONTS: Record<string, string> = {
+  "Geist Sans": "",
+  "System Sans":
+    'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  Inter: '"Inter", ui-sans-serif, system-ui, sans-serif',
+};
+const CODE_FONTS: Record<string, string> = {
+  "Geist Mono": "",
+  "JetBrains Mono": '"JetBrains Mono", ui-monospace, monospace',
+  "Fira Code": '"Fira Code", ui-monospace, monospace',
+};
+
+function applyFontStack(cssVar: "--font-sans" | "--font-mono", stack: string) {
+  const root = document.documentElement;
+  if (stack) root.style.setProperty(cssVar, stack);
+  else root.style.removeProperty(cssVar);
+}
+
+function SettingsSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-lg">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-heading-md text-(--tethys-text-primary)">
+          {title}
+        </h2>
+        {description && (
+          <p className="text-body-sm text-(--tethys-text-muted)">
+            {description}
+          </p>
+        )}
+      </div>
+      <Card className="divide-y divide-(--tethys-hairline)">{children}</Card>
+    </section>
+  );
+}
+
+function SettingRow({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-xl px-lg py-md">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-body-sm text-(--tethys-text-primary)">
+          {title}
+        </span>
+        <span className="text-label-md font-normal text-(--tethys-text-muted)">
+          {description}
+        </span>
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
 export function SettingsGeneralView() {
   const [colorScheme, setColorScheme] = useState<string>("Dark");
   const [theme, setTheme] = useState<string>("Tethys Dark");
@@ -36,219 +114,161 @@ export function SettingsGeneralView() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-(--tethys-text-primary)">
-          General
-        </h2>
-      </div>
+    <div className="flex flex-col gap-2xl">
+      <PageHeader title="General" />
 
-      {/* Appearance Section (§5.1) */}
-      <div className="flex flex-col gap-5 border-b border-(--tethys-hairline) pb-8">
-        <h3 className="text-sm font-semibold text-(--tethys-text-primary)">
-          Appearance & Typography
-        </h3>
-
-        {/* Color Scheme */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-(--tethys-text-primary)">
-              Color scheme
-            </span>
-            <span className="text-[11px] text-(--tethys-text-muted)">
-              Choose whether Tethys follows the system, light, or dark palette.
-            </span>
-          </div>
-          <select
+      <SettingsSection title="Appearance & Typography">
+        <SettingRow
+          title="Color scheme"
+          description="Choose whether Tethys follows the system, light, or dark palette."
+        >
+          <Select
             aria-label="Color scheme"
             value={colorScheme}
             onChange={(e) => setColorScheme(e.target.value)}
-            className="h-8 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-3 text-xs text-(--tethys-text-primary) outline-none focus:border-(--tethys-hairline-strong)"
           >
             <option value="System">System</option>
             <option value="Dark">Dark</option>
             <option value="Light">Light</option>
-          </select>
-        </div>
+          </Select>
+        </SettingRow>
 
-        {/* Theme */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-(--tethys-text-primary)">
-              Theme
-            </span>
-            <span className="text-[11px] text-(--tethys-text-muted)">
-              Design token manifest hot-swapped across UI surfaces.
-            </span>
-          </div>
-          <select
+        <SettingRow
+          title="Theme"
+          description="Design token manifest hot-swapped across UI surfaces."
+        >
+          <Select
             aria-label="Theme"
             value={theme}
             onChange={(e) => setTheme(e.target.value)}
-            className="h-8 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-3 text-xs text-(--tethys-text-primary) outline-none focus:border-(--tethys-hairline-strong)"
           >
             <option value="Tethys Dark">Tethys Dark (Default)</option>
             <option value="Tethys Light">Tethys Light</option>
             <option value="Midnight Charcoal">Midnight Charcoal</option>
-          </select>
-        </div>
+          </Select>
+        </SettingRow>
 
-        {/* UI Font */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-(--tethys-text-primary)">
-              UI Font
-            </span>
-            <span className="text-[11px] text-(--tethys-text-muted)">
-              Interface typeface for headers, labels, and dialogs.
-            </span>
-          </div>
-          <select
+        <SettingRow
+          title="UI Font"
+          description="Interface typeface for headers, labels, and dialogs."
+        >
+          <Select
             aria-label="UI Font"
             value={uiFont}
-            onChange={(e) => setUiFont(e.target.value)}
-            className="h-8 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-3 text-xs text-(--tethys-text-primary) outline-none focus:border-(--tethys-hairline-strong)"
+            onChange={(e) => {
+              setUiFont(e.target.value);
+              applyFontStack("--font-sans", UI_FONTS[e.target.value] ?? "");
+            }}
           >
-            <option value="Geist Sans">Geist Sans</option>
-            <option value="System Sans">System Sans</option>
-            <option value="Inter">Inter</option>
-          </select>
-        </div>
+            {Object.keys(UI_FONTS).map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </Select>
+        </SettingRow>
 
-        {/* Code Font */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-(--tethys-text-primary)">
-              Code Font
-            </span>
-            <span className="text-[11px] text-(--tethys-text-muted)">
-              Monospace font used in git diff views, logs, and tool cards.
-            </span>
-          </div>
-          <select
+        <SettingRow
+          title="Code Font"
+          description="Monospace font used in git diff views, logs, and tool cards."
+        >
+          <Select
             aria-label="Code Font"
             value={codeFont}
-            onChange={(e) => setCodeFont(e.target.value)}
-            className="h-8 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-3 text-xs text-(--tethys-text-primary) outline-none focus:border-(--tethys-hairline-strong)"
+            onChange={(e) => {
+              setCodeFont(e.target.value);
+              applyFontStack("--font-mono", CODE_FONTS[e.target.value] ?? "");
+            }}
           >
-            <option value="Geist Mono">Geist Mono</option>
-            <option value="JetBrains Mono">JetBrains Mono</option>
-            <option value="Fira Code">Fira Code</option>
-          </select>
-        </div>
+            {Object.keys(CODE_FONTS).map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </Select>
+        </SettingRow>
 
-        {/* Terminal Font */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-(--tethys-text-primary)">
-              Terminal Font
-            </span>
-            <span className="text-[11px] text-(--tethys-text-muted)">
-              Monospace font used in isolated PTY sessions and commands.
-            </span>
-          </div>
-          <select
+        <SettingRow
+          title="Terminal Font"
+          description="Monospace font used in isolated PTY sessions and commands."
+        >
+          {/* No terminal surface exists yet, so there is nothing to apply this to. */}
+          <Select
             aria-label="Terminal Font"
             value={terminalFont}
+            disabled
             onChange={(e) => setTerminalFont(e.target.value)}
-            className="h-8 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-3 text-xs text-(--tethys-text-primary) outline-none focus:border-(--tethys-hairline-strong)"
           >
             <option value="Geist Mono">Geist Mono</option>
             <option value="JetBrainsMono Nerd Font">
               JetBrainsMono Nerd Font
             </option>
-          </select>
-        </div>
-      </div>
+          </Select>
+        </SettingRow>
+      </SettingsSection>
 
-      {/* System Notifications Section (§5.1) */}
-      <div className="flex flex-col gap-5 border-b border-(--tethys-hairline) pb-8">
-        <h3 className="text-sm font-semibold text-(--tethys-text-primary)">
-          System Notifications
-        </h3>
-
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-(--tethys-text-primary)">
-              Tool Approvals Required
-            </span>
-            <span className="text-[11px] text-(--tethys-text-muted)">
-              Notify when a background agent turn requests permission to execute
-              tools or edit files.
-            </span>
-          </div>
+      <SettingsSection title="System Notifications">
+        <SettingRow
+          title="Tool Approvals Required"
+          description="Notify when a background agent turn requests permission to execute tools or edit files."
+        >
           <ToggleSwitch
             id="approval-notification-switch"
             label="Tool Approvals Required"
             checked={approvalAlerts}
             onCheckedChange={setApprovalAlerts}
           />
-        </div>
+        </SettingRow>
 
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-(--tethys-text-primary)">
-              Turn Completion
-            </span>
-            <span className="text-[11px] text-(--tethys-text-muted)">
-              Notify when an agent completes its turn or plan steps.
-            </span>
-          </div>
+        <SettingRow
+          title="Turn Completion"
+          description="Notify when an agent completes its turn or plan steps."
+        >
           <ToggleSwitch
             id="completion-notification-switch"
             label="Turn Completion"
             checked={completionAlerts}
             onCheckedChange={setCompletionAlerts}
           />
-        </div>
-      </div>
+        </SettingRow>
+      </SettingsSection>
 
-      {/* Trusted Folders Manager (§5.1) */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="text-sm font-semibold text-(--tethys-text-primary)">
-            Trusted Folders
-          </h3>
-          <span className="text-xs text-(--tethys-text-muted)">
-            Directories granted execution trust via workspace-trust-dialog.
-            Revoking removes the workspace and stops running agent threads.
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-2 rounded-xl border border-(--tethys-hairline) bg-(--tethys-surface-panel) p-2">
-          {trustedFolders.map((folder) => (
-            <div
-              key={folder.id}
-              className="flex items-center justify-between rounded-lg bg-(--tethys-surface-elevated)/50 p-3 text-xs"
-            >
-              <div className="flex flex-col gap-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-medium text-(--tethys-text-primary) truncate">
-                    {folder.path}
-                  </span>
-                  <span className="rounded bg-(--tethys-surface-panel) px-1.5 py-0.5 font-mono text-[10px] text-(--tethys-text-muted) border border-(--tethys-hairline)">
-                    {folder.sourceKind}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-(--tethys-text-muted)">
-                  <span>Policy: {folder.permissionMode}</span>
-                  <span>·</span>
-                  <span>Trusted {folder.dateTrusted}</span>
-                </div>
+      <SettingsSection
+        title="Trusted Folders"
+        description="Directories granted execution trust via workspace-trust-dialog. Revoking removes the workspace and stops running agent threads."
+      >
+        {trustedFolders.map((folder) => (
+          <div
+            key={folder.id}
+            className="flex items-center justify-between gap-xl px-lg py-md"
+          >
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex items-center gap-sm">
+                <span className="truncate font-mono text-mono-code text-(--tethys-text-primary)">
+                  {folder.path}
+                </span>
+                <Badge variant="muted">{folder.sourceKind}</Badge>
               </div>
-
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => revokeFolder(folder.id)}
-                className="text-xs text-(--tethys-status-danger) hover:bg-red-500/10 border-red-500/30"
-              >
-                Revoke Trust
-              </Button>
+              <span className="text-label-md font-normal text-(--tethys-text-muted)">
+                Policy: {folder.permissionMode} · Trusted {folder.dateTrusted}
+              </span>
             </div>
-          ))}
-        </div>
-      </div>
+
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => revokeFolder(folder.id)}
+            >
+              Revoke Trust
+            </Button>
+          </div>
+        ))}
+        {trustedFolders.length === 0 && (
+          <div className="px-lg py-xl text-center text-body-sm text-(--tethys-text-muted)">
+            No trusted folders.
+          </div>
+        )}
+      </SettingsSection>
     </div>
   );
 }

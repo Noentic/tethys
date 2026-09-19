@@ -1,24 +1,22 @@
-import { Button } from "@tethys/ui";
+import { Button, EmptyState, PageHeader } from "@tethys/ui";
 
 export function SettingsMcpView() {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-semibold text-(--tethys-text-primary)">
-          MCP Servers
-        </h2>
-        <p className="text-xs text-(--tethys-text-muted)">
-          Manage Model Context Protocol servers attached to sessions (M1.11).
-        </p>
-      </div>
+    <div className="flex flex-col gap-xl">
+      <PageHeader
+        title="MCP Servers"
+        description="Manage Model Context Protocol servers attached to sessions (M1.11)."
+      />
 
-      <div className="rounded-lg border border-dashed border-(--tethys-hairline-strong) p-8 text-center">
-        <div className="text-xs text-(--tethys-text-muted) mb-3">
-          No MCP servers configured yet.
-        </div>
-        <Button size="sm" variant="secondary">
-          Add MCP Server
-        </Button>
+      <div className="rounded-lg border border-dashed border-(--tethys-hairline-strong)">
+        <EmptyState
+          title="No MCP servers configured yet."
+          action={
+            <Button size="sm" variant="secondary">
+              Add MCP Server
+            </Button>
+          }
+        />
       </div>
     </div>
   );

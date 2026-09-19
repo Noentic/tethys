@@ -18,7 +18,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex h-5 items-center gap-1.5 rounded-xs bg-(--tethys-surface-hover) px-1.5 font-mono text-[11px] font-medium text-(--tethys-text-secondary) select-none transition-colors",
+        "inline-flex h-5 items-center gap-1.5 rounded-xs bg-(--tethys-surface-hover) px-1.5 font-mono text-mono-micro text-(--tethys-text-secondary) select-none transition-colors",
         interactive &&
           "cursor-pointer hover:bg-(--tethys-surface-active) hover:text-(--tethys-text-primary)",
         className,

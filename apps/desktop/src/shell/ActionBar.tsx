@@ -29,17 +29,17 @@ export function ActionBar({
 
   return (
     <footer
-      className={`flex h-14 w-full items-center justify-between border-t border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-4 select-none ${className ?? ""}`}
+      className={`flex h-(--layout-shell-actionbar) w-full shrink-0 items-center justify-between border-t border-(--tethys-hairline-structural) bg-(--tethys-surface-rail) px-lg select-none ${className ?? ""}`}
     >
       {/* Left cluster: Context & Configuration pills */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-sm">
         <Badge
           variant="outline"
-          className="text-xs cursor-pointer hover:bg-(--tethys-surface-hover)"
+          className="cursor-pointer hover:bg-(--tethys-surface-hover)"
         >
-          <span className="font-semibold">{providerName}</span>
+          <span className="text-(--tethys-text-primary)">{providerName}</span>
           {configSummary && (
-            <span className="text-(--tethys-text-muted) ml-1">
+            <span className="ml-1 text-(--tethys-text-muted)">
               ({configSummary})
             </span>
           )}
@@ -47,24 +47,24 @@ export function ActionBar({
 
         <Badge
           variant="outline"
-          className="text-xs cursor-pointer hover:bg-(--tethys-surface-hover)"
+          className="cursor-pointer hover:bg-(--tethys-surface-hover)"
         >
           <span>Mode: {mode}</span>
         </Badge>
 
         {worktreeBranch && (
-          <Badge variant="outline" className="text-xs">
-            <span className="font-mono">{worktreeBranch}</span>
+          <Badge variant="outline">
+            <span>{worktreeBranch}</span>
           </Badge>
         )}
       </div>
 
       {/* Right cluster: telemetry/usage + queue + Stop button */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-md">
         {usageText && (
           <span
             title={`Token usage: ${usageText}`}
-            className="font-mono text-xs text-(--tethys-text-muted)"
+            className="font-mono text-mono-code text-(--tethys-text-muted)"
           >
             {usageText}
           </span>
@@ -77,11 +77,7 @@ export function ActionBar({
           size="sm"
           onClick={onStop}
           loading={isPending}
-          className={
-            isDestructive
-              ? "bg-[rgba(239,68,68,0.15)] border-(--tethys-status-danger) text-(--tethys-status-danger) font-semibold"
-              : undefined
-          }
+          className={isDestructive ? "tint-danger" : undefined}
         >
           {cancellationState === "terminating"
             ? "Terminating (SIGKILL)"

@@ -1,3 +1,4 @@
+import { Cross } from "@nebutra/icons";
 import type React from "react";
 import { cn } from "../lib/utils";
 
@@ -32,7 +33,7 @@ export function TabStrip({
       role="tablist"
       aria-label="Tabs"
       className={cn(
-        "flex h-10 w-full items-center gap-1 border-b border-(--tethys-hairline) bg-(--tethys-surface-rail) px-2 select-none overflow-x-auto overflow-y-hidden",
+        "flex h-titlebar w-full items-center gap-1 overflow-x-auto overflow-y-hidden border-b border-(--tethys-hairline-structural) bg-(--tethys-surface-rail) px-2 select-none",
         className,
       )}
     >
@@ -53,10 +54,9 @@ export function TabStrip({
                 }
               }}
               className={cn(
-                "group flex h-7 max-w-[220px] items-center gap-1.5 rounded-md px-2.5 text-xs transition-all duration-150 cursor-pointer outline-none shrink-0",
-                "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-1 focus-visible:ring-offset-(--tethys-surface-rail)",
+                "focus-ring group flex h-7 max-w-[220px] shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-body-sm transition-colors duration-150",
                 isActive
-                  ? "border border-(--tethys-hairline) bg-(--tethys-surface-elevated) text-(--tethys-text-primary) font-medium"
+                  ? "edge-lit border border-(--tethys-hairline) bg-(--tethys-surface-elevated) text-(--tethys-text-primary)"
                   : "border border-transparent bg-transparent text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
               )}
             >
@@ -67,7 +67,7 @@ export function TabStrip({
               )}
               <span className="truncate">{tab.title}</span>
               {tab.subtitle && (
-                <span className="truncate font-mono text-[10px] text-(--tethys-text-muted)">
+                <span className="truncate font-mono text-mono-micro text-(--tethys-text-muted)">
                   {tab.subtitle}
                 </span>
               )}
@@ -86,9 +86,9 @@ export function TabStrip({
                     e.stopPropagation();
                     onCloseTab(tab.id);
                   }}
-                  className="ml-auto -mr-1 flex h-4 w-4 items-center justify-center rounded text-(--tethys-text-muted) opacity-0 group-hover:opacity-100 hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary) transition-opacity"
+                  className="ml-auto -mr-1 flex h-5 w-5 items-center justify-center rounded-sm text-(--tethys-text-muted) opacity-0 transition-opacity group-hover:opacity-100 hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
                 >
-                  ×
+                  <Cross className="size-3" aria-hidden="true" />
                 </button>
               )}
             </div>

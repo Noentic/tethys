@@ -170,9 +170,9 @@ The distraction-free orchestration stage for composing the `session/new` call th
 
 **Layout**
 
-- Centered prompt canvas with a fixed 35% viewport top-offset.
+- Centered prompt canvas: vertically centered with a `12vh` optical lift (bottom padding). No fixed top offset.
 - `workspace-selector-pill` sits above the textarea as the first field in the prompt card — defaults to the last-active workspace, but is never silently assumed: no thread is created without an explicit `cwd`. Opening this canvas by double-clicking a workspace card pre-fills it; opening it from the rail's global `compose` icon leaves it for the user to pick.
-- Prompt Card: Fixed `680px` width, `{rounded.2xl}` (20px), background `{semantic.surface-elevated}`, `1px {semantic.hairline}` border.
+- Prompt Card: `min({layout.prompt-width}, 100% - 96px)` width (820px max), `{rounded.2xl}` (20px), background `{semantic.surface-elevated}`, `1px {semantic.hairline-strong}` border with `{semantic.edge-highlight}` top edge.
 - Two-Column Flyout Popover (`model-selector-popover`): left column is the fixed `Provider (200px)` list; the right column's contents are **not** a fixed `Model | Effort` grid — see Behaviour.
 
 **Components**
@@ -349,7 +349,7 @@ A unified configuration surface structured with a left-hand navigation sidebar a
 | Page / Route | Primary View Type | Key Tokens & Sizes | Distinctive UX / Behaviours |
 |---|---|---|---|
 | **`/workspaces`** | Card Grid + Peek Drawer | Cards: `220px`, Drawer: `380px` | Dual canvas modes (git-topology / single-node), Local vs. Remote switch, "Needs attention" filter, trust dialog gating every new folder, zero-click thread chips. |
-| **`/thread/new`** | Centered Prompt Canvas | Card: `680px`, Popover: `560px` | Explicit workspace picker, per-Provider config schema (not a fixed Model/Effort grid), auth-gated Provider selection. |
+| **`/thread/new`** | Centered Prompt Canvas | Card: `820px` max, Popover: `560px` | Explicit workspace picker, per-Provider config schema (not a fixed Model/Effort grid), auth-gated Provider selection. |
 | **`/thread/:id`** | Four-Region IDE Shell | Sessions col: `280px`, Inspector: `360px` | Workspace → Provider → Session grouping, plan panel, protocol-native permission requests, dual-layer cancellation, turn rollback in <150ms, unified/split diffs. |
 | **`/settings/providers`** | Accordion Registry List | Rows: `12px 16px` padding | Per-Provider auth method adapts (env var / URL+code / CLI passthrough), negotiated-capabilities panel (resume, MCP transports, elicitation). |
 | **`/settings/skills`** | Categorized Skill Catalog | Cards / Rows: `36px` height | Yours vs. Discover filter, format-preserving two-way sync to `.agents/skills`. |

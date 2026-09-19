@@ -43,11 +43,9 @@ export function SegmentedControl<T extends string = string>({
             disabled={option.disabled}
             onClick={() => onChange(option.value)}
             className={cn(
-              "flex h-full items-center justify-center rounded-sm px-3 font-medium transition-all duration-150 outline-none",
-              size === "sm" ? "text-xs" : "text-xs font-medium",
-              "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-1 focus-visible:ring-offset-(--tethys-canvas)",
+              "focus-ring flex h-full items-center justify-center rounded-sm px-3 text-label-md transition-colors duration-150",
               isSelected
-                ? "border border-(--tethys-hairline) bg-(--tethys-surface-elevated) text-(--tethys-text-primary) shadow-none"
+                ? "edge-lit border border-(--tethys-hairline) bg-(--tethys-surface-elevated) text-(--tethys-text-primary)"
                 : "border border-transparent bg-transparent text-(--tethys-text-muted) hover:text-(--tethys-text-secondary)",
               option.disabled && "pointer-events-none opacity-40",
             )}

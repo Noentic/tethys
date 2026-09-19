@@ -52,10 +52,9 @@ export const SessionListRow = React.forwardRef<
           }
         }}
         className={cn(
-          "group relative flex h-12 w-full items-center justify-between rounded-md px-3 py-2 text-xs transition-colors duration-150 cursor-pointer select-none outline-none",
-          "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-1 focus-visible:ring-offset-(--tethys-canvas)",
+          "focus-ring-inset group relative flex h-12 w-full cursor-pointer items-center justify-between rounded-sm px-3 py-2 text-body-sm transition-colors duration-150 select-none",
           selected
-            ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-medium before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-r before:bg-(--tethys-accent-focus)"
+            ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-r-xs before:bg-(--tethys-accent-focus)"
             : "bg-transparent text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
           className,
         )}
@@ -64,16 +63,14 @@ export const SessionListRow = React.forwardRef<
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <StatusDot status={status} />
           {providerGlyph && (
-            <span className="shrink-0 text-(--tethys-text-muted) text-[12px]">
+            <span className="shrink-0 text-label-md text-(--tethys-text-muted)">
               {providerGlyph}
             </span>
           )}
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="truncate text-[13px] font-normal leading-tight">
-              {title}
-            </span>
+            <span className="truncate text-body-sm">{title}</span>
             {branchName && (
-              <span className="truncate font-mono text-[10px] text-(--tethys-text-muted) leading-tight mt-0.5">
+              <span className="mt-0.5 truncate font-mono text-mono-micro text-(--tethys-text-muted)">
                 {branchName}
               </span>
             )}
@@ -88,7 +85,7 @@ export const SessionListRow = React.forwardRef<
             />
           )}
           {typeof turnCount === "number" && (
-            <span className="rounded bg-(--tethys-surface-hover) px-1 py-0.5 font-mono text-[10px] text-(--tethys-text-muted)">
+            <span className="rounded-xs bg-(--tethys-surface-hover) px-1 py-0.5 font-mono text-mono-micro text-(--tethys-text-muted)">
               T{turnCount}
             </span>
           )}
@@ -102,7 +99,7 @@ export const SessionListRow = React.forwardRef<
                 e.stopPropagation();
                 onFork();
               }}
-              className="flex h-5 w-5 items-center justify-center rounded text-(--tethys-text-muted) opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary) transition-opacity"
+              className="flex h-5 w-5 items-center justify-center rounded-sm text-(--tethys-text-muted) opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
             >
               ⑂
             </button>

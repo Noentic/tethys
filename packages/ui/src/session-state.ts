@@ -34,6 +34,30 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         pulse: true,
         label: "Awaiting approval",
       };
+    // Provider / daemon health (DESIGN.md status-dot: healthy, awaiting, error).
+    case "healthy":
+    case "ready":
+      return {
+        colorVar: "var(--tethys-status-success)",
+        className: "bg-(--tethys-status-success)",
+        pulse: false,
+        label: "Healthy",
+      };
+    case "auth_required":
+      return {
+        colorVar: "var(--tethys-status-warning)",
+        className: "bg-(--tethys-status-warning)",
+        pulse: false,
+        label: "Authentication required",
+      };
+    case "not_found":
+    case "missing":
+      return {
+        colorVar: "var(--tethys-status-danger)",
+        className: "bg-(--tethys-status-danger)",
+        pulse: false,
+        label: "Not found",
+      };
     case "error":
     case "failed":
       return {

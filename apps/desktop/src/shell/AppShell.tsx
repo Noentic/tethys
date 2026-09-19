@@ -4,7 +4,7 @@ import {
   getOrCreateSessionStore,
   sessionsRegistryStore,
 } from "@tethys/state";
-import { Drawer } from "@tethys/ui";
+import { Badge, Button, Drawer } from "@tethys/ui";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
@@ -15,6 +15,11 @@ import { InspectorPane } from "./InspectorPane";
 import { setupGlobalKeyboardMap } from "./keyboard";
 import { SessionsColumn } from "./SessionsColumn";
 import { WindowHeader } from "./WindowHeader";
+
+// DESIGN.md shell-splitter: a 1px structural line inside a wider transparent hit
+// area. State only recolors — it never changes width, so hover cannot shift layout.
+const SHELL_SEPARATOR_CLASS =
+  "relative w-px shrink-0 cursor-col-resize bg-(--tethys-hairline-structural) outline-none transition-colors duration-150 select-none after:absolute after:inset-y-0 after:-inset-x-[2.5px] after:content-[''] data-[separator=hover]:bg-(--tethys-text-muted) data-[separator=active]:bg-(--tethys-accent-focus) data-[separator=focus]:bg-(--tethys-accent-focus)";
 
 export interface TabData {
   id: string;
@@ -338,7 +343,7 @@ export function AppShell({
                 />
               </Panel>
 
-              <Separator className="relative flex items-center justify-center w-px bg-(--tethys-hairline) hover:w-[3px] hover:bg-(--tethys-accent-focus) transition-all cursor-col-resize select-none outline-none after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']" />
+              <Separator className={SHELL_SEPARATOR_CLASS} />
             </>
           )}
 
@@ -368,7 +373,7 @@ export function AppShell({
           {/* Inspector Panel (360px) - In desktop mode */}
           {activeView === "thread" && !isOverlayInspector && (
             <>
-              <Separator className="relative flex items-center justify-center w-px bg-(--tethys-hairline) hover:w-[3px] hover:bg-(--tethys-accent-focus) transition-all cursor-col-resize select-none outline-none after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']" />
+              <Separator className={SHELL_SEPARATOR_CLASS} />
               <Panel
                 id="shell-inspector"
                 defaultSize={360}
@@ -420,11 +425,11 @@ export function AppShell({
         onClose={() => setApprovalDrawerOpen(false)}
         title={`Pending Approvals (${approvalCount})`}
         side="right"
-        width="w-[420px]"
+        width="w-(--layout-drawer-queue)"
       >
-        <div className="p-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-md">
           {approvalCount === 0 ? (
-            <div className="py-12 text-center text-xs text-(--tethys-text-muted)">
+            <div className="py-2xl text-center text-body-sm text-(--tethys-text-muted)">
               No pending approval requests.
             </div>
           ) : (
@@ -433,29 +438,30 @@ export function AppShell({
               .map((sess) => (
                 <div
                   key={sess.sessionId}
-                  className="rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) p-3 flex flex-col gap-2"
+                  className="flex flex-col gap-sm rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested) p-md"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-xs text-(--tethys-text-primary)">
+                  <div className="flex items-center justify-between gap-sm">
+                    <span className="truncate text-body-sm text-(--tethys-text-primary)">
                       {sess.title}
                     </span>
-                    <span className="text-[10px] text-(--tethys-status-warning) font-mono uppercase">
-                      Action Required
-                    </span>
+                    <Badge variant="warning" size="sm">
+                      Action required
+                    </Badge>
                   </div>
-                  <p className="text-xs text-(--tethys-text-secondary)">
+                  <p className="text-body-sm text-(--tethys-text-secondary)">
                     Session is awaiting tool execution permission.
                   </p>
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="self-end"
                     onClick={() => {
                       setApprovalDrawerOpen(false);
                       onNavigate?.(`/thread/${sess.sessionId}`);
                     }}
-                    className="self-end text-xs text-(--tethys-accent-focus) hover:underline"
                   >
-                    Open Session →
-                  </button>
+                    Open session
+                  </Button>
                 </div>
               ))
           )}

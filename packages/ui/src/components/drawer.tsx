@@ -1,3 +1,4 @@
+import { Cross } from "@nebutra/icons";
 import type React from "react";
 import { useEffect, useRef } from "react";
 import { cn } from "../lib/utils";
@@ -87,7 +88,7 @@ export function Drawer({
         aria-label={typeof title === "string" ? title : "Drawer"}
         tabIndex={-1}
         className={cn(
-          "pointer-events-auto flex h-full flex-col bg-(--tethys-surface-elevated) outline-none shadow-none transition-transform duration-200",
+          "pointer-events-auto flex h-full flex-col bg-(--tethys-surface-elevated) outline-none transition-transform duration-200",
           side === "right"
             ? "border-l border-(--tethys-hairline-strong)"
             : "border-r border-(--tethys-hairline-strong)",
@@ -95,20 +96,20 @@ export function Drawer({
           className,
         )}
       >
-        <div className="flex h-12 items-center justify-between border-b border-(--tethys-hairline) px-4">
-          <div className="text-sm font-semibold text-(--tethys-text-primary) truncate">
+        <div className="flex h-12 items-center justify-between border-b border-(--tethys-hairline) px-lg">
+          <div className="truncate text-heading-md text-(--tethys-text-primary)">
             {title}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close drawer"
-            className="flex h-6 w-6 items-center justify-center rounded text-(--tethys-text-muted) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
+            className="focus-ring flex h-7 w-7 items-center justify-center rounded-md text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
           >
-            ×
+            <Cross className="size-3.5" aria-hidden="true" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+        <div className="flex-1 overflow-y-auto p-lg">{children}</div>
       </div>
     </div>
   );

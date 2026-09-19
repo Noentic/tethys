@@ -12,7 +12,7 @@ import {
   validateThemeManifest,
 } from "./tokens/manifest";
 
-// List of all 28 semantic tokens defined in DESIGN.md lines 93-123
+// List of all 31 semantic tokens defined in DESIGN.md `semantic:` block
 const DESIGN_SEMANTIC_NAMES: SemanticTokenKey[] = [
   "canvas",
   "surface-rail",
@@ -28,6 +28,8 @@ const DESIGN_SEMANTIC_NAMES: SemanticTokenKey[] = [
   "overlay-scrim",
   "hairline",
   "hairline-strong",
+  "hairline-structural",
+  "edge-highlight",
   "grid-dot",
   "text-primary",
   "text-secondary",

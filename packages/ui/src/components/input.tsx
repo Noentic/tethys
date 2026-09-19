@@ -12,13 +12,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div
         className={cn(
-          "relative flex items-center w-full rounded-md border border-(--tethys-hairline-strong) bg-(--tethys-surface-panel) transition-all duration-150",
-          "focus-within:border-(--tethys-accent-focus) focus-within:ring-2 focus-within:ring-(--tethys-accent-focus) focus-within:ring-offset-2 focus-within:ring-offset-(--tethys-canvas)",
+          "relative flex h-8 w-full items-center rounded-sm border border-(--tethys-hairline-strong) bg-(--tethys-surface-panel) transition-colors duration-150",
+          "focus-ring-within focus-within:border-(--tethys-accent-focus)",
           disabled && "opacity-40 pointer-events-none",
         )}
       >
         {leadingIcon && (
-          <span className="flex items-center justify-center pl-2.5 text-(--tethys-text-muted)">
+          <span className="flex items-center justify-center pl-2 text-(--tethys-text-muted)">
             {leadingIcon}
           </span>
         )}
@@ -26,7 +26,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           disabled={disabled}
           className={cn(
-            "w-full bg-transparent px-3 py-1.5 text-sm text-(--tethys-text-primary) placeholder-(--tethys-text-muted) outline-none disabled:cursor-not-allowed",
+            "h-full w-full bg-transparent px-2.5 text-body-sm text-(--tethys-text-primary) placeholder-(--tethys-text-muted) outline-none disabled:cursor-not-allowed",
             leadingIcon && "pl-2",
             trailingIcon && "pr-2",
             className,
@@ -34,7 +34,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {trailingIcon && (
-          <span className="flex items-center justify-center pr-2.5 text-(--tethys-text-muted)">
+          <span className="flex items-center justify-center pr-2 text-(--tethys-text-muted)">
             {trailingIcon}
           </span>
         )}

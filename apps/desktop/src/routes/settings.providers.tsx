@@ -5,7 +5,17 @@ import {
   Key,
   RefreshClockwise,
 } from "@nebutra/icons";
-import { Badge, Button, StepperInput, ToggleSwitch } from "@tethys/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  IconButton,
+  Input,
+  PageHeader,
+  StatusDot,
+  StepperInput,
+  ToggleSwitch,
+} from "@tethys/ui";
 import { useState } from "react";
 
 interface ProviderItem {
@@ -91,51 +101,38 @@ export function SettingsProvidersView() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Top Header & Breadcrumb */}
-      <div className="flex flex-col gap-1">
-        <nav
-          aria-label="Breadcrumb"
-          className="flex items-center gap-1.5 text-xs text-(--tethys-text-muted)"
-        >
-          <span>Settings</span>
-          <span>/</span>
-          <span className="text-(--tethys-text-primary) font-medium">
-            Providers
-          </span>
-        </nav>
-
-        <div className="flex items-center justify-between pt-2">
-          <h2 className="text-2xl font-bold tracking-tight text-(--tethys-text-primary)">
-            Providers
-          </h2>
-
-          <div className="flex items-center gap-2 text-xs text-(--tethys-text-muted)">
-            <span>Checked 1m ago</span>
-            <button
-              type="button"
-              aria-label="Refresh providers status"
-              className="p-1 rounded text-(--tethys-text-muted) hover:text-(--tethys-text-primary) transition-colors"
+    <div className="flex flex-col gap-2xl">
+      <PageHeader
+        title="Providers"
+        actions={
+          <>
+            <span className="text-label-md font-normal text-(--tethys-text-muted)">
+              Checked 1m ago
+            </span>
+            <IconButton
+              size="compact"
+              label="Refresh providers status"
+              className="text-(--tethys-text-muted)"
             >
               <RefreshClockwise className="size-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
+            </IconButton>
+          </>
+        }
+      />
 
       {/* Health Check Interval Setting (§5.2) */}
-      <div className="flex items-center justify-between border-b border-(--tethys-hairline) pb-6">
-        <div className="flex flex-col gap-1 max-w-lg">
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-(--tethys-text-primary)">
-            <span>Health check interval</span>
-          </div>
-          <p className="text-xs text-(--tethys-text-muted) leading-relaxed">
+      <Card className="flex items-center justify-between gap-xl px-lg py-md">
+        <div className="flex max-w-128 flex-col gap-1">
+          <span className="text-body-sm text-(--tethys-text-primary)">
+            Health check interval
+          </span>
+          <p className="text-label-md font-normal text-(--tethys-text-muted)">
             Periodically poll configured ACP provider executables, versions,
             auth status, and model metadata. Set to 0 to poll manually.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-sm">
           <StepperInput
             value={interval}
             min={0}
@@ -143,64 +140,53 @@ export function SettingsProvidersView() {
             step={30}
             onChange={setInterval}
           />
-          <span className="text-xs text-(--tethys-text-muted)">seconds</span>
+          <span className="text-label-md font-normal text-(--tethys-text-muted)">
+            seconds
+          </span>
         </div>
-      </div>
+      </Card>
 
       {/* Provider List Rows (§5.2) */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-md">
         {providers.map((p) => {
           const isExpanded = expandedProviderId === p.id;
           return (
-            <div
-              key={p.id}
-              className="flex flex-col rounded-xl border border-(--tethys-hairline) bg-(--tethys-surface-panel) overflow-hidden"
-            >
+            <Card key={p.id} className="overflow-hidden">
               {/* Row Header */}
-              <div className="flex items-center justify-between p-4 bg-(--tethys-surface-elevated)/40">
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`size-2.5 rounded-full ${
-                      p.status === "healthy"
-                        ? "bg-emerald-500"
-                        : p.status === "auth_required"
-                          ? "bg-amber-400"
-                          : "bg-red-500"
-                    }`}
-                  />
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-(--tethys-text-primary)">
+              <div className="flex items-center justify-between gap-lg px-lg py-md">
+                <div className="flex min-w-0 items-center gap-md">
+                  <StatusDot status={p.status} />
+                  <div className="flex min-w-0 flex-col">
+                    <div className="flex items-center gap-sm">
+                      <span className="text-heading-md text-(--tethys-text-primary)">
                         {p.name}
                       </span>
-                      <Badge
-                        variant="muted"
-                        className="text-[10px] px-1.5 py-0"
-                      >
+                      <Badge variant="muted" size="sm">
                         {p.protocolVersion}
                       </Badge>
                     </div>
-                    <span className="text-xs text-(--tethys-text-muted)">
+                    <span className="truncate text-label-md font-normal text-(--tethys-text-muted)">
                       {p.statusText}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    aria-label={`Toggle details for ${p.name}`}
+                <div className="flex shrink-0 items-center gap-md">
+                  <IconButton
+                    size="compact"
+                    label={`Toggle details for ${p.name}`}
+                    aria-expanded={isExpanded}
                     onClick={() =>
                       setExpandedProviderId(isExpanded ? null : p.id)
                     }
-                    className="p-1 text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
+                    className="text-(--tethys-text-muted)"
                   >
                     {isExpanded ? (
                       <ChevronUp className="size-4" />
                     ) : (
                       <ChevronDown className="size-4" />
                     )}
-                  </button>
+                  </IconButton>
                   <ToggleSwitch
                     id={`provider-${p.id}`}
                     label={`Enable ${p.name}`}
@@ -212,29 +198,25 @@ export function SettingsProvidersView() {
 
               {/* Accordion Content (§5.2) */}
               {isExpanded && (
-                <div className="border-t border-(--tethys-hairline) p-4 flex flex-col gap-4 bg-(--tethys-surface-panel) text-xs">
+                <div className="flex flex-col gap-lg border-t border-(--tethys-hairline) bg-(--tethys-surface-nested) p-lg">
                   {/* Executable Path Override */}
                   <div className="flex flex-col gap-1.5">
                     <label
                       htmlFor={`exec-path-${p.id}`}
-                      className="font-medium text-(--tethys-text-secondary)"
+                      className="text-label-md text-(--tethys-text-secondary)"
                     >
                       Executable Path Override
                     </label>
-                    <div className="flex gap-2">
-                      <input
+                    <div className="flex gap-sm">
+                      <Input
                         id={`exec-path-${p.id}`}
                         type="text"
                         value={p.executablePath}
                         placeholder={`Resolved via PATH (default: ${p.binary})`}
                         onChange={(e) => updatePath(p.id, e.target.value)}
-                        className="flex-1 h-8 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-3 font-mono text-xs text-(--tethys-text-primary) outline-none focus:border-(--tethys-hairline-strong)"
+                        className="font-mono text-mono-code"
                       />
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="text-xs flex items-center gap-1.5"
-                      >
+                      <Button size="sm" variant="secondary" className="h-8">
                         <FolderClosed className="size-3.5" />
                         <span>Browse…</span>
                       </Button>
@@ -242,27 +224,20 @@ export function SettingsProvidersView() {
                   </div>
 
                   {/* Negotiated Capabilities & Auth (§5.2) */}
-                  <div className="flex items-center justify-between pt-2 border-t border-(--tethys-hairline)/60">
-                    <div className="flex items-center gap-2">
-                      <span className="text-(--tethys-text-muted)">
-                        Capabilities:
+                  <div className="flex items-center justify-between gap-lg border-t border-(--tethys-hairline) pt-md">
+                    <div className="flex flex-wrap items-center gap-sm">
+                      <span className="text-label-md font-normal text-(--tethys-text-muted)">
+                        Capabilities
                       </span>
                       {p.capabilities.map((cap) => (
-                        <span
-                          key={cap}
-                          className="rounded bg-(--tethys-surface-elevated) px-2 py-0.5 font-mono text-[10px] text-(--tethys-text-secondary) border border-(--tethys-hairline)"
-                        >
+                        <Badge key={cap} variant="outline">
                           {cap}
-                        </span>
+                        </Badge>
                       ))}
                     </div>
 
                     {p.authMethod && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="text-xs flex items-center gap-1.5"
-                      >
+                      <Button size="sm" variant="secondary">
                         <Key className="size-3" />
                         <span>
                           {p.authMethod === "env_var"
@@ -274,7 +249,7 @@ export function SettingsProvidersView() {
                   </div>
                 </div>
               )}
-            </div>
+            </Card>
           );
         })}
       </div>

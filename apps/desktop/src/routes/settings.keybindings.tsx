@@ -1,4 +1,4 @@
-import { KeycapPill } from "@tethys/ui";
+import { Card, KeycapPill, PageHeader } from "@tethys/ui";
 
 export function SettingsKeybindingsView() {
   const bindings = [
@@ -12,27 +12,23 @@ export function SettingsKeybindingsView() {
   ];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-semibold text-(--tethys-text-primary)">
-          Keyboard Shortcuts
-        </h2>
-        <p className="text-xs text-(--tethys-text-muted)">
-          Global navigation and interaction keybindings.
-        </p>
-      </div>
+    <div className="flex flex-col gap-xl">
+      <PageHeader
+        title="Keybindings"
+        description="Global navigation and interaction keybindings."
+      />
 
-      <div className="divide-y divide-(--tethys-hairline) rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-card)">
+      <Card className="divide-y divide-(--tethys-hairline)">
         {bindings.map((b) => (
           <div
             key={b.action}
-            className="flex items-center justify-between p-3 text-xs"
+            className="flex h-9 items-center justify-between px-lg text-body-sm"
           >
             <span className="text-(--tethys-text-secondary)">{b.action}</span>
             <KeycapPill>{b.key}</KeycapPill>
           </div>
         ))}
-      </div>
+      </Card>
     </div>
   );
 }

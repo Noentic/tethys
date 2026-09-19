@@ -6,15 +6,21 @@ description: |
 
 primitives:
   zinc-950: "#09090b"
-  zinc-925: "#111114"
-  zinc-900: "#121215"
-  zinc-850: "#15151a"
-  zinc-800: "#18181b"
   zinc-700: "#27272a"
+  obsidian-1000: "#050507"
+  obsidian-960: "#0b0b0d"
+  obsidian-940: "#0f0f12"
+  obsidian-920: "#111114"
+  obsidian-900: "#131316"
+  obsidian-880: "#161619"
+  obsidian-860: "#17171a"
+  obsidian-840: "#1b1b1e"
+  obsidian-800: "#212124"
   zinc-500: "#71717a"
   zinc-300: "#bfbfc9"
   zinc-50: "#f4f4f5"
   slate-0: "#ffffff"
+  slate-25: "#f9f9fa"
   slate-50: "#fafafa"
   slate-100: "#f4f4f5"
   slate-200: "#e4e4e7"
@@ -30,20 +36,22 @@ primitives:
 
 themes:
   default-dark:
-    canvas: "{primitives.zinc-950}"
-    surface-rail: "{primitives.zinc-950}"
-    surface-panel: "{primitives.zinc-900}"
-    surface-elevated: "{primitives.zinc-800}"
-    surface-card: "{primitives.zinc-925}"
-    surface-card-hover: "{primitives.zinc-850}"
-    surface-nested: "{primitives.zinc-900}"
-    surface-overlay: "{primitives.zinc-800}"
-    surface-sunken: "{primitives.zinc-950}"
+    canvas: "{primitives.obsidian-960}"
+    surface-rail: "{primitives.obsidian-880}"
+    surface-panel: "{primitives.obsidian-920}"
+    surface-elevated: "{primitives.obsidian-840}"
+    surface-card: "{primitives.obsidian-900}"
+    surface-card-hover: "{primitives.obsidian-860}"
+    surface-nested: "{primitives.obsidian-940}"
+    surface-overlay: "{primitives.obsidian-800}"
+    surface-sunken: "{primitives.obsidian-1000}"
     surface-hover: "rgba(255, 255, 255, 0.04)"
     surface-active: "rgba(255, 255, 255, 0.08)"
     overlay-scrim: "rgba(0, 0, 0, 0.50)"
     hairline: "rgba(255, 255, 255, 0.08)"
     hairline-strong: "{primitives.zinc-700}"
+    hairline-structural: "rgba(255, 255, 255, 0.13)"
+    edge-highlight: "rgba(255, 255, 255, 0.055)"
     grid-dot: "rgba(255, 255, 255, 0.12)"
     text-primary: "{primitives.zinc-50}"
     text-secondary: "{primitives.zinc-300}"
@@ -60,9 +68,9 @@ themes:
     status-warning: "{primitives.amber-500}"
     status-danger: "{primitives.red-500}"
   default-light:
-    canvas: "{primitives.slate-50}"
+    canvas: "{primitives.slate-100}"
     surface-rail: "{primitives.slate-0}"
-    surface-panel: "{primitives.slate-100}"
+    surface-panel: "{primitives.slate-25}"
     surface-elevated: "{primitives.slate-0}"
     surface-card: "{primitives.slate-0}"
     surface-card-hover: "{primitives.slate-100}"
@@ -74,6 +82,8 @@ themes:
     overlay-scrim: "rgba(0, 0, 0, 0.30)"
     hairline: "rgba(0, 0, 0, 0.08)"
     hairline-strong: "{primitives.slate-300}"
+    hairline-structural: "rgba(0, 0, 0, 0.12)"
+    edge-highlight: "rgba(255, 255, 255, 0.90)"
     grid-dot: "rgba(0, 0, 0, 0.12)"
     text-primary: "{primitives.slate-900}"
     text-secondary: "{primitives.slate-700}"
@@ -104,7 +114,9 @@ semantic:
   surface-active: { var: "--tethys-surface-active", role: "Pressed / selected wash" }
   overlay-scrim: { var: "--tethys-overlay-scrim", role: "Dismiss scrim" }
   hairline: { var: "--tethys-hairline", role: "1px default divider" }
-  hairline-strong: { var: "--tethys-hairline-strong", role: "Inputs, toggles, drawer edge" }
+  hairline-strong: { var: "--tethys-hairline-strong", role: "Inputs, toggles, drawer edge, Level 3-4 surface borders" }
+  hairline-structural: { var: "--tethys-hairline-structural", role: "Shell region dividers only: titlebar, rail, sessions/inspector edges, action bar, splitters" }
+  edge-highlight: { var: "--tethys-edge-highlight", role: "Lit top 1px of a Level 2+ surface border. Border treatment, not a shadow" }
   grid-dot: { var: "--tethys-grid-dot", role: "Dot-matrix canvas dots" }
   text-primary: { var: "--tethys-text-primary", role: "Primary text" }
   text-secondary: { var: "--tethys-text-secondary", role: "Secondary text" }
@@ -138,10 +150,10 @@ theming:
 typography:
   display-lg:
     fontFamily: Geist Sans
-    fontSize: 28px
+    fontSize: 36px
     fontWeight: 600
-    lineHeight: 1.3
-    letterSpacing: -0.02em
+    lineHeight: 1.15
+    letterSpacing: -0.025em
   heading-lg:
     fontFamily: Geist Sans
     fontSize: 20px
@@ -222,7 +234,8 @@ layout:
   palette-height: 400px
   drawer-peek: 380px
   drawer-queue: 420px
-  prompt-width: 680px
+  prompt-width: 820px
+  stage-measure: 760px
   popover-selector: 560px
 
 motion:
@@ -243,9 +256,47 @@ components:
   nav-rail:
     backgroundColor: "{semantic.surface-rail}"
     width: "{spacing.rail}"
+    borderRight: "1px solid {semantic.hairline-structural}"
+    selected: "surface-active fill + 2px accent-focus left bar"
+  sessions-column:
+    backgroundColor: "{semantic.surface-panel}"
+    width: "{layout.shell-threads}"
+    borderRight: "1px solid {semantic.hairline-structural}"
+    header: "12px padding, 1px hairline bottom"
+  stage:
+    backgroundColor: "{semantic.canvas}"
+    measure: "{layout.stage-measure}"
+    padding: "{spacing.xl}"
+    gap: "{spacing.md}"
+  inspector:
+    backgroundColor: "{semantic.surface-panel}"
+    width: "{layout.shell-inspector}"
+    borderLeft: "1px solid {semantic.hairline-structural}"
+    padding: "{spacing.lg}"
+  action-bar:
+    backgroundColor: "{semantic.surface-rail}"
+    height: "{layout.shell-actionbar}"
+    borderTop: "1px solid {semantic.hairline-structural}"
+    padding: "0 {spacing.lg}"
+    gap: "{spacing.sm}"
+  toast:
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    edge: "{semantic.edge-highlight}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.md}"
+    maxWidth: 384px
+    typography: "{typography.body-sm}"
+  tooltip:
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    rounded: "{rounded.xs}"
+    padding: 4px 8px
+    typography: "{typography.mono-micro}"
   tab-bar:
     backgroundColor: "{semantic.surface-rail}"
     height: "{spacing.titlebar}"
+    borderBottom: "1px solid {semantic.hairline-structural}"
   tab-item:
     backgroundColor: "transparent"
     backgroundActive: "{semantic.surface-elevated}"
@@ -272,13 +323,15 @@ components:
     padding: 2px 8px
     height: 20px
   shell-splitter:
-    backgroundColor: "{semantic.hairline}"
+    backgroundColor: "{semantic.hairline-structural}"
     hitArea: "{layout.splitter-hit}"
-    hoverColor: "{semantic.hairline-strong}"
+    hoverColor: "{semantic.text-muted}"
     dragColor: "{semantic.accent-focus}"
+    hoverRule: "recolor only; width never changes on hover (motion.rules: no layout shift)"
   command-palette:
     backgroundColor: "{semantic.surface-overlay}"
-    border: "1px solid {semantic.hairline}"
+    border: "1px solid {semantic.hairline-strong}"
+    edge: "{semantic.edge-highlight}"
     rounded: "{rounded.lg}"
     width: "{layout.palette-width}"
   segmented-control:
@@ -369,6 +422,8 @@ components:
     height: 28px
   prompt-card:
     backgroundColor: "{semantic.surface-elevated}"
+    border: "1px solid {semantic.hairline-strong}"
+    edge: "{semantic.edge-highlight}"
     rounded: "{rounded.2xl}"
     padding: "{spacing.lg}"
     width: "{layout.prompt-width}"
@@ -391,8 +446,9 @@ components:
     padding: 4px 8px
     height: 28px
   model-selector-popover:
-    backgroundColor: "{semantic.surface-elevated}"
-    border: "1px solid {semantic.hairline}"
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    edge: "{semantic.edge-highlight}"
     rounded: "{rounded.md}"
     width: "{layout.popover-selector}"
     providerColumnWidth: 200px
@@ -635,19 +691,24 @@ Two-tier contract: `primitives` (raw palette) → `semantic` interface (`surface
 All rows are `{semantic.*}` → `var(--tethys-*)`, resolved per active theme. Hex below shows Default Dark / Default Light.
 
 ### Surfaces
-- **Canvas Base** (`{semantic.canvas}` — dark `#09090b` / light `#fafafa`): Default background for empty states and canvas containers.
-- **Surface Rail** (`{semantic.surface-rail}` — dark `#09090b` / light `#ffffff`): Activity rail and window chrome.
-- **Surface Card** (`{semantic.surface-card}` — dark `#111114` / light `#ffffff`): Workspace card body in the catalog view.
-- **Surface Card Hover** (`{semantic.surface-card-hover}` — dark `#15151a` / light `#f4f4f5`): Raised card state on pointer interaction.
-- **Surface Elevated** (`{semantic.surface-elevated}` — dark `#18181b` / light `#ffffff`): Active tabs, popovers, prompt containers, and active segmented buttons.
-- **Surface Overlay** (`{semantic.surface-overlay}`): Command palette and modal sheets (elevated tone per theme).
-- **Surface Sunken** (`{semantic.surface-sunken}` — `#18181b` both themes): Terminal wells, diff viewer, code wells; always dark for ANSI stability.
-- **Surface Nested** (`{semantic.surface-nested}` — dark `#121215` / light `#f4f4f5`): Accordion interior, thought blocks, tool accordions.
+The shell is **chrome raised over a deep stage**: titlebar, rail and action bar sit above the canvas, the sessions column and inspector sit between, and the stage is the deepest plane. Every pair of surfaces that abut must clear a perceptual gap (CIE L*), enforced by `packages/ui/src/theme/elevation.test.ts`. Depth is tone alone, so the ramp is wide on purpose.
+
+- **Canvas Base** (`{semantic.canvas}` — dark `#0b0b0d` / light `#f4f4f5`): The stage. Deepest plane; default background for empty states and canvas containers.
+- **Surface Rail** (`{semantic.surface-rail}` — dark `#161619` / light `#ffffff`): Titlebar, activity rail, action bar. Raised chrome, >= 3 L* above the canvas.
+- **Surface Panel** (`{semantic.surface-panel}` — dark `#111114` / light `#f9f9fa`): Sessions column and inspector, between chrome and stage.
+- **Surface Card** (`{semantic.surface-card}` — dark `#131316` / light `#ffffff`): Workspace card body in the catalog view.
+- **Surface Card Hover** (`{semantic.surface-card-hover}` — dark `#17171a` / light `#f4f4f5`): Raised card state on pointer interaction.
+- **Surface Elevated** (`{semantic.surface-elevated}` — dark `#1b1b1e` / light `#ffffff`): Active tabs, drawers, prompt containers, active segmented buttons.
+- **Surface Overlay** (`{semantic.surface-overlay}` — dark `#212124` / light `#ffffff`): Popovers, command palette, modal sheets, toasts, tooltips. In dark it is strictly above Surface Elevated. Light themes cannot exceed white, so separation there is the border's job.
+- **Surface Sunken** (`{semantic.surface-sunken}` — dark `#050507` / light `#18181b`): Terminal wells, diff viewer, code wells; always dark for ANSI stability.
+- **Surface Nested** (`{semantic.surface-nested}` — dark `#0f0f12` / light `#f4f4f5`): Recessed interior: accordion bodies, thought blocks, tool accordions, cards inside drawers.
 - **Dot Matrix Grid** (`{semantic.grid-dot}` — dark `rgba(255,255,255,0.12)` / light `rgba(0,0,0,0.12)`): 1px circular grid dots spaced at 12px intervals inside workspace cards.
 
 ### Dividers & Accents
 - **Hairline** (`{semantic.hairline}` — dark `rgba(255,255,255,0.08)` / light `rgba(0,0,0,0.08)`): 1px borders surrounding cards, tab borders, panel dividers, popover frames, and provider row separators.
-- **Hairline Strong** (`{semantic.hairline-strong}` — dark `#27272a` / light `#d4d4d8`): Used for search input strokes, active selection rings, toggle inactive tracks, and drawer borders.
+- **Hairline Strong** (`{semantic.hairline-strong}` — dark `#27272a` / light `#d4d4d8`): Input strokes, toggle inactive tracks, and the border of every Level 3 and Level 4 surface (drawers, prompt card, popovers, palette, modals).
+- **Hairline Structural** (`{semantic.hairline-structural}` — dark `rgba(255,255,255,0.13)` / light `rgba(0,0,0,0.12)`): Shell region dividers only — titlebar bottom, rail right, sessions/inspector edges, action bar top, splitters. Heavier than Hairline so the shell skeleton outweighs component borders such as keycaps.
+- **Edge Highlight** (`{semantic.edge-highlight}` — dark `rgba(255,255,255,0.055)` / light `rgba(255,255,255,0.9)`): The lit top 1px of a Level 2+ surface, drawn as `inset 0 1px 0`. It is a border treatment, not a shadow: it does not cast, blur, or extend beyond the element.
 - **Accent Agent Active** (`{semantic.accent-agent-active}` — dark `#38bdf8` / light `#0284c7`): Electric sky indicator signaling live ACP streaming, active process execution, or an active agent session (`status-active-session` alias).
 - **Accent Focus** (`{semantic.accent-focus}` — `#3b82f6` both): Keyboard focus boundaries and toggle active track (`accent-toggle-active` alias).
 - **Health States**: `{semantic.status-danger}` (dark `#ef4444` / light `#dc2626`, CLI missing), `{semantic.status-warning}` (dark `#f59e0b` / light `#d97706`, disabled/unauthenticated), `{semantic.status-success}` (dark `#10b981` / light `#059669`, healthy handshake). Reserved strictly for provider/agent health; never for decorative chrome.
@@ -659,7 +720,7 @@ The interface relies exclusively on **Geist Sans** for UI hierarchy, **Geist Mon
 
 | Token | Family | Size | Weight | Line Height | Usage |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `{typography.display-lg}` | Geist Sans | 28px | 600 | 1.3 | Centered prompt header ("What are we building today?") |
+| `{typography.display-lg}` | Geist Sans | 36px | 600 | 1.15 | Centered prompt header ("What are we building today?") |
 | `{typography.heading-lg}` | Geist Sans | 20px | 600 | 1.4 | View title ("Workspaces") |
 | `{typography.heading-md}` | Geist Sans | 15px | 600 | 1.4 | Workspace card repo title, drawer headers |
 | `{typography.body-md}` | Geist Sans | 14px | 400 | 1.5 | Chat messages, primary prompt input |
@@ -742,7 +803,7 @@ Provider login opens whichever surface the Provider's `authMethods` declares —
 
 ## Elevation & Depth
 
-No ambient shadows are permitted. Depth is achieved strictly through tonal stepped zinc layers and 1px borders:
+No ambient shadows are permitted. Depth is achieved through tonal stepped layers, 1px borders, and the `{semantic.edge-highlight}` lit top edge on Level 2 and above. Level 4 is always a strictly lighter tone than Level 3 in dark themes, with the same `{semantic.hairline-strong}` border:
 
 | Layer | Surface | Border | Role |
 | :--- | :--- | :--- | :--- |
@@ -750,7 +811,7 @@ No ambient shadows are permitted. Depth is achieved strictly through tonal stepp
 | Level 1 | `{semantic.surface-card}` | 1px `{semantic.hairline}` | Default Workspace card |
 | Level 2 | `{semantic.surface-card-hover}` | 1px `{semantic.hairline-strong}` | Card hover state |
 | Level 3 | `{semantic.surface-elevated}` | 1px `{semantic.hairline-strong}` | Thread peek drawer, prompt input |
-| Level 4 | `{semantic.surface-elevated}` / `{semantic.surface-overlay}` | 1px `{semantic.hairline}` | `model-selector-popover`, `terminal-sheet`, palette above Level 3 |
+| Level 4 | `{semantic.surface-overlay}` | 1px `{semantic.hairline-strong}` | `model-selector-popover`, `terminal-sheet`, palette, modal, toast, tooltip |
 | Nested | `{semantic.surface-nested}` | 1px `{semantic.hairline}` | `provider-accordion` interior inside a Level 0/1 settings row |
 | Sunken | `{semantic.surface-sunken}` | 1px `{semantic.hairline}` | Terminal, diff viewer wells |
 
@@ -772,7 +833,7 @@ Every interactive component implements these 7 states + loading/empty with ident
 | `default` | As specified per component; text `{semantic.text-secondary}`, border `{semantic.hairline}` |
 | `hover` | bg `{semantic.surface-hover}`, text → `{semantic.text-primary}` |
 | `active/pressed` | bg `{semantic.surface-active}`, scale `0.99`, no shadow |
-| `focused` | `2px` `{semantic.accent-focus}` ring + `2px` offset; never remove outline for custom controls |
+| `focused` | `2px` `{semantic.accent-focus}` ring + `2px` offset, drawn with `outline` (not `box-shadow`) so it cannot clip in scroll containers; full-width rows inside scroll regions use a `-2px` inset offset. Never remove outline for custom controls; no per-component override |
 | `selected` | bg `{semantic.surface-active}` + left `2px` `{semantic.accent-focus}` bar (lists) or filled pill (segmented) |
 | `disabled` | `40%` opacity, no pointer events, `aria-disabled`; skeleton text stays `{semantic.text-muted}` |
 | `destructive` | border/text `{semantic.status-danger}`; hover fill `status-danger` at `12%` + `{semantic.text-inverse}` in dark / danger text in light |
@@ -805,7 +866,7 @@ All P0 actions reachable by keyboard; layout stable at 60fps under synthetic 8-s
 ### Prompt Components
 
 **`prompt-card`**
-* Structure: Centered column, width `680px`, background `{semantic.surface-elevated}`, radius `{rounded.2xl}`, padding `{spacing.lg}`.
+* Structure: Centered column, width `min({layout.prompt-width}, 100% - 96px)`, background `{semantic.surface-elevated}`, `1px {semantic.hairline-strong}` border + `{semantic.edge-highlight}` top edge, radius `{rounded.2xl}`, padding `{spacing.lg}`. Vertically centered with a `12vh` optical lift (bottom padding) — no fixed top offset.
 * Header (outside card): `{typography.display-lg}` prompt ("What are we building today?").
 * Input: Multiline textarea, `{typography.body-md}`, text `{semantic.text-primary}`, placeholder `{semantic.text-muted}`.
 * Lower bar: Flex row, `space-between`; left slot is `model-selector-pill`, right slot is the submit action.
@@ -816,13 +877,13 @@ All P0 actions reachable by keyboard; layout stable at 60fps under synthetic 8-s
 * States: `selected` shows the resolved path as a `mono-code` tooltip; a workspace whose trust was revoked renders `destructive` and is non-selectable.
 
 **`model-selector-pill`**
-* Format: `[Provider Icon 16px] [Provider Name label-md] [Config summary mono-micro] [Chevron 14px]`, height `28px`, padding `4px 8px`, radius `{rounded.sm}`, transparent bg → `{semantic.surface-hover}` on hover, focus ring `1px {semantic.accent-focus}`.
+* Format: `[Provider Icon 16px] [Provider Name label-md] [Config summary mono-micro] [Chevron 14px]`, height `28px`, padding `4px 8px`, radius `{rounded.sm}`, transparent bg → `{semantic.surface-hover}` on hover, universal focus ring (see Universal State Matrix).
 * The config summary is whatever the selected Provider's own session-config schema returns — often model + effort, but not guaranteed to be that shape. Display examples: `[▲ Claude Code  Sonnet · Medium ∨]`, `[◈ OpenCode  gpt-5-codex ∨]`, `[◇ Codex CLI ∨]` (no configurable options).
 * A field label dims to `{semantic.text-muted}` (from `{semantic.text-secondary}`) when the schema marks it unavailable for the current selection (e.g. `thought_level` absent on the chosen model). The Provider name never dims.
 * Trigger: Click, `Enter`, or `Space` when focused opens the popover. `Escape` with popover closed is a no-op (focus stays in pill); with popover open, cancels and returns focus to the prompt textarea.
 
 **`model-selector-popover` — Provider List + Schema Panel (supersedes the earlier fixed three-column flyout)**
-* Container: `560px` total width, bg `{semantic.surface-elevated}`, `1px {semantic.hairline}`, radius `{rounded.md}` (Level 4 elevation). Anchored below the pill, left-aligned to the `680px` prompt card. No screen wrapping; flips above the pill only if viewport space requires.
+* Container: `560px` total width, bg `{semantic.surface-overlay}`, `1px {semantic.hairline-strong}` + `{semantic.edge-highlight}` top edge, radius `{rounded.md}` (Level 4 elevation). Anchored below the pill, left-aligned to the prompt card. No screen wrapping; flips above the pill only if viewport space requires.
 * Two regions (macOS column-view / Raycast submenu pattern):
   * **Left — Provider `200px`** (fixed): connected ACP Providers (Claude Code, Codex, OpenCode, custom ACP server). Each row: Geist vendor icon (`16px`) + name (`{typography.label-md}`) + connection dot (`6px {rounded.full}`; `{semantic.accent-agent-active}` streaming, `{semantic.status-success}` ready/idle, `{semantic.status-warning}` `auth_required`, `{semantic.accent-agent-idle}` unreachable) + `protocol-pill` (`ACP v2`) where applicable.
   * **Right — `session-config-panel` `360px`**: renders **whatever the selected Provider's session-config schema declares**, one `schema-field-group` per field. Model + effort is the common case (Claude Code), not a Tethys-wide constant: a Provider may expose only a model list, or nothing configurable at all (panel shows the `empty` pattern: `No session options for this provider`). Field controls come from the schema's type — listbox for enums, `stepper-input` for numbers, `toggle-switch` for booleans. Long lists scroll inside the panel; the Provider column never resizes.
@@ -941,7 +1002,7 @@ All P0 actions reachable by keyboard; layout stable at 60fps under synthetic 8-s
 * `Fork` opens a new Session on the same Provider + Workspace — `session/resume` with `replayFrom: start` where the Provider supports it, otherwise a fresh `session/new` seeded with the transcript summarized into the first message. The row's tooltip states which path applies, read from the Provider's negotiated capabilities.
 
 **`status-dot`**
-* One shared dot for every state surface (rail daemon health, hub rows, session rows, provider rows, topology nodes): `8px` standalone / `6px` inline, `{rounded.full}`. `UI-02` mapping: `Idle` → `accent-agent-idle`, `Running` → `accent-agent-active` (pulse), `Awaiting approval` → `status-warning` (pulse), `Error` → `status-danger`, `Interrupted` → `text-muted`, `Suspended` → `hairline-strong`, `Archived` → `hairline`. An unrecognized state renders the neutral idle dot rather than failing.
+* One shared dot for every state surface (rail daemon health, hub rows, session rows, provider rows, topology nodes): `8px` standalone / `6px` inline, `{rounded.full}`. `UI-02` mapping: `Idle` → `accent-agent-idle`, `Running` → `accent-agent-active` (pulse), `Awaiting approval` → `status-warning` (pulse), `Error` → `status-danger`, `Interrupted` → `text-muted`, `Suspended` → `hairline-strong`, `Archived` → `hairline`. Provider and daemon health reuse the same dot: `Healthy` → `status-success`, `Authentication required` → `status-warning` (no pulse), `Not found` → `status-danger`. An unrecognized state renders the neutral idle dot rather than failing.
 
 **`approval-inbox-pill`**
 * Tab-strip pill `Waiting on you (N)` with a `{semantic.status-warning}` pulse dot and `mono-micro` count; hidden entirely at zero. Click slides out the `approval-queue-drawer` without interrupting the active conversation. The hub's `Needs attention (N)` filter chip reuses these tokens in `selected` state — same component, different placement.
@@ -978,7 +1039,7 @@ All layouts use `{semantic.*}` only; API states marked with `→ API`.
 
 * **Font stack**: `Geist Sans` for all structural UI labels (titles, pills, buttons, segmented items, provider names). `Geist Mono` for branch names, `worktree-session-item` labels, diff stats (`+42 −12`), hotkeys, telemetry, stepper numbers, and status subtext. `Geist Icons` for all glyphs. Never swap.
 * **Backgrounds**: `{semantic.canvas}` global, `{semantic.surface-rail}` chrome, `{semantic.surface-elevated}`/`{semantic.surface-overlay}` for prompt/popover/drawer/palette/sheets, `{semantic.surface-card}` cards, `{semantic.surface-nested}` accordion, `{semantic.surface-sunken}` terminal/diff wells. No other fills.
-* **Dividers**: strictly `1px solid` `{semantic.hairline}`, with `{semantic.hairline-strong}` only for input strokes, toggle tracks, and drawer borders. No shadows for depth — tonal steps + hairlines only.
+* **Dividers**: strictly `1px solid`. `{semantic.hairline-structural}` for shell region edges and splitters; `{semantic.hairline}` for component borders and row separators; `{semantic.hairline-strong}` for input strokes, toggle tracks, and Level 3-4 surface borders. No shadows for depth — tonal steps, hairlines and the `{semantic.edge-highlight}` lit edge only.
 * **Accents**: general chrome entirely monochromatic. Color accents restricted to `{semantic.accent-agent-active}`/`{semantic.status-active-session}` streaming/running, `{semantic.status-success}` healthy/idle-ready, `{semantic.status-warning}` / `{semantic.status-danger}` health warnings, `{semantic.accent-focus}` focus + toggle-active. Effort labels, chips, and badges never use accent color except the running pulse dot.
 * **Density**: settings rows `12px 16px`; accordion sections `12px` gaps; drawer rows `36px`; chips `20px`. `SYN-11` schema forms must reuse `schema-field-group` spacing so static MVP inputs and generated V1 forms share rhythm.
 
@@ -1038,4 +1099,4 @@ All layouts use `{semantic.*}` only; API states marked with `→ API`.
 * Don't dim the Provider name when a config field is unsupported; dim only the affected field label.
 * Don't read or cache vendor tokens in any login surface (`login-dialog` or `terminal-sheet`); launch the vendor's own flow and close.
 * Don't adopt foreign component runtimes (e.g. ACP UI kits) that bring their own stores, providers, or icon sets; borrow presentational ideas only and re-implement against `@tethys/state` and semantic tokens (M1.6 plan D9).
-* Don't add shadows, blurs, or accent-colored chrome outside execution/health states.
+* Don't add shadows, blurs, or accent-colored chrome outside execution/health states. The `{semantic.edge-highlight}` lit top edge is a border treatment and is the only inset highlight permitted.

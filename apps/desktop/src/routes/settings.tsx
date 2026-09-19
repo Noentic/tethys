@@ -1,4 +1,5 @@
 import { ArrowLeft, MagnifyingGlass, TerminalWindow } from "@nebutra/icons";
+import { Input, KeycapPill } from "@tethys/ui";
 import type React from "react";
 import { useState } from "react";
 
@@ -42,34 +43,29 @@ export function SettingsLayout({
       {/* Left Navigation (240px, Matching Image 4 & Image 6) */}
       <nav
         aria-label="Settings Navigation"
-        className="flex h-full w-60 flex-col justify-between border-r border-(--tethys-hairline) bg-(--tethys-surface-panel) p-3 select-none shrink-0"
+        className="flex h-full w-60 shrink-0 flex-col justify-between border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) p-md select-none"
       >
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-md">
           {/* App title / Brand header (Matching Image 4) */}
-          <div className="flex items-center gap-2 px-2 py-1.5">
-            <div className="flex size-6 items-center justify-center rounded bg-(--tethys-accent-primary) text-white">
+          <div className="flex items-center gap-sm px-2 py-1.5">
+            <div className="flex size-6 items-center justify-center rounded-sm bg-(--tethys-primary) text-(--tethys-on-primary)">
               <TerminalWindow className="size-3.5" />
             </div>
-            <span className="text-sm font-bold tracking-tight text-(--tethys-text-primary)">
+            <span className="text-heading-md text-(--tethys-text-primary)">
               Tethys
             </span>
           </div>
 
           {/* Search box inside settings sidebar (Matching Image 4) */}
-          <div className="relative flex items-center px-1">
-            <MagnifyingGlass className="absolute left-3.5 size-3.5 text-(--tethys-text-muted)" />
-            <input
-              type="text"
-              aria-label="Search settings"
-              placeholder="Search"
-              value={navSearch}
-              onChange={(e) => setNavSearch(e.target.value)}
-              className="h-8 w-full rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) pl-8 pr-7 text-xs text-(--tethys-text-primary) placeholder:text-(--tethys-text-muted) focus:border-(--tethys-hairline-strong) focus:outline-none transition-colors"
-            />
-            <kbd className="absolute right-3 font-mono text-[10px] text-(--tethys-text-muted)">
-              /
-            </kbd>
-          </div>
+          <Input
+            type="text"
+            aria-label="Search settings"
+            placeholder="Search"
+            value={navSearch}
+            onChange={(e) => setNavSearch(e.target.value)}
+            leadingIcon={<MagnifyingGlass className="size-3.5" />}
+            trailingIcon={<KeycapPill>/</KeycapPill>}
+          />
 
           {/* Nav Categories */}
           <div className="flex flex-col gap-0.5">
@@ -80,9 +76,9 @@ export function SettingsLayout({
                   key={item.id}
                   type="button"
                   onClick={() => onNavigateSection?.(item.path)}
-                  className={`flex h-8 items-center rounded-lg px-3 text-xs font-medium transition-colors text-left outline-none focus-visible:ring-1 focus-visible:ring-(--tethys-accent-focus) ${
+                  className={`focus-ring-inset flex h-8 items-center rounded-sm px-3 text-left text-body-sm transition-colors ${
                     isSelected
-                      ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-semibold"
+                      ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
                       : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
                   }`}
                 >
@@ -94,10 +90,10 @@ export function SettingsLayout({
         </div>
 
         {/* Bottom Section (Matching Image 4) */}
-        <div className="flex flex-col gap-1 border-t border-(--tethys-hairline) pt-2">
+        <div className="flex flex-col gap-1 border-t border-(--tethys-hairline) pt-sm">
           <button
             type="button"
-            className="flex h-8 items-center gap-2 rounded-lg px-3 text-xs text-(--tethys-text-muted) hover:text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover) transition-colors text-left"
+            className="focus-ring-inset flex h-8 items-center gap-sm rounded-sm px-3 text-left text-body-sm text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
           >
             <span className="truncate">Sign in to Tethys Sync</span>
           </button>
@@ -105,7 +101,7 @@ export function SettingsLayout({
           <button
             type="button"
             onClick={() => onNavigateSection?.("/thread/new")}
-            className="flex h-8 items-center gap-2 rounded-lg px-3 text-xs text-(--tethys-text-muted) hover:text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover) transition-colors text-left"
+            className="focus-ring-inset flex h-8 items-center gap-sm rounded-sm px-3 text-left text-body-sm text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
           >
             <ArrowLeft className="size-3.5" />
             <span>Back</span>
@@ -118,7 +114,7 @@ export function SettingsLayout({
         {/* Child Slot */}
         <main
           aria-label={`${currentItem.label} Settings`}
-          className="flex-1 p-8 max-w-4xl"
+          className="max-w-4xl flex-1 p-2xl"
         >
           {children}
         </main>

@@ -15,7 +15,7 @@ export function ActivityRail({
   return (
     <aside
       aria-label="Activity Rail"
-      className="flex h-full w-12 flex-col items-center justify-between border-r border-(--tethys-hairline) bg-(--tethys-surface-rail) py-3 select-none shrink-0 z-20"
+      className="z-20 flex h-full w-rail shrink-0 flex-col items-center justify-between border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-rail) py-3 select-none"
     >
       {/* Top cluster */}
       <div className="flex flex-col items-center gap-2">
@@ -25,11 +25,11 @@ export function ActivityRail({
           onClick={() => onNavigate("workspaces")}
           className={
             activeView === "workspaces"
-              ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-semibold"
+              ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) relative before:absolute before:top-2 before:bottom-2 before:-left-1.5 before:w-0.5 before:rounded-r-xs before:bg-(--tethys-accent-focus)"
               : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
           }
         >
-          <GridSquare className="h-5 w-5" />
+          <GridSquare className="size-5" />
         </IconButton>
 
         <IconButton
@@ -38,11 +38,11 @@ export function ActivityRail({
           onClick={() => onNavigate("thread-new")}
           className={
             activeView === "thread-new"
-              ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-semibold"
+              ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) relative before:absolute before:top-2 before:bottom-2 before:-left-1.5 before:w-0.5 before:rounded-r-xs before:bg-(--tethys-accent-focus)"
               : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
           }
         >
-          <Plus className="h-5 w-5" />
+          <Plus className="size-5" />
         </IconButton>
       </div>
 
@@ -54,11 +54,11 @@ export function ActivityRail({
           onClick={() => onNavigate("settings")}
           className={
             activeView === "settings"
-              ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
+              ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) relative before:absolute before:top-2 before:bottom-2 before:-left-1.5 before:w-0.5 before:rounded-r-xs before:bg-(--tethys-accent-focus)"
               : "text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
           }
         >
-          <SettingsGear className="h-5 w-5" />
+          <SettingsGear className="size-5" />
         </IconButton>
 
         <div

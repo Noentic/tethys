@@ -19,7 +19,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center p-8 text-center",
+        "flex flex-col items-center justify-center p-2xl text-center",
         className,
       )}
       {...props}
@@ -29,15 +29,13 @@ export function EmptyState({
           {icon}
         </div>
       )}
-      <h3 className="text-sm font-semibold text-(--tethys-text-primary)">
-        {title}
-      </h3>
+      <h3 className="text-heading-md text-(--tethys-text-primary)">{title}</h3>
       {description && (
-        <p className="mt-1 max-w-sm text-xs text-(--tethys-text-muted)">
+        <p className="mt-1 max-w-96 text-body-sm text-(--tethys-text-muted)">
           {description}
         </p>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div className="mt-lg">{action}</div>}
     </div>
   );
 }

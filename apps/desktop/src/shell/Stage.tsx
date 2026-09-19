@@ -12,7 +12,7 @@ export function Stage({ store, className }: StageProps) {
 
   if (entries.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center min-w-[560px] p-8">
+      <div className="flex min-w-[560px] flex-1 items-center justify-center p-2xl">
         <EmptyState
           title="No activity yet"
           description="Send a message in the composer or select an action to start this thread."
@@ -24,16 +24,18 @@ export function Stage({ store, className }: StageProps) {
   return (
     <main
       aria-label="Thread Stage"
-      className={`flex-1 overflow-y-auto min-w-[560px] p-4 flex flex-col gap-3 ${className ?? ""}`}
+      className={`min-w-[560px] flex-1 overflow-y-auto ${className ?? ""}`}
     >
-      {entries.map((entry) => {
-        const Renderer = getEntryRenderer(entry.kind);
-        return (
-          <div key={entry.id} className="w-full">
-            <Renderer entry={entry} />
-          </div>
-        );
-      })}
+      <div className="mx-auto flex w-full max-w-(--layout-stage-measure) flex-col gap-md px-xl py-xl">
+        {entries.map((entry) => {
+          const Renderer = getEntryRenderer(entry.kind);
+          return (
+            <div key={entry.id} className="w-full">
+              <Renderer entry={entry} />
+            </div>
+          );
+        })}
+      </div>
     </main>
   );
 }

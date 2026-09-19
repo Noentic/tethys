@@ -16,20 +16,20 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 font-medium select-none rounded-xs border transition-colors",
+        "inline-flex items-center gap-1 select-none rounded-xs border transition-colors",
         size === "sm"
-          ? "px-1.5 py-0.5 text-[10px] leading-tight"
-          : "px-2 py-0.5 text-[11px] leading-snug font-mono",
+          ? "px-1.5 py-0.5 text-label-sm"
+          : "px-2 py-0.5 font-mono text-mono-micro",
         variant === "default" &&
           "border-(--tethys-hairline) bg-(--tethys-surface-hover) text-(--tethys-text-secondary)",
         variant === "muted" &&
           "border-(--tethys-hairline) bg-(--tethys-surface-hover) text-(--tethys-text-muted)",
         variant === "warning" &&
-          "border-(--tethys-status-warning) bg-[rgba(245,158,11,0.1)] text-(--tethys-status-warning)",
+          "border-(--tethys-status-warning) tint-warning text-(--tethys-status-warning)",
         variant === "success" &&
-          "border-(--tethys-status-success) bg-[rgba(16,185,129,0.1)] text-(--tethys-status-success)",
+          "border-(--tethys-status-success) tint-success text-(--tethys-status-success)",
         variant === "danger" &&
-          "border-(--tethys-status-danger) bg-[rgba(239,68,68,0.1)] text-(--tethys-status-danger)",
+          "border-(--tethys-status-danger) tint-danger text-(--tethys-status-danger)",
         variant === "outline" &&
           "border-(--tethys-hairline-strong) bg-transparent text-(--tethys-text-secondary)",
         className,

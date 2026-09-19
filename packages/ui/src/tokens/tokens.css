@@ -1,19 +1,22 @@
 :root {
-  /* Default Dark (Obsidian Zinc) */
-  --tethys-canvas: #09090b;
-  --tethys-surface-rail: #09090b;
-  --tethys-surface-panel: #121215;
-  --tethys-surface-elevated: #18181b;
-  --tethys-surface-card: #111114;
-  --tethys-surface-card-hover: #15151a;
-  --tethys-surface-nested: #121215;
-  --tethys-surface-overlay: #18181b;
-  --tethys-surface-sunken: #09090b;
+  /* Default Dark (Obsidian Zinc) — chrome raised above the canvas, stage deepest.
+     Every pair of surfaces that touch in the UI clears its L* gap (elevation.test.ts). */
+  --tethys-canvas: #0b0b0d;
+  --tethys-surface-rail: #161619;
+  --tethys-surface-panel: #111114;
+  --tethys-surface-elevated: #1b1b1e;
+  --tethys-surface-card: #131316;
+  --tethys-surface-card-hover: #17171a;
+  --tethys-surface-nested: #0f0f12;
+  --tethys-surface-overlay: #212124;
+  --tethys-surface-sunken: #050507;
   --tethys-surface-hover: rgba(255, 255, 255, 0.04);
   --tethys-surface-active: rgba(255, 255, 255, 0.08);
   --tethys-overlay-scrim: rgba(0, 0, 0, 0.5);
   --tethys-hairline: rgba(255, 255, 255, 0.08);
   --tethys-hairline-strong: #27272a;
+  --tethys-hairline-structural: rgba(255, 255, 255, 0.13);
+  --tethys-edge-highlight: rgba(255, 255, 255, 0.055);
   --tethys-grid-dot: rgba(255, 255, 255, 0.12);
   --tethys-text-primary: #f4f4f5;
   --tethys-text-secondary: #bfbfc9;
@@ -34,11 +37,13 @@
   --tethys-status-warning: #f59e0b;
   --tethys-status-danger: #ef4444;
 
-  /* Typography */
+  /* Typography families */
   --font-sans:
-    "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
-  --font-mono: "Geist Mono", monospace;
+    "Geist Variable", "Geist Sans", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    "Geist Mono Variable", "Geist Mono", ui-monospace, SFMono-Regular, Menlo,
+    monospace;
 
   /* Border radius */
   --radius-none: 0px;
@@ -61,12 +66,9 @@
   --layout-palette-height: 400px;
   --layout-drawer-peek: 380px;
   --layout-drawer-queue: 420px;
-  --layout-prompt-width: 680px;
+  --layout-prompt-width: 820px;
   --layout-popover-selector: 560px;
-
-  /* Spacing */
-  --spacing-rail: 48px;
-  --spacing-titlebar: 40px;
+  --layout-stage-measure: 760px;
 
   /* Motion */
   --motion-instant: 100ms;
@@ -76,10 +78,11 @@
 }
 
 [data-theme="light"] {
-  /* Default Light (Clean Zinc/Slate) */
-  --tethys-canvas: #fafafa;
+  /* Default Light (Clean Zinc/Slate) — canvas and panel step down so the
+     white surfaces actually rise above them. */
+  --tethys-canvas: #f4f4f5;
   --tethys-surface-rail: #ffffff;
-  --tethys-surface-panel: #f4f4f5;
+  --tethys-surface-panel: #f9f9fa;
   --tethys-surface-elevated: #ffffff;
   --tethys-surface-card: #ffffff;
   --tethys-surface-card-hover: #f4f4f5;
@@ -91,6 +94,8 @@
   --tethys-overlay-scrim: rgba(0, 0, 0, 0.3);
   --tethys-hairline: rgba(0, 0, 0, 0.08);
   --tethys-hairline-strong: #d4d4d8;
+  --tethys-hairline-structural: rgba(0, 0, 0, 0.12);
+  --tethys-edge-highlight: rgba(255, 255, 255, 0.9);
   --tethys-grid-dot: rgba(0, 0, 0, 0.12);
   --tethys-text-primary: #18181b;
   --tethys-text-secondary: #3f3f46;

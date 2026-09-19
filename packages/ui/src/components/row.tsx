@@ -25,10 +25,9 @@ export const Row = React.forwardRef<HTMLDivElement, RowProps>(
         data-selected={selected ? "true" : undefined}
         aria-disabled={disabled}
         className={cn(
-          "flex items-center gap-2 rounded-sm px-3 py-1.5 text-xs transition-colors duration-150 select-none outline-none",
-          "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-1 focus-visible:ring-offset-(--tethys-canvas)",
+          "focus-ring relative flex min-h-9 items-center gap-2 rounded-sm px-3 py-1.5 text-body-sm transition-colors duration-150 select-none",
           selected
-            ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-medium"
+            ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-r-xs before:bg-(--tethys-accent-focus)"
             : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
           borderBottom && "border-b border-(--tethys-hairline)",
           disabled && "pointer-events-none opacity-40",

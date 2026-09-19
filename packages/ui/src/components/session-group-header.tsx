@@ -1,3 +1,4 @@
+import { ChevronDown } from "@nebutra/icons";
 import type React from "react";
 import { cn } from "../lib/utils";
 
@@ -26,30 +27,27 @@ export function SessionGroupHeader({
       aria-expanded={!collapsed}
       onClick={onToggle}
       className={cn(
-        "flex h-7 w-full items-center justify-between px-3 font-medium text-[11px] text-(--tethys-text-muted) select-none cursor-pointer outline-none transition-colors",
+        "focus-ring-inset flex h-7 w-full cursor-pointer items-center justify-between px-3 text-label-sm text-(--tethys-text-muted) transition-colors select-none",
         level === 1
           ? "bg-transparent uppercase tracking-wider"
           : "pl-5 bg-transparent",
         "hover:text-(--tethys-text-secondary)",
-        "focus-visible:ring-1 focus-visible:ring-(--tethys-accent-focus)",
         className,
       )}
     >
       <div className="flex items-center gap-1.5 min-w-0">
-        <span
+        <ChevronDown
           className={cn(
-            "text-[10px] transition-transform duration-150 shrink-0",
+            "size-3 shrink-0 transition-transform duration-150",
             collapsed ? "-rotate-90" : "rotate-0",
           )}
           aria-hidden="true"
-        >
-          ▾
-        </span>
+        />
         {icon && <span className="shrink-0">{icon}</span>}
         <span className="truncate">{title}</span>
       </div>
       {typeof count === "number" && (
-        <span className="font-mono text-[10px] text-(--tethys-text-muted)">
+        <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
           {count}
         </span>
       )}

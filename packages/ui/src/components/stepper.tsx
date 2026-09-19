@@ -68,8 +68,7 @@ export const StepperInput = React.forwardRef<HTMLDivElement, StepperInputProps>(
         aria-valuemax={max}
         onKeyDown={handleKeyDown}
         className={cn(
-          "inline-flex h-8 items-center rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-panel) outline-none transition-all",
-          "focus-visible:ring-2 focus-visible:ring-(--tethys-accent-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--tethys-canvas)",
+          "focus-ring inline-flex h-8 items-center rounded-sm border border-(--tethys-hairline-strong) bg-(--tethys-surface-panel) transition-colors",
           disabled && "cursor-not-allowed opacity-40",
           className,
         )}
@@ -80,11 +79,11 @@ export const StepperInput = React.forwardRef<HTMLDivElement, StepperInputProps>(
           disabled={disabled || value <= min}
           onClick={handleDecrement}
           aria-label="Decrement"
-          className="flex h-full w-7 items-center justify-center text-xs font-mono text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) disabled:pointer-events-none disabled:opacity-40"
+          className="flex h-full w-6 items-center justify-center font-mono text-mono-code text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) disabled:pointer-events-none disabled:opacity-40"
         >
           −
         </button>
-        <span className="min-w-[70px] px-2 text-center font-mono text-xs font-medium text-(--tethys-text-primary) select-none">
+        <span className="min-w-[70px] px-2 text-center font-mono text-mono-micro text-(--tethys-text-primary) select-none">
           {display}
         </span>
         <button
@@ -93,7 +92,7 @@ export const StepperInput = React.forwardRef<HTMLDivElement, StepperInputProps>(
           disabled={disabled || value >= max}
           onClick={handleIncrement}
           aria-label="Increment"
-          className="flex h-full w-7 items-center justify-center text-xs font-mono text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) disabled:pointer-events-none disabled:opacity-40"
+          className="flex h-full w-6 items-center justify-center font-mono text-mono-code text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) disabled:pointer-events-none disabled:opacity-40"
         >
           +
         </button>

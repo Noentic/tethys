@@ -1,4 +1,5 @@
-import { getAllInspectorSlots } from "@tethys/ui";
+import { Cross } from "@nebutra/icons";
+import { getAllInspectorSlots, IconButton } from "@tethys/ui";
 
 export interface InspectorPaneProps {
   sessionId?: string;
@@ -18,27 +19,29 @@ export function InspectorPane({
   const content = (
     <aside
       aria-label="Turn Inspector"
-      className={`flex h-full w-[360px] flex-col border-l border-(--tethys-hairline) bg-(--tethys-surface-panel) select-none shrink-0 overflow-y-auto ${className ?? ""}`}
+      className={`flex h-full flex-col overflow-y-auto border-l border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) select-none ${
+        isOverlay ? "w-(--layout-shell-inspector) shrink-0" : "w-full"
+      } ${className ?? ""}`}
     >
-      <div className="flex h-10 items-center justify-between border-b border-(--tethys-hairline) px-4">
-        <span className="text-xs font-semibold text-(--tethys-text-primary)">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-(--tethys-hairline) px-lg">
+        <span className="text-heading-md text-(--tethys-text-primary)">
           Inspector
         </span>
         {isOverlay && onCloseOverlay && (
-          <button
-            type="button"
+          <IconButton
+            size="compact"
+            label="Close inspector"
             onClick={onCloseOverlay}
-            aria-label="Close inspector"
-            className="flex h-6 w-6 items-center justify-center rounded text-(--tethys-text-muted) hover:text-(--tethys-text-primary)"
+            className="text-(--tethys-text-muted)"
           >
-            ×
-          </button>
+            <Cross className="size-3.5" aria-hidden="true" />
+          </IconButton>
         )}
       </div>
 
-      <div className="flex-1 p-4 flex flex-col gap-4">
+      <div className="flex flex-1 flex-col gap-lg p-lg">
         {slots.length === 0 ? (
-          <div className="py-8 text-center text-xs text-(--tethys-text-muted)">
+          <div className="py-xl text-center text-body-sm text-(--tethys-text-muted)">
             No inspector slots registered
           </div>
         ) : (

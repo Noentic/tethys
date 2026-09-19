@@ -85,7 +85,7 @@ export function ModalDialog({
         aria-describedby={description ? "dialog-description" : undefined}
         tabIndex={-1}
         className={cn(
-          "w-full rounded-xl border border-(--tethys-hairline-strong) bg-(--tethys-surface-overlay) p-6 shadow-none outline-none",
+          "edge-lit w-full rounded-lg border border-(--tethys-hairline-strong) bg-(--tethys-surface-overlay) p-xl outline-none",
           maxWidth,
           className,
         )}
@@ -93,7 +93,7 @@ export function ModalDialog({
         {title && (
           <h2
             id="dialog-title"
-            className="text-base font-semibold text-(--tethys-text-primary)"
+            className="text-heading-md text-(--tethys-text-primary)"
           >
             {title}
           </h2>
@@ -101,14 +101,14 @@ export function ModalDialog({
         {description && (
           <p
             id="dialog-description"
-            className="mt-1 text-xs text-(--tethys-text-muted)"
+            className="mt-1 text-body-sm text-(--tethys-text-muted)"
           >
             {description}
           </p>
         )}
         <div className="mt-4">{children}</div>
         {footer && (
-          <div className="mt-6 flex items-center justify-end gap-2 border-t border-(--tethys-hairline) pt-4">
+          <div className="mt-xl flex items-center justify-end gap-sm border-t border-(--tethys-hairline) pt-lg">
             {footer}
           </div>
         )}

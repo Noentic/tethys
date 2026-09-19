@@ -1,12 +1,13 @@
+import { ArrowUp, ChevronDown, FolderClosed, Warning } from "@nebutra/icons";
 import {
-  ArrowUp,
-  Check,
-  ChevronDown,
-  FolderClosed,
-  Sparkles,
-  Warning,
-} from "@nebutra/icons";
-import { Popover, Textarea } from "@tethys/ui";
+  ActionIconButton,
+  Badge,
+  Listbox,
+  Popover,
+  Select,
+  StatusDot,
+  Textarea,
+} from "@tethys/ui";
 import type React from "react";
 import { useState } from "react";
 
@@ -74,6 +75,13 @@ const ACP_PROVIDERS: ProviderOption[] = [
   },
 ];
 
+// workspace-selector-pill / model-selector-pill: transparent, 28px, sm radius.
+const PILL_CLASS =
+  "focus-ring flex h-7 items-center gap-1.5 rounded-sm px-2 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+
+const SECTION_LABEL_CLASS =
+  "px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider";
+
 export function ThreadNewView({ onStartSession }: ThreadNewViewProps) {
   const [prompt, setPrompt] = useState<string>("");
   const [selectedWorkspace, setSelectedWorkspace] = useState<WorkspaceOption>(
@@ -91,9 +99,10 @@ export function ThreadNewView({ onStartSession }: ThreadNewViewProps) {
     useState<boolean>(false);
   const [providerPickerOpen, setProviderPickerOpen] = useState<boolean>(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim()) return;
+  const canSubmit = prompt.trim().length > 0;
+
+  const submit = () => {
+    if (!canSubmit) return;
     onStartSession?.(
       selectedWorkspace.id,
       selectedProvider.id,
@@ -102,45 +111,45 @@ export function ThreadNewView({ onStartSession }: ThreadNewViewProps) {
     );
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submit();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (prompt.trim()) {
-        onStartSession?.(
-          selectedWorkspace.id,
-          selectedProvider.id,
-          selectedModel,
-          prompt,
-        );
-      }
+      submit();
     }
   };
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center -mt-10 bg-(--tethys-canvas) px-4">
-      {/* Hero Greeting */}
-      <h1 className="text-2xl sm:text-3xl font-medium tracking-tight text-white mb-6 text-center select-none">
+    <div className="flex h-full w-full flex-col items-center justify-center px-12 pb-[12vh]">
+      {/* Hero Greeting (display-lg, outside the card) */}
+      <h1 className="mb-xl text-center text-display-lg text-(--tethys-text-primary) select-none">
         What are we building today?
       </h1>
 
-      {/* Rounded Prompt Card Frame (Fixed 680px - 720px, §3) */}
-      <div className="w-full max-w-[700px] rounded-2xl border border-(--tethys-hairline) bg-(--tethys-surface-panel) p-4 shadow-2xl focus-within:border-(--tethys-hairline-strong) transition-all">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          {/* Top Row: Workspace Selector Pill (§3) */}
-          <div className="relative">
+      {/* prompt-card: Level 3 surface, lit top edge, 2xl radius */}
+      <div className="edge-lit w-full max-w-(--layout-prompt-width) rounded-2xl border border-(--tethys-hairline-strong) bg-(--tethys-surface-elevated) p-lg transition-colors focus-within:border-(--tethys-text-muted)">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-md">
+          {/* workspace-selector-pill */}
+          <div className="relative self-start">
             <button
               type="button"
+              aria-haspopup="listbox"
+              aria-expanded={workspacePickerOpen}
               onClick={() => setWorkspacePickerOpen((prev) => !prev)}
-              className="flex h-7 items-center gap-1.5 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-2.5 text-xs text-(--tethys-text-secondary) hover:text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover) transition-colors outline-none focus-visible:ring-1 focus-visible:ring-(--tethys-accent-focus)"
+              className={PILL_CLASS}
             >
-              <FolderClosed className="size-3.5 text-(--tethys-accent-focus)" />
-              <span className="font-semibold text-(--tethys-text-primary)">
+              <FolderClosed className="size-4 text-(--tethys-text-muted)" />
+              <span className="text-(--tethys-text-primary)">
                 {selectedWorkspace.name}
               </span>
-              <span className="font-mono text-[10px] text-(--tethys-text-muted)">
+              <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
                 {selectedWorkspace.sourceKind}
               </span>
-              <ChevronDown className="size-3 opacity-60 ml-0.5" />
+              <ChevronDown className="size-3.5 text-(--tethys-text-muted)" />
             </button>
 
             <Popover
@@ -148,65 +157,56 @@ export function ThreadNewView({ onStartSession }: ThreadNewViewProps) {
               onClose={() => setWorkspacePickerOpen(false)}
               className="top-full left-0 mt-1.5"
             >
-              <div className="w-72 p-2 flex flex-col gap-1 overflow-y-auto max-h-64">
-                <span className="text-[10px] font-semibold text-(--tethys-text-muted) uppercase tracking-wider px-2 py-1">
-                  Trusted Workspaces (cwd)
-                </span>
-                {TRUSTED_WORKSPACES.map((ws) => (
-                  <button
-                    key={ws.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedWorkspace(ws);
-                      setWorkspacePickerOpen(false);
-                    }}
-                    className={`flex items-center justify-between rounded-lg px-2.5 py-2 text-xs text-left transition-colors ${
-                      selectedWorkspace.id === ws.id
-                        ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-medium"
-                        : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)"
-                    }`}
-                  >
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-semibold truncate text-(--tethys-text-primary)">
-                        {ws.name}
-                      </span>
-                      <span className="font-mono text-[10px] text-(--tethys-text-muted) truncate">
-                        {ws.path}
-                      </span>
-                    </div>
-                    {selectedWorkspace.id === ws.id && (
-                      <Check className="size-3.5 text-(--tethys-accent-focus) shrink-0 ml-2" />
-                    )}
-                  </button>
-                ))}
+              <div className="w-72">
+                <div className={SECTION_LABEL_CLASS}>Trusted Workspaces</div>
+                <Listbox
+                  label="Trusted workspaces"
+                  selectedId={selectedWorkspace.id}
+                  items={TRUSTED_WORKSPACES.map((ws) => ({
+                    id: ws.id,
+                    value: ws,
+                    label: ws.name,
+                    sublabel: ws.path,
+                  }))}
+                  onSelect={(item) => {
+                    setSelectedWorkspace(item.value);
+                    setWorkspacePickerOpen(false);
+                  }}
+                />
               </div>
             </Popover>
           </div>
 
-          {/* Prompt Input Area */}
+          {/* Prompt input */}
           <Textarea
+            bare
             rows={3}
             placeholder="Ask Anything..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full resize-none bg-transparent border-0 p-1 text-sm sm:text-base leading-relaxed focus:outline-none focus-visible:ring-0 placeholder:text-(--tethys-text-muted) min-h-[96px] text-(--tethys-text-primary)"
+            className="min-h-[96px] px-1"
           />
 
-          {/* Bottom Action Row */}
-          <div className="flex items-center justify-between pt-1">
-            {/* Model & Provider Selector Pill (§3) */}
+          {/* Bottom action row */}
+          <div className="flex items-center justify-between">
+            {/* model-selector-pill */}
             <div className="relative">
               <button
                 type="button"
+                aria-haspopup="listbox"
+                aria-expanded={providerPickerOpen}
                 onClick={() => setProviderPickerOpen((prev) => !prev)}
-                className="flex h-8 items-center gap-2 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-elevated) px-3 text-xs text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover) transition-colors outline-none focus-visible:ring-1 focus-visible:ring-(--tethys-accent-focus)"
+                className={PILL_CLASS}
               >
-                <Sparkles className="size-3.5 text-(--tethys-accent-focus)" />
-                <span className="font-medium">
-                  {selectedProvider.name} · {selectedModel} · {selectedEffort}
+                <StatusDot status={selectedProvider.status} inline />
+                <span className="text-(--tethys-text-primary)">
+                  {selectedProvider.name}
                 </span>
-                <ChevronDown className="size-3.5 opacity-60" />
+                <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
+                  {selectedModel} · {selectedEffort}
+                </span>
+                <ChevronDown className="size-3.5 text-(--tethys-text-muted)" />
               </button>
 
               <Popover
@@ -214,127 +214,95 @@ export function ThreadNewView({ onStartSession }: ThreadNewViewProps) {
                 onClose={() => setProviderPickerOpen(false)}
                 className="top-full left-0 mt-1.5"
               >
-                {/* Two-Column Popover: 200px Providers + 340px Parameters (§3) */}
-                <div className="flex w-[540px] h-[300px] divide-x divide-(--tethys-hairline) overflow-hidden rounded-xl bg-(--tethys-surface-elevated)">
-                  {/* Column 1: ACP Providers (200px) */}
-                  <div className="w-[200px] p-2 flex flex-col gap-1 overflow-y-auto shrink-0">
-                    <span className="text-[10px] font-semibold text-(--tethys-text-muted) uppercase tracking-wider px-2 py-1">
-                      ACP Providers
-                    </span>
-                    {ACP_PROVIDERS.map((prov) => (
-                      <button
-                        key={prov.id}
-                        type="button"
-                        onClick={() => {
-                          if (prov.status === "healthy") {
-                            setSelectedProvider(prov);
-                            setSelectedModel(prov.models[0]);
-                          }
-                        }}
-                        className={`flex items-center justify-between rounded-lg px-2.5 py-2 text-xs text-left transition-colors ${
-                          selectedProvider.id === prov.id
-                            ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-medium"
-                            : prov.status === "healthy"
-                              ? "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)"
-                              : "text-(--tethys-text-muted) opacity-60 cursor-not-allowed"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <span
-                            className={`size-2 rounded-full shrink-0 ${
-                              prov.status === "healthy"
-                                ? "bg-emerald-500"
-                                : prov.status === "auth_required"
-                                  ? "bg-amber-400"
-                                  : "bg-red-500"
-                            }`}
-                          />
-                          <span className="truncate">{prov.name}</span>
-                        </div>
-                        {prov.status !== "healthy" && (
-                          <Warning className="size-3 text-(--tethys-status-warning) shrink-0 ml-1" />
-                        )}
-                      </button>
-                    ))}
+                {/* Provider list (200px) + session-config panel */}
+                <div className="flex h-[300px] w-(--layout-popover-selector) divide-x divide-(--tethys-hairline) overflow-hidden">
+                  <div className="flex w-[200px] shrink-0 flex-col overflow-y-auto">
+                    <div className={SECTION_LABEL_CLASS}>ACP Providers</div>
+                    <Listbox
+                      label="ACP providers"
+                      selectedId={selectedProvider.id}
+                      items={ACP_PROVIDERS.map((prov) => ({
+                        id: prov.id,
+                        value: prov,
+                        label: prov.name,
+                        icon: <StatusDot status={prov.status} inline />,
+                        sublabel:
+                          prov.status !== "healthy" ? (
+                            <Warning className="size-3 text-(--tethys-status-warning)" />
+                          ) : undefined,
+                        disabled: prov.status !== "healthy",
+                      }))}
+                      onSelect={(item) => {
+                        setSelectedProvider(item.value);
+                        setSelectedModel(item.value.models[0]);
+                      }}
+                    />
                   </div>
 
-                  {/* Column 2: Provider Parameters & Schema (340px) */}
-                  <div className="flex-1 p-3.5 flex flex-col gap-3 overflow-y-auto">
-                    <div className="flex flex-col gap-1 border-b border-(--tethys-hairline) pb-2">
-                      <span className="text-xs font-semibold text-(--tethys-text-primary)">
+                  <div className="flex flex-1 flex-col gap-md overflow-y-auto p-md">
+                    <div className="flex flex-col gap-sm border-b border-(--tethys-hairline) pb-md">
+                      <span className="text-heading-md text-(--tethys-text-primary)">
                         {selectedProvider.name} Configuration
                       </span>
-                      <div className="flex flex-wrap gap-1 mt-0.5">
+                      <div className="flex flex-wrap gap-1">
                         {selectedProvider.capabilities.map((cap) => (
-                          <span
-                            key={cap}
-                            className="rounded bg-(--tethys-surface-panel) px-1.5 py-0.5 font-mono text-[9px] text-(--tethys-text-muted) border border-(--tethys-hairline)"
-                          >
+                          <Badge key={cap} variant="muted">
                             {cap}
-                          </span>
+                          </Badge>
                         ))}
                       </div>
                     </div>
 
-                    {/* Model Select */}
                     <div className="flex flex-col gap-1">
                       <label
                         htmlFor="model-select"
-                        className="text-[11px] font-medium text-(--tethys-text-muted)"
+                        className="text-label-md text-(--tethys-text-muted)"
                       >
                         Model
                       </label>
-                      <select
+                      <Select
                         id="model-select"
                         value={selectedModel}
                         onChange={(e) => setSelectedModel(e.target.value)}
-                        className="h-8 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-panel) px-2.5 text-xs text-(--tethys-text-primary) outline-none focus:border-(--tethys-hairline-strong)"
                       >
                         {selectedProvider.models.map((m) => (
                           <option key={m} value={m}>
                             {m}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </div>
 
-                    {/* Reasoning Effort */}
                     <div className="flex flex-col gap-1">
                       <label
                         htmlFor="effort-select"
-                        className="text-[11px] font-medium text-(--tethys-text-muted)"
+                        className="text-label-md text-(--tethys-text-muted)"
                       >
                         Thinking Effort
                       </label>
-                      <select
+                      <Select
                         id="effort-select"
                         value={selectedEffort}
                         onChange={(e) => setSelectedEffort(e.target.value)}
-                        className="h-8 rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-panel) px-2.5 text-xs text-(--tethys-text-primary) outline-none focus:border-(--tethys-hairline-strong)"
                       >
                         <option value="Low">Low</option>
                         <option value="Medium">Medium</option>
                         <option value="High">High</option>
-                      </select>
+                      </Select>
                     </div>
                   </div>
                 </div>
               </Popover>
             </div>
 
-            {/* Circular Arrow Up Submit Button */}
-            <button
+            <ActionIconButton
               type="submit"
-              disabled={!prompt.trim()}
-              aria-label="Submit prompt"
-              className={`flex size-8 items-center justify-center rounded-full transition-all ${
-                prompt.trim()
-                  ? "bg-white text-black hover:bg-white/90 shadow-md cursor-pointer"
-                  : "bg-white/10 text-white/40 cursor-not-allowed"
-              }`}
+              label="Submit prompt"
+              ready={canSubmit}
+              disabled={!canSubmit}
             >
               <ArrowUp className="size-4" />
-            </button>
+            </ActionIconButton>
           </div>
         </form>
       </div>

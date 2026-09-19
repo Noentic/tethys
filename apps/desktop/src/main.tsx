@@ -1,4 +1,5 @@
-import "@tethys/ui/src/tokens/tokens.css";
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
 import "@tethys/ui/tailwind.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -68,7 +69,7 @@ const threadNewRoute = createRoute({
     const navigate = useNavigate();
     return (
       <ThreadNewView
-        onStartSession={(_wsId, _modelId) => {
+        onStartSession={(_workspaceId, _providerId, _modelId, _prompt) => {
           const generatedId = `sess-${Date.now().toString(36)}`;
           navigate({ to: `/thread/${generatedId}` });
         }}

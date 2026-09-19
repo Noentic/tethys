@@ -31,8 +31,7 @@ export function Listbox<T = string>({
       aria-label={label}
       tabIndex={0}
       className={cn(
-        "flex flex-col gap-0.5 rounded-md p-1 outline-none",
-        "focus-visible:ring-1 focus-visible:ring-(--tethys-accent-focus)",
+        "focus-ring flex flex-col gap-0.5 rounded-md p-1",
         className,
       )}
     >
@@ -53,9 +52,9 @@ export function Listbox<T = string>({
               }
             }}
             className={cn(
-              "flex h-8 items-center gap-2 rounded-sm px-2.5 text-xs transition-colors duration-150 cursor-pointer select-none",
+              "relative flex h-9 cursor-pointer items-center gap-2 rounded-sm px-3 text-body-sm transition-colors duration-150 select-none",
               isSelected
-                ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) font-medium"
+                ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-r-xs before:bg-(--tethys-accent-focus)"
                 : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
               item.disabled &&
                 "pointer-events-none opacity-40 cursor-not-allowed",
@@ -68,7 +67,7 @@ export function Listbox<T = string>({
             )}
             <span className="truncate flex-1">{item.label}</span>
             {item.sublabel && (
-              <span className="shrink-0 font-mono text-[10px] text-(--tethys-text-muted)">
+              <span className="shrink-0 font-mono text-mono-micro text-(--tethys-text-muted)">
                 {item.sublabel}
               </span>
             )}

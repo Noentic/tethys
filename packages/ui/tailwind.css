@@ -1,6 +1,61 @@
 @import "tailwindcss";
 @import "./src/tokens/tokens.css";
 
+/* Tailwind auto-detects sources from the consuming app's root, so classes that
+   appear only inside these primitives were never generated. Scan them explicitly. */
+@source "./src";
+
+/* Literal design scales (not themeable): the type ramp from DESIGN.md
+   typography.*. Each step carries size, leading, tracking and weight, so
+   `text-body-sm` is the whole style. */
+@theme {
+  --text-display-lg: 36px;
+  --text-display-lg--line-height: 1.15;
+  --text-display-lg--letter-spacing: -0.025em;
+  --text-display-lg--font-weight: 600;
+  --text-heading-lg: 20px;
+  --text-heading-lg--line-height: 1.4;
+  --text-heading-lg--letter-spacing: -0.015em;
+  --text-heading-lg--font-weight: 600;
+  --text-heading-md: 15px;
+  --text-heading-md--line-height: 1.4;
+  --text-heading-md--letter-spacing: -0.01em;
+  --text-heading-md--font-weight: 600;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 1.5;
+  --text-body-md--letter-spacing: -0.005em;
+  --text-body-md--font-weight: 400;
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 1.4;
+  --text-body-sm--letter-spacing: 0;
+  --text-body-sm--font-weight: 400;
+  --text-label-md: 12px;
+  --text-label-md--line-height: 1.4;
+  --text-label-md--letter-spacing: 0;
+  --text-label-md--font-weight: 500;
+  --text-label-sm: 11px;
+  --text-label-sm--line-height: 1.3;
+  --text-label-sm--letter-spacing: 0.01em;
+  --text-label-sm--font-weight: 500;
+  --text-mono-code: 12px;
+  --text-mono-code--line-height: 1.5;
+  --text-mono-code--letter-spacing: 0;
+  --text-mono-code--font-weight: 400;
+  --text-mono-micro: 11px;
+  --text-mono-micro--line-height: 1.3;
+  --text-mono-micro--letter-spacing: 0.02em;
+  --text-mono-micro--font-weight: 500;
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-rail: 48px;
+  --spacing-titlebar: 40px;
+}
+
 @theme inline {
   --color-canvas: var(--tethys-canvas);
   --color-surface-rail: var(--tethys-surface-rail);
@@ -16,6 +71,8 @@
   --color-overlay-scrim: var(--tethys-overlay-scrim);
   --color-hairline: var(--tethys-hairline);
   --color-hairline-strong: var(--tethys-hairline-strong);
+  --color-hairline-structural: var(--tethys-hairline-structural);
+  --color-edge-highlight: var(--tethys-edge-highlight);
   --color-grid-dot: var(--tethys-grid-dot);
   --color-text-primary: var(--tethys-text-primary);
   --color-text-secondary: var(--tethys-text-secondary);
@@ -42,4 +99,59 @@
   --radius-xl: var(--radius-xl);
   --radius-2xl: var(--radius-2xl);
   --radius-full: var(--radius-full);
+}
+
+/* Structural utilities the scales can't express as a single class. */
+@utility edge-lit {
+  /* Top 1px of the border, lit. A border treatment, not a shadow: it does not
+     cast, blur or extend beyond the element (DESIGN.md Elevation & Depth). */
+  box-shadow: inset 0 1px 0 var(--tethys-edge-highlight);
+}
+
+/* Universal focus state (DESIGN.md state matrix): 2px accent ring, 2px offset.
+   Drawn with outline rather than box-shadow so it never clips inside a scroll
+   container and stays clear of the no-shadow rule. */
+@utility focus-ring {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  &:focus-visible {
+    outline-color: var(--tethys-accent-focus);
+  }
+}
+
+/* For full-width rows inside scroll containers, where an outset ring would clip. */
+@utility focus-ring-inset {
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  &:focus-visible {
+    outline-color: var(--tethys-accent-focus);
+  }
+}
+
+@utility focus-ring-within {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  &:focus-within {
+    outline-color: var(--tethys-accent-focus);
+  }
+}
+
+@utility border-warning-soft {
+  border-color: color-mix(in oklab, var(--tethys-status-warning) 45%, transparent);
+}
+
+/* Dot-matrix canvas well (DESIGN.md worktree-topology-canvas: 12px dot grid). */
+@utility dot-matrix {
+  background-image: radial-gradient(var(--tethys-grid-dot) 1px, transparent 1px);
+  background-size: 12px 12px;
+}
+
+@utility tint-warning {
+  background-color: color-mix(in oklab, var(--tethys-status-warning) 12%, transparent);
+}
+@utility tint-success {
+  background-color: color-mix(in oklab, var(--tethys-status-success) 12%, transparent);
+}
+@utility tint-danger {
+  background-color: color-mix(in oklab, var(--tethys-status-danger) 12%, transparent);
 }
