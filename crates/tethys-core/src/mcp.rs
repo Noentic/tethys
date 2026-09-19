@@ -184,58 +184,38 @@ impl McpApi for Core {
         scope: Scope,
     ) -> Result<ProjectionPlan, ApiError> {
         let root = self.workspace_roots.root(&workspace_id).await?;
-        let root_str = root.display().to_string();
-        let projector = projector_for(target)
-            .ok_or_else(|| ApiError::Internal(format!("{target:?} has no file projector")))?;
-        let path = target_path(projector.as_ref(), &root_str, &self.sync_home(), scope)?;
-        let original = read_text(&path).map_err(internal)?;
-
-        let (global, workspace) = self.registry_paths(Some(&root));
-        let registry = Registry::load(Some(&global), workspace.as_deref()).map_err(internal)?;
-        let desired = registry.effective(target, &BTreeSet::new());
-
-        let owned = match &self.store {
-            Some(store) => match store
-                .projection(target.as_str(), &path.display().to_string())
-                .await
-                .map_err(store_error)?
-            {
-                Some(row) => applied_from_row(&row).map_err(internal)?.entries,
-                None => BTreeMap::new(),
-            },
-            None => BTreeMap::new(),
-        };
-
-        let mut plan = projection::plan(PlanRequest {
-            projector: projector.as_ref(),
-            path: &path,
-            scope,
-            original: original.as_deref(),
-            desired: &desired,
-            owned: &owned,
-        })
-        .map_err(internal)?;
-
-        if let Ok(proj_target) = ProjectionTarget::try_from(target) {
-            let profiles = self.sessions.profiles_compat();
-            for (profile_id, _, compat) in profiles {
-                if compat.projection_target == Some(proj_target) {
-                    plan.providers.push(profile_id);
-                }
-            }
-        }
-
-        Ok(plan)
+        self.build_projection_plan(&root, target, scope).await
     }
 
-    async fn mcp_projection_apply(&self, plan: ProjectionPlan) -> Result<Applied, ApiError> {
+    async fn mcp_projection_apply(
+        &self,
+        workspace_id: WorkspaceId,
+        target: TargetId,
+        scope: Scope,
+        plan: ProjectionPlan,
+    ) -> Result<Applied, ApiError> {
+        // The webview-supplied plan is untrusted: it carries `path` and
+        // `content`. Re-derive the plan server-side and apply only our own.
+        let root = self.workspace_roots.root(&workspace_id).await?;
+        let fresh = self.build_projection_plan(&root, target, scope).await?;
+        if plan.target != fresh.target
+            || plan.scope != fresh.scope
+            || plan.path != fresh.path
+            || plan.base_hash != fresh.base_hash
+            || plan.content != fresh.content
+        {
+            return Err(ApiError::Conflict(
+                "projection plan does not match workspace state; re-plan and retry".into(),
+            ));
+        }
+
         let store = self.sync_store()?;
-        let projector = projector_for(plan.target).ok_or_else(|| {
-            ApiError::Internal(format!("{:?} has no file projector", plan.target))
+        let projector = projector_for(fresh.target).ok_or_else(|| {
+            ApiError::Internal(format!("{:?} has no file projector", fresh.target))
         })?;
         let applied = projection::apply(ApplyRequest {
             projector: projector.as_ref(),
-            plan: &plan,
+            plan: &fresh,
             home: &self.sync_home(),
         })
         .map_err(internal)?;
@@ -334,6 +314,60 @@ impl Core {
             global_registry_path(&self.sync_home()),
             workspace_root.map(workspace_registry_path),
         )
+    }
+
+    /// Builds the authoritative projection plan for a resolved workspace root.
+    ///
+    /// Both preview (`mcp_projection_plan`) and apply (`mcp_projection_apply`)
+    /// route through here so apply never trusts a webview-supplied path/content.
+    async fn build_projection_plan(
+        &self,
+        root: &Path,
+        target: TargetId,
+        scope: Scope,
+    ) -> Result<ProjectionPlan, ApiError> {
+        let root_str = root.display().to_string();
+        let projector = projector_for(target)
+            .ok_or_else(|| ApiError::Internal(format!("{target:?} has no file projector")))?;
+        let path = target_path(projector.as_ref(), &root_str, &self.sync_home(), scope)?;
+        let original = read_text(&path).map_err(internal)?;
+
+        let (global, workspace) = self.registry_paths(Some(root));
+        let registry = Registry::load(Some(&global), workspace.as_deref()).map_err(internal)?;
+        let desired = registry.effective(target, &BTreeSet::new());
+
+        let owned = match &self.store {
+            Some(store) => match store
+                .projection(target.as_str(), &path.display().to_string())
+                .await
+                .map_err(store_error)?
+            {
+                Some(row) => applied_from_row(&row).map_err(internal)?.entries,
+                None => BTreeMap::new(),
+            },
+            None => BTreeMap::new(),
+        };
+
+        let mut plan = projection::plan(PlanRequest {
+            projector: projector.as_ref(),
+            path: &path,
+            scope,
+            original: original.as_deref(),
+            desired: &desired,
+            owned: &owned,
+        })
+        .map_err(internal)?;
+
+        if let Ok(proj_target) = ProjectionTarget::try_from(target) {
+            let profiles = self.sessions.profiles_compat();
+            for (profile_id, _, compat) in profiles {
+                if compat.projection_target == Some(proj_target) {
+                    plan.providers.push(profile_id);
+                }
+            }
+        }
+
+        Ok(plan)
     }
 
     async fn compute_projection_states_for_target(

@@ -25,7 +25,7 @@ use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary,
 use tethys_schema::{
     CheckpointInfo, CheckpointPhase, CheckpointResult, CommitResult, DiffFileDetail, DiffHunk,
     DiffSource, DiffSummary, HealthStatus, HostInfo, HunkRef, RestoreOutcome, RestorePolicy,
-    RestoreTarget, SearchItem, WorktreeInfo, WorktreeSpec,
+    RestoreTarget, SearchItem, WorkspaceGitConfig, WorktreeInfo, WorktreeSpec,
 };
 use tethys_search::{SearchError, SearchIndexManager};
 
@@ -380,6 +380,18 @@ impl TethysApi for Core {
             .engine(&root_str, options)
             .map_err(map_git_error)?;
 
+        // The webview names the path; keep it inside the workspace root or the
+        // worktrees directory so a non-empty spec cannot escape.
+        if !spec.path.trim().is_empty() {
+            let candidate = Path::new(&spec.path);
+            if !worktree_path_allowed(&root, &self.sync_home(), &config, candidate) {
+                return Err(ApiError::InvalidConfig(format!(
+                    "worktree path is outside the workspace root and worktrees directory: {}",
+                    spec.path
+                )));
+            }
+        }
+
         if spec.path.trim().is_empty() {
             spec.path = match config.worktrees_dir.as_deref().map(str::trim) {
                 Some(dir) if !dir.is_empty() => Path::new(dir)
@@ -611,5 +623,54 @@ fn fallback_source(source: &DiffSource) -> Option<DiffSource> {
             turn: *turn,
         }),
         _ => None,
+    }
+}
+
+/// Whether a caller-supplied worktree path is inside the workspace root or the
+/// configured/default worktrees directory.
+fn worktree_path_allowed(
+    root: &Path,
+    sync_home: &Path,
+    config: &WorkspaceGitConfig,
+    candidate: &Path,
+) -> bool {
+    let mut allowed = vec![normalize_path(root)];
+    match config
+        .worktrees_dir
+        .as_deref()
+        .map(str::trim)
+        .filter(|dir| !dir.is_empty())
+    {
+        Some(dir) => {
+            let dir = Path::new(dir);
+            let dir = if dir.is_absolute() {
+                dir.to_path_buf()
+            } else {
+                root.join(dir)
+            };
+            allowed.push(normalize_path(&dir));
+        }
+        None => allowed.push(normalize_path(&sync_home.join("worktrees"))),
+    }
+
+    let candidate = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        root.join(candidate)
+    };
+    let candidate = normalize_path(&candidate);
+    allowed.iter().any(|base| candidate.starts_with(base))
+}
+
+/// Lexically resolves a path, canonicalizing the deepest existing ancestor so
+/// symlinks cannot smuggle an out-of-jail path past the check. The leaf may
+/// not exist yet (the worktree is created after validation).
+fn normalize_path(path: &Path) -> PathBuf {
+    if let Ok(canonical) = path.canonicalize() {
+        return canonical;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => normalize_path(parent).join(name),
+        _ => path.to_path_buf(),
     }
 }

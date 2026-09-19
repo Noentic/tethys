@@ -518,10 +518,13 @@ pub async fn mcp_projection_plan(
 #[specta::specta]
 pub async fn mcp_projection_apply(
     state: State<'_, CoreState>,
+    workspace_id: WorkspaceId,
+    target: TargetId,
+    scope: Scope,
     plan: ProjectionPlan,
 ) -> Result<Applied, String> {
     state
-        .mcp_projection_apply(plan)
+        .mcp_projection_apply(workspace_id, target, scope, plan)
         .await
         .map_err(|e| e.to_string())
 }

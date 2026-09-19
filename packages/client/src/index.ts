@@ -290,10 +290,30 @@ export function createClient(options: ClientOptions = {}) {
           target,
           scope,
         }),
-      projectionApply: (plan: ProjectionPlan) =>
-        call<Applied>("mcp_projection_apply", { plan }),
-      projection_apply: (plan: ProjectionPlan) =>
-        call<Applied>("mcp_projection_apply", { plan }),
+      projectionApply: (
+        workspaceId: string,
+        target: TargetId,
+        scope: Scope,
+        plan: ProjectionPlan,
+      ) =>
+        call<Applied>("mcp_projection_apply", {
+          workspaceId,
+          target,
+          scope,
+          plan,
+        }),
+      projection_apply: (
+        workspaceId: string,
+        target: TargetId,
+        scope: Scope,
+        plan: ProjectionPlan,
+      ) =>
+        call<Applied>("mcp_projection_apply", {
+          workspaceId,
+          target,
+          scope,
+          plan,
+        }),
       projectionRollback: (
         workspaceId: string,
         target: TargetId,

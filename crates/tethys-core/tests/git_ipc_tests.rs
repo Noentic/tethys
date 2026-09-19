@@ -22,10 +22,20 @@ impl Fixture {
         std::fs::write(root.join("pkg/a.txt"), "one\n").expect("write file");
         git(&root, &["add", "-A"]);
         git(&root, &["commit", "-q", "-m", "base"]);
+        let worktrees = tempfile::tempdir().expect("worktree dir");
+        std::fs::create_dir_all(root.join(".tethys")).expect(".tethys dir");
+        std::fs::write(
+            root.join(".tethys/config.json"),
+            format!(
+                r#"{{"git": {{"worktrees_dir": {:?}}}}}"#,
+                worktrees.path().to_string_lossy()
+            ),
+        )
+        .expect("git config");
         Self {
             _dir: dir,
             root,
-            worktrees: tempfile::tempdir().expect("worktree dir"),
+            worktrees,
         }
     }
 

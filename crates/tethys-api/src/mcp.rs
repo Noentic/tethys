@@ -61,6 +61,9 @@ pub trait McpApi: Send + Sync {
 
     fn mcp_projection_apply(
         &self,
+        _workspace_id: WorkspaceId,
+        _target: TargetId,
+        _scope: Scope,
         _plan: ProjectionPlan,
     ) -> impl std::future::Future<Output = Result<Applied, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.projection_apply")) }

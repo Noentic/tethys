@@ -112,7 +112,10 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     assert_eq!(plan.entries.len(), 1);
     assert!(plan.created);
 
-    let applied = core.mcp_projection_apply(plan).await.expect("apply");
+    let applied = core
+        .mcp_projection_apply(ws_id.clone(), TargetId::OpenCode, Scope::Workspace, plan)
+        .await
+        .expect("apply");
     let config = root.join("opencode.json");
     assert!(config.is_file());
     assert_eq!(applied.entries.len(), 1);

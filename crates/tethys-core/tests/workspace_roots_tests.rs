@@ -33,6 +33,32 @@ fn snapshot_dir(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     files
 }
 
+fn init_git_repo(dir: &Path) {
+    fs::create_dir_all(dir).expect("create repo");
+    for args in [
+        vec!["init", "-b", "main"],
+        vec!["config", "user.email", "test@test.com"],
+        vec!["config", "user.name", "Test"],
+    ] {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("git command");
+    }
+    fs::write(dir.join("README.md"), b"# Test\n").expect("write file");
+    std::process::Command::new("git")
+        .args(["add", "."])
+        .current_dir(dir)
+        .output()
+        .expect("git add");
+    std::process::Command::new("git")
+        .args(["commit", "-m", "init"])
+        .current_dir(dir)
+        .output()
+        .expect("git commit");
+}
+
 #[tokio::test]
 async fn unknown_workspace_id_returns_not_found_and_touches_nothing() {
     let tmp = tempdir().expect("tempdir");
@@ -198,7 +224,15 @@ async fn core_open_on_temp_home_creates_store_and_allows_skills_and_mcp() {
         .mcp_projection_plan(WorkspaceId::new("ws-1"), TargetId::OpenCode, Scope::Workspace)
         .await
         .expect("projection plan must succeed");
-    let applied = core.mcp_projection_apply(plan).await.expect("projection apply must succeed");
+    let applied = core
+        .mcp_projection_apply(
+            WorkspaceId::new("ws-1"),
+            TargetId::OpenCode,
+            Scope::Workspace,
+            plan,
+        )
+        .await
+        .expect("projection apply must succeed");
     assert_eq!(applied.entries.len(), 0);
 }
 
@@ -209,33 +243,7 @@ async fn worktree_creation_for_workspace_id_lands_under_expected_location() {
     let core = Core::open(&home).await.expect("Core::open");
 
     let repo_dir = tmp.path().join("repo");
-    fs::create_dir_all(&repo_dir).expect("create repo");
-    std::process::Command::new("git")
-        .args(["init", "-b", "main"])
-        .current_dir(&repo_dir)
-        .output()
-        .expect("git init");
-    std::process::Command::new("git")
-        .args(["config", "user.email", "test@test.com"])
-        .current_dir(&repo_dir)
-        .output()
-        .expect("git config email");
-    std::process::Command::new("git")
-        .args(["config", "user.name", "Test"])
-        .current_dir(&repo_dir)
-        .output()
-        .expect("git config name");
-    fs::write(repo_dir.join("README.md"), b"# Test\n").expect("write file");
-    std::process::Command::new("git")
-        .args(["add", "."])
-        .current_dir(&repo_dir)
-        .output()
-        .expect("git add");
-    std::process::Command::new("git")
-        .args(["commit", "-m", "init"])
-        .current_dir(&repo_dir)
-        .output()
-        .expect("git commit");
+    init_git_repo(&repo_dir);
 
     // Register workspace
     core.sync_store()
@@ -260,4 +268,125 @@ async fn worktree_creation_for_workspace_id_lands_under_expected_location() {
     assert!(Path::new(&info.path).exists());
     assert!(info.path.contains("worktrees"));
     assert!(info.path.contains("feat-test"));
+}
+
+async fn projection_workspace(home: &Path, root: &Path, id: &str) -> Core {
+    fs::create_dir_all(root).expect("create workspace root");
+    let core = Core::open(home).await.expect("Core::open");
+    core.sync_store()
+        .expect("sync store")
+        .ensure_workspace(id, &root.display().to_string(), "plain")
+        .await
+        .expect("ensure workspace");
+    core
+}
+
+#[tokio::test]
+async fn projection_apply_rejects_tampered_path_and_writes_nothing() {
+    let tmp = tempdir().expect("tempdir");
+    let home = tmp.path().join("home");
+    let root = tmp.path().join("repo");
+    let core = projection_workspace(&home, &root, "ws-sec").await;
+    let ws = WorkspaceId::new("ws-sec");
+
+    let outside = tmp.path().join("outside.json");
+    fs::write(&outside, b"secret").expect("write outside");
+
+    let mut plan = core
+        .mcp_projection_plan(ws.clone(), TargetId::OpenCode, Scope::Workspace)
+        .await
+        .expect("plan");
+    plan.path = outside.display().to_string();
+    plan.content = "overwritten".into();
+
+    let res = core
+        .mcp_projection_apply(ws.clone(), TargetId::OpenCode, Scope::Workspace, plan)
+        .await;
+    assert!(matches!(res, Err(ApiError::Conflict(_))), "expected Conflict, got {res:?}");
+    assert_eq!(fs::read(&outside).expect("outside intact"), b"secret");
+    assert!(!root.join("opencode.json").exists(), "target must not be written");
+}
+
+#[tokio::test]
+async fn projection_apply_rejects_tampered_content() {
+    let tmp = tempdir().expect("tempdir");
+    let home = tmp.path().join("home");
+    let root = tmp.path().join("repo");
+    let core = projection_workspace(&home, &root, "ws-sec").await;
+    let ws = WorkspaceId::new("ws-sec");
+
+    let mut plan = core
+        .mcp_projection_plan(ws.clone(), TargetId::OpenCode, Scope::Workspace)
+        .await
+        .expect("plan");
+    plan.content = format!("{}\n// injected\n", plan.content);
+
+    let res = core
+        .mcp_projection_apply(ws, TargetId::OpenCode, Scope::Workspace, plan)
+        .await;
+    assert!(matches!(res, Err(ApiError::Conflict(_))), "expected Conflict, got {res:?}");
+    assert!(!root.join("opencode.json").exists(), "target must not be written");
+}
+
+#[tokio::test]
+async fn projection_apply_for_unknown_workspace_is_refused() {
+    let tmp = tempdir().expect("tempdir");
+    let home = tmp.path().join("home");
+    let root = tmp.path().join("repo");
+    let core = projection_workspace(&home, &root, "ws-sec").await;
+
+    let plan = core
+        .mcp_projection_plan(
+            WorkspaceId::new("ws-sec"),
+            TargetId::OpenCode,
+            Scope::Workspace,
+        )
+        .await
+        .expect("plan");
+
+    let res = core
+        .mcp_projection_apply(
+            WorkspaceId::new("unknown-ws"),
+            TargetId::OpenCode,
+            Scope::Workspace,
+            plan,
+        )
+        .await;
+    assert!(matches!(res, Err(ApiError::NotFound(_))), "expected NotFound, got {res:?}");
+    assert!(!root.join("opencode.json").exists());
+}
+
+#[tokio::test]
+async fn worktree_creation_rejects_out_of_jail_path() {
+    let tmp = tempdir().expect("tempdir");
+    let home = tmp.path().join("home");
+    let core = Core::open(&home).await.expect("Core::open");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+    core.sync_store()
+        .unwrap()
+        .ensure_workspace("ws-jail", &repo_dir.display().to_string(), "worktree")
+        .await
+        .expect("ensure ws");
+
+    let escape = tmp.path().join("evil-wt");
+    let spec = WorktreeSpec {
+        thread_id: "thread-jail".into(),
+        workspace_id: WorkspaceId::new("ws-jail"),
+        slug: "feat-jail".into(),
+        path: escape.display().to_string(),
+        branch: "feat/jail".into(),
+        base: "main".into(),
+        bootstrap_globs: vec![],
+        setup_script: None,
+        main_checkout: false,
+    };
+
+    let res = core.git_worktree_create(spec).await;
+    assert!(
+        matches!(res, Err(ApiError::InvalidConfig(_))),
+        "expected InvalidConfig, got {res:?}"
+    );
+    assert!(!escape.exists(), "out-of-jail worktree must not be created");
 }
