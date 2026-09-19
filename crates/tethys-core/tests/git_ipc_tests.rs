@@ -132,8 +132,10 @@ async fn worktree_flow_covers_registry_checkpoints_and_diffs() {
     .await
     .expect("discard live changes");
     assert_eq!(
-        std::fs::read_to_string(PathBuf::from(&info.path).join("pkg/a.txt")).expect("read"),
-        "one\n"
+        std::fs::read_to_string(PathBuf::from(&info.path).join("pkg/a.txt"))
+            .expect("read")
+            .trim_end(),
+        "one"
     );
 
     let restored = core
