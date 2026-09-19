@@ -440,6 +440,7 @@ export type ProjectionPlan = {
 	diff: string,
 	content: string,
 	entries: EntryProjection[],
+	providers?: string[],
 };
 
 /**  A file surface that a registry entry can be projected to. */

@@ -86,15 +86,15 @@ async fn unknown_workspace_id_returns_not_found_and_touches_nothing() {
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_attachments: expected NotFound, got {res:?}");
 
     // mcp.projection.plan
-    let res = core.mcp_projection_plan(TargetId::ClaudeCode, Scope::Workspace, unknown_id.clone()).await;
+    let res = core.mcp_projection_plan(unknown_id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_projection_plan: expected NotFound, got {res:?}");
 
     // mcp.projection.rollback
-    let res = core.mcp_projection_rollback(TargetId::ClaudeCode, Scope::Workspace, unknown_id.clone()).await;
+    let res = core.mcp_projection_rollback(unknown_id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_projection_rollback: expected NotFound, got {res:?}");
 
     // mcp.projection.verify
-    let res = core.mcp_projection_verify(TargetId::ClaudeCode, Scope::Workspace, unknown_id.clone()).await;
+    let res = core.mcp_projection_verify(unknown_id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_projection_verify: expected NotFound, got {res:?}");
 
     // mcp.import.scan
@@ -195,7 +195,7 @@ async fn core_open_on_temp_home_creates_store_and_allows_skills_and_mcp() {
 
     // mcp.projection.plan succeeds against the opened store
     let plan = core
-        .mcp_projection_plan(TargetId::OpenCode, Scope::Workspace, WorkspaceId::new("ws-1"))
+        .mcp_projection_plan(WorkspaceId::new("ws-1"), TargetId::OpenCode, Scope::Workspace)
         .await
         .expect("projection plan must succeed");
     let applied = core.mcp_projection_apply(plan).await.expect("projection apply must succeed");

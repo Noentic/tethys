@@ -131,6 +131,19 @@ impl From<ProjectionTarget> for TargetId {
     }
 }
 
+impl TryFrom<TargetId> for ProjectionTarget {
+    type Error = ();
+
+    fn try_from(target: TargetId) -> Result<Self, Self::Error> {
+        match target {
+            TargetId::ClaudeCode => Ok(ProjectionTarget::ClaudeCode),
+            TargetId::Codex => Ok(ProjectionTarget::Codex),
+            TargetId::OpenCode => Ok(ProjectionTarget::OpenCode),
+            TargetId::Session => Err(()),
+        }
+    }
+}
+
 /// MCP transport of a registry entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "kebab-case")]
@@ -436,6 +449,8 @@ pub struct ProjectionPlan {
     pub diff: String,
     pub content: String,
     pub entries: Vec<EntryProjection>,
+    #[serde(default)]
+    pub providers: Vec<String>,
 }
 
 /// Manifest record for one applied projection.

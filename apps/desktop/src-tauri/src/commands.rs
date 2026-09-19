@@ -503,12 +503,12 @@ pub async fn mcp_attachments(
 #[specta::specta]
 pub async fn mcp_projection_plan(
     state: State<'_, CoreState>,
+    workspace_id: WorkspaceId,
     target: TargetId,
     scope: Scope,
-    workspace_id: WorkspaceId,
 ) -> Result<ProjectionPlan, String> {
     state
-        .mcp_projection_plan(target, scope, workspace_id)
+        .mcp_projection_plan(workspace_id, target, scope)
         .await
         .map_err(|e| e.to_string())
 }
@@ -531,12 +531,12 @@ pub async fn mcp_projection_apply(
 #[specta::specta]
 pub async fn mcp_projection_rollback(
     state: State<'_, CoreState>,
+    workspace_id: WorkspaceId,
     target: TargetId,
     scope: Scope,
-    workspace_id: WorkspaceId,
 ) -> Result<(), String> {
     state
-        .mcp_projection_rollback(target, scope, workspace_id)
+        .mcp_projection_rollback(workspace_id, target, scope)
         .await
         .map_err(|e| e.to_string())
 }
@@ -546,12 +546,12 @@ pub async fn mcp_projection_rollback(
 #[specta::specta]
 pub async fn mcp_projection_verify(
     state: State<'_, CoreState>,
+    workspace_id: WorkspaceId,
     target: TargetId,
     scope: Scope,
-    workspace_id: WorkspaceId,
 ) -> Result<VerifyStatus, String> {
     state
-        .mcp_projection_verify(target, scope, workspace_id)
+        .mcp_projection_verify(workspace_id, target, scope)
         .await
         .map_err(|e| e.to_string())
 }

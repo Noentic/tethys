@@ -52,9 +52,9 @@ pub trait McpApi: Send + Sync {
 
     fn mcp_projection_plan(
         &self,
+        _workspace_id: WorkspaceId,
         _target: TargetId,
         _scope: Scope,
-        _workspace_id: WorkspaceId,
     ) -> impl std::future::Future<Output = Result<ProjectionPlan, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.projection_plan")) }
     }
@@ -68,18 +68,18 @@ pub trait McpApi: Send + Sync {
 
     fn mcp_projection_rollback(
         &self,
+        _workspace_id: WorkspaceId,
         _target: TargetId,
         _scope: Scope,
-        _workspace_id: WorkspaceId,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.projection_rollback")) }
     }
 
     fn mcp_projection_verify(
         &self,
+        _workspace_id: WorkspaceId,
         _target: TargetId,
         _scope: Scope,
-        _workspace_id: WorkspaceId,
     ) -> impl std::future::Future<Output = Result<VerifyStatus, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("mcp.projection_verify")) }
     }

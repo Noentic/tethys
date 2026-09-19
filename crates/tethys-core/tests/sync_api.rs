@@ -103,9 +103,9 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
 
     let plan = core
         .mcp_projection_plan(
+            ws_id.clone(),
             TargetId::OpenCode,
             Scope::Workspace,
-            ws_id.clone(),
         )
         .await
         .expect("plan");
@@ -119,9 +119,9 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
 
     let verified = core
         .mcp_projection_verify(
+            ws_id.clone(),
             TargetId::OpenCode,
             Scope::Workspace,
-            ws_id.clone(),
         )
         .await
         .expect("verify");
@@ -140,9 +140,9 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     fs::write(&config, format!("{pristine}\n")).expect("drift");
     let verified = core
         .mcp_projection_verify(
+            ws_id.clone(),
             TargetId::OpenCode,
             Scope::Workspace,
-            ws_id.clone(),
         )
         .await
         .expect("verify drifted");
@@ -150,9 +150,9 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     fs::write(&config, pristine).expect("restore");
 
     core.mcp_projection_rollback(
+        ws_id.clone(),
         TargetId::OpenCode,
         Scope::Workspace,
-        ws_id.clone(),
     )
     .await
     .expect("rollback");
@@ -323,3 +323,76 @@ async fn mcp_attachments_returns_grid_through_core() {
         }
     );
 }
+
+#[tokio::test]
+async fn projection_plan_names_matching_providers_and_handles_unmatched_target() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let home = dir.path().join("home");
+    let root = dir.path().join("repo");
+    fs::create_dir_all(&home).expect("home");
+    fs::create_dir_all(&root).expect("root");
+    let (core, ws_id) = core_with_workspace(&home, &root).await;
+
+    core.mcp_registry_set(
+        "github".into(),
+        stdio_entry(),
+        Scope::Workspace,
+        Some(ws_id.clone()),
+    )
+    .await
+    .expect("set");
+
+    // Register a profile with projection_target ClaudeCode
+    let p_claude = core.register_profile(
+        tethys_agent_servers::LaunchSpec::new("claude-profile", "/bin/echo"),
+        tethys_schema::connection::AgentCompat {
+            preferred_protocol: Some(AcpProtocol::V1),
+            projection_target: Some(tethys_schema::sync::ProjectionTarget::ClaudeCode),
+        },
+    );
+    let key_claude = tethys_schema::connection::ConnectionKey::new(&p_claude, "local");
+    core.sessions().store().set_capabilities_for_test(
+        &key_claude,
+        Some(tethys_schema::connection::NormalizedCapabilities {
+            load_session: false,
+            resume: false,
+            mcp: tethys_schema::sync::McpTransports::default(),
+            prompt_embedded_context: false,
+        }),
+    );
+
+    // Plan for ClaudeCode -> providers should contain p_claude
+    let claude_plan = core
+        .mcp_projection_plan(ws_id.clone(), TargetId::ClaudeCode, Scope::Workspace)
+        .await
+        .expect("plan claude");
+    assert_eq!(claude_plan.providers, vec![p_claude]);
+
+    // Plan for Codex (Global scope) -> no matching profile, providers should be empty
+    let codex_plan = core
+        .mcp_projection_plan(ws_id.clone(), TargetId::Codex, Scope::Global)
+        .await
+        .expect("plan codex");
+    assert!(codex_plan.providers.is_empty());
+
+    // Plan for OpenCode (Workspace scope) -> no matching profile, providers should be empty
+    let opencode_plan = core
+        .mcp_projection_plan(ws_id.clone(), TargetId::OpenCode, Scope::Workspace)
+        .await
+        .expect("plan opencode");
+    assert!(opencode_plan.providers.is_empty());
+
+    // Attachment grid should not have any FileProjection cell targeting Codex
+    let grid = core.mcp_attachments(ws_id.clone()).await.expect("attachments");
+    let mut saw_claude_projection = false;
+    for cell in &grid.cells {
+        if let tethys_schema::sync::AttachmentState::FileProjection { target, .. } = &cell.state {
+            assert_ne!(*target, tethys_schema::sync::ProjectionTarget::Codex);
+            if *target == tethys_schema::sync::ProjectionTarget::ClaudeCode {
+                saw_claude_projection = true;
+            }
+        }
+    }
+    assert!(saw_claude_projection);
+}
+

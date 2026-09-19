@@ -99,6 +99,7 @@ pub fn plan(request: PlanRequest<'_>) -> Result<ProjectionPlan, SyncError> {
         diff: unified_diff(original, &content),
         content,
         entries,
+        providers: Vec::new(),
     })
 }
 

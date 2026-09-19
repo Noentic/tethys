@@ -278,49 +278,49 @@ export function createClient(options: ClientOptions = {}) {
         call<RegistryEntryView[]>("mcp_effective", { providerId, workspaceId }),
       attachments: (workspaceId: string) =>
         call<AttachmentGrid>("mcp_attachments", { workspaceId }),
-      projectionPlan: (target: TargetId, scope: Scope, workspaceId: string) =>
+      projectionPlan: (workspaceId: string, target: TargetId, scope: Scope) =>
         call<ProjectionPlan>("mcp_projection_plan", {
+          workspaceId,
           target,
           scope,
-          workspaceId,
         }),
-      projection_plan: (target: TargetId, scope: Scope, workspaceId: string) =>
+      projection_plan: (workspaceId: string, target: TargetId, scope: Scope) =>
         call<ProjectionPlan>("mcp_projection_plan", {
+          workspaceId,
           target,
           scope,
-          workspaceId,
         }),
       projectionApply: (plan: ProjectionPlan) =>
         call<Applied>("mcp_projection_apply", { plan }),
       projection_apply: (plan: ProjectionPlan) =>
         call<Applied>("mcp_projection_apply", { plan }),
       projectionRollback: (
+        workspaceId: string,
         target: TargetId,
         scope: Scope,
-        workspaceId: string,
       ) =>
-        call<void>("mcp_projection_rollback", { target, scope, workspaceId }),
+        call<void>("mcp_projection_rollback", { workspaceId, target, scope }),
       projection_rollback: (
+        workspaceId: string,
         target: TargetId,
         scope: Scope,
-        workspaceId: string,
       ) =>
-        call<void>("mcp_projection_rollback", { target, scope, workspaceId }),
-      projectionVerify: (target: TargetId, scope: Scope, workspaceId: string) =>
+        call<void>("mcp_projection_rollback", { workspaceId, target, scope }),
+      projectionVerify: (workspaceId: string, target: TargetId, scope: Scope) =>
         call<VerifyStatus>("mcp_projection_verify", {
+          workspaceId,
           target,
           scope,
-          workspaceId,
         }),
       projection_verify: (
+        workspaceId: string,
         target: TargetId,
         scope: Scope,
-        workspaceId: string,
       ) =>
         call<VerifyStatus>("mcp_projection_verify", {
+          workspaceId,
           target,
           scope,
-          workspaceId,
         }),
       importScan: (workspaceId: string) =>
         call<ImportScan>("mcp_import_scan", { workspaceId }),

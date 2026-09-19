@@ -143,7 +143,7 @@ Git is a feature, not enforcement. Any folder — git-initialized or not — can
 | SYN‑10 | Per‑thread disable of any MCP server or skill | P1 |
 | SYN‑11 | Agent native-settings forms: per-agent config UI renders the full native config file as a form from a versioned, community-contributed schema that follows the agent's official schema; form + raw fallback, with preview diff, backups, rollback, version-drift warnings/errors, and a link to the official docs/schema for advanced areas (hooks, steering, plugins, etc.) | P1 |
 
-The sync view is a grid of servers × targets, each cell showing *in sync*, *pending*, *drifted*, *conflict*, or *unsupported*. Agent native settings (SYN‑11) live in a separate per-agent settings view, not in the sync grid.
+The sync view is a grid of servers × targets, each cell showing *in sync*, *pending*, *drifted*, *conflict*, or *unsupported*. The underlying sync unit for file projection is the Target file, while the UI column header displays the Providers that consume that Target file (e.g. "Claude Code (2 profiles)"). Agent native settings (SYN‑11) live in a separate per-agent settings view, not in the sync grid.
 
 #### 3.4.1 Agent native settings (SYN‑11)
 

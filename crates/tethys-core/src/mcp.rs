@@ -179,9 +179,9 @@ impl McpApi for Core {
 
     async fn mcp_projection_plan(
         &self,
+        workspace_id: WorkspaceId,
         target: TargetId,
         scope: Scope,
-        workspace_id: WorkspaceId,
     ) -> Result<ProjectionPlan, ApiError> {
         let root = self.workspace_roots.root(&workspace_id).await?;
         let root_str = root.display().to_string();
@@ -206,7 +206,7 @@ impl McpApi for Core {
             None => BTreeMap::new(),
         };
 
-        projection::plan(PlanRequest {
+        let mut plan = projection::plan(PlanRequest {
             projector: projector.as_ref(),
             path: &path,
             scope,
@@ -214,7 +214,18 @@ impl McpApi for Core {
             desired: &desired,
             owned: &owned,
         })
-        .map_err(internal)
+        .map_err(internal)?;
+
+        if let Ok(proj_target) = ProjectionTarget::try_from(target) {
+            let profiles = self.sessions.profiles_compat();
+            for (profile_id, _, compat) in profiles {
+                if compat.projection_target == Some(proj_target) {
+                    plan.providers.push(profile_id);
+                }
+            }
+        }
+
+        Ok(plan)
     }
 
     async fn mcp_projection_apply(&self, plan: ProjectionPlan) -> Result<Applied, ApiError> {
@@ -237,9 +248,9 @@ impl McpApi for Core {
 
     async fn mcp_projection_rollback(
         &self,
+        workspace_id: WorkspaceId,
         target: TargetId,
         scope: Scope,
-        workspace_id: WorkspaceId,
     ) -> Result<(), ApiError> {
         let root = self.workspace_roots.root(&workspace_id).await?;
         let root_str = root.display().to_string();
@@ -264,9 +275,9 @@ impl McpApi for Core {
 
     async fn mcp_projection_verify(
         &self,
+        workspace_id: WorkspaceId,
         target: TargetId,
         scope: Scope,
-        workspace_id: WorkspaceId,
     ) -> Result<VerifyStatus, ApiError> {
         let root = self.workspace_roots.root(&workspace_id).await?;
         let root_str = root.display().to_string();
