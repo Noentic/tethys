@@ -76,11 +76,12 @@ fn cell_state(
     }
 
     // 2. If unconnected or no capabilities yet -> NotNegotiated
-    if !provider.connected || provider.capabilities.is_none() {
+    let Some(caps) = provider.capabilities.as_ref() else {
+        return AttachmentState::NotNegotiated;
+    };
+    if !provider.connected {
         return AttachmentState::NotNegotiated;
     }
-
-    let caps = provider.capabilities.as_ref().unwrap();
 
     // Check negotiated transports
     let mcp = &caps.mcp;
