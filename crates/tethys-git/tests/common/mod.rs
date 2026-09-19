@@ -19,6 +19,7 @@ impl TestRepo {
         std::fs::create_dir_all(root.join("pkg")).expect("create pkg dir");
         let repo = Self { _dir: dir, root };
         repo.git(&["init", "-q", "-b", "main"]);
+        repo.git(&["config", "core.autocrlf", "false"]);
         repo.git(&["config", "user.name", "Tethys Test"]);
         repo.git(&["config", "user.email", "test@tethys.dev"]);
         repo

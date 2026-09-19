@@ -37,6 +37,7 @@ fn init_git_repo(dir: &Path) {
     fs::create_dir_all(dir).expect("create repo");
     for args in [
         vec!["init", "-b", "main"],
+        vec!["config", "core.autocrlf", "false"],
         vec!["config", "user.email", "test@test.com"],
         vec!["config", "user.name", "Test"],
     ] {

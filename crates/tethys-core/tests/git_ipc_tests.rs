@@ -17,6 +17,7 @@ impl Fixture {
         let root = dir.path().to_path_buf();
         std::fs::create_dir_all(root.join("pkg")).expect("pkg dir");
         git(&root, &["init", "-q", "-b", "main"]);
+        git(&root, &["config", "core.autocrlf", "false"]);
         git(&root, &["config", "user.name", "Tethys Test"]);
         git(&root, &["config", "user.email", "test@tethys.dev"]);
         std::fs::write(root.join("pkg/a.txt"), "one\n").expect("write file");
