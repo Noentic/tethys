@@ -27,6 +27,8 @@ async fn fresh_database_creates_all_tables_and_pragmas() -> Result<(), Box<dyn s
     assert!(tables.contains(&"threads".to_string()));
     assert!(tables.contains(&"events".to_string()));
     assert!(tables.contains(&"entries".to_string()));
+    assert!(tables.contains(&"workspace_trust".to_string()));
+    assert!(tables.contains(&"agent_profiles".to_string()));
 
     // Verify WAL mode and foreign_keys
     let journal_mode: String = conn.query_row("PRAGMA journal_mode;", [], |r| r.get(0))?;
@@ -112,11 +114,39 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
 {
     let mut conn = rusqlite::Connection::open_in_memory()?;
 
-    // Step 1: Migrate to latest (version 4: workspaces, threads, events, entries,
-    // projections, skills_state)
+    // Step 1: Migrate to latest (version 5: workspaces, threads, events, entries,
+    // projections, skills_state, workspace_trust, agent_profiles)
     migrate_to_latest(&mut conn)?;
     let v_latest: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_latest, 4);
+    assert_eq!(v_latest, 5);
+
+    for table in ["workspace_trust", "agent_profiles"] {
+        let exists: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            rusqlite::params![table],
+            |r| r.get(0),
+        )?;
+        assert_eq!(exists, 1, "{table} should exist at version 5");
+    }
+
+    // Step 1a: Step down to version 4 (Wave 2 tables dropped, workspaces preserved)
+    migrate_to_version(&mut conn, 4)?;
+    let v_4: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
+    assert_eq!(v_4, 4);
+    for table in ["workspace_trust", "agent_profiles"] {
+        let exists: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            rusqlite::params![table],
+            |r| r.get(0),
+        )?;
+        assert_eq!(exists, 0, "{table} should be dropped at version 4");
+    }
+    let workspaces_exist: i64 = conn.query_row(
+        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='workspaces'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(workspaces_exist, 1, "workspaces should remain at version 4");
 
     // Step 1b: Step down to version 3 (projects table restored, workspace_id -> project_id)
     migrate_to_version(&mut conn, 3)?;
@@ -191,13 +221,13 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
     // Step 5: Re-apply to latest
     migrate_to_latest(&mut conn)?;
     let v_final: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_final, 4);
+    assert_eq!(v_final, 5);
 
     Ok(())
 }
 
 #[test]
-fn store_upgrades_from_v3_to_v4_preserving_rows() -> Result<(), Box<dyn std::error::Error>> {
+fn store_upgrades_from_v3_preserving_rows() -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = rusqlite::Connection::open_in_memory()?;
     migrate_to_version(&mut conn, 3)?;
     let v_3: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
@@ -214,7 +244,7 @@ fn store_upgrades_from_v3_to_v4_preserving_rows() -> Result<(), Box<dyn std::err
 
     migrate_to_latest(&mut conn)?;
     let v_latest: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_latest, 4);
+    assert_eq!(v_latest, 5);
 
     let (id, root, iso): (String, String, String) = conn.query_row(
         "SELECT id, root_path, isolation FROM workspaces WHERE id = 'proj_1'",
@@ -249,3 +279,84 @@ fn store_upgrades_from_v3_to_v4_preserving_rows() -> Result<(), Box<dyn std::err
     Ok(())
 }
 
+
+#[test]
+fn workspace_trust_unique_key_and_cascade() -> Result<(), Box<dyn std::error::Error>> {
+    let mut conn = rusqlite::Connection::open_in_memory()?;
+    migrate_to_latest(&mut conn)?;
+
+    conn.execute(
+        "INSERT INTO workspaces (id, root_path, isolation) VALUES (?1, ?2, ?3)",
+        rusqlite::params!["w1", "/tmp/w1", "worktree"],
+    )?;
+    conn.execute(
+        "INSERT INTO workspaces (id, root_path, isolation) VALUES (?1, ?2, ?3)",
+        rusqlite::params!["w2", "/tmp/w2", "worktree"],
+    )?;
+
+    conn.execute(
+        "INSERT INTO workspace_trust
+            (workspace_id, resolved_path, host, permission_mode, scope, trusted_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params!["w1", "/tmp/w1", "local", "supervised", "folder", 1],
+    )?;
+
+    // A second row with the same (resolved_path, host) is refused by the index.
+    let duplicate = conn.execute(
+        "INSERT INTO workspace_trust
+            (workspace_id, resolved_path, host, permission_mode, scope, trusted_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params!["w2", "/tmp/w1", "local", "supervised", "folder", 2],
+    );
+    assert!(
+        duplicate.is_err(),
+        "duplicate (resolved_path, host) must be refused"
+    );
+
+    // Deleting the workspace cascades to its trust row.
+    conn.execute("DELETE FROM workspaces WHERE id = 'w1'", [])?;
+    let remaining: i64 = conn.query_row(
+        "SELECT count(*) FROM workspace_trust WHERE workspace_id = 'w1'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(remaining, 0, "trust row should cascade with its workspace");
+
+    Ok(())
+}
+
+#[test]
+fn agent_profiles_round_trip_and_nullable_columns() -> Result<(), Box<dyn std::error::Error>> {
+    let mut conn = rusqlite::Connection::open_in_memory()?;
+    migrate_to_latest(&mut conn)?;
+
+    conn.execute(
+        "INSERT INTO agent_profiles
+            (id, name, class, launch_spec, registry_ref, projection_target, preferred_protocol, enabled)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        rusqlite::params![
+            "p1",
+            "Claude Code",
+            "cli",
+            "{\"program\":\"claude\"}",
+            rusqlite::types::Null,
+            "claude-code",
+            "V1",
+            1
+        ],
+    )?;
+
+    let (name, enabled, registry_ref, target): (String, i64, Option<String>, Option<String>) =
+        conn.query_row(
+            "SELECT name, enabled, registry_ref, projection_target
+             FROM agent_profiles WHERE id = 'p1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )?;
+    assert_eq!(name, "Claude Code");
+    assert_eq!(enabled, 1);
+    assert!(registry_ref.is_none(), "nullable column stays NULL, not ''");
+    assert_eq!(target.as_deref(), Some("claude-code"));
+
+    Ok(())
+}

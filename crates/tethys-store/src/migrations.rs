@@ -1,10 +1,11 @@
 //! SQLite migrations management using `rusqlite_migration`.
 //!
-//! Four migrations:
+//! Five migrations:
 //! - `0001`: Core schema (`projects`, `threads`, `events`, and indexes).
 //! - `0002`: Materialized `entries` table and index for zero-replay thread opens.
 //! - `0003`: Sync state (`projections`, `skills_state`).
 //! - `0004`: Rename `projects` to `workspaces` and `threads.project_id` to `workspace_id`.
+//! - `0005`: Pre-allocate Wave 2's `workspace_trust` and `agent_profiles` tables (DDL only).
 
 use rusqlite::Connection;
 use rusqlite_migration::{Migrations, M};
@@ -105,6 +106,40 @@ pub fn migrations() -> Migrations<'static> {
             ALTER TABLE threads RENAME COLUMN workspace_id TO project_id;
             ALTER TABLE workspaces RENAME TO projects;
             CREATE INDEX idx_threads_project ON threads(project_id);",
+        ),
+        // Wave 2's two tables land together in one positional migration
+        // (overview D14): the migration index *is* the schema version, so two
+        // worktrees appending independently would both define version 5.
+        // DDL only — no reader exists yet.
+        M::up(
+            "CREATE TABLE workspace_trust (
+                workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+                resolved_path TEXT NOT NULL,
+                host TEXT NOT NULL DEFAULT 'local',
+                remote_url TEXT,
+                permission_mode TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                trusted_at INTEGER NOT NULL
+            );
+
+            CREATE UNIQUE INDEX idx_workspace_trust_key
+                ON workspace_trust(resolved_path, host);
+
+            CREATE TABLE agent_profiles (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                class TEXT NOT NULL,
+                launch_spec TEXT NOT NULL,
+                registry_ref TEXT,
+                projection_target TEXT,
+                preferred_protocol TEXT,
+                enabled INTEGER NOT NULL DEFAULT 1
+            );",
+        )
+        .down(
+            "DROP TABLE IF EXISTS agent_profiles;
+            DROP INDEX IF EXISTS idx_workspace_trust_key;
+            DROP TABLE IF EXISTS workspace_trust;",
         ),
     ])
 }

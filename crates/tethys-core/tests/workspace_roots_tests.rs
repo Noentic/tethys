@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
-use tethys_api::{ApiError, McpApi, SkillsApi, TethysApi};
+use tethys_api::{ApiError, CommandsApi, GitApi, McpApi, SearchApi, SkillsApi};
 use tethys_core::Core;
 use tethys_schema::sync::{
     RegistryEntry, Scope, SkillImportSource, TargetId, TransportKind, WorkspaceId,

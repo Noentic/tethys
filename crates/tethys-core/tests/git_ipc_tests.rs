@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use tethys_api::{ApiError, TethysApi};
+use tethys_api::{ApiError, GitApi};
 use tethys_core::{Core, ThreadRuntimeState};
 use tethys_schema::{CheckpointPhase, DiffSource, RestorePolicy, RestoreTarget, WorktreeSpec};
 

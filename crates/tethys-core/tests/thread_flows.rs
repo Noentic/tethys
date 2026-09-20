@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use futures::stream::StreamExt;
 use tethys_agent_servers::{ConnectionStore, LaunchSpec, StoreOptions};
-use tethys_api::TethysApi;
+use tethys_api::{AgentApi, EventsApi, ThreadApi};
 use tethys_core::thread_session::{DenyPermissionResolver, ThreadSessions};
 use tethys_core::Core;
 use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionKey};

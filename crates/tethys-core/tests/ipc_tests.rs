@@ -29,7 +29,7 @@ fn test_synthetic_diff_generation() {
 
 #[tokio::test]
 async fn test_core_stub_returns_unimplemented() {
-    use tethys_api::{ApiError, TethysApi};
+    use tethys_api::{ApiError, WorkspaceApi};
     let core = tethys_core::Core::new("0.0.0");
     match core.workspace_list().await {
         Err(ApiError::Unimplemented(m)) => assert_eq!(m, "workspace.list"),

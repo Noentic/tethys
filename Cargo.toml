@@ -33,3 +33,18 @@ tokio-util = { version = "0.7", features = ["compat", "rt"] }
 tracing = "0.1"
 anyhow = "1"
 tempfile = "3"
+
+# Wave 2 (M1.6d). Declared here so every worktree resolves one version; the
+# consuming crates reference these as `workspace = true` when their code lands.
+# `zip`, `tar`, `flate2` and `reqwest` are already used by `tethys-sync` at the
+# same versions. `keyring` is deliberately *not* promoted: it stays a
+# `tethys-sync` local dependency until a second crate needs it (plan U4).
+sysinfo = "0.39"
+which = "8"
+semver = "1"
+sha2 = "0.11"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "webpki-roots"] }
+zip = { version = "4.6", default-features = false, features = ["deflate"] }
+tar = "0.4"
+flate2 = "1"
+wiremock = "0.6"
