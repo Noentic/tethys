@@ -1,9 +1,0 @@
-{
-  "jsonrpc": "2.0",
-  "id": "resume_1",
-  "method": "session/resume",
-  "params": {
-    "sessionId": "s_v2_99",
-    "replayFrom": "start"
-  }
-}

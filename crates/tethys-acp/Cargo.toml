@@ -1,0 +1,28 @@
+[package]
+name = "tethys-acp"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = []
+acp-v2 = ["agent-client-protocol/unstable_protocol_v2"]
+mock = []
+
+[dependencies]
+agent-client-protocol.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+parking_lot = "0.12"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tethys-schema = { path = "../tethys-schema" }
+tethys-thread = { path = "../tethys-thread" }
+
+[dev-dependencies]
+tokio.workspace = true

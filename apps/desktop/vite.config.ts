@@ -1,9 +1,10 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 // Tauri expects the dev server on a fixed port (see src-tauri/tauri.conf.json).
 export default defineConfig({
-  plugins: [react()],
+  plugins: [tailwindcss(), react()],
   clearScreen: false,
   server: {
     port: 1420,

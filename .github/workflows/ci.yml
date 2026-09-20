@@ -39,3 +39,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec turbo run codegen lint typecheck test --concurrency 100%
       - run: pnpm exec turbo run //#cargo:check //#cargo:test --concurrency 100%
+
+      # Draft ACP v2 and the mock vendor stay feature-gated; prove both states
+      # on every OS (M1.2 D16).
+      - name: ACP v2 feature tests
+        run: |
+          cargo test -p tethys-acp --features acp-v2,mock
+          cargo test -p tethys-agent-servers --features acp-v2
+          cargo test -p tethys-core --features acp-v2

@@ -1,0 +1,33 @@
+[package]
+name = "tethys-agent-servers"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+acp-v2 = ["tethys-acp/acp-v2"]
+
+[dependencies]
+agent-client-protocol.workspace = true
+futures.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tethys-acp = { path = "../tethys-acp" }
+tethys-schema = { path = "../tethys-schema" }
+tethys-supervisor = { path = "../tethys-supervisor" }
+tethys-thread = { path = "../tethys-thread" }
+
+[dev-dependencies]
+async-trait.workspace = true
+tethys-acp = { path = "../tethys-acp", features = ["mock"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2"
+
+[[test]]
+name = "mock_vendor"
+harness = false
