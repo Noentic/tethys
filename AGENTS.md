@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Design System
-- Reference AGENTS.md for design system & tokens.
+- Reference DESIGN.md for design system & tokens.
 
 ## Context & Documentation
 - Invoke the find-docs skill for up-to-date documentation on any library or module.
