@@ -20,6 +20,10 @@ pub mod cancel;
 
 pub use cancel::*;
 
+pub mod catalog;
+
+pub use catalog::*;
+
 pub mod elicitation;
 
 pub use elicitation::*;
@@ -200,6 +204,11 @@ pub fn registered_types() -> Types {
         .register::<workspace::Vcs>()
         .register::<workspace::GitHost>()
         .register::<workspace::PermissionMode>()
+        .register::<catalog::WorkspaceTrustState>()
+        .register::<catalog::TrustScope>()
+        .register::<catalog::TrustGrant>()
+        .register::<catalog::WorkspaceListItem>()
+        .register::<catalog::WorkspaceSessionSummary>()
         .register::<elicitation::ElicitationEnumOption>()
         .register::<elicitation::ElicitationFieldKind>()
         .register::<elicitation::ElicitationField>()

@@ -21,9 +21,24 @@ use parking_lot::Mutex;
 use std::path::Path;
 
 pub use error::{GitError, GitResult};
+pub use read::remote_url as remote_url_in_repo;
 pub use repo::GitRepo;
 pub use setup::SetupRunner;
 pub use worktree::default_worktree_path;
+
+/// Whether `root` is inside a git repository.
+pub fn vcs_present(root: &Path) -> bool {
+    GitRepo::discover(root).is_ok()
+}
+
+/// Reads the `origin` remote URL for the repository containing `root`, without
+/// fetching. `None` for a non-repository or a repository without the remote.
+pub fn remote_url(root: &Path, remote: &str) -> GitResult<Option<String>> {
+    match GitRepo::discover(root) {
+        Ok(repo) => read::remote_url(&repo, remote),
+        Err(_) => Ok(None),
+    }
+}
 
 use hunks::DiffCache;
 use tethys_schema::{

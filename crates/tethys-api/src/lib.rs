@@ -64,6 +64,8 @@ pub enum ApiError {
     Conflict(String),
     #[error("CAPABILITIES_NOT_NEGOTIATED: connection has not negotiated capabilities yet")]
     CapabilitiesNotNegotiated,
+    #[error("CONCURRENCY_LIMIT: workspace {workspace_id} allows at most {limit} concurrent session(s)")]
+    ConcurrencyLimit { workspace_id: String, limit: u32 },
     #[error("DELETE_BLOCKED: {} uncommitted path(s), {} unpushed commit(s), leased={leased}",
         uncommitted.len(), unpushed.len())]
     DeleteBlocked {

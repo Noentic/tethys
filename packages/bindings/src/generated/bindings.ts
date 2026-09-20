@@ -867,6 +867,22 @@ export type ToolOrigin = { kind: "builtin" } | { kind: "mcp"; server: string } |
 /**  MCP transport of a registry entry. */
 export type TransportKind = "stdio" | "http" | "sse";
 
+/**
+ *  The `workspace.add` request — the one path-taking method, because it *is*
+ *  the trust flow (`architecture.md` §1 principle 8's stated exception).
+ */
+export type TrustGrant = {
+	/**  The folder the user picked; Core canonicalizes it before trusting. */
+	path: string,
+	permission_mode: PermissionMode,
+	scope: TrustScope,
+	/**  Run `git init` in place when the folder is not a repository. */
+	init_git?: boolean,
+};
+
+/**  Scope a trust grant covers (`pages-views-spec.md` §2.1). */
+export type TrustScope = "folder" | "subtree";
+
 /**  Normalized event model (architecture §7.3). One v2-shaped stream for all agents. */
 export type TurnEventBody = { type: "StateChanged"; body: StateChanged } | { type: "MessageUpsert"; body: MessageUpsert } | { type: "MessageChunk"; body: MessageChunk } | { type: "ToolCallUpsert"; body: {
 	tool_call_id: string,
@@ -993,6 +1009,36 @@ export type WorkspaceGitConfig = {
 
 /**  Stable workspace identifier. */
 export type WorkspaceId = string;
+
+/**  One catalog card: a trusted, addressable workspace. */
+export type WorkspaceListItem = {
+	id: WorkspaceId,
+	name: string,
+	path: string,
+	capabilities: WorkspaceCapabilities,
+	trust: WorkspaceTrustState,
+	sessions: WorkspaceSessionSummary[],
+};
+
+/**
+ *  A live thread attached to a card. Branch, turn and diff are the session
+ *  surface's view (fixture-backed until the checkpoint, D12); this carries the
+ *  trustworthy identity and state.
+ */
+export type WorkspaceSessionSummary = {
+	id: string,
+	title: string,
+	state: ThreadState,
+};
+
+/**  Whether a workspace's stored trust decision still matches its folder. */
+export type WorkspaceTrustState = 
+/**  A live trust row whose resolved path and remote still match. */
+"trusted" | 
+/**  No trust row: never added or revoked. */
+"untrusted" | 
+/**  Trusted once, but the resolved path or remote changed (re-prompt). */
+"changed";
 
 /**  Result of materializing a worktree. */
 export type WorktreeInfo = {

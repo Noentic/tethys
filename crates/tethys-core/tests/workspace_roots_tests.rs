@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
-use tethys_api::{ApiError, CommandsApi, GitApi, McpApi, SearchApi, SkillsApi};
+use tethys_api::{ApiError, CommandsApi, GitApi, McpApi, SearchApi, SkillsApi, WorkspaceApi};
 use tethys_core::Core;
 use tethys_schema::sync::{
     RegistryEntry, Scope, SkillImportSource, TargetId, TransportKind, WorkspaceId,
@@ -60,6 +60,25 @@ fn init_git_repo(dir: &Path) {
         .expect("git commit");
 }
 
+/// Grants trust for `id` whose folder is `root`, with the canonical path and
+/// no remote (a local or non-git folder).
+async fn trust_workspace(core: &Core, id: &str, root: &Path) {
+    let resolved = fs::canonicalize(root).expect("canonicalize root");
+    core.sync_store()
+        .expect("sync store")
+        .upsert_trust(tethys_store::TrustRow {
+            workspace_id: id.to_string(),
+            resolved_path: resolved.to_string_lossy().to_string(),
+            host: "local".to_string(),
+            remote_url: None,
+            permission_mode: "supervised".to_string(),
+            scope: "folder".to_string(),
+            trusted_at: 0,
+        })
+        .await
+        .expect("upsert trust");
+}
+
 #[tokio::test]
 async fn unknown_workspace_id_returns_not_found_and_touches_nothing() {
     let tmp = tempdir().expect("tempdir");
@@ -71,20 +90,30 @@ async fn unknown_workspace_id_returns_not_found_and_touches_nothing() {
     let core = Core::new("0.0.0");
     let unknown_id = WorkspaceId::new("unknown-ws-12345");
 
+    assert_every_filesystem_namespace_is_not_found(&core, &unknown_id).await;
+
+    // Assert filesystem remains identical
+    let after = snapshot_dir(&test_dir);
+    assert_eq!(before, after, "Directory modified despite NotFound errors!");
+}
+
+/// The one `WorkspaceRoots` trust rule covers every filesystem-touching
+/// namespace (M1.4 routed them all through the port), so one helper proves it.
+async fn assert_every_filesystem_namespace_is_not_found(core: &Core, id: &WorkspaceId) {
     // search.files
-    let res = core.search_files(unknown_id.clone(), "query".into(), 10).await;
+    let res = core.search_files(id.clone(), "query".into(), 10).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "search_files: expected NotFound, got {res:?}");
 
     // commands.list
-    let res = core.commands_list(Some(unknown_id.clone())).await;
+    let res = core.commands_list(Some(id.clone())).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "commands_list: expected NotFound, got {res:?}");
 
     // commands.expand
-    let res = core.commands_expand("cmd".into(), "args".into(), Some(unknown_id.clone())).await;
+    let res = core.commands_expand("cmd".into(), "args".into(), Some(id.clone())).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "commands_expand: expected NotFound, got {res:?}");
 
     // mcp.registry.list
-    let res = core.mcp_registry_list(Some(unknown_id.clone())).await;
+    let res = core.mcp_registry_list(Some(id.clone())).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_registry_list: expected NotFound, got {res:?}");
 
     // mcp.registry.set
@@ -97,73 +126,73 @@ async fn unknown_workspace_id_returns_not_found_and_touches_nothing() {
         headers: Default::default(),
         meta: Default::default(),
     };
-    let res = core.mcp_registry_set("test".into(), dummy_entry, Scope::Workspace, Some(unknown_id.clone())).await;
+    let res = core.mcp_registry_set("test".into(), dummy_entry, Scope::Workspace, Some(id.clone())).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_registry_set: expected NotFound, got {res:?}");
 
     // mcp.registry.delete
-    let res = core.mcp_registry_delete("test".into(), Scope::Workspace, Some(unknown_id.clone())).await;
+    let res = core.mcp_registry_delete("test".into(), Scope::Workspace, Some(id.clone())).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_registry_delete: expected NotFound, got {res:?}");
 
     // mcp.effective
-    let res = core.mcp_effective(None, Some(unknown_id.clone())).await;
+    let res = core.mcp_effective(None, Some(id.clone())).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_effective: expected NotFound, got {res:?}");
 
     // mcp.attachments
-    let res = core.mcp_attachments(unknown_id.clone()).await;
+    let res = core.mcp_attachments(id.clone()).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_attachments: expected NotFound, got {res:?}");
 
     // mcp.projection.plan
-    let res = core.mcp_projection_plan(unknown_id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
+    let res = core.mcp_projection_plan(id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_projection_plan: expected NotFound, got {res:?}");
 
     // mcp.projection.rollback
-    let res = core.mcp_projection_rollback(unknown_id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
+    let res = core.mcp_projection_rollback(id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_projection_rollback: expected NotFound, got {res:?}");
 
     // mcp.projection.verify
-    let res = core.mcp_projection_verify(unknown_id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
+    let res = core.mcp_projection_verify(id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_projection_verify: expected NotFound, got {res:?}");
 
     // mcp.import.scan
-    let res = core.mcp_import_scan(unknown_id.clone()).await;
+    let res = core.mcp_import_scan(id.clone()).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_import_scan: expected NotFound, got {res:?}");
 
     // mcp.import.apply
-    let res = core.mcp_import_apply(unknown_id.clone(), vec![], Scope::Workspace).await;
+    let res = core.mcp_import_apply(id.clone(), vec![], Scope::Workspace).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_import_apply: expected NotFound, got {res:?}");
 
     // skills.list
-    let res = core.skills_list(unknown_id.clone()).await;
+    let res = core.skills_list(id.clone()).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_list: expected NotFound, got {res:?}");
 
     // skills.import
-    let res = core.skills_import(unknown_id.clone(), Scope::Workspace, SkillImportSource::Folder { path: "/tmp".into() }).await;
+    let res = core.skills_import(id.clone(), Scope::Workspace, SkillImportSource::Folder { path: "/tmp".into() }).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_import: expected NotFound, got {res:?}");
 
     // skills.update_check
-    let res = core.skills_update_check(unknown_id.clone(), Scope::Workspace, "name".into()).await;
+    let res = core.skills_update_check(id.clone(), Scope::Workspace, "name".into()).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_update_check: expected NotFound, got {res:?}");
 
     // skills.update_plan
-    let res = core.skills_update_plan(unknown_id.clone(), Scope::Workspace, "name".into()).await;
+    let res = core.skills_update_plan(id.clone(), Scope::Workspace, "name".into()).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_update_plan: expected NotFound, got {res:?}");
 
     // skills.update_apply
-    let res = core.skills_update_apply(unknown_id.clone(), Scope::Workspace, "name".into()).await;
+    let res = core.skills_update_apply(id.clone(), Scope::Workspace, "name".into()).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_update_apply: expected NotFound, got {res:?}");
 
     // skills.trust
-    let res = core.skills_trust(unknown_id.clone(), Scope::Workspace, "name".into()).await;
+    let res = core.skills_trust(id.clone(), Scope::Workspace, "name".into()).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_trust: expected NotFound, got {res:?}");
 
     // skills.enable
-    let res = core.skills_enable(unknown_id.clone(), Scope::Workspace, "name".into(), true).await;
+    let res = core.skills_enable(id.clone(), Scope::Workspace, "name".into(), true).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_enable: expected NotFound, got {res:?}");
 
     // git.worktree.create
     let spec = WorktreeSpec {
         thread_id: "thread-1".into(),
-        workspace_id: unknown_id.clone(),
+        workspace_id: id.clone(),
         slug: "slug-1".into(),
         path: "".into(),
         branch: "branch-1".into(),
@@ -174,10 +203,6 @@ async fn unknown_workspace_id_returns_not_found_and_touches_nothing() {
     };
     let res = core.git_worktree_create(spec).await;
     assert!(matches!(res, Err(ApiError::NotFound(_))), "git_worktree_create: expected NotFound, got {res:?}");
-
-    // Assert filesystem remains identical
-    let after = snapshot_dir(&test_dir);
-    assert_eq!(before, after, "Directory modified despite NotFound errors!");
 }
 
 #[tokio::test]
@@ -199,6 +224,117 @@ async fn path_shaped_workspace_id_is_treated_as_unknown_id() {
 }
 
 #[tokio::test]
+async fn untrusted_workspace_row_resolves_not_found_across_namespaces() {
+    let tmp = tempdir().expect("tempdir");
+    let home = tmp.path().join("home");
+    let root = tmp.path().join("repo");
+    fs::create_dir_all(&root).expect("root");
+    fs::write(root.join("sentinel.txt"), b"do-not-touch").expect("sentinel");
+    let before = snapshot_dir(&root);
+
+    let core = Core::open(&home).await.expect("Core::open");
+    core.sync_store()
+        .expect("sync store")
+        .ensure_workspace("ws-untrusted", &root.display().to_string(), "plain")
+        .await
+        .expect("ensure workspace");
+    let id = WorkspaceId::new("ws-untrusted");
+
+    // The row exists in `workspaces`, but with no trust row every
+    // filesystem-touching namespace resolves through the one rule to NotFound.
+    assert_every_filesystem_namespace_is_not_found(&core, &id).await;
+    assert_eq!(snapshot_dir(&root), before, "no file touched on refusal");
+
+    // Granting trust makes the same id resolve.
+    trust_workspace(&core, "ws-untrusted", &root).await;
+    assert!(core.skills_list(id.clone()).await.is_ok(), "trusted id resolves");
+
+    // Revoking removes it again.
+    core.workspace_remove(id.clone()).await.expect("revoke");
+    let res = core.skills_list(id).await;
+    assert!(matches!(res, Err(ApiError::NotFound(_))), "revoked: {res:?}");
+    assert_eq!(snapshot_dir(&root), before, "no file touched after revoke");
+}
+
+#[tokio::test]
+async fn changed_trust_key_reprompts_until_regranted() {
+    let tmp = tempdir().expect("tempdir");
+    let home = tmp.path().join("home");
+    let root = tmp.path().join("repo");
+    init_git_repo(&root);
+    let core = Core::open(&home).await.expect("Core::open");
+    core.sync_store()
+        .expect("sync store")
+        .ensure_workspace("ws-change", &root.display().to_string(), "worktree")
+        .await
+        .expect("ensure");
+    trust_workspace(&core, "ws-change", &root).await;
+    let id = WorkspaceId::new("ws-change");
+    assert!(core.skills_list(id.clone()).await.is_ok());
+
+    // A new remote changes the trust key: re-prompt (NotFound) until re-granted.
+    std::process::Command::new("git")
+        .args(["remote", "add", "origin", "https://github.com/x/y.git"])
+        .current_dir(&root)
+        .output()
+        .expect("git remote add");
+    let res = core.skills_list(id.clone()).await;
+    assert!(matches!(res, Err(ApiError::NotFound(_))), "changed remote: {res:?}");
+
+    // Re-granting with the new remote restores access.
+    let resolved = fs::canonicalize(&root).expect("canonicalize");
+    core.sync_store()
+        .expect("sync store")
+        .upsert_trust(tethys_store::TrustRow {
+            workspace_id: "ws-change".to_string(),
+            resolved_path: resolved.to_string_lossy().to_string(),
+            host: "local".to_string(),
+            remote_url: Some("https://github.com/x/y.git".to_string()),
+            permission_mode: "supervised".to_string(),
+            scope: "folder".to_string(),
+            trusted_at: 0,
+        })
+        .await
+        .expect("regrant");
+    assert!(core.skills_list(id).await.is_ok(), "re-granted resolves");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn symlink_swap_reprompts_until_regranted() {
+    use std::os::unix::fs::symlink;
+
+    let tmp = tempdir().expect("tempdir");
+    let home = tmp.path().join("home");
+    let real_a = tmp.path().join("real-a");
+    let real_b = tmp.path().join("real-b");
+    let link = tmp.path().join("link");
+    fs::create_dir_all(&real_a).expect("real a");
+    fs::create_dir_all(&real_b).expect("real b");
+    symlink(&real_a, &link).expect("symlink a");
+
+    let core = Core::open(&home).await.expect("Core::open");
+    core.sync_store()
+        .expect("sync store")
+        .ensure_workspace("ws-link", &link.display().to_string(), "plain")
+        .await
+        .expect("ensure");
+    trust_workspace(&core, "ws-link", &real_a).await;
+    let id = WorkspaceId::new("ws-link");
+    assert!(core.skills_list(id.clone()).await.is_ok());
+
+    // Repointing the symlink changes the canonical root: re-prompt (NotFound)
+    // until re-trusted.
+    fs::remove_file(&link).expect("remove link");
+    symlink(&real_b, &link).expect("symlink b");
+    let res = core.skills_list(id).await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "symlink swap: {res:?}"
+    );
+}
+
+#[tokio::test]
 async fn core_open_on_temp_home_creates_store_and_allows_skills_and_mcp() {
     let tmp = tempdir().expect("temp home");
     let home = tmp.path().to_path_buf();
@@ -215,6 +351,7 @@ async fn core_open_on_temp_home_creates_store_and_allows_skills_and_mcp() {
         .ensure_workspace("ws-1", &ws_dir.display().to_string(), "plain")
         .await
         .expect("ensure_workspace");
+    trust_workspace(&core, "ws-1", &ws_dir).await;
 
     // skills.list succeeds against the opened store
     let skills = core.skills_list(WorkspaceId::new("ws-1")).await.expect("skills_list must succeed");
@@ -252,6 +389,7 @@ async fn worktree_creation_for_workspace_id_lands_under_expected_location() {
         .ensure_workspace("ws-git", &repo_dir.display().to_string(), "worktree")
         .await
         .expect("ensure ws");
+    trust_workspace(&core, "ws-git", &repo_dir).await;
 
     let spec = WorktreeSpec {
         thread_id: "thread-wt-1".into(),
@@ -279,6 +417,7 @@ async fn projection_workspace(home: &Path, root: &Path, id: &str) -> Core {
         .ensure_workspace(id, &root.display().to_string(), "plain")
         .await
         .expect("ensure workspace");
+    trust_workspace(&core, id, root).await;
     core
 }
 
@@ -370,6 +509,7 @@ async fn worktree_creation_rejects_out_of_jail_path() {
         .ensure_workspace("ws-jail", &repo_dir.display().to_string(), "worktree")
         .await
         .expect("ensure ws");
+    trust_workspace(&core, "ws-jail", &repo_dir).await;
 
     let escape = tmp.path().join("evil-wt");
     let spec = WorktreeSpec {

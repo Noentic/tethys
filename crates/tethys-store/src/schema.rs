@@ -47,6 +47,24 @@ pub fn get_workspace(conn: &Connection, workspace_id: &str) -> Result<Option<Wor
     }
 }
 
+/// Lists every stored workspace.
+pub fn list_workspaces(conn: &Connection) -> Result<Vec<WorkspaceRow>, StoreError> {
+    let mut stmt =
+        conn.prepare_cached("SELECT id, root_path, isolation FROM workspaces ORDER BY id ASC")?;
+    let rows = stmt.query_map([], |row| {
+        Ok(WorkspaceRow {
+            id: row.get(0)?,
+            root_path: row.get(1)?,
+            isolation: row.get(2)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
 /// Ensures workspace exists (creates minimal workspace record if absent).
 pub fn ensure_workspace(
     conn: &Connection,

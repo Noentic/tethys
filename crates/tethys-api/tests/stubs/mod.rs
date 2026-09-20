@@ -98,3 +98,13 @@ pub(crate) fn sample_create_thread() -> CreateThread {
         workdir: "/tmp".into(),
     }
 }
+
+/// A helper so the fixture's `TrustGrant` construction is shared.
+pub(crate) fn sample_trust_grant() -> tethys_schema::catalog::TrustGrant {
+    tethys_schema::catalog::TrustGrant {
+        path: "/tmp".into(),
+        permission_mode: tethys_schema::workspace::PermissionMode::Supervised,
+        scope: tethys_schema::catalog::TrustScope::Folder,
+        init_git: false,
+    }
+}

@@ -188,6 +188,37 @@ impl ThreadSessions {
         let workspace_id = WorkspaceId::new(&request.workspace_id);
         let roots = self.roots.read().clone();
         let workspace_root = roots.root(&workspace_id).await?;
+        // The one `thread.create` call site consults `max_concurrent_sessions`
+        // (architecture §10.6): a non-git folder admits one session, so a second
+        // window or a direct API caller cannot bypass the cap. The check runs a
+        // read-only git read, so it stays off the async worker.
+        let root_for_check = workspace_root.clone();
+        let limit = tokio::task::spawn_blocking(move || {
+            crate::workspace::capability::max_concurrent_sessions_for_root(&root_for_check)
+        })
+        .await
+        .map_err(|error| ApiError::Internal(format!("concurrency check failed: {error}")))?;
+        if let Some(limit) = limit {
+            let live = self
+                .threads
+                .lock()
+                .values()
+                .filter(|handle| {
+                    let inner = handle.inner.lock();
+                    inner.workspace_id == request.workspace_id
+                        && !matches!(
+                            inner.machine.state(),
+                            tethys_schema::thread::ThreadState::Archived
+                        )
+                })
+                .count() as u32;
+            if live >= limit {
+                return Err(ApiError::ConcurrencyLimit {
+                    workspace_id: request.workspace_id,
+                    limit,
+                });
+            }
+        }
         let id = ThreadId::new(format!("thread-{}", self.threads.lock().len() + 1));
         let handle = Arc::new(ThreadHandle {
             inner: Mutex::new(ThreadInner {

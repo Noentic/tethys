@@ -10,8 +10,11 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tethys_api::ApiError;
+use tethys_schema::catalog::WorkspaceTrustState;
 use tethys_schema::sync::WorkspaceId;
 use tethys_store::EventStore;
+
+use crate::workspace_trust::WorkspaceTrust;
 
 /// Resolves a workspace ID to its on-disk filesystem root.
 #[async_trait::async_trait]
@@ -81,4 +84,54 @@ impl WorkspaceRoots for StaticWorkspaces {
             ))),
         }
     }
+}
+
+/// The single trust gate: resolves the inner root, then requires a live trust
+/// row whose resolved path and remote still match the folder.
+///
+/// Every filesystem namespace already resolves through this one port (M1.4),
+/// so an untrusted, revoked, or changed workspace resolves to `NotFound` for
+/// all of them without a per-namespace edit.
+pub struct TrustFilteredRoots {
+    inner: Arc<dyn WorkspaceRoots>,
+    trust: Arc<dyn WorkspaceTrust>,
+}
+
+impl TrustFilteredRoots {
+    pub fn new(inner: Arc<dyn WorkspaceRoots>, trust: Arc<dyn WorkspaceTrust>) -> Self {
+        Self { inner, trust }
+    }
+
+    /// Why a workspace is or is not currently admitted, for the catalog's
+    /// absent-card reasoning (never added vs revoked vs changed).
+    pub async fn trust_status(&self, id: &WorkspaceId) -> WorkspaceTrustState {
+        let Ok(root) = self.inner.root(id).await else {
+            return WorkspaceTrustState::Untrusted;
+        };
+        let record = self.trust.trust(id).await.ok().flatten();
+        crate::workspace_trust::trust_state_async(record, root).await
+    }
+}
+
+#[async_trait::async_trait]
+impl WorkspaceRoots for TrustFilteredRoots {
+    async fn root(&self, id: &WorkspaceId) -> Result<PathBuf, ApiError> {
+        let path = self.inner.root(id).await?;
+        let record = self
+            .trust
+            .trust(id)
+            .await
+            .map_err(|error| ApiError::Internal(error.to_string()))?;
+        if crate::workspace_trust::trust_state_async(record, path.clone()).await
+            == WorkspaceTrustState::Trusted
+        {
+            Ok(path)
+        } else {
+            Err(not_found(id))
+        }
+    }
+}
+
+fn not_found(id: &WorkspaceId) -> ApiError {
+    ApiError::NotFound(format!("workspace not found: {}", id.as_str()))
 }

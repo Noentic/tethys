@@ -28,10 +28,24 @@ async fn core(home: &Path) -> Core {
 async fn core_with_workspace(home: &Path, root: &Path) -> (Core, WorkspaceId) {
     let store = EventStore::in_memory().await.expect("store");
     let ws_id = "ws-repo";
+    fs::create_dir_all(root).expect("create workspace root");
     store
         .ensure_workspace(ws_id, &root.display().to_string(), "plain")
         .await
         .expect("ensure");
+    let resolved = fs::canonicalize(root).expect("canonicalize root");
+    store
+        .upsert_trust(tethys_store::TrustRow {
+            workspace_id: ws_id.to_string(),
+            resolved_path: resolved.to_string_lossy().to_string(),
+            host: "local".to_string(),
+            remote_url: None,
+            permission_mode: "supervised".to_string(),
+            scope: "folder".to_string(),
+            trusted_at: 0,
+        })
+        .await
+        .expect("trust");
     let options = StoreOptions::new(AcpProtocol::V1, Arc::new(DenyPermissionResolver));
     let sessions = Arc::new(ThreadSessions::with_default_roots(
         ConnectionStore::new(options),

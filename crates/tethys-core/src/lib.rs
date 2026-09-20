@@ -9,19 +9,25 @@ pub mod skills;
 pub mod synthetic;
 pub mod thread_queue;
 pub mod thread_session;
+pub mod workspace;
 pub mod workspace_roots;
+pub mod workspace_trust;
 
 pub use git_registry::ThreadRuntimeState;
-pub use workspace_roots::{StaticWorkspaces, StoreWorkspaceRoots, WorkspaceRoots};
+pub use workspace_roots::{
+    StaticWorkspaces, StoreWorkspaceRoots, TrustFilteredRoots, WorkspaceRoots,
+};
+pub use workspace_trust::{StaticTrust, StoreWorkspaceTrust, WorkspaceTrust};
 
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tethys_agent_servers::{ConnectionStore, StoreOptions};
 use tethys_api::ApiError;
 use tethys_git::GitError;
 use tethys_schema::connection::{AcpProtocol, AgentCompat};
-use tethys_schema::{CheckpointPhase, DiffSource, RestoreTarget, WorkspaceGitConfig};
+use tethys_schema::{CheckpointPhase, DiffSource, RestoreTarget, WorkspaceCapabilities, WorkspaceGitConfig};
 use tethys_search::{SearchError, SearchIndexManager};
 
 use crate::composer::SkillCandidate;
@@ -86,6 +92,8 @@ pub struct Core {
     sessions: Arc<ThreadSessions>,
     store: Option<Arc<tethys_store::EventStore>>,
     workspace_roots: Arc<dyn WorkspaceRoots>,
+    trust: Arc<dyn WorkspaceTrust>,
+    capability_cache: Mutex<HashMap<String, WorkspaceCapabilities>>,
 }
 
 impl Default for Core {
@@ -101,23 +109,40 @@ impl Core {
         let home = dirs::home_dir().unwrap_or_default();
         let sync =
             crate::thread_session::SyncSource::new(home, Arc::new(tethys_sync::KeyringSecrets));
-        let sessions = Arc::new(ThreadSessions::new(
-            store,
-            sync,
+        let trust: Arc<dyn WorkspaceTrust> = Arc::new(StaticTrust::new());
+        let roots: Arc<dyn WorkspaceRoots> = Arc::new(TrustFilteredRoots::new(
             Arc::new(workspace_roots::StaticWorkspaces::new()),
+            trust.clone(),
         ));
+        let sessions = Arc::new(ThreadSessions::new(store, sync, roots.clone()));
         sessions.set_permissions(permissions);
-        Self::with_sessions(version, sessions)
-    }
-
-    pub fn with_sessions(version: impl Into<String>, sessions: Arc<ThreadSessions>) -> Self {
         Self {
             version: version.into(),
             search: SearchIndexManager::new(),
             git: Mutex::new(GitRegistry::default()),
             sessions,
             store: None,
-            workspace_roots: Arc::new(workspace_roots::StaticWorkspaces::new()),
+            workspace_roots: roots,
+            trust,
+            capability_cache: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub fn with_sessions(version: impl Into<String>, sessions: Arc<ThreadSessions>) -> Self {
+        let trust: Arc<dyn WorkspaceTrust> = Arc::new(StaticTrust::new());
+        let roots: Arc<dyn WorkspaceRoots> = Arc::new(TrustFilteredRoots::new(
+            Arc::new(workspace_roots::StaticWorkspaces::new()),
+            trust.clone(),
+        ));
+        Self {
+            version: version.into(),
+            search: SearchIndexManager::new(),
+            git: Mutex::new(GitRegistry::default()),
+            sessions,
+            store: None,
+            workspace_roots: roots,
+            trust,
+            capability_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -137,7 +162,12 @@ impl Core {
         let sync = crate::thread_session::SyncSource::new(home, Arc::new(tethys_sync::KeyringSecrets));
         let permissions = PermissionRegistry::new();
         let agent_store = ConnectionStore::new(policy_store_options(permissions.clone()));
-        let workspace_roots = Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone()));
+        let trust: Arc<dyn WorkspaceTrust> =
+            Arc::new(StoreWorkspaceTrust::new((*store).clone()));
+        let workspace_roots: Arc<dyn WorkspaceRoots> = Arc::new(TrustFilteredRoots::new(
+            Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone())),
+            trust.clone(),
+        ));
         let sessions = Arc::new(ThreadSessions::new(agent_store, sync, workspace_roots.clone()));
         sessions.set_permissions(permissions);
         let core = Self {
@@ -147,15 +177,23 @@ impl Core {
             sessions,
             store: Some(store),
             workspace_roots,
+            trust,
+            capability_cache: Mutex::new(HashMap::new()),
         };
         Ok(core)
     }
 
     /// Attaches the sync-state store (projection ownership and skill rows).
     pub fn with_store(mut self, store: Arc<tethys_store::EventStore>) -> Self {
-        let roots = Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone()));
+        let trust: Arc<dyn WorkspaceTrust> =
+            Arc::new(StoreWorkspaceTrust::new((*store).clone()));
+        let roots: Arc<dyn WorkspaceRoots> = Arc::new(TrustFilteredRoots::new(
+            Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone())),
+            trust.clone(),
+        ));
         self.sessions.set_roots(roots.clone());
         self.workspace_roots = roots;
+        self.trust = trust;
         self.store = Some(store);
         self
     }
@@ -168,6 +206,39 @@ impl Core {
 
     pub fn workspace_roots(&self) -> &Arc<dyn WorkspaceRoots> {
         &self.workspace_roots
+    }
+
+    /// The trust port the workspace catalog grants and revokes through.
+    pub fn trust(&self) -> &Arc<dyn WorkspaceTrust> {
+        &self.trust
+    }
+
+    /// Resolves (and caches) a workspace's capabilities. A cache hit avoids the
+    /// git reads a card render would otherwise pay; the entry is invalidated by
+    /// [`Self::invalidate_capabilities`] on trust and checkpoint mutations.
+    pub(crate) async fn resolve_capabilities(
+        &self,
+        id: &tethys_schema::sync::WorkspaceId,
+    ) -> Result<WorkspaceCapabilities, ApiError> {
+        if let Some(cached) = self.capability_cache.lock().get(id.as_str()).cloned() {
+            return Ok(cached);
+        }
+        let root = self.workspace_roots.root(id).await?;
+        let resolved = tokio::task::spawn_blocking(move || {
+            crate::workspace::capability::resolve_folder(&root)
+        })
+        .await
+        .map_err(|error| ApiError::Internal(format!("capability task failed: {error}")))?;
+        self.capability_cache
+            .lock()
+            .insert(id.as_str().to_string(), resolved.clone());
+        Ok(resolved)
+    }
+
+    /// Drops the cached capabilities for one workspace (trust grant/revoke, a
+    /// checkpoint write, or an in-place `git init`).
+    pub fn invalidate_capabilities(&self, id: &str) {
+        self.capability_cache.lock().remove(id);
     }
 
     pub fn sync_store(&self) -> Result<&Arc<tethys_store::EventStore>, ApiError> {

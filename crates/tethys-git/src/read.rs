@@ -104,6 +104,19 @@ pub fn main_worktree_root(repo: &GitRepo) -> GitResult<PathBuf> {
     Ok(repo.worktree_root.clone())
 }
 
+/// Reads a remote's fetch URL without fetching anything (`git remote get-url`).
+///
+/// A missing remote is `None`, not an error: a local-only repository has no
+/// origin and the capability resolver must read that as `GitLocal`.
+pub fn remote_url(repo: &GitRepo, remote: &str) -> GitResult<Option<String>> {
+    let output = repo.command().args(["remote", "get-url", remote]).output()?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok((!url.is_empty()).then_some(url))
+}
+
 /// Commits on `HEAD` that have not reached its upstream (empty without one).
 pub fn unpushed_commits(repo: &GitRepo) -> GitResult<Vec<String>> {
     if repo.rev_parse("@{u}")?.is_none() {

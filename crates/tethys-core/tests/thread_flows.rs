@@ -1,7 +1,7 @@
 //! End-to-end thread flows over real mock-agent processes (harness = false so
 //! the binary can re-exec itself as the mock vendor).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -40,15 +40,27 @@ fn workdir(name: &str) -> PathBuf {
     dir
 }
 
+/// Makes the workspace root a git repository so the concurrency guard admits
+/// more than one session (a non-git folder is capped at one).
+fn init_git(dir: &Path) {
+    let output = std::process::Command::new("git")
+        .args(["init", "-q", "-b", "main"])
+        .current_dir(dir)
+        .output()
+        .expect("git init");
+    assert!(output.status.success(), "git init failed");
+}
+
 fn build_core(grace: Duration) -> Core {
     let options = StoreOptions {
         idle_grace: grace,
         cancel_grace: Duration::from_millis(200),
         ..StoreOptions::new(AcpProtocol::V1, Arc::new(DenyPermissionResolver))
     };
+    let workspace_root = workdir("workspace");
+    init_git(&workspace_root);
     let roots = Arc::new(
-        tethys_core::workspace_roots::StaticWorkspaces::new()
-            .with("workspace", workdir("workspace")),
+        tethys_core::workspace_roots::StaticWorkspaces::new().with("workspace", workspace_root),
     );
     let sessions = Arc::new(ThreadSessions::new(
         ConnectionStore::new(options),

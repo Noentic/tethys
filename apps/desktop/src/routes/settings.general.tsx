@@ -1,31 +1,7 @@
-import {
-  Badge,
-  Button,
-  Card,
-  PageHeader,
-  Select,
-  ToggleSwitch,
-} from "@tethys/ui";
+import { TrustedFolders } from "@tethys/features";
+import { Card, PageHeader, Select, ToggleSwitch } from "@tethys/ui";
 import type React from "react";
 import { useState } from "react";
-
-interface TrustedFolder {
-  id: string;
-  path: string;
-  sourceKind: string;
-  permissionMode: "Supervised" | "Auto-edit" | "YOLO";
-  dateTrusted: string;
-}
-
-const INITIAL_TRUSTED_FOLDERS: TrustedFolder[] = [
-  {
-    id: "f-1",
-    path: "~/Code/tethys",
-    sourceKind: "Git · GitHub",
-    permissionMode: "Supervised",
-    dateTrusted: "2026-09-17",
-  },
-];
 
 // Picker label -> CSS font stack. The first entry of each list is the shipped
 // default and is applied by removing the override rather than restating it.
@@ -105,13 +81,6 @@ export function SettingsGeneralView() {
   const [terminalFont, setTerminalFont] = useState<string>("Geist Mono");
   const [approvalAlerts, setApprovalAlerts] = useState<boolean>(true);
   const [completionAlerts, setCompletionAlerts] = useState<boolean>(true);
-  const [trustedFolders, setTrustedFolders] = useState<TrustedFolder[]>(
-    INITIAL_TRUSTED_FOLDERS,
-  );
-
-  const revokeFolder = (id: string) => {
-    setTrustedFolders((prev) => prev.filter((f) => f.id !== id));
-  };
 
   return (
     <div className="flex flex-col gap-2xl">
@@ -237,37 +206,7 @@ export function SettingsGeneralView() {
         title="Trusted Folders"
         description="Directories granted execution trust via workspace-trust-dialog. Revoking removes the workspace and stops running agent threads."
       >
-        {trustedFolders.map((folder) => (
-          <div
-            key={folder.id}
-            className="flex items-center justify-between gap-xl px-lg py-md"
-          >
-            <div className="flex min-w-0 flex-col gap-1">
-              <div className="flex items-center gap-sm">
-                <span className="truncate font-mono text-mono-code text-(--tethys-text-primary)">
-                  {folder.path}
-                </span>
-                <Badge variant="muted">{folder.sourceKind}</Badge>
-              </div>
-              <span className="text-label-md font-normal text-(--tethys-text-muted)">
-                Policy: {folder.permissionMode} · Trusted {folder.dateTrusted}
-              </span>
-            </div>
-
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => revokeFolder(folder.id)}
-            >
-              Revoke Trust
-            </Button>
-          </div>
-        ))}
-        {trustedFolders.length === 0 && (
-          <div className="px-lg py-xl text-center text-body-sm text-(--tethys-text-muted)">
-            No trusted folders.
-          </div>
-        )}
+        <TrustedFolders />
       </SettingsSection>
     </div>
   );

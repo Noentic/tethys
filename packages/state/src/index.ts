@@ -13,3 +13,4 @@ export * from "./thread-contract-fixtures";
 export * from "./thread-state";
 export * from "./trusted-workspaces";
 export * from "./workspace-capabilities";
+export * from "./workspaces";

@@ -15,6 +15,8 @@ pub mod pool;
 pub mod schema;
 #[doc(hidden)]
 pub mod sync_state;
+#[doc(hidden)]
+pub mod workspace_trust;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -25,6 +27,7 @@ pub use blobs::BlobStore;
 pub use error::StoreError;
 pub use schema::WorkspaceRow;
 pub use sync_state::{ProjectionRow, SkillRow};
+pub use workspace_trust::TrustRow;
 pub use tethys_schema::store::{
     BlobHash, Entry, EntryKind, EntryPage, EntryUpsert, NewEvent, SeqRange, StoredEvent, ThreadId,
     ThreadView,
@@ -268,5 +271,56 @@ impl EventStore {
             .call(move |conn| sync_state::skill(conn, &skill_id))
             .await?;
         Ok(row)
+    }
+
+    /// Lists every stored workspace row.
+    pub async fn list_workspaces(&self) -> Result<Vec<WorkspaceRow>, StoreError> {
+        let rows = self
+            .pool
+            .reader()
+            .call(move |conn| schema::list_workspaces(conn))
+            .await?;
+        Ok(rows)
+    }
+
+    /// Inserts or replaces one workspace trust row.
+    pub async fn upsert_trust(&self, row: TrustRow) -> Result<(), StoreError> {
+        self.pool
+            .writer()
+            .call(move |conn| workspace_trust::upsert_trust(conn, &row))
+            .await?;
+        Ok(())
+    }
+
+    /// Reads one workspace trust row.
+    pub async fn trust(&self, workspace_id: &str) -> Result<Option<TrustRow>, StoreError> {
+        let workspace_id = workspace_id.to_string();
+        let row = self
+            .pool
+            .reader()
+            .call(move |conn| workspace_trust::trust(conn, &workspace_id))
+            .await?;
+        Ok(row)
+    }
+
+    /// Deletes one workspace trust row, reporting whether it existed.
+    pub async fn delete_trust(&self, workspace_id: &str) -> Result<bool, StoreError> {
+        let workspace_id = workspace_id.to_string();
+        let deleted = self
+            .pool
+            .writer()
+            .call(move |conn| workspace_trust::delete_trust(conn, &workspace_id))
+            .await?;
+        Ok(deleted)
+    }
+
+    /// Lists every workspace trust row.
+    pub async fn list_trust(&self) -> Result<Vec<TrustRow>, StoreError> {
+        let rows = self
+            .pool
+            .reader()
+            .call(move |conn| workspace_trust::list_trust(conn))
+            .await?;
+        Ok(rows)
     }
 }

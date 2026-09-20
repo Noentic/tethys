@@ -29,6 +29,19 @@ const MCP_REGISTRY_JSON: &str = r#"{
   }
 }"#;
 
+/// Makes `dir` a git repository so `max_concurrent_sessions` is unbounded
+/// (a non-git folder admits a single session, which this fixture needs to
+/// exceed).
+fn init_git(dir: &std::path::Path) {
+    std::fs::create_dir_all(dir).expect("create repo dir");
+    let output = std::process::Command::new("git")
+        .args(["init", "-q", "-b", "main"])
+        .current_dir(dir)
+        .output()
+        .expect("git init");
+    assert!(output.status.success(), "git init failed");
+}
+
 #[tokio::test]
 async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -38,6 +51,7 @@ async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
     fs::create_dir_all(home.join(".tethys")).expect("home");
     fs::create_dir_all(ws_root.join(".tethys")).expect("ws_root");
     fs::create_dir_all(&worktree).expect("worktree");
+    init_git(&ws_root);
 
     // Write uncommitted registry in workspace_root, but NOT in worktree
     fs::write(ws_root.join(".tethys").join("mcp.json"), MCP_REGISTRY_JSON).expect("write registry");
