@@ -222,6 +222,13 @@ export type ContentBlock = ({ Text: string }) & { Image?: never; ResourceLink?: 
 	data: string,
 } }) & { ResourceLink?: never; Text?: never; Unknown?: never } | ({ Unknown: string }) & { Image?: never; ResourceLink?: never; Text?: never };
 
+/**  Request for `thread.create`. */
+export type CreateThread = {
+	workspace_id: string,
+	agent_profile_id: string,
+	workdir: string,
+};
+
 export type Decider = "User" | "Policy";
 
 /**  One file in a diff summary. */
@@ -582,6 +589,17 @@ export type ProviderExtension = {
 	params: string,
 };
 
+/**  One staged prompt in a thread's queue. */
+export type QueuedPrompt = {
+	/**  Stable queue-item identity (`q-<seq>`), used by remove/reorder. */
+	id: string,
+	thread_id: ThreadId,
+	/**  The turn as it will be prompted; text plus any non-text blocks. */
+	blocks: ContentBlock[],
+	/**  Zero-based position in the queue. */
+	ordinal: number,
+};
+
 /**  What a resolved composer reference points at. */
 export type ReferenceKind = "skill" | "path";
 
@@ -784,6 +802,17 @@ export type ThreadId = string;
 
 /**  UI-02 thread states. */
 export type ThreadState = "Idle" | "Running" | "AwaitingApproval" | "Error" | "Interrupted" | "Suspended" | "Archived";
+
+/**  Thread row returned by `thread.create/list/get`. */
+export type ThreadSummary = {
+	id: ThreadId,
+	workspace_id: string,
+	agent_profile_id: string,
+	title: string,
+	workdir: string,
+	state: ThreadState,
+	session_id: string | null,
+};
 
 /**  Result of opening a thread, containing materialized entries and tail sequence. */
 export type ThreadView = {

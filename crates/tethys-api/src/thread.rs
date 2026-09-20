@@ -1,6 +1,7 @@
 //! `thread.*` namespace (`architecture.md` §12.1).
 
 use tethys_schema::cancel::CancelState;
+use tethys_schema::queue::QueuedPrompt;
 use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView};
 
 use crate::ApiError;
@@ -35,22 +36,33 @@ pub trait ThreadApi: Send + Sync {
         async { Err(ApiError::Unimplemented("thread.prompt")) }
     }
 
-    fn thread_queue_list(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+    fn thread_queue_list(
+        &self,
+        _id: ThreadId,
+    ) -> impl std::future::Future<Output = Result<Vec<QueuedPrompt>, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.queue_list")) }
     }
 
-    fn thread_queue_add(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+    fn thread_queue_add(
+        &self,
+        _id: ThreadId,
+        _blocks: Vec<ContentBlock>,
+    ) -> impl std::future::Future<Output = Result<QueuedPrompt, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.queue_add")) }
     }
 
     fn thread_queue_remove(
         &self,
+        _id: ThreadId,
+        _queued_id: String,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.queue_remove")) }
     }
 
     fn thread_queue_reorder(
         &self,
+        _id: ThreadId,
+        _ordered_ids: Vec<String>,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.queue_reorder")) }
     }
@@ -104,6 +116,9 @@ pub trait ThreadApi: Send + Sync {
 
     fn thread_set_config_option(
         &self,
+        _id: ThreadId,
+        _option_id: String,
+        _value: String,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.set_config_option")) }
     }

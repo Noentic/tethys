@@ -1,4 +1,6 @@
 import type {
+  AgentCommand,
+  ConfigOption,
   ContentBlock,
   Decider,
   ElicitationOutcome,
@@ -174,6 +176,10 @@ export interface SessionState {
   resolvedPermissions: Record<string, PermissionResolution>;
   usage?: UsageSnapshot;
   error?: string | null;
+  /** Commands the Provider advertised (`CommandsAvailable`); composer `/` group. */
+  agentCommands: AgentCommand[];
+  /** Current session config options (`ConfigOptionsChanged`); composer chips. */
+  configOptions: ConfigOption[];
 }
 
 export function extractTextFromContentBlock(block: ContentBlock): string {
@@ -239,6 +245,8 @@ export function createInitialSessionState(
     resolvedPermissions: {},
     usage: undefined,
     error: null,
+    agentCommands: [],
+    configOptions: [],
   };
 }
 
@@ -736,6 +744,22 @@ export function sessionReducer(
       return {
         ...state,
         usage: event.body.snapshot,
+        seq: currentSeq,
+      };
+    }
+
+    case "CommandsAvailable": {
+      return {
+        ...state,
+        agentCommands: event.body.commands,
+        seq: currentSeq,
+      };
+    }
+
+    case "ConfigOptionsChanged": {
+      return {
+        ...state,
+        configOptions: event.body.options,
         seq: currentSeq,
       };
     }

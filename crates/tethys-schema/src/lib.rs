@@ -30,6 +30,7 @@ use specta::{Type, Types};
 pub mod composer;
 pub mod connection;
 pub mod provider_extension;
+pub mod queue;
 pub mod search;
 pub mod sync;
 pub mod thread;
@@ -147,8 +148,11 @@ pub fn registered_types() -> Types {
         .register::<connection::ConnectionEntry>()
         .register::<thread::ThreadId>()
         .register::<thread::ThreadState>()
+        .register::<thread::CreateThread>()
+        .register::<thread::ThreadSummary>()
         .register::<thread::TurnEventBody>()
         .register::<thread::EventEnvelope>()
+        .register::<queue::QueuedPrompt>()
         .register::<cancel::CancelPhase>()
         .register::<cancel::CancelState>()
         .register::<provider_extension::ProviderExtension>()

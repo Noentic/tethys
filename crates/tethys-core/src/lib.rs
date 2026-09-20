@@ -7,6 +7,7 @@ pub mod mcp;
 pub mod permission;
 pub mod skills;
 pub mod synthetic;
+pub mod thread_queue;
 pub mod thread_session;
 pub mod workspace_roots;
 

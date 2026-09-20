@@ -3,6 +3,7 @@
 use tauri::State;
 use tethys_api::ThreadApi;
 use tethys_schema::cancel::CancelState;
+use tethys_schema::queue::QueuedPrompt;
 use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView};
 
 use crate::commands::CoreState;
@@ -48,10 +49,57 @@ pub async fn thread_prompt(
         .map_err(|e| e.to_string())
 }
 
-stub_cmd!(thread_queue_list);
-stub_cmd!(thread_queue_add);
-stub_cmd!(thread_queue_remove);
-stub_cmd!(thread_queue_reorder);
+/// `thread.queue_list` — the persisted prompt queue (M1.10).
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_queue_list(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+) -> Result<Vec<QueuedPrompt>, String> {
+    state.thread_queue_list(id).await.map_err(|e| e.to_string())
+}
+
+/// `thread.queue_add` — stages a prompt without interrupting the stream (M1.10).
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_queue_add(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+    blocks: Vec<ContentBlock>,
+) -> Result<QueuedPrompt, String> {
+    state
+        .thread_queue_add(id, blocks)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `thread.queue_remove` — drops one staged prompt (M1.10).
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_queue_remove(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+    queued_id: String,
+) -> Result<(), String> {
+    state
+        .thread_queue_remove(id, queued_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `thread.queue_reorder` — persists a new queue order (M1.10).
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_queue_reorder(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+    ordered_ids: Vec<String>,
+) -> Result<(), String> {
+    state
+        .thread_queue_reorder(id, ordered_ids)
+        .await
+        .map_err(|e| e.to_string())
+}
 
 /// `thread.cancel` — see `architecture.md §12.1`.
 #[tauri::command]
@@ -97,7 +145,20 @@ pub async fn thread_delete(state: State<'_, CoreState>, id: ThreadId) -> Result<
     state.thread_delete(id).await.map_err(|e| e.to_string())
 }
 
-stub_cmd!(thread_set_config_option);
+/// `thread.set_config_option` — applies one Provider config option (M1.10).
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_set_config_option(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+    option_id: String,
+    value: String,
+) -> Result<(), String> {
+    state
+        .thread_set_config_option(id, option_id, value)
+        .await
+        .map_err(|e| e.to_string())
+}
 
 /// `thread.set_permission_mode` — sets the Supervised / Auto-edit / YOLO mode
 /// for one thread (M1.8).

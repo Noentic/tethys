@@ -65,17 +65,7 @@ const workspacesRoute = createRoute({
 const threadNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/thread/new",
-  component: () => {
-    const navigate = useNavigate();
-    return (
-      <ThreadNewView
-        onStartSession={(_workspaceId, _providerId, _modelId, _prompt) => {
-          const generatedId = `sess-${Date.now().toString(36)}`;
-          navigate({ to: `/thread/${generatedId}` });
-        }}
-      />
-    );
-  },
+  component: ThreadNewView,
 });
 
 // Thread by ID

@@ -1,5 +1,7 @@
 export * from "./cancellation";
+export * from "./composer";
 export * from "./inspector";
+export * from "./provider-connections";
 export * from "./provider-extension";
 export * from "./reducers";
 export * from "./review";
@@ -8,4 +10,5 @@ export * from "./stores";
 export * from "./stream";
 export * from "./thread-contract-fixtures";
 export * from "./thread-state";
+export * from "./trusted-workspaces";
 export * from "./workspace-capabilities";
