@@ -1,12 +1,14 @@
 import { type CancellationState, selectIsStopDestructive } from "@tethys/state";
-import { Badge, Button } from "@tethys/ui";
+import { Badge, Button, getAllActionBarSlots } from "@tethys/ui";
 
 export interface ActionBarProps {
   cancellationState: CancellationState;
+  sessionId?: string;
   providerName?: string;
   configSummary?: string;
   mode?: string;
   worktreeBranch?: string;
+  noGit?: boolean;
   queueCount?: number;
   usageText?: string;
   onStop?: () => void;
@@ -15,10 +17,12 @@ export interface ActionBarProps {
 
 export function ActionBar({
   cancellationState,
+  sessionId,
   providerName = "Claude Code",
   configSummary = "Sonnet · Medium",
   mode = "Supervised",
   worktreeBranch,
+  noGit = false,
   queueCount = 0,
   usageText,
   onStop,
@@ -26,6 +30,7 @@ export function ActionBar({
 }: ActionBarProps) {
   const isDestructive = selectIsStopDestructive(cancellationState);
   const isPending = cancellationState === "cancel_requested";
+  const slots = getAllActionBarSlots();
 
   return (
     <footer
@@ -52,10 +57,17 @@ export function ActionBar({
           <span>Mode: {mode}</span>
         </Badge>
 
-        {worktreeBranch && (
+        {/* Wave-2 chunks contribute pills through registerActionBarSlot. */}
+        {slots.map(([id, Slot]) => (
+          <Slot key={id} sessionId={sessionId} />
+        ))}
+
+        {worktreeBranch ? (
           <Badge variant="outline">
             <span>{worktreeBranch}</span>
           </Badge>
+        ) : (
+          noGit && <Badge variant="muted">no git</Badge>
         )}
       </div>
 

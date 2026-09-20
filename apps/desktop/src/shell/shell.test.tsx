@@ -115,4 +115,17 @@ describe("ActionBar Stop Button States", () => {
     });
     expect(termBtn.className).toContain("text-(--tethys-status-danger)");
   });
+
+  it("shows the isolation pill as the branch, or no git", () => {
+    const { rerender } = render(
+      <ActionBar cancellationState="idle" worktreeBranch="feat/isolation" />,
+    );
+    expect(screen.getByText("feat/isolation")).toBeDefined();
+
+    rerender(<ActionBar cancellationState="idle" noGit />);
+    expect(screen.getByText("no git")).toBeDefined();
+
+    rerender(<ActionBar cancellationState="idle" />);
+    expect(screen.queryByText("no git")).toBeNull();
+  });
 });
