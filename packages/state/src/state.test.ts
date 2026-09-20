@@ -13,8 +13,10 @@ import {
   getOrCreateSessionStore,
   type HistoryDividerEntry,
   loadHistoryIntoSession,
+  NO_GIT_REVERT_REASON,
   PERMISSION_MODE_LABELS,
   providerExtensionFixture,
+  resolveReviewGate,
   SessionStreamManager,
   selectCancellationState,
   selectGraceDeadline,
@@ -683,5 +685,49 @@ describe("turn endings and attachments (M1.7 U17/U18)", () => {
       (candidate) => candidate.id === "m1",
     ) as TurnMessageEntry;
     expect(endedEntry.streaming).toBe(false);
+  });
+});
+
+describe("resolveReviewGate (M1.9 U6)", () => {
+  it("git-remote: diff, stage and revert all available", () => {
+    expect(
+      resolveReviewGate(workspaceCapabilityFixtures["git-remote"]),
+    ).toEqual({
+      showDiff: true,
+      showStage: true,
+      showRevert: true,
+      hiddenReason: null,
+    });
+  });
+
+  it("git-local: local git still restores", () => {
+    expect(resolveReviewGate(workspaceCapabilityFixtures["git-local"])).toEqual(
+      {
+        showDiff: true,
+        showStage: true,
+        showRevert: true,
+        hiddenReason: null,
+      },
+    );
+  });
+
+  it("git-no-restore: diff and stage without revert", () => {
+    expect(
+      resolveReviewGate(workspaceCapabilityFixtures["git-no-restore"]),
+    ).toEqual({
+      showDiff: true,
+      showStage: true,
+      showRevert: false,
+      hiddenReason: null,
+    });
+  });
+
+  it("no-git: the whole surface is hidden with a stated reason", () => {
+    expect(resolveReviewGate(workspaceCapabilityFixtures["no-git"])).toEqual({
+      showDiff: false,
+      showStage: false,
+      showRevert: false,
+      hiddenReason: NO_GIT_REVERT_REASON,
+    });
   });
 });

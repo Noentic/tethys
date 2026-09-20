@@ -88,6 +88,8 @@
   --color-status-success: var(--tethys-status-success);
   --color-status-warning: var(--tethys-status-warning);
   --color-status-danger: var(--tethys-status-danger);
+  --color-diff-added: var(--tethys-diff-added);
+  --color-diff-removed: var(--tethys-diff-removed);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

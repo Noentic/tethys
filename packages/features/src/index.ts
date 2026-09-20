@@ -34,3 +34,4 @@ export * from "./providers/capability-notice";
 export * from "./providers/pending-extensions";
 export * from "./providers/provider-artifact";
 export * from "./providers/provider-popover";
+export * from "./review";

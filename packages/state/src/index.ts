@@ -2,6 +2,7 @@ export * from "./cancellation";
 export * from "./inspector";
 export * from "./provider-extension";
 export * from "./reducers";
+export * from "./review";
 export * from "./selectors";
 export * from "./stores";
 export * from "./stream";
