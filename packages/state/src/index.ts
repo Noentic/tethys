@@ -8,6 +8,7 @@ export * from "./review";
 export * from "./selectors";
 export * from "./stores";
 export * from "./stream";
+export * from "./sync";
 export * from "./thread-contract-fixtures";
 export * from "./thread-state";
 export * from "./trusted-workspaces";
