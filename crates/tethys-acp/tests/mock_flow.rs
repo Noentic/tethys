@@ -25,7 +25,11 @@ struct AutoApprove;
 
 #[async_trait]
 impl PermissionResolver for AutoApprove {
-    async fn resolve(&self, _session: &SessionId, request: PermissionRequested) -> PermissionDecision {
+    async fn resolve(
+        &self,
+        _session: &SessionId,
+        request: PermissionRequested,
+    ) -> PermissionDecision {
         PermissionDecision {
             outcome: PermOutcome::Approved,
             option_id: request

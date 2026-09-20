@@ -5,16 +5,20 @@
 //! (`harness = false`).
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 
 use tethys_acp::mock::MOCK_ENV;
-use tethys_agent_servers::{ConnectionStore, LaunchSpec, RecoveryOutcome, StoreOptions};
+use tethys_agent_servers::{
+    ConnectionStore, EnvResolver, LaunchSpec, RecoveryOutcome, StoreError, StoreOptions,
+};
 use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionKey, ConnectionState};
 use tethys_schema::thread::{Decider, PermOutcome, PermissionRequested};
-use tethys_thread::{AgentConnection, NewSession, PermissionDecision, PermissionResolver, SessionId};
+use tethys_thread::{
+    AgentConnection, NewSession, PermissionDecision, PermissionResolver, SessionId,
+};
 
 const IDLE_GRACE: Duration = Duration::from_millis(50);
 const CANCEL_GRACE: Duration = Duration::from_millis(500);
@@ -23,7 +27,11 @@ struct ApproveAll;
 
 #[async_trait]
 impl PermissionResolver for ApproveAll {
-    async fn resolve(&self, _session: &SessionId, _request: PermissionRequested) -> PermissionDecision {
+    async fn resolve(
+        &self,
+        _session: &SessionId,
+        _request: PermissionRequested,
+    ) -> PermissionDecision {
         PermissionDecision {
             outcome: PermOutcome::Approved,
             option_id: Some("allow".to_string()),
@@ -365,6 +373,118 @@ async fn v2_recovery_cancels_live_session_and_restarts_dead_connection() {
     store.restart(&key).await.expect("cleanup restart");
 }
 
+/// Records every binding it is asked to resolve; `ref:missing` cannot be
+/// resolved and any other `ref:x` resolves to `x`.
+struct RecordingEnv(Mutex<Vec<(String, String)>>);
+
+impl EnvResolver for RecordingEnv {
+    fn resolve(&self, name: &str, value: &str) -> Result<String, String> {
+        self.0
+            .lock()
+            .expect("lock")
+            .push((name.to_string(), value.to_string()));
+        match value.strip_prefix("ref:") {
+            Some("missing") => Err(format!("the secret for {name} is missing")),
+            Some(resolved) => Ok(resolved.to_string()),
+            None => Ok(value.to_string()),
+        }
+    }
+}
+
+async fn env_bindings_go_through_the_resolver_and_a_failure_stops_the_launch() {
+    let resolver = Arc::new(RecordingEnv(Mutex::new(Vec::new())));
+    let mut options = StoreOptions::new(AcpProtocol::V1, Arc::new(ApproveAll));
+    options.env_resolver = resolver.clone();
+    let store = ConnectionStore::new(options);
+    let dir = workdir("env-resolver");
+    let program = std::env::current_exe()
+        .expect("current exe")
+        .to_string_lossy()
+        .into_owned();
+
+    let resolvable = store.register(
+        LaunchSpec::new("env-ok", program.clone())
+            .cwd(&dir)
+            .env(MOCK_ENV, "v1")
+            .env("API_KEY", "ref:s3cret"),
+        AgentCompat::default(),
+    );
+    let lease = store.acquire(&resolvable).await.expect("resolvable spawn");
+    drop(lease);
+    assert!(
+        resolver
+            .0
+            .lock()
+            .expect("lock")
+            .contains(&("API_KEY".to_string(), "ref:s3cret".to_string())),
+        "the spawn asked the resolver for the binding"
+    );
+
+    let unresolvable = store.register(
+        LaunchSpec::new("env-missing", program)
+            .cwd(&dir)
+            .env(MOCK_ENV, "v1")
+            .env("API_KEY", "ref:missing"),
+        AgentCompat::default(),
+    );
+    match store.acquire(&unresolvable).await {
+        Err(StoreError::Spawn(message)) => {
+            assert!(message.contains("missing"), "{message}");
+            assert!(!message.contains("ref:"), "the reference is not echoed");
+        }
+        Err(other) => panic!("expected a spawn failure, got {other}"),
+        Ok(_) => panic!("an unresolvable binding must not launch the agent"),
+    }
+}
+
+async fn a_re_registered_spec_applies_to_the_next_spawn() {
+    let resolver = Arc::new(RecordingEnv(Mutex::new(Vec::new())));
+    let mut options = StoreOptions::new(AcpProtocol::V1, Arc::new(ApproveAll));
+    options.env_resolver = resolver.clone();
+    let store = ConnectionStore::new(options);
+    let dir = workdir("re-register");
+    let program = std::env::current_exe()
+        .expect("current exe")
+        .to_string_lossy()
+        .into_owned();
+    let spec = |binding: &str| {
+        LaunchSpec::new("edited", program.clone())
+            .cwd(&dir)
+            .env(MOCK_ENV, "v1")
+            .env(binding, "1")
+    };
+
+    let key = store.register(spec("BEFORE"), AgentCompat::default());
+    let in_use = store.acquire(&key).await.expect("first spawn");
+
+    // A profile edit (or a registry update) registers the same profile again.
+    store.register(spec("AFTER"), AgentCompat::default());
+    assert!(
+        !store.retire_idle(&key).await,
+        "an edit must not kill a connection that is in use"
+    );
+
+    drop(in_use);
+    assert!(
+        store.retire_idle(&key).await,
+        "an unused connection retires"
+    );
+    drop(store.acquire(&key).await.expect("second spawn"));
+
+    let asked: Vec<String> = resolver
+        .0
+        .lock()
+        .expect("lock")
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+    assert!(asked.contains(&"BEFORE".to_string()), "{asked:?}");
+    assert!(
+        asked.contains(&"AFTER".to_string()),
+        "the edited spec was never used: {asked:?}"
+    );
+}
+
 fn main() {
     if tethys_acp::mock::run_if_requested() {
         return;
@@ -376,6 +496,16 @@ fn main() {
         .expect("tokio runtime");
 
     runtime.block_on(async {
+        run_limited(
+            "env_bindings_go_through_the_resolver_and_a_failure_stops_the_launch",
+            env_bindings_go_through_the_resolver_and_a_failure_stops_the_launch(),
+        )
+        .await;
+        run_limited(
+            "a_re_registered_spec_applies_to_the_next_spawn",
+            a_re_registered_spec_applies_to_the_next_spawn(),
+        )
+        .await;
         run_limited(
             "leases_share_one_process_and_idle_reap_kills_the_process_group",
             leases_share_one_process_and_idle_reap_kills_the_process_group(),

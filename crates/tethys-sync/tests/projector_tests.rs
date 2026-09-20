@@ -242,9 +242,14 @@ fn sse_is_never_projected() {
 #[test]
 fn foreign_sections_preserved_for_codex_and_opencode() {
     // Codex: foreign table outside mcp_servers preserved
-    let codex_original = "[general]\nmodel = \"gpt-4\"\n\n[mcp_servers.postgres]\ncommand = \"psql\"\n";
+    let codex_original =
+        "[general]\nmodel = \"gpt-4\"\n\n[mcp_servers.postgres]\ncommand = \"psql\"\n";
     let codex_injected = CodexProjector
-        .inject(codex_original, "github", &stdio("github-mcp", &[], BTreeMap::new()))
+        .inject(
+            codex_original,
+            "github",
+            &stdio("github-mcp", &[], BTreeMap::new()),
+        )
         .expect("inject codex");
     assert!(codex_injected.contains("[general]"));
     assert!(codex_injected.contains("model = \"gpt-4\""));
@@ -258,7 +263,11 @@ fn foreign_sections_preserved_for_codex_and_opencode() {
     // OpenCode: foreign root keys preserved
     let opencode_original = "{\n  \"model\": \"claude-3-5-sonnet\",\n  \"servers\": {\n    \"existing\": { \"type\": \"local\", \"command\": [\"existing\"] }\n  }\n}";
     let opencode_injected = OpenCodeProjector
-        .inject(opencode_original, "github", &stdio("github-mcp", &[], BTreeMap::new()))
+        .inject(
+            opencode_original,
+            "github",
+            &stdio("github-mcp", &[], BTreeMap::new()),
+        )
         .expect("inject opencode");
     assert!(opencode_injected.contains("\"model\": \"claude-3-5-sonnet\""));
     assert!(opencode_injected.contains("\"existing\""));
@@ -266,5 +275,8 @@ fn foreign_sections_preserved_for_codex_and_opencode() {
     let opencode_rolled_back = OpenCodeProjector
         .rollback(&opencode_injected, "github")
         .expect("rollback opencode");
-    assert_eq!(opencode_original.trim_end(), opencode_rolled_back.trim_end());
+    assert_eq!(
+        opencode_original.trim_end(),
+        opencode_rolled_back.trim_end()
+    );
 }

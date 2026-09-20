@@ -96,10 +96,7 @@ pub struct ElicitationResponse {
 
 impl ElicitationResponse {
     /// Builds an `Accepted` response with typed answers.
-    pub fn accepted(
-        req_id: impl Into<String>,
-        values: BTreeMap<String, ElicitationValue>,
-    ) -> Self {
+    pub fn accepted(req_id: impl Into<String>, values: BTreeMap<String, ElicitationValue>) -> Self {
         Self {
             req_id: req_id.into(),
             outcome: ElicitationOutcome::Accepted,
@@ -208,7 +205,10 @@ mod tests {
         let encoded = serde_json::to_string(&request).expect("serialize");
         let decoded: ElicitationRequest = serde_json::from_str(&encoded).expect("deserialize");
         assert_eq!(decoded, request);
-        assert_eq!(serde_json::to_string(&decoded).expect("reserialize"), encoded);
+        assert_eq!(
+            serde_json::to_string(&decoded).expect("reserialize"),
+            encoded
+        );
     }
 
     #[test]

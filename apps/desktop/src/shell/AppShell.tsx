@@ -1,10 +1,5 @@
 import { useStore } from "@tanstack/react-store";
-import {
-  advanceCancellationState,
-  CANCEL_FIXTURE_GRACE_MS,
-  getOrCreateSessionStore,
-  sessionsRegistryStore,
-} from "@tethys/state";
+import { sessionsRegistryStore } from "@tethys/state";
 import {
   Drawer,
   getApprovalDrawerBody,
@@ -47,6 +42,12 @@ export interface AppShellProps {
   activeRoute?: string;
   onNavigate?: (route: string) => void;
   platformInset?: boolean;
+  /**
+   * Asks the backend to stop a thread (`thread.cancel`). Every press is
+   * forwarded: the backend decides what it means (start the grace window, or
+   * force-kill once it has elapsed) and reports the phase on the event stream.
+   */
+  onStopSession?: (sessionId: string) => void;
 }
 
 export function AppShell({
@@ -54,6 +55,7 @@ export function AppShell({
   activeRoute = "/thread/new",
   onNavigate,
   platformInset = false,
+  onStopSession,
 }: AppShellProps) {
   // Tabs management
   const [tabs, setTabs] = useState<TabData[]>(() => {
@@ -289,26 +291,12 @@ export function AppShell({
     },
   };
 
-  // Active session store for Action Bar
-  const activeSessionStore = activeSessionId
-    ? getOrCreateSessionStore(activeSessionId)
-    : undefined;
-
   const currentSessionState = activeSessionId
     ? sessionsMap[activeSessionId]
     : undefined;
 
   const handleStopSession = () => {
-    if (!activeSessionStore) return;
-    // One press sends the cancel and enters the pending phase. The ladder is
-    // no longer advanced by click: `grace_elapsed` / `terminating` arrive from
-    // the backend, which owns the clock and the deadline (M1.12). Until then
-    // the phase is fixture-driven.
-    if (activeSessionStore.state.cancellationState !== "idle") return;
-    const deadline = new Date(
-      Date.now() + CANCEL_FIXTURE_GRACE_MS,
-    ).toISOString();
-    advanceCancellationState(activeSessionStore, "cancel_requested", deadline);
+    if (activeSessionId) onStopSession?.(activeSessionId);
   };
 
   return (

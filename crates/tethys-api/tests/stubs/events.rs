@@ -15,8 +15,5 @@ async fn events_defaults_return_unimplemented() {
         "events.unsubscribe",
         api.events_unsubscribe(ThreadId::from("t1")).await,
     );
-    assert_unimplemented(
-        "events.inbox_subscribe",
-        api.events_inbox_subscribe().await,
-    );
+    assert_unimplemented("events.inbox_subscribe", api.events_inbox_subscribe().await);
 }

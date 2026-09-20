@@ -102,19 +102,33 @@ async fn unknown_workspace_id_returns_not_found_and_touches_nothing() {
 async fn assert_every_filesystem_namespace_is_not_found(core: &Core, id: &WorkspaceId) {
     // search.files
     let res = core.search_files(id.clone(), "query".into(), 10).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "search_files: expected NotFound, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "search_files: expected NotFound, got {res:?}"
+    );
 
     // commands.list
     let res = core.commands_list(Some(id.clone())).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "commands_list: expected NotFound, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "commands_list: expected NotFound, got {res:?}"
+    );
 
     // commands.expand
-    let res = core.commands_expand("cmd".into(), "args".into(), Some(id.clone())).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "commands_expand: expected NotFound, got {res:?}");
+    let res = core
+        .commands_expand("cmd".into(), "args".into(), Some(id.clone()))
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "commands_expand: expected NotFound, got {res:?}"
+    );
 
     // mcp.registry.list
     let res = core.mcp_registry_list(Some(id.clone())).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_registry_list: expected NotFound, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_registry_list: expected NotFound, got {res:?}"
+    );
 
     // mcp.registry.set
     let dummy_entry = RegistryEntry {
@@ -126,68 +140,151 @@ async fn assert_every_filesystem_namespace_is_not_found(core: &Core, id: &Worksp
         headers: Default::default(),
         meta: Default::default(),
     };
-    let res = core.mcp_registry_set("test".into(), dummy_entry, Scope::Workspace, Some(id.clone())).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_registry_set: expected NotFound, got {res:?}");
+    let res = core
+        .mcp_registry_set(
+            "test".into(),
+            dummy_entry,
+            Scope::Workspace,
+            Some(id.clone()),
+        )
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_registry_set: expected NotFound, got {res:?}"
+    );
 
     // mcp.registry.delete
-    let res = core.mcp_registry_delete("test".into(), Scope::Workspace, Some(id.clone())).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_registry_delete: expected NotFound, got {res:?}");
+    let res = core
+        .mcp_registry_delete("test".into(), Scope::Workspace, Some(id.clone()))
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_registry_delete: expected NotFound, got {res:?}"
+    );
 
     // mcp.effective
     let res = core.mcp_effective(None, Some(id.clone())).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_effective: expected NotFound, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_effective: expected NotFound, got {res:?}"
+    );
 
     // mcp.attachments
     let res = core.mcp_attachments(id.clone()).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_attachments: expected NotFound, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_attachments: expected NotFound, got {res:?}"
+    );
 
     // mcp.projection.plan
-    let res = core.mcp_projection_plan(id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_projection_plan: expected NotFound, got {res:?}");
+    let res = core
+        .mcp_projection_plan(id.clone(), TargetId::ClaudeCode, Scope::Workspace)
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_projection_plan: expected NotFound, got {res:?}"
+    );
 
     // mcp.projection.rollback
-    let res = core.mcp_projection_rollback(id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_projection_rollback: expected NotFound, got {res:?}");
+    let res = core
+        .mcp_projection_rollback(id.clone(), TargetId::ClaudeCode, Scope::Workspace)
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_projection_rollback: expected NotFound, got {res:?}"
+    );
 
     // mcp.projection.verify
-    let res = core.mcp_projection_verify(id.clone(), TargetId::ClaudeCode, Scope::Workspace).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_projection_verify: expected NotFound, got {res:?}");
+    let res = core
+        .mcp_projection_verify(id.clone(), TargetId::ClaudeCode, Scope::Workspace)
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_projection_verify: expected NotFound, got {res:?}"
+    );
 
     // mcp.import.scan
     let res = core.mcp_import_scan(id.clone()).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_import_scan: expected NotFound, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_import_scan: expected NotFound, got {res:?}"
+    );
 
     // mcp.import.apply
-    let res = core.mcp_import_apply(id.clone(), vec![], Scope::Workspace).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "mcp_import_apply: expected NotFound, got {res:?}");
+    let res = core
+        .mcp_import_apply(id.clone(), vec![], Scope::Workspace)
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "mcp_import_apply: expected NotFound, got {res:?}"
+    );
 
     // skills.list
     let res = core.skills_list(id.clone()).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_list: expected NotFound, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "skills_list: expected NotFound, got {res:?}"
+    );
 
     // skills.import
-    let res = core.skills_import(id.clone(), Scope::Workspace, SkillImportSource::Folder { path: "/tmp".into() }).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_import: expected NotFound, got {res:?}");
+    let res = core
+        .skills_import(
+            id.clone(),
+            Scope::Workspace,
+            SkillImportSource::Folder {
+                path: "/tmp".into(),
+            },
+        )
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "skills_import: expected NotFound, got {res:?}"
+    );
 
     // skills.update_check
-    let res = core.skills_update_check(id.clone(), Scope::Workspace, "name".into()).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_update_check: expected NotFound, got {res:?}");
+    let res = core
+        .skills_update_check(id.clone(), Scope::Workspace, "name".into())
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "skills_update_check: expected NotFound, got {res:?}"
+    );
 
     // skills.update_plan
-    let res = core.skills_update_plan(id.clone(), Scope::Workspace, "name".into()).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_update_plan: expected NotFound, got {res:?}");
+    let res = core
+        .skills_update_plan(id.clone(), Scope::Workspace, "name".into())
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "skills_update_plan: expected NotFound, got {res:?}"
+    );
 
     // skills.update_apply
-    let res = core.skills_update_apply(id.clone(), Scope::Workspace, "name".into()).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_update_apply: expected NotFound, got {res:?}");
+    let res = core
+        .skills_update_apply(id.clone(), Scope::Workspace, "name".into())
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "skills_update_apply: expected NotFound, got {res:?}"
+    );
 
     // skills.trust
-    let res = core.skills_trust(id.clone(), Scope::Workspace, "name".into()).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_trust: expected NotFound, got {res:?}");
+    let res = core
+        .skills_trust(id.clone(), Scope::Workspace, "name".into())
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "skills_trust: expected NotFound, got {res:?}"
+    );
 
     // skills.enable
-    let res = core.skills_enable(id.clone(), Scope::Workspace, "name".into(), true).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "skills_enable: expected NotFound, got {res:?}");
+    let res = core
+        .skills_enable(id.clone(), Scope::Workspace, "name".into(), true)
+        .await;
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "skills_enable: expected NotFound, got {res:?}"
+    );
 
     // git.worktree.create
     let spec = WorktreeSpec {
@@ -202,7 +299,10 @@ async fn assert_every_filesystem_namespace_is_not_found(core: &Core, id: &Worksp
         main_checkout: false,
     };
     let res = core.git_worktree_create(spec).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "git_worktree_create: expected NotFound, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "git_worktree_create: expected NotFound, got {res:?}"
+    );
 }
 
 #[tokio::test]
@@ -247,12 +347,18 @@ async fn untrusted_workspace_row_resolves_not_found_across_namespaces() {
 
     // Granting trust makes the same id resolve.
     trust_workspace(&core, "ws-untrusted", &root).await;
-    assert!(core.skills_list(id.clone()).await.is_ok(), "trusted id resolves");
+    assert!(
+        core.skills_list(id.clone()).await.is_ok(),
+        "trusted id resolves"
+    );
 
     // Revoking removes it again.
     core.workspace_remove(id.clone()).await.expect("revoke");
     let res = core.skills_list(id).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "revoked: {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "revoked: {res:?}"
+    );
     assert_eq!(snapshot_dir(&root), before, "no file touched after revoke");
 }
 
@@ -279,7 +385,10 @@ async fn changed_trust_key_reprompts_until_regranted() {
         .output()
         .expect("git remote add");
     let res = core.skills_list(id.clone()).await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "changed remote: {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "changed remote: {res:?}"
+    );
 
     // Re-granting with the new remote restores access.
     let resolved = fs::canonicalize(&root).expect("canonicalize");
@@ -341,7 +450,11 @@ async fn core_open_on_temp_home_creates_store_and_allows_skills_and_mcp() {
     let core = Core::open(&home).await.expect("Core::open");
 
     let db_path = home.join(".tethys/state.db");
-    assert!(db_path.is_file(), "state.db was not created at expected path: {}", db_path.display());
+    assert!(
+        db_path.is_file(),
+        "state.db was not created at expected path: {}",
+        db_path.display()
+    );
 
     // Register a workspace in the store
     let ws_dir = tmp.path().join("workspace_one");
@@ -354,12 +467,19 @@ async fn core_open_on_temp_home_creates_store_and_allows_skills_and_mcp() {
     trust_workspace(&core, "ws-1", &ws_dir).await;
 
     // skills.list succeeds against the opened store
-    let skills = core.skills_list(WorkspaceId::new("ws-1")).await.expect("skills_list must succeed");
+    let skills = core
+        .skills_list(WorkspaceId::new("ws-1"))
+        .await
+        .expect("skills_list must succeed");
     assert!(skills.is_empty());
 
     // mcp.projection.plan succeeds against the opened store
     let plan = core
-        .mcp_projection_plan(WorkspaceId::new("ws-1"), TargetId::OpenCode, Scope::Workspace)
+        .mcp_projection_plan(
+            WorkspaceId::new("ws-1"),
+            TargetId::OpenCode,
+            Scope::Workspace,
+        )
         .await
         .expect("projection plan must succeed");
     let applied = core
@@ -403,7 +523,10 @@ async fn worktree_creation_for_workspace_id_lands_under_expected_location() {
         main_checkout: false,
     };
 
-    let info = core.git_worktree_create(spec).await.expect("create worktree");
+    let info = core
+        .git_worktree_create(spec)
+        .await
+        .expect("create worktree");
     assert!(Path::new(&info.path).exists());
     assert!(info.path.contains("worktrees"));
     assert!(info.path.contains("feat-test"));
@@ -442,9 +565,15 @@ async fn projection_apply_rejects_tampered_path_and_writes_nothing() {
     let res = core
         .mcp_projection_apply(ws.clone(), TargetId::OpenCode, Scope::Workspace, plan)
         .await;
-    assert!(matches!(res, Err(ApiError::Conflict(_))), "expected Conflict, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::Conflict(_))),
+        "expected Conflict, got {res:?}"
+    );
     assert_eq!(fs::read(&outside).expect("outside intact"), b"secret");
-    assert!(!root.join("opencode.json").exists(), "target must not be written");
+    assert!(
+        !root.join("opencode.json").exists(),
+        "target must not be written"
+    );
 }
 
 #[tokio::test]
@@ -464,8 +593,14 @@ async fn projection_apply_rejects_tampered_content() {
     let res = core
         .mcp_projection_apply(ws, TargetId::OpenCode, Scope::Workspace, plan)
         .await;
-    assert!(matches!(res, Err(ApiError::Conflict(_))), "expected Conflict, got {res:?}");
-    assert!(!root.join("opencode.json").exists(), "target must not be written");
+    assert!(
+        matches!(res, Err(ApiError::Conflict(_))),
+        "expected Conflict, got {res:?}"
+    );
+    assert!(
+        !root.join("opencode.json").exists(),
+        "target must not be written"
+    );
 }
 
 #[tokio::test]
@@ -492,7 +627,10 @@ async fn projection_apply_for_unknown_workspace_is_refused() {
             plan,
         )
         .await;
-    assert!(matches!(res, Err(ApiError::NotFound(_))), "expected NotFound, got {res:?}");
+    assert!(
+        matches!(res, Err(ApiError::NotFound(_))),
+        "expected NotFound, got {res:?}"
+    );
     assert!(!root.join("opencode.json").exists());
 }
 

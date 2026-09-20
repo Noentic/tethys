@@ -91,7 +91,10 @@ fn temp_files_cleaned_up() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    assert_eq!(temp_files_count, 0, "No temp files should remain in shard dir");
+    assert_eq!(
+        temp_files_count, 0,
+        "No temp files should remain in shard dir"
+    );
 
     Ok(())
 }

@@ -79,7 +79,9 @@ fn invalidate_refreshes_after_churn() {
     let deadline = std::time::Instant::now() + READY_TIMEOUT;
     loop {
         assert!(
-            manager.wait_ready(dir.path(), READY_TIMEOUT).expect("rescan"),
+            manager
+                .wait_ready(dir.path(), READY_TIMEOUT)
+                .expect("rescan"),
             "index never became ready again"
         );
         let after = manager.query(dir.path(), "fresh", 10).expect("query");

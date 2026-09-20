@@ -122,7 +122,11 @@ pub trait PermissionResolver: Send + Sync {
     /// Resolves one request. The session is supplied so a policy resolver can
     /// read that thread's workspace, isolation and mode without reaching back
     /// into the reader task (M1.7 U3).
-    async fn resolve(&self, session: &SessionId, request: PermissionRequested) -> PermissionDecision;
+    async fn resolve(
+        &self,
+        session: &SessionId,
+        request: PermissionRequested,
+    ) -> PermissionDecision;
 }
 
 /// Optional capability: agents that can delete sessions (architecture §6.1).
@@ -136,6 +140,11 @@ pub trait SessionDeleter: Send + Sync {
 pub trait AgentConnection: Send + Sync {
     fn info(&self) -> &AgentInfo;
     fn capabilities(&self) -> &NormalizedCapabilities;
+
+    /// Auth methods the agent declared at `initialize` (empty means none).
+    fn auth_methods(&self) -> &[tethys_schema::agents::AuthMethodView] {
+        &[]
+    }
 
     async fn new_session(&self, request: NewSession) -> Result<SessionHandle, ConnectionError>;
     async fn resume_session(

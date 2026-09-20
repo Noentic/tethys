@@ -60,6 +60,13 @@ impl ThreadApi for Core {
         self.sessions.cancel(&id).await
     }
 
+    async fn thread_cancel_state(
+        &self,
+        id: ThreadId,
+    ) -> Result<tethys_schema::cancel::CancelState, ApiError> {
+        self.sessions.cancel_state(&id)
+    }
+
     async fn thread_resume(&self, id: ThreadId) -> Result<(), ApiError> {
         self.sessions.resume(&id).await
     }

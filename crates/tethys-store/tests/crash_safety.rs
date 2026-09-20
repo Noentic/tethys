@@ -49,7 +49,8 @@ fn uncommitted_transaction_drop_leaves_no_torn_state() -> Result<(), Box<dyn std
 }
 
 #[tokio::test]
-async fn blob_before_event_failure_leaves_no_dangling_reference() -> Result<(), Box<dyn std::error::Error>> {
+async fn blob_before_event_failure_leaves_no_dangling_reference(
+) -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempfile::tempdir()?;
     let db_path = dir.path().join("blob_crash.db");
     let store = EventStore::open(&db_path).await?;

@@ -131,7 +131,6 @@ impl Registry {
             .collect()
     }
 
-
     /// Merged view with each entry's scope, for import conflict detection.
     pub fn merged(&self) -> BTreeMap<String, (Scope, RegistryEntry)> {
         let mut merged: BTreeMap<String, (Scope, RegistryEntry)> = self

@@ -124,8 +124,7 @@ fn nested_skill_and_path_resolve_to_plaintext() {
         "---\nname: rust\ndescription: Idiomatic Rust guidance\n---\n\nSENTINEL_SKILL_BODY\n",
     );
 
-    let expanded =
-        expand_command(&global, Some(&workspace), &[rust], "check", "").expect("expand");
+    let expanded = expand_command(&global, Some(&workspace), &[rust], "check", "").expect("expand");
 
     assert!(expanded.text.contains("Use the skill \"rust\""));
     assert!(expanded.text.contains("Idiomatic Rust guidance"));

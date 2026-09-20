@@ -31,10 +31,12 @@ pub struct WorkspaceRow {
 }
 
 /// Retrieves a workspace by id if present.
-pub fn get_workspace(conn: &Connection, workspace_id: &str) -> Result<Option<WorkspaceRow>, StoreError> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT id, root_path, isolation FROM workspaces WHERE id = ?1",
-    )?;
+pub fn get_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> Result<Option<WorkspaceRow>, StoreError> {
+    let mut stmt =
+        conn.prepare_cached("SELECT id, root_path, isolation FROM workspaces WHERE id = ?1")?;
     let mut rows = stmt.query(params![workspace_id])?;
     if let Some(row) = rows.next()? {
         Ok(Some(WorkspaceRow {

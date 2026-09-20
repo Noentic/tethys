@@ -35,6 +35,10 @@ async fn test_core_stub_returns_unimplemented() {
         Err(ApiError::Unimplemented(m)) => assert_eq!(m, "workspace.settings_get"),
         other => panic!("expected Unimplemented, got {other:?}"),
     }
-    let err_str = core.workspace_settings_get().await.map_err(|e| e.to_string()).unwrap_err();
+    let err_str = core
+        .workspace_settings_get()
+        .await
+        .map_err(|e| e.to_string())
+        .unwrap_err();
     assert_eq!(err_str, "UNIMPLEMENTED: workspace.settings_get");
 }

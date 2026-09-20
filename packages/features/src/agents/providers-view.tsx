@@ -1,0 +1,379 @@
+//! Settings / Providers screen (M1.12): the single source of Provider truth.
+//!
+//! Reads `agent.profiles_list` into `@tethys/state`'s store, drives the real
+//! health poller, registry install/pin/update, login surfaces and the M1.13
+//! activity table. `settings.providers.tsx` is left a thin mount (D13).
+
+import type {
+  AgentProfileView,
+  AgentRegistryEntryView,
+  LaunchSpecInput,
+  ProcessSample,
+  ProfileInput,
+} from "@tethys/bindings";
+import { createClient } from "@tethys/client";
+import {
+  ingestProviders,
+  markProviderChecking,
+  providersStore,
+  selectAllProviders,
+  selectProviderCancelPhase,
+  sessionsRegistryStore,
+  useProviders,
+} from "@tethys/state";
+import { Card } from "@tethys/ui";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { ActivityTable } from "../monitor";
+import { LoginSurface } from "./login-surface";
+import { ProfileCard } from "./profile-card";
+import { ProviderAccordion } from "./provider-accordion";
+import { ProviderRow } from "./provider-row";
+import { HealthIntervalControl, ProvidersHeader } from "./providers-header";
+import type { ProvidersClient } from "./types";
+
+const defaultClient = createClient();
+// Mirrors `tethys_core::health::DEFAULT_INTERVAL_SECS`, armed at start-up.
+const DEFAULT_INTERVAL_SECONDS = 300;
+
+export interface ProvidersViewProps {
+  client?: ProvidersClient;
+  className?: string;
+}
+
+function toInput(
+  profile: AgentProfileView,
+  overrides: Partial<ProfileInput> = {},
+): ProfileInput {
+  return {
+    id: profile.id,
+    name: profile.name,
+    launch_spec: profile.launch_spec,
+    projection_target: profile.projection_target,
+    preferred_protocol: profile.preferred_protocol,
+    enabled: profile.enabled,
+    ...overrides,
+  };
+}
+
+export function ProvidersView({
+  client = defaultClient,
+  className,
+}: ProvidersViewProps): React.ReactElement {
+  const state = useProviders();
+  const profiles = selectAllProviders(state);
+
+  const [registry, setRegistry] = useState<AgentRegistryEntryView[]>([]);
+  const [intervalSeconds, setIntervalSeconds] = useState(
+    DEFAULT_INTERVAL_SECONDS,
+  );
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loginProfile, setLoginProfile] = useState<AgentProfileView | null>(
+    null,
+  );
+  // Secrets typed into the env-var form are stored before the close-triggered
+  // re-check runs, so that check sees them.
+  const pendingSecrets = useRef<Promise<void>>(Promise.resolve());
+  const [stderrById, setStderrById] = useState<Record<string, string>>({});
+  const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
+  // One process tree per Provider, so Restart and the cancel ladder target the
+  // Provider whose processes are listed.
+  const [samplesById, setSamplesById] = useState<
+    Record<string, ProcessSample[]>
+  >({});
+  const sessions = useSyncExternalStore(
+    (onStoreChange) => {
+      const subscription = sessionsRegistryStore.subscribe(onStoreChange);
+      return () => subscription.unsubscribe();
+    },
+    () => sessionsRegistryStore.state.sessions,
+  );
+
+  const refresh = useCallback(async () => {
+    const next = await client.agent.profilesList();
+    ingestProviders(next);
+  }, [client]);
+
+  const refreshRegistry = useCallback(async () => {
+    setRegistry(await client.agent.registryList());
+  }, [client]);
+
+  useEffect(() => {
+    void refresh();
+    void refreshRegistry();
+  }, [refresh, refreshRegistry]);
+
+  // §7.5 whole-tree sampling every 2s for enabled Providers. Keyed on the set
+  // of enabled ids so the first sample runs as soon as the list has loaded,
+  // not one interval later.
+  const enabledKey = profiles
+    .filter((profile) => profile.enabled)
+    .map((profile) => profile.id)
+    .join("\n");
+  useEffect(() => {
+    const ids = enabledKey === "" ? [] : enabledKey.split("\n");
+    let cancelled = false;
+    const tick = async () => {
+      const batches = await Promise.all(
+        ids.map(
+          async (id) =>
+            [id, await client.agent.processSample(id).catch(() => [])] as const,
+        ),
+      );
+      if (!cancelled) setSamplesById(Object.fromEntries(batches));
+    };
+    void tick();
+    const timer = window.setInterval(tick, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [client, enabledKey]);
+
+  const manualCheck = useCallback(async () => {
+    for (const profile of selectAllProviders(providersStore.state)) {
+      if (profile.enabled) markProviderChecking(profile.id);
+    }
+    await client.agent.recheck();
+    await refresh();
+  }, [client, refresh]);
+
+  // Network reconnect is one of the seven re-check triggers (spec §5.2).
+  useEffect(() => {
+    const onOnline = () => void client.agent.recheck().then(refresh);
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [client, refresh]);
+
+  const changeInterval = useCallback(
+    async (seconds: number) => {
+      setIntervalSeconds(seconds);
+      await client.agent.healthIntervalSet(seconds);
+    },
+    [client],
+  );
+
+  const toggleEnabled = useCallback(
+    async (profile: AgentProfileView, enabled: boolean) => {
+      await client.agent.profilesUpdate(toInput(profile, { enabled }));
+      await refresh();
+    },
+    [client, refresh],
+  );
+
+  const saveLaunchSpec = useCallback(
+    async (
+      profile: AgentProfileView,
+      launchSpec: LaunchSpecInput,
+      preferredProtocol: AgentProfileView["preferred_protocol"],
+    ) => {
+      await client.agent.profilesUpdate(
+        toInput(profile, {
+          launch_spec: launchSpec,
+          preferred_protocol: preferredProtocol,
+        }),
+      );
+      await refresh();
+    },
+    [client, refresh],
+  );
+
+  const addCustom = useCallback(async () => {
+    const created = await client.agent.profilesCreate({
+      id: null,
+      name: "Custom ACP Server",
+      launch_spec: { program: "", args: [], cwd: null, env: [] },
+      projection_target: null,
+      preferred_protocol: null,
+      enabled: true,
+    });
+    await refresh();
+    setExpandedId(created.id);
+  }, [client, refresh]);
+
+  const install = useCallback(
+    async (entry: AgentRegistryEntryView) => {
+      setBusyEntryId(entry.id);
+      try {
+        await client.agent.registryInstall(entry.id, entry.version);
+        await Promise.all([refresh(), refreshRegistry()]);
+      } finally {
+        setBusyEntryId(null);
+      }
+    },
+    [client, refresh, refreshRegistry],
+  );
+
+  const update = useCallback(
+    async (entry: AgentRegistryEntryView) => {
+      setBusyEntryId(entry.id);
+      try {
+        await client.agent.registryUpdate(entry.id);
+        await Promise.all([refresh(), refreshRegistry()]);
+      } finally {
+        setBusyEntryId(null);
+      }
+    },
+    [client, refresh, refreshRegistry],
+  );
+
+  const viewStderr = useCallback(
+    async (profile: AgentProfileView) => {
+      const text = await client.agent.stderr(profile.id).catch(() => "");
+      setStderrById((current) => ({ ...current, [profile.id]: text }));
+    },
+    [client],
+  );
+
+  const telemetryLabel = useMemo(() => {
+    const checked = profiles
+      .map((profile) => profile.last_checked_ms)
+      .filter((value): value is number => value != null);
+    if (profiles.some((profile) => profile.recheck === "checking"))
+      return "Checking…";
+    if (checked.length === 0) return "Not checked yet";
+    const seconds = Math.max(
+      0,
+      Math.round((Date.now() - Math.max(...checked)) / 1000),
+    );
+    return seconds < 60
+      ? `Checked ${seconds}s ago`
+      : `Checked ${Math.round(seconds / 60)}m ago`;
+  }, [profiles]);
+
+  const activityProfiles = profiles.filter(
+    (profile) => (samplesById[profile.id] ?? []).length > 0,
+  );
+
+  return (
+    <div
+      className={`flex flex-col gap-2xl ${className ?? ""}`}
+      data-testid="providers-view"
+    >
+      <ProvidersHeader
+        onManualCheck={() => void manualCheck()}
+        onAddCustom={() => void addCustom()}
+        telemetryLabel={telemetryLabel}
+      />
+
+      <Card className="flex items-center justify-between gap-xl px-lg py-md">
+        <div className="flex max-w-128 flex-col gap-1">
+          <span className="text-body-sm text-(--tethys-text-primary)">
+            Health check interval
+          </span>
+          <p className="text-label-md font-normal text-(--tethys-text-muted)">
+            Periodically poll configured ACP provider executables, versions,
+            auth status, and model metadata. Set to 0 to poll manually.
+          </p>
+        </div>
+        <HealthIntervalControl
+          intervalSeconds={intervalSeconds}
+          onIntervalChange={(seconds) => void changeInterval(seconds)}
+        />
+      </Card>
+
+      <div className="flex flex-col">
+        {profiles.map((profile) => (
+          <ProviderRow
+            key={profile.id}
+            profile={profile}
+            expanded={expandedId === profile.id}
+            onToggleExpanded={() =>
+              setExpandedId((current) =>
+                current === profile.id ? null : profile.id,
+              )
+            }
+            onToggleEnabled={(enabled) => void toggleEnabled(profile, enabled)}
+          >
+            <ProviderAccordion
+              profile={profile}
+              stderr={stderrById[profile.id] ?? ""}
+              onSaveLaunchSpec={(spec, protocol) =>
+                void saveLaunchSpec(profile, spec, protocol)
+              }
+              onLogin={() => setLoginProfile(profile)}
+              onRestart={() =>
+                void client.agent.connectionsRestart(profile.id).then(refresh)
+              }
+              onViewStderr={() => void viewStderr(profile)}
+            />
+          </ProviderRow>
+        ))}
+      </div>
+
+      {registry.length > 0 && (
+        <section className="flex flex-col gap-md">
+          <h2 className="text-heading-md text-(--tethys-text-primary)">
+            ACP Registry
+          </h2>
+          {registry.map((entry) => (
+            <ProfileCard
+              key={entry.id}
+              entry={entry}
+              busy={busyEntryId === entry.id}
+              onInstall={() => void install(entry)}
+              onUpdate={() => void update(entry)}
+            />
+          ))}
+        </section>
+      )}
+
+      {activityProfiles.length === 0 ? (
+        <ActivityTable samples={[]} />
+      ) : (
+        activityProfiles.map((profile) => (
+          <ActivityTable
+            key={profile.id}
+            title={profile.name}
+            samples={samplesById[profile.id] ?? []}
+            cancelPhase={selectProviderCancelPhase(sessions, profile.id)}
+            onRestart={() =>
+              void client.agent.connectionsRestart(profile.id).then(refresh)
+            }
+          />
+        ))
+      )}
+
+      {loginProfile && (
+        <LoginSurface
+          profile={loginProfile}
+          onClose={() => {
+            const profile = loginProfile;
+            setLoginProfile(null);
+            void pendingSecrets.current
+              .then(() => client.agent.recheck(profile.id))
+              .then(refresh);
+          }}
+          onExpiry={() => {
+            void client.agent.recheck(loginProfile.id).then(refresh);
+          }}
+          command={loginProfile.launch_spec.program}
+          onSubmitEnv={(rows) => {
+            // Each value goes straight to the host, which writes it to the
+            // keychain and keeps only a reference; nothing is retained here.
+            const profile = loginProfile;
+            const method = profile.auth_methods.find(
+              (candidate) => candidate.shape.shape === "env-var",
+            );
+            pendingSecrets.current = (async () => {
+              for (const row of rows) {
+                await client.agent.envSecretSet(profile.id, row.key, row.value);
+              }
+              if (rows.length > 0 && method) {
+                await client.agent.login(profile.id, method.id);
+              }
+            })().catch((error: unknown) => {
+              console.error("could not store the secret", error);
+            });
+          }}
+        />
+      )}
+    </div>
+  );
+}

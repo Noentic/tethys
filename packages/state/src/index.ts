@@ -3,6 +3,7 @@ export * from "./composer";
 export * from "./inspector";
 export * from "./provider-connections";
 export * from "./provider-extension";
+export * from "./providers";
 export * from "./reducers";
 export * from "./review";
 export * from "./selectors";

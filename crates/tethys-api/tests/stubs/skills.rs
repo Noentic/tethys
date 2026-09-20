@@ -7,7 +7,10 @@ use super::{assert_unimplemented, MinimalApi};
 async fn skills_defaults_return_unimplemented() {
     let api = MinimalApi;
     let workspace = "w1".to_string();
-    assert_unimplemented("skills.list", api.skills_list(workspace.clone().into()).await);
+    assert_unimplemented(
+        "skills.list",
+        api.skills_list(workspace.clone().into()).await,
+    );
     assert_unimplemented(
         "skills.import",
         api.skills_import(

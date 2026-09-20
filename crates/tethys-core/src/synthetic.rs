@@ -1,5 +1,5 @@
-use tethys_schema::{DiffHunk, DiffLine, DiffLineKind, StreamChunk};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tethys_schema::{DiffHunk, DiffLine, DiffLineKind, StreamChunk};
 
 /// Generates a synthetic git-patch diff with the given line count (e.g. 20,000 lines).
 pub fn generate_synthetic_diff(total_lines: usize) -> Vec<DiffHunk> {
@@ -44,15 +44,12 @@ pub fn generate_synthetic_diff(total_lines: usize) -> Vec<DiffHunk> {
 }
 
 /// Generates a sequence of stream chunks simulating 8 concurrent agent streams.
-pub fn generate_stream_chunks(
-    stream_id: u32,
-    count: u32,
-    payload_size: usize,
-) -> Vec<StreamChunk> {
+pub fn generate_stream_chunks(stream_id: u32, count: u32, payload_size: usize) -> Vec<StreamChunk> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs_f64() * 1000.0;
+        .as_secs_f64()
+        * 1000.0;
 
     let sample_payload = "A".repeat(payload_size.max(1));
 

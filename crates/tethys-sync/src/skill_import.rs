@@ -42,7 +42,10 @@ impl Downloader for HttpDownloader {
                 .send()
                 .map_err(|error| SyncError::Network(error.to_string()))?;
             if !response.status().is_success() {
-                return Err(SyncError::Network(format!("{url_string}: {}", response.status())));
+                return Err(SyncError::Network(format!(
+                    "{url_string}: {}",
+                    response.status()
+                )));
             }
             response
                 .bytes()
@@ -672,9 +675,9 @@ fn extract_tar(bytes: &[u8], destination: &Path) -> Result<(), SyncError> {
             .map_err(|error| SyncError::UnsafeArchive(error.to_string()))?
             .into_owned();
         if path.has_root()
-            || path.components().any(|component| {
-                matches!(component, Component::ParentDir | Component::Prefix(..))
-            })
+            || path
+                .components()
+                .any(|component| matches!(component, Component::ParentDir | Component::Prefix(..)))
         {
             return Err(SyncError::UnsafeArchive(format!(
                 "unsafe path {}",

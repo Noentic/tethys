@@ -30,7 +30,6 @@ pub fn run() {
             host_info,
             host_pair,
             health,
-
             // workspace
             workspace_list,
             workspace_add,
@@ -39,7 +38,6 @@ pub fn run() {
             workspace_settings_set,
             workspace_status,
             workspace_capabilities,
-
             // agent
             agent_profiles_list,
             agent_profiles_create,
@@ -53,13 +51,16 @@ pub fn run() {
             agent_login,
             agent_logout,
             agent_stderr,
+            agent_process_sample,
+            agent_env_secret_set,
+            agent_health_interval_set,
+            agent_recheck,
             agent_config_schema,
             agent_config_get,
             agent_config_validate,
             agent_config_plan,
             agent_config_apply,
             agent_config_rollback,
-
             // thread
             thread_create,
             thread_list,
@@ -78,19 +79,16 @@ pub fn run() {
             thread_delete,
             thread_set_config_option,
             thread_set_permission_mode,
-
             // events
             events_subscribe,
             events_unsubscribe,
             events_inbox_subscribe,
-
             // permission
             permission_respond,
             elicitation_respond,
             permission_rules_list,
             permission_rules_set,
             permission_rules_delete,
-
             // git
             git_worktree_create,
             git_worktree_remove,
@@ -108,10 +106,8 @@ pub fn run() {
             git_merge,
             git_push,
             git_pr_create,
-
             // search
             search_files,
-
             // mcp
             mcp_registry_list,
             mcp_registry_set,
@@ -125,7 +121,6 @@ pub fn run() {
             mcp_import_scan,
             mcp_import_apply,
             mcp_health,
-
             // skills
             skills_list,
             skills_import,
@@ -134,17 +129,14 @@ pub fn run() {
             skills_update_apply,
             skills_trust,
             skills_enable,
-
             // commands
             commands_list,
             commands_expand,
-
             // terminal
             terminal_list,
             terminal_attach,
             terminal_write,
             terminal_resize,
-
             // benchmark helpers
             generate_synthetic_diff,
             run_stream_benchmark,

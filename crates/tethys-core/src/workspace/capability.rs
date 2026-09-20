@@ -23,7 +23,9 @@ pub struct CapabilityInputs {
 pub fn vcs_for_root(root: &Path) -> Vcs {
     match GitRepo::discover(root) {
         Ok(repo) => match tethys_git::remote_url_in_repo(&repo, "origin") {
-            Ok(Some(url)) => Vcs::GitRemote { host: host_for(&url) },
+            Ok(Some(url)) => Vcs::GitRemote {
+                host: host_for(&url),
+            },
             _ => Vcs::GitLocal,
         },
         Err(_) => Vcs::None,

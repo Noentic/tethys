@@ -1,10 +1,17 @@
 //! Provider connection hook (M1.10 selector data; overview D12).
 //!
-//! **Swap point (Wave 2 checkpoint):** worktree E's `@tethys/state` connection
-//! store — `agent.connections.list` (still `call<void>()` today). This module
-//! returns a typed fixture until then; the hook signature does not change.
+//! **Swap point (Wave 2 checkpoint):** M1.12's `@tethys/state` connection store
+//! (`providers.ts`) is now the real source. `selectProviderConnections` maps the
+//! stored `AgentProfileView`s onto this selector's shape, and
+//! `useProviderConnections` prefers the store, falling back to the fixtures only
+//! while the store is empty (so the M1.10 tests and fixtures stay honest).
 
-import type { AcpProtocol, ConfigOption } from "@tethys/bindings";
+import type {
+  AcpProtocol,
+  AgentProfileView,
+  ConfigOption,
+} from "@tethys/bindings";
+import { providersStore, selectAllProviders } from "./providers";
 
 export type ProviderConnectionStatus =
   | "healthy"
@@ -127,14 +134,47 @@ export const providerConnectionFixtures: ProviderConnection[] = [
 /** Fixture with no connectable Provider (the zero-provider empty state). */
 export const noProviderFixtures: ProviderConnection[] = [];
 
+/** Maps a stored profile onto the selector's connectability shape. */
+export function toProviderConnection(
+  view: AgentProfileView,
+): ProviderConnection {
+  const status: ProviderConnectionStatus = !view.enabled
+    ? "unreachable"
+    : view.health === "healthy"
+      ? "healthy"
+      : view.health === "auth-required"
+        ? "auth_required"
+        : view.health === "not-found"
+          ? "missing"
+          : "unreachable";
+  return {
+    id: view.id,
+    profileId: view.id,
+    name: view.name,
+    status,
+    protocol: view.protocol,
+    configSchema: [],
+    authMethods: view.auth_methods.map((method) => method.id),
+    imagePrompts: false,
+  };
+}
+
+/** The store's Providers as selector rows, in display order. */
+export function selectProviderConnections(): ProviderConnection[] {
+  return selectAllProviders(providersStore.state).map(toProviderConnection);
+}
+
 /**
- * Connected Providers and their status. Pass `providers` to override the
- * fixture in a test; production reads worktree E's connection store.
+ * Connected Providers and their status. Pass `providers` to override in a
+ * test; otherwise the M1.12 store is the source, with fixtures as the fallback
+ * while it is still empty.
  */
 export function useProviderConnections(
-  providers: ProviderConnection[] = providerConnectionFixtures,
+  providers?: ProviderConnection[],
 ): ProviderConnection[] {
-  return providers;
+  if (providers) return providers;
+  const live = selectProviderConnections();
+  return live.length > 0 ? live : providerConnectionFixtures;
 }
 
 /** A Provider is selectable only when healthy. */

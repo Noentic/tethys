@@ -75,7 +75,11 @@ impl PolicyResolver {
 
 #[async_trait]
 impl PermissionResolver for PolicyResolver {
-    async fn resolve(&self, session: &SessionId, request: PermissionRequested) -> PermissionDecision {
+    async fn resolve(
+        &self,
+        session: &SessionId,
+        request: PermissionRequested,
+    ) -> PermissionDecision {
         self.decide(session, request).await
     }
 }
@@ -191,7 +195,11 @@ impl ElicitationPolicyResolver {
 
 #[async_trait]
 impl ElicitationResolver for ElicitationPolicyResolver {
-    async fn resolve(&self, session: &SessionId, request: ElicitationRequest) -> ElicitationResponse {
+    async fn resolve(
+        &self,
+        session: &SessionId,
+        request: ElicitationRequest,
+    ) -> ElicitationResponse {
         let thread_id = self
             .registry
             .context(session)
@@ -215,7 +223,11 @@ mod tests {
     use crate::permission::pending::ThreadPermissionContext;
     use tethys_schema::thread::ThreadId;
 
-    fn context(mode: PermissionMode, isolation: Isolation, is_git: bool) -> ThreadPermissionContext {
+    fn context(
+        mode: PermissionMode,
+        isolation: Isolation,
+        is_git: bool,
+    ) -> ThreadPermissionContext {
         ThreadPermissionContext {
             thread_id: ThreadId::new("thread-1"),
             workspace_id: "ws-1".into(),
@@ -232,7 +244,10 @@ mod tests {
         }
     }
 
-    fn request(subject: Option<PermissionSubject>, options: Vec<PermOption>) -> PermissionRequested {
+    fn request(
+        subject: Option<PermissionSubject>,
+        options: Vec<PermOption>,
+    ) -> PermissionRequested {
         PermissionRequested {
             req_id: "perm-1".into(),
             title: "Do the thing".into(),
@@ -279,9 +294,7 @@ mod tests {
             }),
             vec![allow_option(), deny_option()],
         );
-        let handle = tokio::spawn(async move {
-            resolver.decide(&session, request).await
-        });
+        let handle = tokio::spawn(async move { resolver.decide(&session, request).await });
         // Supervised surfaces; answer it as a rejection to prove it never auto-approved.
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         registry
@@ -352,10 +365,7 @@ mod tests {
             let session = session.clone();
             async move {
                 resolver
-                    .decide(
-                        &session,
-                        request(None, vec![allow_option()]),
-                    )
+                    .decide(&session, request(None, vec![allow_option()]))
                     .await
             }
         });
@@ -370,7 +380,11 @@ mod tests {
 
     #[tokio::test]
     async fn yolo_guard_refuses_non_git_without_opt_in() {
-        let registry = registry_with(context(PermissionMode::Yolo, Isolation::MainCheckout, false));
+        let registry = registry_with(context(
+            PermissionMode::Yolo,
+            Isolation::MainCheckout,
+            false,
+        ));
         let session = SessionId::new("s1");
         let handle = tokio::spawn({
             let resolver = PolicyResolver::new(registry.clone());
@@ -452,14 +466,8 @@ mod tests {
 
     #[test]
     fn path_within_handles_parent_traversal() {
-        assert!(path_within(
-            Path::new("/repo"),
-            Path::new("src/a.rs")
-        ));
-        assert!(!path_within(
-            Path::new("/repo"),
-            Path::new("../etc/passwd")
-        ));
+        assert!(path_within(Path::new("/repo"), Path::new("src/a.rs")));
+        assert!(!path_within(Path::new("/repo"), Path::new("../etc/passwd")));
         assert!(path_within(
             Path::new("/repo/.tethys/worktrees/t1"),
             Path::new("/repo/.tethys/worktrees/t1/a.rs")

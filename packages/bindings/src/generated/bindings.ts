@@ -22,6 +22,47 @@ export type AgentInfo = {
 	title: string | null,
 };
 
+/**  A profile merged with its last known health and negotiated capabilities. */
+export type AgentProfileView = {
+	id: string,
+	name: string,
+	class: BackendClass,
+	enabled: boolean,
+	launch_spec: LaunchSpecInput,
+	registry_ref: RegistryRef | null,
+	projection_target: ProjectionTarget | null,
+	preferred_protocol: AcpProtocol | null,
+	health: ProviderHealth,
+	/**  Human-readable reason for `health` (e.g. `needs Node.js`). */
+	detail: string | null,
+	/**  Protocol actually negotiated at the last handshake. */
+	protocol: AcpProtocol | null,
+	capabilities: NormalizedCapabilities | null,
+	auth_methods: AuthMethodView[],
+	detected_version: string | null,
+	latency_ms: number | null,
+	/**  Unix milliseconds of the last completed check. */
+	last_checked_ms: number | null,
+	recheck: RecheckStatus,
+};
+
+/**  One installable ACP-Registry entry (`latest/registry.json`). */
+export type AgentRegistryEntryView = {
+	id: string,
+	name: string,
+	version: string,
+	description: string | null,
+	repository: string | null,
+	license: string | null,
+	/**  Distribution kinds the entry offers: `npx`, `binary`, `uvx`. */
+	distributions: string[],
+	installed: boolean,
+	pinned_version: string | null,
+	update: UpdateAvailability | null,
+	/**  Vendor compliance note where the matrix has one (PRD §2). */
+	compliance_note: string | null,
+};
+
 /**  Manifest record for one applied projection. */
 export type Applied = {
 	target: TargetId,
@@ -48,6 +89,32 @@ export type AttachmentGrid = {
 
 /**  Attachment state of an MCP server to a Provider. */
 export type AttachmentState = { kind: "attached" } | { kind: "unsupported-transport"; needs: TransportKind } | { kind: "file-projection"; target: ProjectionTarget; state: EntryState } | { kind: "excluded" } | { kind: "not-negotiated" };
+
+/**
+ *  How a Provider's declared auth method is presented by the login surface.
+ * 
+ *  ACP only distinguishes *terminal* (the client runs the vendor command) and
+ *  *agent* (the agent runs its own OAuth) auth, mapped to [`CliPassthrough`]
+ *  and [`AgentAuth`]. `env-var` and `url-code` are manual-profile shapes; an
+ *  unrecognised method id degrades to [`Unknown`], which the dialog renders as
+ *  a disabled row naming the id rather than breaking (spec §5.2).
+ * 
+ *  [`CliPassthrough`]: AuthMethodShape::CliPassthrough
+ *  [`AgentAuth`]: AuthMethodShape::AgentAuth
+ *  [`Unknown`]: AuthMethodShape::Unknown
+ */
+export type AuthMethodShape = { shape: "env-var" } | { shape: "url-code" } | { shape: "cli-passthrough" } | { shape: "agent-auth" } | { shape: "unknown"; id: string };
+
+/**  One declared `authMethods` entry plus the shape the surface renders. */
+export type AuthMethodView = {
+	id: string,
+	name: string,
+	description: string | null,
+	shape: AuthMethodShape,
+};
+
+/**  How a profile was created. */
+export type BackendClass = "registry" | "manual";
 
 /**  Benchmark configuration for S0.1 IPC test harness. */
 export type BenchmarkConfig = {
@@ -413,6 +480,12 @@ export type EntryUpsert = {
 	payload: string,
 };
 
+/**  One environment binding: a literal or a `keychain:…` reference. */
+export type EnvVarInput = {
+	key: string,
+	value: string,
+};
+
 /**  Sequenced event delivered to subscribers (`events.subscribe`). */
 export type EventEnvelope = {
 	thread_id: ThreadId,
@@ -466,6 +539,25 @@ export type ImportFailure = {
 export type ImportScan = {
 	candidates: ImportCandidate[],
 	failures: ImportFailure[],
+};
+
+/**  The result of installing a registry entry into a profile. */
+export type InstallResult = {
+	profile_id: string,
+	version: string,
+	launch_spec: LaunchSpecInput,
+	/**  Set when an optional integrity field was absent (`sha256`). */
+	warning: string | null,
+	/**  True when an `npx` install needs Node.js that is not on PATH. */
+	needs_node: boolean,
+};
+
+/**  The launch inputs a profile owns (architecture §12). */
+export type LaunchSpecInput = {
+	program: string,
+	args?: string[],
+	cwd: string | null,
+	env?: EnvVarInput[],
 };
 
 /**  Transports an agent advertised for a session. */
@@ -551,6 +643,31 @@ export type PlanEntryPriority = "High" | "Medium" | "Low";
 
 export type PlanEntryStatus = "Pending" | "InProgress" | "Completed";
 
+/**  One process in a thread's tree (architecture §7.5). */
+export type ProcessSample = {
+	pid: number,
+	/**  CPU usage in percent of one core, summed for the tree on the leader row. */
+	cpu: number | null,
+	/**  Resident set size in bytes. */
+	rss: number | null,
+	uptime_secs: number,
+	/**  Coarse process state (`run`, `sleep`, …). */
+	state: string,
+	/**  True for the process-group leader (the connection's `pid`). */
+	leader: boolean,
+};
+
+/**  Create/update input for a manual profile. */
+export type ProfileInput = {
+	/**  `None` on create generates an id; on update identifies the row. */
+	id: string | null,
+	name: string,
+	launch_spec: LaunchSpecInput,
+	projection_target: ProjectionTarget | null,
+	preferred_protocol: AcpProtocol | null,
+	enabled?: boolean,
+};
+
 /**  Preview of one projected registry into one target file. */
 export type ProjectionPlan = {
 	target: TargetId,
@@ -589,6 +706,13 @@ export type ProviderExtension = {
 	params: string,
 };
 
+/**  Health of a profile's executable + ACP handshake (spec §5.2). */
+export type ProviderHealth = 
+/**  No check has completed yet. */
+"unknown" | "healthy" | "auth-required" | 
+/**  Program not found on PATH or missing install (e.g. Node.js for `npx`). */
+"not-found" | "error";
+
 /**  One staged prompt in a thread's queue. */
 export type QueuedPrompt = {
 	/**  Stable queue-item identity (`q-<seq>`), used by remove/reorder. */
@@ -599,6 +723,9 @@ export type QueuedPrompt = {
 	/**  Zero-based position in the queue. */
 	ordinal: number,
 };
+
+/**  In-flight state of the health poller for one Provider. */
+export type RecheckStatus = "idle" | "checking";
 
 /**  What a resolved composer reference points at. */
 export type ReferenceKind = "skill" | "path";
@@ -619,6 +746,12 @@ export type RegistryEntryView = {
 	name: string,
 	scope: Scope,
 	entry: RegistryEntry,
+};
+
+/**  A pinned registry install: which entry, at which version. */
+export type RegistryRef = {
+	id: string,
+	version: string,
 };
 
 /**
@@ -948,7 +1081,14 @@ export type TurnEventBody = { type: "StateChanged"; body: StateChanged } | { typ
 	req_id: string,
 	outcome: ElicitationOutcome,
 	values: { [key in string]: ElicitationValue },
-} };
+} } | 
+/**
+ *  A cancel-ladder phase transition (`cancel_requested` → `grace_elapsed` →
+ *  `terminating`, or back to `idle`). Appended last, an append-only region;
+ *  emitted by M1.12's Stop backend and read by the `Stop` control. The
+ *  backend owns the clock, so the payload carries the absolute deadline.
+ */
+{ type: "CancelPhaseChanged"; body: CancelState };
 
 /**  Refs holding the pre-restore state so restore is itself reversible. */
 export type UndoCapture = {
@@ -957,6 +1097,9 @@ export type UndoCapture = {
 	worktree_tree: string,
 	index_tree: string,
 };
+
+/**  Whether an upstream release is newer than a profile's pin. */
+export type UpdateAvailability = { kind: "up-to-date" } | { kind: "available"; latest: string };
 
 export type UsageSnapshot = {
 	input_tokens: number,

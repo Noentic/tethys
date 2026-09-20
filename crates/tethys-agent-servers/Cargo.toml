@@ -10,12 +10,21 @@ acp-v2 = ["tethys-acp/acp-v2"]
 
 [dependencies]
 agent-client-protocol.workspace = true
+async-trait.workspace = true
 futures.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+which.workspace = true
+semver.workspace = true
+sha2.workspace = true
+reqwest.workspace = true
+zip.workspace = true
+tar.workspace = true
+flate2.workspace = true
 tethys-acp = { path = "../tethys-acp" }
 tethys-schema = { path = "../tethys-schema" }
 tethys-supervisor = { path = "../tethys-supervisor" }
@@ -23,6 +32,8 @@ tethys-thread = { path = "../tethys-thread" }
 
 [dev-dependencies]
 async-trait.workspace = true
+wiremock.workspace = true
+tempfile.workspace = true
 tethys-acp = { path = "../tethys-acp", features = ["mock"] }
 
 [target.'cfg(unix)'.dev-dependencies]

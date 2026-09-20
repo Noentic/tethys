@@ -14,9 +14,7 @@ stub_cmd!(workspace_settings_set);
 /// `workspace.list` — the trust-filtered catalog.
 #[tauri::command]
 #[specta::specta]
-pub async fn workspace_list(
-    state: State<'_, CoreState>,
-) -> Result<Vec<WorkspaceListItem>, String> {
+pub async fn workspace_list(state: State<'_, CoreState>) -> Result<Vec<WorkspaceListItem>, String> {
     state.workspace_list().await.map_err(|e| e.to_string())
 }
 
@@ -27,7 +25,10 @@ pub async fn workspace_add(
     state: State<'_, CoreState>,
     request: TrustGrant,
 ) -> Result<WorkspaceListItem, String> {
-    state.workspace_add(request).await.map_err(|e| e.to_string())
+    state
+        .workspace_add(request)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// `workspace.remove` — revoke trust (the card leaves the catalog).

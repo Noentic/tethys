@@ -84,10 +84,7 @@ async fn mcp_registry_round_trips_and_effective_returns_data() {
     assert_eq!(listed[0].name, "github");
     assert_eq!(listed[0].scope, Scope::Global);
 
-    let effective = core
-        .mcp_effective(None, None)
-        .await
-        .expect("effective");
+    let effective = core.mcp_effective(None, None).await.expect("effective");
     assert_eq!(effective.len(), 1);
 
     let deleted = core
@@ -117,11 +114,7 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     .expect("set");
 
     let plan = core
-        .mcp_projection_plan(
-            ws_id.clone(),
-            TargetId::OpenCode,
-            Scope::Workspace,
-        )
+        .mcp_projection_plan(ws_id.clone(), TargetId::OpenCode, Scope::Workspace)
         .await
         .expect("plan");
     assert_eq!(plan.entries.len(), 1);
@@ -136,19 +129,12 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     assert_eq!(applied.entries.len(), 1);
 
     let verified = core
-        .mcp_projection_verify(
-            ws_id.clone(),
-            TargetId::OpenCode,
-            Scope::Workspace,
-        )
+        .mcp_projection_verify(ws_id.clone(), TargetId::OpenCode, Scope::Workspace)
         .await
         .expect("verify");
     assert_eq!(verified, VerifyStatus::InSync);
 
-    let scan = core
-        .mcp_import_scan(ws_id.clone())
-        .await
-        .expect("scan");
+    let scan = core.mcp_import_scan(ws_id.clone()).await.expect("scan");
     assert!(scan
         .candidates
         .iter()
@@ -157,23 +143,15 @@ async fn projection_plan_apply_and_rollback_through_the_api() {
     let pristine = fs::read_to_string(&config).expect("config");
     fs::write(&config, format!("{pristine}\n")).expect("drift");
     let verified = core
-        .mcp_projection_verify(
-            ws_id.clone(),
-            TargetId::OpenCode,
-            Scope::Workspace,
-        )
+        .mcp_projection_verify(ws_id.clone(), TargetId::OpenCode, Scope::Workspace)
         .await
         .expect("verify drifted");
     assert_eq!(verified, VerifyStatus::Drifted);
     fs::write(&config, pristine).expect("restore");
 
-    core.mcp_projection_rollback(
-        ws_id.clone(),
-        TargetId::OpenCode,
-        Scope::Workspace,
-    )
-    .await
-    .expect("rollback");
+    core.mcp_projection_rollback(ws_id.clone(), TargetId::OpenCode, Scope::Workspace)
+        .await
+        .expect("rollback");
     assert!(!config.exists());
 }
 
@@ -192,10 +170,7 @@ async fn skills_list_trust_and_enable_through_the_api() {
     fs::write(skill.join("scripts/run.sh"), "echo hi").expect("script");
 
     let (core, ws_id) = core_with_workspace(&home, &root).await;
-    let listed = core
-        .skills_list(ws_id.clone())
-        .await
-        .expect("list");
+    let listed = core.skills_list(ws_id.clone()).await.expect("list");
     assert_eq!(listed.len(), 1);
     assert!(listed[0].requires_trust);
     assert!(!listed[0].trusted);
@@ -207,12 +182,7 @@ async fn skills_list_trust_and_enable_through_the_api() {
     assert!(trusted.trusted);
 
     let disabled = core
-        .skills_enable(
-            ws_id.clone(),
-            Scope::Workspace,
-            "pdf".into(),
-            false,
-        )
+        .skills_enable(ws_id.clone(), Scope::Workspace, "pdf".into(), false)
         .await
         .expect("disable");
     assert!(!disabled.enabled);
@@ -344,7 +314,10 @@ async fn mcp_attachments_returns_grid_through_core() {
         }),
     );
 
-    let grid = core.mcp_attachments(ws_id.clone()).await.expect("attachments");
+    let grid = core
+        .mcp_attachments(ws_id.clone())
+        .await
+        .expect("attachments");
     assert_eq!(grid.servers.len(), 2);
     assert_eq!(grid.providers.len(), 2);
 
@@ -358,10 +331,16 @@ async fn mcp_attachments_returns_grid_through_core() {
     };
 
     // github on agent-1 -> Attached
-    assert_eq!(cell("github", "agent-1"), tethys_schema::sync::AttachmentState::Attached);
+    assert_eq!(
+        cell("github", "agent-1"),
+        tethys_schema::sync::AttachmentState::Attached
+    );
 
     // opencode-only on agent-1 -> Excluded
-    assert_eq!(cell("opencode-only", "agent-1"), tethys_schema::sync::AttachmentState::Excluded);
+    assert_eq!(
+        cell("opencode-only", "agent-1"),
+        tethys_schema::sync::AttachmentState::Excluded
+    );
 
     // github on agent-claude -> FileProjection { target: ClaudeCode, state: Pending }
     assert_eq!(
@@ -433,7 +412,10 @@ async fn projection_plan_names_matching_providers_and_handles_unmatched_target()
     assert!(opencode_plan.providers.is_empty());
 
     // Attachment grid should not have any FileProjection cell targeting Codex
-    let grid = core.mcp_attachments(ws_id.clone()).await.expect("attachments");
+    let grid = core
+        .mcp_attachments(ws_id.clone())
+        .await
+        .expect("attachments");
     let mut saw_claude_projection = false;
     for cell in &grid.cells {
         if let tethys_schema::sync::AttachmentState::FileProjection { target, .. } = &cell.state {
@@ -445,4 +427,3 @@ async fn projection_plan_names_matching_providers_and_handles_unmatched_target()
     }
     assert!(saw_claude_projection);
 }
-

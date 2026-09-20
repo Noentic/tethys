@@ -20,7 +20,10 @@ fn sample_spec() -> WorktreeSpec {
 #[tokio::test]
 async fn git_defaults_return_unimplemented() {
     let api = MinimalApi;
-    assert_unimplemented("git.worktree_create", api.git_worktree_create(sample_spec()).await);
+    assert_unimplemented(
+        "git.worktree_create",
+        api.git_worktree_create(sample_spec()).await,
+    );
     assert_unimplemented(
         "git.worktree_remove",
         api.git_worktree_remove("t".into(), false, false).await,
@@ -54,7 +57,10 @@ async fn git_defaults_return_unimplemented() {
     let source = DiffSource::HeadWorktree {
         thread_id: "t".into(),
     };
-    assert_unimplemented("git.diff_summary", api.git_diff_summary(source.clone()).await);
+    assert_unimplemented(
+        "git.diff_summary",
+        api.git_diff_summary(source.clone()).await,
+    );
     assert_unimplemented(
         "git.diff_file",
         api.git_diff_file(source.clone(), "a.txt".into()).await,

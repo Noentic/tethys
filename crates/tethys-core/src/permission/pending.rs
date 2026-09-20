@@ -176,8 +176,8 @@ impl PermissionRegistry {
                 _ => None,
             }
         };
-        let pending = pending
-            .ok_or_else(|| ApiError::NotFound(format!("pending permission {req_id}")))?;
+        let pending =
+            pending.ok_or_else(|| ApiError::NotFound(format!("pending permission {req_id}")))?;
         let decision = match option_id {
             Some(option_id) => {
                 let kind = pending
@@ -297,16 +297,12 @@ mod tests {
         let b = ThreadId::new("b");
         let receiver = registry.park_permission(a.clone(), request("perm-1"));
 
-        assert!(
-            registry
-                .complete_permission(&b, "perm-1", Some("allow".into()))
-                .is_err()
-        );
-        assert!(
-            registry
-                .complete_permission(&a, "perm-1", Some("allow".into()))
-                .is_ok()
-        );
+        assert!(registry
+            .complete_permission(&b, "perm-1", Some("allow".into()))
+            .is_err());
+        assert!(registry
+            .complete_permission(&a, "perm-1", Some("allow".into()))
+            .is_ok());
         assert_eq!(
             receiver.await.expect("decision").outcome,
             PermOutcome::Approved

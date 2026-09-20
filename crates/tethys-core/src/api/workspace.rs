@@ -164,11 +164,7 @@ impl WorkspaceApi for Core {
                 ApiError::NotFound(format!("workspace not found: {}", workspace_id.as_str()))
             })?;
         let record = self.trust().trust(&workspace_id).await?;
-        Ok(crate::workspace_trust::trust_state_async(
-            record,
-            PathBuf::from(&row.root_path),
-        )
-        .await)
+        Ok(crate::workspace_trust::trust_state_async(record, PathBuf::from(&row.root_path)).await)
     }
 
     async fn workspace_capabilities(

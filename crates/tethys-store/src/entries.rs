@@ -47,10 +47,7 @@ pub fn open_thread(
              ORDER BY first_seq DESC
              LIMIT ?2",
         )?;
-        let rows = stmt.query_map(
-            params![thread_id.as_str(), query_limit],
-            row_to_entry,
-        )?;
+        let rows = stmt.query_map(params![thread_id.as_str(), query_limit], row_to_entry)?;
         for r in rows {
             entries_desc.push(r?);
         }

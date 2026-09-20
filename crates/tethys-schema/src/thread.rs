@@ -456,6 +456,11 @@ pub enum TurnEventBody {
         outcome: crate::elicitation::ElicitationOutcome,
         values: std::collections::BTreeMap<String, crate::elicitation::ElicitationValue>,
     },
+    /// A cancel-ladder phase transition (`cancel_requested` → `grace_elapsed` →
+    /// `terminating`, or back to `idle`). Appended last, an append-only region;
+    /// emitted by M1.12's Stop backend and read by the `Stop` control. The
+    /// backend owns the clock, so the payload carries the absolute deadline.
+    CancelPhaseChanged(crate::cancel::CancelState),
 }
 
 /// Sequenced event delivered to subscribers (`events.subscribe`).
@@ -557,7 +562,13 @@ mod tests {
         let json = r#"{"title":"Read file","kind":"read","status":"Completed","input":null,"output":null,"locations":["src/a.rs"]}"#;
         let patch: ToolCallPatch = serde_json::from_str(json).expect(json);
         assert_eq!(patch.kind, Some(ToolKind::Read));
-        assert_eq!(patch.locations, vec![ToolLocation { path: "src/a.rs".into(), line: None }]);
+        assert_eq!(
+            patch.locations,
+            vec![ToolLocation {
+                path: "src/a.rs".into(),
+                line: None
+            }]
+        );
         assert_eq!(patch.origin, None);
         assert_eq!(patch.parent_tool_call_id, None);
     }
@@ -565,10 +576,22 @@ mod tests {
     #[test]
     fn tool_location_keeps_line_and_accepts_both_shapes() {
         let legacy: ToolLocation = serde_json::from_str("\"src/a.rs\"").expect("legacy");
-        assert_eq!(legacy, ToolLocation { path: "src/a.rs".into(), line: None });
+        assert_eq!(
+            legacy,
+            ToolLocation {
+                path: "src/a.rs".into(),
+                line: None
+            }
+        );
         let full: ToolLocation =
             serde_json::from_str(r#"{"path":"src/b.rs","line":42}"#).expect("full");
-        assert_eq!(full, ToolLocation { path: "src/b.rs".into(), line: Some(42) });
+        assert_eq!(
+            full,
+            ToolLocation {
+                path: "src/b.rs".into(),
+                line: Some(42)
+            }
+        );
     }
 
     #[test]
@@ -619,7 +642,10 @@ mod tests {
             params: "{}".into(),
         });
         let value = serde_json::to_value(&ext).expect("serialize");
-        assert_eq!(serde_json::from_value::<TurnEventBody>(value).expect("round"), ext);
+        assert_eq!(
+            serde_json::from_value::<TurnEventBody>(value).expect("round"),
+            ext
+        );
 
         let compaction = TurnEventBody::Compaction { summary: None };
         let value = serde_json::to_value(&compaction).expect("serialize");

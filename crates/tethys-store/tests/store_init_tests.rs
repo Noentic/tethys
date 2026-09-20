@@ -158,7 +158,10 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
         [],
         |r| r.get(0),
     )?;
-    assert_eq!(projects_exist, 1, "projects table should exist at version 3");
+    assert_eq!(
+        projects_exist, 1,
+        "projects table should exist at version 3"
+    );
 
     // Step 2: Step down to version 2 (sync state dropped, entries preserved)
     migrate_to_version(&mut conn, 2)?;
@@ -279,7 +282,6 @@ fn store_upgrades_from_v3_preserving_rows() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-
 #[test]
 fn workspace_trust_unique_key_and_cascade() -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = rusqlite::Connection::open_in_memory()?;
@@ -346,8 +348,8 @@ fn agent_profiles_round_trip_and_nullable_columns() -> Result<(), Box<dyn std::e
         ],
     )?;
 
-    let (name, enabled, registry_ref, target): (String, i64, Option<String>, Option<String>) =
-        conn.query_row(
+    let (name, enabled, registry_ref, target): (String, i64, Option<String>, Option<String>) = conn
+        .query_row(
             "SELECT name, enabled, registry_ref, projection_target
              FROM agent_profiles WHERE id = 'p1'",
             [],

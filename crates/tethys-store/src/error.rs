@@ -22,6 +22,9 @@ pub enum StoreError {
     #[error("not found: {0}")]
     NotFound(String),
 
+    #[error("conflict: {0}")]
+    Conflict(String),
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 

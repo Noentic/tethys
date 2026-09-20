@@ -268,7 +268,11 @@ async fn permission_resolver_is_dyn_and_returns_typed_decision() {
 
     #[async_trait]
     impl PermissionResolver for AutoApprove {
-        async fn resolve(&self, _session: &SessionId, request: PermissionRequested) -> PermissionDecision {
+        async fn resolve(
+            &self,
+            _session: &SessionId,
+            request: PermissionRequested,
+        ) -> PermissionDecision {
             PermissionDecision {
                 outcome: PermOutcome::Approved,
                 option_id: request

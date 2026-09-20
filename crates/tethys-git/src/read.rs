@@ -109,7 +109,10 @@ pub fn main_worktree_root(repo: &GitRepo) -> GitResult<PathBuf> {
 /// A missing remote is `None`, not an error: a local-only repository has no
 /// origin and the capability resolver must read that as `GitLocal`.
 pub fn remote_url(repo: &GitRepo, remote: &str) -> GitResult<Option<String>> {
-    let output = repo.command().args(["remote", "get-url", remote]).output()?;
+    let output = repo
+        .command()
+        .args(["remote", "get-url", remote])
+        .output()?;
     if !output.status.success() {
         return Ok(None);
     }

@@ -42,8 +42,14 @@ fn test_real_sigkill_mid_write_leaves_no_torn_state() {
     let rt = tokio::runtime::Runtime::new().expect("runtime");
     rt.block_on(async {
         let store = EventStore::open(&db_path).await.expect("init store");
-        store.ensure_project("p1", "/tmp", "worktree").await.unwrap();
-        store.ensure_thread(&ThreadId("child_thread".into()), "p1").await.unwrap();
+        store
+            .ensure_project("p1", "/tmp", "worktree")
+            .await
+            .unwrap();
+        store
+            .ensure_thread(&ThreadId("child_thread".into()), "p1")
+            .await
+            .unwrap();
     });
 
     let current_exe = env::current_exe().expect("current test exe");
@@ -67,7 +73,9 @@ fn test_real_sigkill_mid_write_leaves_no_torn_state() {
 
     // Reopen in parent
     rt.block_on(async {
-        let store = EventStore::open(&db_path).await.expect("reopen store after kill");
+        let store = EventStore::open(&db_path)
+            .await
+            .expect("reopen store after kill");
         let tid = ThreadId("child_thread".into());
 
         let count = store.count_events(&tid).await.expect("count events");

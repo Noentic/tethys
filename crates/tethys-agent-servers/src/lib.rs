@@ -3,8 +3,10 @@
 pub mod connection_store;
 pub mod launch;
 mod recovery;
+pub mod registry;
 
 pub use connection_store::{
-    ConnectionLease, ConnectionStore, RecoveryOutcome, StoreError, StoreOptions,
+    ConnectionLease, ConnectionStore, EnvResolver, LiteralEnv, RecoveryOutcome, StoreError,
+    StoreOptions,
 };
 pub use launch::LaunchSpec;

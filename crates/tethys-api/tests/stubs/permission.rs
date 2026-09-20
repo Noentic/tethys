@@ -24,5 +24,8 @@ async fn permission_defaults_return_unimplemented() {
     );
     assert_unimplemented("permission.rules_list", api.permission_rules_list().await);
     assert_unimplemented("permission.rules_set", api.permission_rules_set().await);
-    assert_unimplemented("permission.rules_delete", api.permission_rules_delete().await);
+    assert_unimplemented(
+        "permission.rules_delete",
+        api.permission_rules_delete().await,
+    );
 }

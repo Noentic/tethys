@@ -38,10 +38,7 @@ pub fn trust_state(record: Option<&TrustRow>, root: &Path) -> WorkspaceTrustStat
 /// [`trust_state`] off the async worker: the comparison runs a read-only git
 /// read, so it must not block an async thread (the repo's `blocking`
 /// convention). A failed join fails closed (`Untrusted`).
-pub async fn trust_state_async(
-    record: Option<TrustRow>,
-    root: PathBuf,
-) -> WorkspaceTrustState {
+pub async fn trust_state_async(record: Option<TrustRow>, root: PathBuf) -> WorkspaceTrustState {
     match tokio::task::spawn_blocking(move || trust_state(record.as_ref(), &root)).await {
         Ok(state) => state,
         Err(_) => WorkspaceTrustState::Untrusted,
@@ -140,7 +137,11 @@ impl WorkspaceTrust for StaticTrust {
 
     async fn list(&self) -> Result<Vec<TrustRow>, ApiError> {
         let mut rows: Vec<TrustRow> = self.rows.read().values().cloned().collect();
-        rows.sort_by(|a, b| b.trusted_at.cmp(&a.trusted_at).then(a.workspace_id.cmp(&b.workspace_id)));
+        rows.sort_by(|a, b| {
+            b.trusted_at
+                .cmp(&a.trusted_at)
+                .then(a.workspace_id.cmp(&b.workspace_id))
+        });
         Ok(rows)
     }
 }

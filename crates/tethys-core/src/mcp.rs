@@ -134,7 +134,9 @@ impl McpApi for Core {
                 if let Some(states) = target_states.get(&target) {
                     states.clone()
                 } else {
-                    let states = self.compute_projection_states_for_target(&root, target).await?;
+                    let states = self
+                        .compute_projection_states_for_target(&root, target)
+                        .await?;
                     target_states.insert(target, states.clone());
                     states
                 }
@@ -432,11 +434,9 @@ impl Core {
     ) -> Result<PathBuf, ApiError> {
         match scope {
             Scope::Global => Ok(global_registry_path(&self.sync_home())),
-            Scope::Workspace => workspace_root
-                .map(workspace_registry_path)
-                .ok_or_else(|| {
-                    ApiError::InvalidConfig("workspace scope needs a workspace root".into())
-                }),
+            Scope::Workspace => workspace_root.map(workspace_registry_path).ok_or_else(|| {
+                ApiError::InvalidConfig("workspace scope needs a workspace root".into())
+            }),
         }
     }
 }

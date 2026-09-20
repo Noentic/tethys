@@ -10,8 +10,7 @@ use crate::ApiError;
 pub trait WorkspaceApi: Send + Sync {
     fn workspace_list(
         &self,
-    ) -> impl std::future::Future<Output = Result<Vec<WorkspaceListItem>, ApiError>> + Send
-    {
+    ) -> impl std::future::Future<Output = Result<Vec<WorkspaceListItem>, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("workspace.list")) }
     }
 

@@ -3,9 +3,9 @@
 use agent_client_protocol::schema::v2 as acp2;
 use agent_client_protocol::schema::MaybeUndefined;
 use tethys_schema::thread::{
-    AgentCommand, ConfigOption, ContentBlock, MessageChunk, MessageUpsert, Patch, PermissionSubject,
-    PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, Role, SessionState, StopReason,
-    ToolCallContent, ToolCallPatch, ToolCallStatus, TurnEventBody,
+    AgentCommand, ConfigOption, ContentBlock, MessageChunk, MessageUpsert, Patch,
+    PermissionSubject, PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, Role,
+    SessionState, StopReason, ToolCallContent, ToolCallPatch, ToolCallStatus, TurnEventBody,
 };
 
 use crate::map::{json_string, state_changed};

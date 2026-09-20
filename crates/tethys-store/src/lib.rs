@@ -6,6 +6,8 @@ pub mod blobs;
 pub mod error;
 
 #[doc(hidden)]
+pub mod agent_profiles;
+#[doc(hidden)]
 pub mod entries;
 #[doc(hidden)]
 pub mod migrations;
@@ -23,15 +25,16 @@ use std::sync::Arc;
 
 use pool::ConnectionPool;
 
+pub use agent_profiles::AgentProfileRow;
 pub use blobs::BlobStore;
 pub use error::StoreError;
 pub use schema::WorkspaceRow;
 pub use sync_state::{ProjectionRow, SkillRow};
-pub use workspace_trust::TrustRow;
 pub use tethys_schema::store::{
     BlobHash, Entry, EntryKind, EntryPage, EntryUpsert, NewEvent, SeqRange, StoredEvent, ThreadId,
     ThreadView,
 };
+pub use workspace_trust::TrustRow;
 
 /// The primary persistence facade for threads, event logs, and blobs.
 #[derive(Clone)]
@@ -109,7 +112,8 @@ impl EventStore {
         root_path: &str,
         isolation: &str,
     ) -> Result<(), StoreError> {
-        self.ensure_workspace(workspace_id, root_path, isolation).await
+        self.ensure_workspace(workspace_id, root_path, isolation)
+            .await
     }
 
     /// Ensures a thread record exists within a workspace.
@@ -281,6 +285,66 @@ impl EventStore {
             .call(move |conn| schema::list_workspaces(conn))
             .await?;
         Ok(rows)
+    }
+
+    /// Lists agent profiles, ordered by id.
+    pub async fn agent_profiles(&self) -> Result<Vec<AgentProfileRow>, StoreError> {
+        let rows = self
+            .pool
+            .reader()
+            .call(|conn| agent_profiles::list(conn))
+            .await?;
+        Ok(rows)
+    }
+
+    /// Reads one agent profile.
+    pub async fn agent_profile(&self, id: &str) -> Result<Option<AgentProfileRow>, StoreError> {
+        let id = id.to_string();
+        let row = self
+            .pool
+            .reader()
+            .call(move |conn| agent_profiles::get(conn, &id))
+            .await?;
+        Ok(row)
+    }
+
+    /// Inserts a new agent profile; a duplicate id is a conflict.
+    pub async fn insert_agent_profile(&self, row: AgentProfileRow) -> Result<(), StoreError> {
+        self.pool
+            .writer()
+            .call(move |conn| agent_profiles::insert(conn, &row))
+            .await?;
+        Ok(())
+    }
+
+    /// Inserts or replaces an agent profile by id (install/reinstall).
+    pub async fn upsert_agent_profile(&self, row: AgentProfileRow) -> Result<(), StoreError> {
+        self.pool
+            .writer()
+            .call(move |conn| agent_profiles::upsert(conn, &row))
+            .await?;
+        Ok(())
+    }
+
+    /// Updates an agent profile, reporting whether it existed.
+    pub async fn update_agent_profile(&self, row: AgentProfileRow) -> Result<bool, StoreError> {
+        let updated = self
+            .pool
+            .writer()
+            .call(move |conn| agent_profiles::update(conn, &row))
+            .await?;
+        Ok(updated)
+    }
+
+    /// Deletes an agent profile, reporting whether it existed.
+    pub async fn delete_agent_profile(&self, id: &str) -> Result<bool, StoreError> {
+        let id = id.to_string();
+        let deleted = self
+            .pool
+            .writer()
+            .call(move |conn| agent_profiles::delete(conn, &id))
+            .await?;
+        Ok(deleted)
     }
 
     /// Inserts or replaces one workspace trust row.

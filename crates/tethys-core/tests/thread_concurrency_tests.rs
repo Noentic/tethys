@@ -83,9 +83,18 @@ async fn git_workspace_allows_many_sessions() {
     init_git(&root);
     let (sessions, profile) = build_sessions(dir.path(), &root);
 
-    sessions.create(request(&profile, &root)).await.expect("first");
-    sessions.create(request(&profile, &root)).await.expect("second");
-    sessions.create(request(&profile, &root)).await.expect("third");
+    sessions
+        .create(request(&profile, &root))
+        .await
+        .expect("first");
+    sessions
+        .create(request(&profile, &root))
+        .await
+        .expect("second");
+    sessions
+        .create(request(&profile, &root))
+        .await
+        .expect("third");
     assert_eq!(sessions.list().len(), 3);
 }
 
@@ -158,7 +167,10 @@ async fn untrusted_workspace_refuses_create_without_leasing() {
         .create(request(&profile, &root))
         .await
         .expect_err("untrusted workspace must be refused");
-    assert!(matches!(err, ApiError::NotFound(_)), "expected NotFound, got {err:?}");
+    assert!(
+        matches!(err, ApiError::NotFound(_)),
+        "expected NotFound, got {err:?}"
+    );
     assert!(sessions.list().is_empty(), "no session created");
     assert!(store.entries().is_empty(), "no lease acquired");
 

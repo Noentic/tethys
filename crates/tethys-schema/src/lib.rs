@@ -20,6 +20,10 @@ pub mod cancel;
 
 pub use cancel::*;
 
+pub mod agents;
+
+pub use agents::*;
+
 pub mod catalog;
 
 pub use catalog::*;
@@ -150,6 +154,20 @@ pub fn registered_types() -> Types {
         .register::<connection::AgentCompat>()
         .register::<connection::ConnectionKey>()
         .register::<connection::ConnectionEntry>()
+        .register::<agents::AuthMethodShape>()
+        .register::<agents::AuthMethodView>()
+        .register::<agents::EnvVarInput>()
+        .register::<agents::LaunchSpecInput>()
+        .register::<agents::BackendClass>()
+        .register::<agents::RegistryRef>()
+        .register::<agents::ProviderHealth>()
+        .register::<agents::RecheckStatus>()
+        .register::<agents::AgentProfileView>()
+        .register::<agents::ProfileInput>()
+        .register::<agents::AgentRegistryEntryView>()
+        .register::<agents::UpdateAvailability>()
+        .register::<agents::InstallResult>()
+        .register::<agents::ProcessSample>()
         .register::<thread::ThreadId>()
         .register::<thread::ThreadState>()
         .register::<thread::CreateThread>()
@@ -217,4 +235,3 @@ pub fn registered_types() -> Types {
         .register::<elicitation::ElicitationOutcome>()
         .register::<elicitation::ElicitationResponse>()
 }
-

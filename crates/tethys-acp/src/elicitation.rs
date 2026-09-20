@@ -149,7 +149,10 @@ fn property_v1(
             string.description.clone(),
             string_property(
                 string.enum_values.as_deref(),
-                string.one_of.as_ref().map(|options| titled_options_v1(options)),
+                string
+                    .one_of
+                    .as_ref()
+                    .map(|options| titled_options_v1(options)),
                 string.default.clone(),
                 string.min_length,
                 string.max_length,
@@ -195,7 +198,10 @@ fn property_v2(
             string.description.clone(),
             string_property(
                 string.enum_values.as_deref(),
-                string.one_of.as_ref().map(|options| titled_options_v2(options)),
+                string
+                    .one_of
+                    .as_ref()
+                    .map(|options| titled_options_v2(options)),
                 string.default.clone(),
                 string.min_length,
                 string.max_length,
@@ -318,11 +324,7 @@ mod tests {
                     .max_length(80),
                 true,
             )
-            .property(
-                "contact",
-                acp1::StringPropertySchema::email(),
-                false,
-            )
+            .property("contact", acp1::StringPropertySchema::email(), false)
             .property(
                 "tier",
                 acp1::StringPropertySchema::new().one_of(vec![
@@ -334,10 +336,7 @@ mod tests {
             )
             .property("notify", acp1::BooleanPropertySchema::new(), true);
         acp1::CreateElicitationRequest::new(
-            acp1::ElicitationFormMode::new(
-                acp1::ElicitationSessionScope::new("session-1"),
-                schema,
-            ),
+            acp1::ElicitationFormMode::new(acp1::ElicitationSessionScope::new("session-1"), schema),
             "Tell us about the project",
         )
     }
@@ -401,10 +400,7 @@ mod tests {
         string.format = None;
         schema.properties.insert("plain".into(), string.into());
         let request = acp1::CreateElicitationRequest::new(
-            acp1::ElicitationFormMode::new(
-                acp1::ElicitationSessionScope::new("session-1"),
-                schema,
-            ),
+            acp1::ElicitationFormMode::new(acp1::ElicitationSessionScope::new("session-1"), schema),
             "message",
         );
         let normalized = from_sdk_v1(&request).expect("form");

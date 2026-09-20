@@ -252,10 +252,7 @@ fn server_with_opencode_provider_scoping() {
 }"#;
     let registry = registry_from(v2_json, "");
     let opencode_effective = registry.effective_for_provider(Some("opencode"), &BTreeSet::new());
-    let opencode_names: Vec<&str> = opencode_effective
-        .iter()
-        .map(|(n, _)| n.as_str())
-        .collect();
+    let opencode_names: Vec<&str> = opencode_effective.iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(opencode_names, vec!["opencode-tool", "shared-tool"]);
 
     let other_effective = registry.effective_for_provider(Some("claude-code"), &BTreeSet::new());
@@ -290,4 +287,3 @@ fn legacy_scope_project_still_loads() {
     let entry: RegistryEntry = serde_json::from_str(json).expect("parse entry");
     assert_eq!(entry.meta.scope, Some(Scope::Workspace));
 }
-

@@ -28,10 +28,7 @@ use tethys_schema::thread::CreateThread;
 use tethys_schema::{DiffHunk, HealthStatus, HostInfo, SearchItem};
 
 /// Asserts an awaited stub call returned `Unimplemented` with `message`.
-pub(crate) fn assert_unimplemented<T: std::fmt::Debug>(
-    message: &str,
-    result: Result<T, ApiError>,
-) {
+pub(crate) fn assert_unimplemented<T: std::fmt::Debug>(message: &str, result: Result<T, ApiError>) {
     match result {
         Err(ApiError::Unimplemented(m)) => assert_eq!(m, message),
         other => panic!("expected Unimplemented({message}), got {other:?}"),

@@ -119,7 +119,9 @@ struct WorkspaceConfigFile {
 
 /// Loads `<workspace>/.tethys/config.json`; missing file means defaults.
 pub fn load_git_config(workspace_root: &str) -> Result<WorkspaceGitConfig, ApiError> {
-    let path = Path::new(workspace_root).join(".tethys").join("config.json");
+    let path = Path::new(workspace_root)
+        .join(".tethys")
+        .join("config.json");
     if !path.is_file() {
         return Ok(WorkspaceGitConfig::default());
     }

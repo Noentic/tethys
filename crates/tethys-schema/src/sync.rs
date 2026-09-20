@@ -635,4 +635,3 @@ pub struct AttachmentGrid {
     pub providers: Vec<ProviderColumn>,
     pub cells: Vec<AttachmentCell>,
 }
-

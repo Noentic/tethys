@@ -162,7 +162,10 @@ fn attachment_grid_calculates_all_cell_states() {
     };
 
     // Case: v1 Provider with stdio only + stdio server -> Attached
-    assert_eq!(cell_state("stdio-tool", "v1-stdio"), AttachmentState::Attached);
+    assert_eq!(
+        cell_state("stdio-tool", "v1-stdio"),
+        AttachmentState::Attached
+    );
 
     // Case: v1 Provider with stdio only + http server -> UnsupportedTransport { needs: Http }
     assert_eq!(

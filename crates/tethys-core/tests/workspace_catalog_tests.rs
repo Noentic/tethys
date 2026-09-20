@@ -40,7 +40,9 @@ async fn add_grants_lists_and_revoke_removes() {
     assert_eq!(list[0].path, item.path);
 
     assert_eq!(
-        core.workspace_status(item.id.clone()).await.expect("status"),
+        core.workspace_status(item.id.clone())
+            .await
+            .expect("status"),
         WorkspaceTrustState::Trusted
     );
 

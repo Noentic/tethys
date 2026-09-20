@@ -13,10 +13,30 @@ use std::sync::Arc;
 /// Environment variable that turns a re-executed test binary into a mock agent.
 pub const MOCK_ENV: &str = "TETHYS_MOCK_ACP";
 
+/// Marker a test binary sets on itself the first time it reaches
+/// [`run_if_requested`] as a harness. Children inherit it, so a child that
+/// reaches the same call *without* [`MOCK_ENV`] is a test binary re-executed by
+/// mistake, which would otherwise re-run the suite and spawn itself forever.
+pub const HARNESS_ENV: &str = "TETHYS_TEST_HARNESS";
+
+/// Exit code for an accidental harness re-exec (see [`HARNESS_ENV`]).
+pub const REEXEC_EXIT_CODE: i32 = 97;
+
 /// Runs the requested mock agent (blocking). Returns `false` when this process
 /// is not a mock agent.
+///
+/// A process that is neither a mock agent nor the first harness process exits
+/// with [`REEXEC_EXIT_CODE`] rather than running the test suite again.
 pub fn run_if_requested() -> bool {
     let Ok(kind) = std::env::var(MOCK_ENV) else {
+        if std::env::var_os(HARNESS_ENV).is_some() {
+            eprintln!(
+                "test binary re-executed as a child without {MOCK_ENV} set; \
+                 set {MOCK_ENV}=v1|v2 on the launch spec (refusing to re-run the suite)"
+            );
+            std::process::exit(REEXEC_EXIT_CODE);
+        }
+        std::env::set_var(HARNESS_ENV, "1");
         return false;
     };
     let runtime = match tokio::runtime::Builder::new_multi_thread()
@@ -65,6 +85,24 @@ pub async fn run_v1() -> Result<()> {
     serve_v1(Stdio::new()).await
 }
 
+/// Auth methods the mock advertises when `TETHYS_MOCK_AUTH` is set
+/// (`agent` → agent-auth, `terminal` → CLI passthrough).
+/// Auth methods the mock advertises when `TETHYS_MOCK_AUTH` is set
+/// (`agent` → agent-auth, `terminal` → CLI passthrough).
+fn mock_auth_methods_v1() -> Vec<acp1::AuthMethod> {
+    match std::env::var("TETHYS_MOCK_AUTH").as_deref() {
+        Ok("agent") => vec![acp1::AuthMethod::Agent(acp1::AuthMethodAgent::new(
+            "agent",
+            "Agent Auth",
+        ))],
+        Ok("terminal") => vec![acp1::AuthMethod::Terminal(acp1::AuthMethodTerminal::new(
+            "tui-auth",
+            "Terminal Auth",
+        ))],
+        _ => Vec::new(),
+    }
+}
+
 /// Serves the v1 mock agent over any agent-role transport.
 pub async fn serve_v1(transport: impl agent_client_protocol::ConnectTo<Agent>) -> Result<()> {
     let state = Arc::new(Mutex::new(MockStateV1::default()));
@@ -78,7 +116,8 @@ pub async fn serve_v1(transport: impl agent_client_protocol::ConnectTo<Agent>) -
                 responder.respond(
                     acp1::InitializeResponse::new(request.protocol_version)
                         .agent_info(acp1::Implementation::new("tethys-mock-v1", "0.0.0"))
-                        .agent_capabilities(acp1::AgentCapabilities::new().load_session(true)),
+                        .agent_capabilities(acp1::AgentCapabilities::new().load_session(true))
+                        .auth_methods(mock_auth_methods_v1()),
                 )
             },
             agent_client_protocol::on_receive_request!(),
@@ -271,9 +310,12 @@ pub fn contract_fixture_updates() -> Vec<acp1::SessionUpdate> {
         .enumerate()
         .map(|(index, kind)| {
             acp1::SessionUpdate::ToolCall(
-                acp1::ToolCall::new(format!("contract-tool-{index}"), format!("Contract {kind:?}"))
-                    .kind(kind)
-                    .status(acp1::ToolCallStatus::Completed),
+                acp1::ToolCall::new(
+                    format!("contract-tool-{index}"),
+                    format!("Contract {kind:?}"),
+                )
+                .kind(kind)
+                .status(acp1::ToolCallStatus::Completed),
             )
         })
         .collect();
@@ -282,8 +324,7 @@ pub fn contract_fixture_updates() -> Vec<acp1::SessionUpdate> {
         acp1::ToolCall::new("contract-diff", "Edit contract.txt")
             .kind(Kind::Edit)
             .content(vec![acp1::ToolCallContent::Diff(
-                acp1::Diff::new("/tmp/contract.txt", "line two\n")
-                    .old_text("line one\n"),
+                acp1::Diff::new("/tmp/contract.txt", "line two\n").old_text("line one\n"),
             )]),
     ));
 
@@ -291,19 +332,19 @@ pub fn contract_fixture_updates() -> Vec<acp1::SessionUpdate> {
         acp1::UsageUpdate::new(1_200, 200_000).cost(acp1::Cost::new(0.42, "USD")),
     ));
 
-    let select = |id: &'static str, name: &'static str, category: acp1::SessionConfigOptionCategory| {
-        acp1::SessionConfigOption::select(
-            id,
-            name,
-            "medium",
-            vec![
-                acp1::SessionConfigSelectOption::new("low", "Low")
-                    .description("Fastest"),
-                acp1::SessionConfigSelectOption::new("medium", "Medium"),
-            ],
-        )
-        .category(category)
-    };
+    let select =
+        |id: &'static str, name: &'static str, category: acp1::SessionConfigOptionCategory| {
+            acp1::SessionConfigOption::select(
+                id,
+                name,
+                "medium",
+                vec![
+                    acp1::SessionConfigSelectOption::new("low", "Low").description("Fastest"),
+                    acp1::SessionConfigSelectOption::new("medium", "Medium"),
+                ],
+            )
+            .category(category)
+        };
     updates.push(acp1::SessionUpdate::ConfigOptionUpdate(
         acp1::ConfigOptionUpdate::new(vec![
             select(

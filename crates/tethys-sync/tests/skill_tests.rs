@@ -237,11 +237,13 @@ fn github_spec_url_parsing_and_normalization() {
     assert_eq!(url_bare.reference, None);
 
     // Bare repo with trailing slash
-    let url_bare_slash = parse_github_spec("https://github.com/owner/repo/").expect("bare url slash");
+    let url_bare_slash =
+        parse_github_spec("https://github.com/owner/repo/").expect("bare url slash");
     assert_eq!(url_bare_slash, short_bare);
 
     // Bare repo with .git
-    let url_bare_git = parse_github_spec("https://github.com/owner/repo.git").expect("bare url git");
+    let url_bare_git =
+        parse_github_spec("https://github.com/owner/repo.git").expect("bare url git");
     assert_eq!(url_bare_git, short_bare);
 
     // Tree main
@@ -254,7 +256,8 @@ fn github_spec_url_parsing_and_normalization() {
     assert_eq!(url_tree.reference.as_deref(), Some("main"));
 
     // Tree with ref and subdir: /tree/v1/skills/x
-    let url_subdir = parse_github_spec("https://github.com/owner/repo/tree/v1/skills/x").expect("tree subdir");
+    let url_subdir =
+        parse_github_spec("https://github.com/owner/repo/tree/v1/skills/x").expect("tree subdir");
     let short_subdir = parse_github_spec("owner/repo/skills/x@v1").expect("short subdir");
     assert_eq!(url_subdir, short_subdir);
     assert_eq!(url_subdir.owner, "owner");

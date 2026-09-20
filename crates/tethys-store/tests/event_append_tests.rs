@@ -5,11 +5,14 @@ use tethys_schema::store::{EntryKind, EntryPage, EntryUpsert, NewEvent, ThreadId
 use tethys_store::{entries, schema, EventStore};
 
 #[tokio::test]
-async fn append_batch_allocates_monotonic_contiguous_sequences() -> Result<(), Box<dyn std::error::Error>> {
+async fn append_batch_allocates_monotonic_contiguous_sequences(
+) -> Result<(), Box<dyn std::error::Error>> {
     let store = EventStore::in_memory().await?;
     let thread_id = ThreadId("seq_test_thread".into());
 
-    store.ensure_project("proj_1", "/tmp/p1", "worktree").await?;
+    store
+        .ensure_project("proj_1", "/tmp/p1", "worktree")
+        .await?;
     store.ensure_thread(&thread_id, "proj_1").await?;
 
     // First batch: 3 events
@@ -60,11 +63,14 @@ async fn append_batch_allocates_monotonic_contiguous_sequences() -> Result<(), B
 }
 
 #[tokio::test]
-async fn entries_materialization_preserves_first_seq_on_upsert() -> Result<(), Box<dyn std::error::Error>> {
+async fn entries_materialization_preserves_first_seq_on_upsert(
+) -> Result<(), Box<dyn std::error::Error>> {
     let store = EventStore::in_memory().await?;
     let thread_id = ThreadId("upsert_test_thread".into());
 
-    store.ensure_project("proj_1", "/tmp/p1", "worktree").await?;
+    store
+        .ensure_project("proj_1", "/tmp/p1", "worktree")
+        .await?;
     store.ensure_thread(&thread_id, "proj_1").await?;
 
     // Event 1 creates entry "msg_001" at seq 1
@@ -128,14 +134,21 @@ async fn entries_materialization_preserves_first_seq_on_upsert() -> Result<(), B
         )
         .await?;
 
-    assert_eq!(view.entries.len(), 2, "There should only be 2 entries due to dedupe/upsert");
+    assert_eq!(
+        view.entries.len(),
+        2,
+        "There should only be 2 entries due to dedupe/upsert"
+    );
     assert_eq!(view.latest_seq, 3);
 
     // Display order check: msg_001 MUST remain before msg_002 because first_seq was 1
     assert_eq!(view.entries[0].entry_id, "msg_001");
     assert_eq!(view.entries[0].first_seq, 1);
     assert_eq!(view.entries[0].last_seq, 3, "last_seq advanced to 3");
-    assert_eq!(view.entries[0].payload, "{\"text\":\"updated initial message\"}");
+    assert_eq!(
+        view.entries[0].payload,
+        "{\"text\":\"updated initial message\"}"
+    );
 
     assert_eq!(view.entries[1].entry_id, "msg_002");
     assert_eq!(view.entries[1].first_seq, 2);
@@ -145,11 +158,14 @@ async fn entries_materialization_preserves_first_seq_on_upsert() -> Result<(), B
 }
 
 #[tokio::test]
-async fn paged_open_thread_walks_backwards_without_gaps_or_repeats() -> Result<(), Box<dyn std::error::Error>> {
+async fn paged_open_thread_walks_backwards_without_gaps_or_repeats(
+) -> Result<(), Box<dyn std::error::Error>> {
     let store = EventStore::in_memory().await?;
     let thread_id = ThreadId("paging_test_thread".into());
 
-    store.ensure_project("proj_1", "/tmp/p1", "worktree").await?;
+    store
+        .ensure_project("proj_1", "/tmp/p1", "worktree")
+        .await?;
     store.ensure_thread(&thread_id, "proj_1").await?;
 
     // Insert 5 distinct entries
@@ -227,7 +243,9 @@ async fn events_since_filtering() -> Result<(), Box<dyn std::error::Error>> {
     let store = EventStore::in_memory().await?;
     let thread_id = ThreadId("since_test_thread".into());
 
-    store.ensure_project("proj_1", "/tmp/p1", "worktree").await?;
+    store
+        .ensure_project("proj_1", "/tmp/p1", "worktree")
+        .await?;
     store.ensure_thread(&thread_id, "proj_1").await?;
 
     for i in 1..=10 {
@@ -260,7 +278,8 @@ async fn events_since_filtering() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn zero_replay_behavioral_proof_with_authorizer_and_explain_query_plan() -> Result<(), Box<dyn std::error::Error>> {
+fn zero_replay_behavioral_proof_with_authorizer_and_explain_query_plan(
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = Connection::open_in_memory()?;
     tethys_store::migrations::migrate_to_latest(&mut conn)?;
 
@@ -322,16 +341,18 @@ fn zero_replay_behavioral_proof_with_authorizer_and_explain_query_plan() -> Resu
     let events_read_attempted = Arc::new(AtomicBool::new(false));
     let flag = events_read_attempted.clone();
 
-    conn.authorizer(Some(move |ctx: rusqlite::hooks::AuthContext<'_>| match ctx.action {
-        rusqlite::hooks::AuthAction::Read {
-            table_name: "events",
-            ..
-        } => {
-            flag.store(true, Ordering::SeqCst);
-            rusqlite::hooks::Authorization::Deny
-        }
-        _ => rusqlite::hooks::Authorization::Allow,
-    }))?;
+    conn.authorizer(Some(
+        move |ctx: rusqlite::hooks::AuthContext<'_>| match ctx.action {
+            rusqlite::hooks::AuthAction::Read {
+                table_name: "events",
+                ..
+            } => {
+                flag.store(true, Ordering::SeqCst);
+                rusqlite::hooks::Authorization::Deny
+            }
+            _ => rusqlite::hooks::Authorization::Allow,
+        },
+    ))?;
 
     let view = entries::open_thread(
         &conn,

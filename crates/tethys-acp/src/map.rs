@@ -8,9 +8,9 @@ use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDi
 use serde::Serialize;
 use tethys_schema::thread::{
     AgentCommand, ConfigOption, ConfigOptionKind, ConfigOptionValue, ContentBlock, MessageChunk,
-    PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, PermissionSubject, Role,
-    SessionState, StateChanged, StopReason, ToolCallContent, ToolCallPatch, ToolCallStatus, ToolKind,
-    ToolLocation, TurnEventBody,
+    PermissionSubject, PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, Role,
+    SessionState, StateChanged, StopReason, ToolCallContent, ToolCallPatch, ToolCallStatus,
+    ToolKind, ToolLocation, TurnEventBody,
 };
 
 /// Deterministic synthetic message IDs for v1 chunks that omit `messageId`:
