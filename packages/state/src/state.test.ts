@@ -9,6 +9,7 @@ import {
   getOrCreateSessionStore,
   type HistoryDividerEntry,
   loadHistoryIntoSession,
+  PERMISSION_MODE_LABELS,
   SessionStreamManager,
   selectCancellationState,
   selectIsStopDestructive,
@@ -16,6 +17,7 @@ import {
   sessionReducer,
   setCustomRafScheduler,
   type TurnMessageEntry,
+  workspaceCapabilityFixtures,
 } from "./index";
 
 describe("@tethys/state Store & Reducer Architecture (U7 / D5)", () => {
@@ -353,5 +355,38 @@ describe("@tethys/state Store & Reducer Architecture (U7 / D5)", () => {
     advanceCancellationState(store, "idle");
     expect(selectCancellationState(store.state)).toBe("idle");
     expect(selectIsStopDestructive(store.state.cancellationState)).toBe(false);
+  });
+});
+
+describe("Workspace capability seams (M1.6b)", () => {
+  it("exposes the four canonical fixture shapes", () => {
+    expect(Object.keys(workspaceCapabilityFixtures).sort()).toEqual([
+      "git-local",
+      "git-no-restore",
+      "git-remote",
+      "no-git",
+    ]);
+
+    expect(workspaceCapabilityFixtures["git-remote"].vcs).toEqual({
+      kind: "git-remote",
+      host: "github",
+    });
+    expect(workspaceCapabilityFixtures["git-local"].vcs).toEqual({
+      kind: "git-local",
+    });
+    expect(workspaceCapabilityFixtures["no-git"]).toEqual({
+      vcs: { kind: "none" },
+      restore: false,
+      max_concurrent_sessions: 1,
+    });
+    expect(workspaceCapabilityFixtures["git-no-restore"].restore).toBe(false);
+  });
+
+  it("labels every permission mode", () => {
+    const modes = ["supervised", "auto-edit", "yolo"] as const;
+    for (const mode of modes) {
+      expect(PERMISSION_MODE_LABELS[mode]).toBeTruthy();
+    }
+    expect(PERMISSION_MODE_LABELS.yolo).toBe("YOLO");
   });
 });
