@@ -24,6 +24,7 @@ import {
   Textarea,
   ToggleSwitch,
   UnknownEntryRenderer,
+  WorkspaceSourceBadge,
 } from "./index";
 
 describe("Component Kit & State Matrix (U2 & U6)", () => {
@@ -398,5 +399,39 @@ describe("Component Kit & State Matrix (U2 & U6)", () => {
 
     fireEvent.keyDown(three, { key: "Home" });
     expect(document.activeElement).toBe(one);
+  });
+});
+
+describe("WorkspaceSourceBadge (M1.6b)", () => {
+  it("renders the DESIGN label for each source state", () => {
+    const cases = [
+      [{ kind: "git-remote", host: "github" }, "Git · GitHub"],
+      [{ kind: "git-remote", host: "gitlab" }, "Git · GitLab"],
+      [{ kind: "git-local" }, "Git · local"],
+      [{ kind: "none" }, "Folder · no VCS"],
+    ] as const;
+
+    for (const [vcs, label] of cases) {
+      const { unmount } = render(<WorkspaceSourceBadge vcs={vcs} />);
+      expect(screen.getByText(label)).toBeDefined();
+      unmount();
+    }
+  });
+
+  it("falls back to a remote label for an unknown host", () => {
+    render(
+      <WorkspaceSourceBadge vcs={{ kind: "git-remote", host: "other" }} />,
+    );
+    expect(screen.getByText("Git · remote")).toBeDefined();
+  });
+
+  it("appends the Remote tag only when the flag is set", () => {
+    const { rerender } = render(
+      <WorkspaceSourceBadge vcs={{ kind: "git-local" }} remote />,
+    );
+    expect(screen.getByText("Remote")).toBeDefined();
+
+    rerender(<WorkspaceSourceBadge vcs={{ kind: "git-local" }} />);
+    expect(screen.queryByText("Remote")).toBeNull();
   });
 });

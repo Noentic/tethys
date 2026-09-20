@@ -16,6 +16,7 @@ import {
   TabStrip,
   Textarea,
   ToggleSwitch,
+  WorkspaceSourceBadge,
 } from "./index";
 
 async function runAxe(container: HTMLElement) {
@@ -132,6 +133,20 @@ describe("A11y automated axe-core gates (D6 / U2 / U8)", () => {
           turnCount={4}
         />
       </section>,
+    );
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
+  });
+
+  it("WorkspaceSourceBadge reports its source with zero violations", async () => {
+    const { container } = render(
+      <div>
+        <WorkspaceSourceBadge
+          vcs={{ kind: "git-remote", host: "github" }}
+          remote
+        />
+        <WorkspaceSourceBadge vcs={{ kind: "none" }} />
+      </div>,
     );
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
