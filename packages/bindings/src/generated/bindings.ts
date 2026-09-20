@@ -317,6 +317,9 @@ export type ExpandedCommand = {
 	references: ComposerReference[],
 };
 
+/**  Host of a workspace's git remote (read-only; never an entry point). */
+export type GitHost = "github" | "gitlab" | "other";
+
 /**  Liveness probe result (`host.health`). */
 export type HealthStatus = {
 	ok: boolean,
@@ -399,6 +402,9 @@ export type PermOption = {
 };
 
 export type PermOutcome = "Approved" | "Rejected" | "Cancelled";
+
+/**  Permission policy a thread runs under (`thread.set_permission_mode`). */
+export type PermissionMode = "supervised" | "auto-edit" | "yolo";
 
 export type PermissionRequested = {
 	req_id: string,
@@ -742,8 +748,27 @@ export type UsageSnapshot = {
 	cost: number | null,
 };
 
+/**  Version control state of a workspace root. */
+export type Vcs = 
+/**  Not a git repository. */
+{ kind: "none" } | 
+/**  A git repository with no remote configured. */
+{ kind: "git-local" } | 
+/**  A git repository with a remote; `host` drives the source badge. */
+{ kind: "git-remote"; host: GitHost };
+
 /**  Result of verifying a projected file against its manifest entry. */
 export type VerifyStatus = "in-sync" | "drifted" | "missing";
+
+/**  Resolved capabilities for one workspace. */
+export type WorkspaceCapabilities = {
+	/**  Version control the folder is under, and the remote host if any. */
+	vcs: Vcs,
+	/**  Checkpoints exist and the session can restore them. */
+	restore: boolean,
+	/**  `Some(1)` where no worktree mechanism isolates parallel sessions. */
+	max_concurrent_sessions: number | null,
+};
 
 /**  Per-project git settings loaded from `<repo>/.tethys/config.json`. */
 export type WorkspaceGitConfig = {
