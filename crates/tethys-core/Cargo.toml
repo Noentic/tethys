@@ -18,6 +18,9 @@ serde_json.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 parking_lot = "0.12"
+which.workspace = true
+sysinfo.workspace = true
+time = { version = "0.3", features = ["formatting", "parsing"] }
 tethys-api = { path = "../tethys-api" }
 tethys-schema = { path = "../tethys-schema" }
 tethys-acp = { path = "../tethys-acp" }
@@ -30,10 +33,42 @@ tethys-sync = { path = "../tethys-sync" }
 tethys-thread = { path = "../tethys-thread" }
 
 [dev-dependencies]
+async-trait.workspace = true
+flate2.workspace = true
+sha2.workspace = true
+tar.workspace = true
 tempfile.workspace = true
+wiremock.workspace = true
 tethys-acp = { path = "../tethys-acp", features = ["mock"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2"
 
 [[test]]
 name = "thread_flows"
 harness = false
 
+[[test]]
+name = "cancel_phases"
+harness = false
+
+[[test]]
+name = "health_recheck"
+harness = false
+
+[[test]]
+name = "credential_principle"
+harness = false
+
+
+[[bench]]
+name = "monitor_overhead"
+harness = false
+
+[[bench]]
+name = "idle_core_rss"
+harness = false
+
+[[test]]
+name = "registry_install_run"
+harness = false

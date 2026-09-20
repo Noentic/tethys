@@ -15,11 +15,32 @@ use tethys_thread::{AgentConnection, ElicitationResolver, PermissionResolver};
 
 use crate::launch::LaunchSpec;
 
+/// Resolves one launch-spec environment binding at spawn time.
+///
+/// A profile stores only references (`keychain:…`); the value exists in memory
+/// for the spawn and is never written back (G7).
+pub trait EnvResolver: Send + Sync {
+    /// The value to launch with, or a message when the binding cannot be
+    /// resolved. A failure stops the launch: a reference is never passed on as
+    /// if it were the value.
+    fn resolve(&self, name: &str, value: &str) -> Result<String, String>;
+}
+
+/// Passes every binding through unchanged.
+pub struct LiteralEnv;
+
+impl EnvResolver for LiteralEnv {
+    fn resolve(&self, _name: &str, value: &str) -> Result<String, String> {
+        Ok(value.to_string())
+    }
+}
+
 pub struct StoreOptions {
     pub protocol: AcpProtocol,
     pub client_name: String,
     pub permission_resolver: Arc<dyn PermissionResolver>,
     pub elicitation_resolver: Arc<dyn ElicitationResolver>,
+    pub env_resolver: Arc<dyn EnvResolver>,
     pub idle_grace: Duration,
     pub cancel_grace: Duration,
 }
@@ -31,6 +52,7 @@ impl StoreOptions {
             client_name: "tethys".to_string(),
             permission_resolver,
             elicitation_resolver: Arc::new(tethys_acp::client::NoopElicitationResolver),
+            env_resolver: Arc::new(LiteralEnv),
             idle_grace: Duration::from_secs(30),
             cancel_grace: Duration::from_secs(5),
         }
@@ -124,25 +146,39 @@ impl ConnectionStore {
         })
     }
 
+    /// Registers a profile, or replaces the launch spec and compat of one that
+    /// is already registered (a profile edit, or a registry update).
+    ///
+    /// A live connection keeps its current process and leases: the new spec
+    /// applies to the next spawn, which `restart` brings forward.
     pub fn register(&self, spec: LaunchSpec, compat: AgentCompat) -> ConnectionKey {
         let key = ConnectionKey::new(spec.profile_id.clone(), spec.host.clone());
         let mut entries = self.lock_entries();
-        entries.entry(key.clone()).or_insert_with(|| Entry {
-            key: key.clone(),
-            spec,
-            compat,
-            state: Lifecycle::Terminated,
-            protocol: None,
-            info: None,
-            capabilities: None,
-            pid: None,
-            restarts: 0,
-            spawn_count: 0,
-            leases: 0,
-            last_active: Instant::now(),
-            child: None,
-            connection: None,
-        });
+        match entries.entry(key.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut existing) => {
+                let entry = existing.get_mut();
+                entry.spec = spec;
+                entry.compat = compat;
+            }
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert(Entry {
+                    key: key.clone(),
+                    spec,
+                    compat,
+                    state: Lifecycle::Terminated,
+                    protocol: None,
+                    info: None,
+                    capabilities: None,
+                    pid: None,
+                    restarts: 0,
+                    spawn_count: 0,
+                    leases: 0,
+                    last_active: Instant::now(),
+                    child: None,
+                    connection: None,
+                });
+            }
+        }
         key
     }
 
@@ -210,6 +246,35 @@ impl ConnectionStore {
         reaped
     }
 
+    /// Retires a live connection nobody is using, so the next `acquire` spawns
+    /// with the spec registered now. A connection with active leases is left
+    /// alone (an edit must not kill a running turn). Returns whether one was
+    /// retired.
+    pub async fn retire_idle(&self, key: &ConnectionKey) -> bool {
+        let (child, connection) = {
+            let mut entries = self.lock_entries();
+            let Some(entry) = entries.get_mut(key) else {
+                return false;
+            };
+            if entry.leases != 0 || entry.child.is_none() {
+                return false;
+            }
+            entry.state = Lifecycle::Terminated;
+            (entry.child.take(), entry.connection.take())
+        };
+        drop(connection);
+        if let Some(mut child) = child {
+            if child
+                .cancel_ladder(self.options.cancel_grace)
+                .await
+                .is_err()
+            {
+                let _ = child.force_kill_group().await;
+            }
+        }
+        true
+    }
+
     pub async fn restart(&self, key: &ConnectionKey) -> Result<(), StoreError> {
         let (child, connection) = {
             let mut entries = self.lock_entries();
@@ -227,6 +292,42 @@ impl ConnectionStore {
                 .map_err(|error| StoreError::Spawn(error.to_string()))?;
         }
         Ok(())
+    }
+
+    /// Immediately force-kills the process group for a key (the destructive
+    /// rung the explicit second `Stop` press requests) and marks it errored.
+    pub async fn force_kill(&self, key: &ConnectionKey) -> Result<(), StoreError> {
+        let child = {
+            let mut entries = self.lock_entries();
+            let entry = entries
+                .get_mut(key)
+                .ok_or_else(|| StoreError::UnknownProfile(key.profile_id.clone()))?;
+            entry.state = Lifecycle::Error;
+            entry.connection = None;
+            entry.child.take()
+        };
+        if let Some(mut child) = child {
+            child
+                .force_kill_group()
+                .await
+                .map_err(|error| StoreError::Spawn(error.to_string()))?;
+        }
+        Ok(())
+    }
+
+    /// The launch spec registered for a key (M1.12 health resolution).
+    pub fn spec(&self, key: &ConnectionKey) -> Option<LaunchSpec> {
+        self.lock_entries().get(key).map(|entry| entry.spec.clone())
+    }
+
+    /// The agent's captured stderr (empty when no live child).
+    pub fn stderr(&self, key: &ConnectionKey) -> String {
+        let entries = self.lock_entries();
+        entries
+            .get(key)
+            .and_then(|entry| entry.child.as_ref())
+            .map(|child| child.stderr_buffer().to_string_lossy())
+            .unwrap_or_default()
     }
 
     pub fn entries(&self) -> Vec<ConnectionEntry> {
@@ -307,11 +408,11 @@ impl ConnectionStore {
         Ok(entry.connection.clone())
     }
 
-    pub(crate) fn cancel_grace(&self) -> Duration {
+    /// The grace window between the protocol cancel and the destructive
+    /// fallback (M1.12 reads this to timestamp `cancel_requested`).
+    pub fn cancel_grace(&self) -> Duration {
         self.options.cancel_grace
-    }
-
-    fn reuse(self: &Arc<Self>, key: &ConnectionKey) -> Option<ConnectionLease> {
+    }    fn reuse(self: &Arc<Self>, key: &ConnectionKey) -> Option<ConnectionLease> {
         let mut entries = self.lock_entries();
         let entry = entries.get_mut(key)?;
         refresh_liveness(entry);
@@ -358,7 +459,12 @@ impl ConnectionStore {
             command.current_dir(cwd);
         }
         for (name, value) in &spec.env {
-            command.env(name, value);
+            let resolved = self
+                .options
+                .env_resolver
+                .resolve(name, value)
+                .map_err(StoreError::Spawn)?;
+            command.env(name, resolved);
         }
 
         let mut child = match SupervisedChild::spawn(command, spec.stderr_capacity) {

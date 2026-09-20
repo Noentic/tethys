@@ -1,9 +1,13 @@
 //! Orchestrator and domain core (implements `tethys-api`).
 
 mod api;
+pub mod agent_profile;
 pub mod composer;
+pub mod env_secrets;
 mod git_registry;
+pub mod health;
 pub mod mcp;
+pub mod monitor;
 pub mod permission;
 pub mod skills;
 pub mod synthetic;
@@ -23,6 +27,7 @@ use tethys_git::GitError;
 use tethys_schema::connection::{AcpProtocol, AgentCompat};
 use tethys_schema::{CheckpointPhase, DiffSource, RestoreTarget, WorkspaceGitConfig};
 use tethys_search::{SearchError, SearchIndexManager};
+use tethys_sync::secrets::SecretStore;
 
 use crate::composer::SkillCandidate;
 use crate::permission::{ElicitationPolicyResolver, PermissionRegistry, PolicyResolver};
@@ -86,6 +91,8 @@ pub struct Core {
     sessions: Arc<ThreadSessions>,
     store: Option<Arc<tethys_store::EventStore>>,
     workspace_roots: Arc<dyn WorkspaceRoots>,
+    registry_source: Option<Arc<dyn tethys_agent_servers::registry::RegistrySource>>,
+    monitor: monitor::Monitor,
 }
 
 impl Default for Core {
@@ -97,10 +104,10 @@ impl Default for Core {
 impl Core {
     pub fn new(version: impl Into<String>) -> Self {
         let permissions = PermissionRegistry::new();
-        let store = ConnectionStore::new(policy_store_options(permissions.clone()));
+        let secrets: Arc<dyn SecretStore> = Arc::new(tethys_sync::secrets::KeyringSecrets);
+        let store = ConnectionStore::new(policy_store_options(permissions.clone(), secrets.clone()));
         let home = dirs::home_dir().unwrap_or_default();
-        let sync =
-            crate::thread_session::SyncSource::new(home, Arc::new(tethys_sync::KeyringSecrets));
+        let sync = crate::thread_session::SyncSource::new(home, secrets);
         let sessions = Arc::new(ThreadSessions::new(
             store,
             sync,
@@ -118,6 +125,8 @@ impl Core {
             sessions,
             store: None,
             workspace_roots: Arc::new(workspace_roots::StaticWorkspaces::new()),
+            registry_source: None,
+            monitor: monitor::Monitor::new(),
         }
     }
 
@@ -134,12 +143,22 @@ impl Core {
                 .await
                 .map_err(|e| ApiError::Internal(e.to_string()))?,
         );
-        let sync = crate::thread_session::SyncSource::new(home, Arc::new(tethys_sync::KeyringSecrets));
+        let secrets: Arc<dyn SecretStore> = Arc::new(tethys_sync::secrets::KeyringSecrets);
+        let sync = crate::thread_session::SyncSource::new(home, secrets.clone());
         let permissions = PermissionRegistry::new();
-        let agent_store = ConnectionStore::new(policy_store_options(permissions.clone()));
+        let agent_store =
+            ConnectionStore::new(policy_store_options(permissions.clone(), secrets));
         let workspace_roots = Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone()));
         let sessions = Arc::new(ThreadSessions::new(agent_store, sync, workspace_roots.clone()));
         sessions.set_permissions(permissions);
+        if let Ok(rows) = store.agent_profiles().await {
+            sessions.hydrate_profiles(&rows);
+        }
+        // Two of the seven re-check triggers (spec §5.2): arm the interval poller
+        // and run one check of every enabled Provider now (cold start).
+        let health = Arc::clone(sessions.health());
+        health.set_interval(health::DEFAULT_INTERVAL_SECS);
+        tokio::spawn(async move { health.recheck_all().await });
         let core = Self {
             version: env!("CARGO_PKG_VERSION").to_string(),
             search: SearchIndexManager::new(),
@@ -147,6 +166,8 @@ impl Core {
             sessions,
             store: Some(store),
             workspace_roots,
+            registry_source: None,
+            monitor: monitor::Monitor::new(),
         };
         Ok(core)
     }
@@ -164,6 +185,31 @@ impl Core {
         self.sessions.set_roots(roots.clone());
         self.workspace_roots = roots;
         self
+    }
+
+    /// Injects a registry source (tests use a fixture/wiremock source).
+    pub fn with_registry_source(
+        mut self,
+        source: Arc<dyn tethys_agent_servers::registry::RegistrySource>,
+    ) -> Self {
+        self.registry_source = Some(source);
+        self
+    }
+
+    /// The configured registry source, or the published endpoint.
+    pub(crate) fn registry_source(
+        &self,
+    ) -> Result<Arc<dyn tethys_agent_servers::registry::RegistrySource>, ApiError> {
+        if let Some(source) = &self.registry_source {
+            return Ok(Arc::clone(source));
+        }
+        tethys_agent_servers::registry::HttpRegistrySource::published()
+            .map(|source| Arc::new(source) as Arc<dyn tethys_agent_servers::registry::RegistrySource>)
+            .map_err(|error| ApiError::Internal(error.to_string()))
+    }
+
+    pub(crate) fn install_root(&self) -> PathBuf {
+        self.sessions.sync().home.join(".tethys").join("agents")
     }
 
     pub fn workspace_roots(&self) -> &Arc<dyn WorkspaceRoots> {
@@ -253,12 +299,16 @@ impl Core {
 
 /// Builds connection options backed by the M1.8 policy engine and the
 /// elicitation responder, both sharing one registry.
-fn policy_store_options(permissions: Arc<PermissionRegistry>) -> StoreOptions {
+fn policy_store_options(
+    permissions: Arc<PermissionRegistry>,
+    secrets: Arc<dyn SecretStore>,
+) -> StoreOptions {
     let mut options = StoreOptions::new(
         AcpProtocol::V1,
         Arc::new(PolicyResolver::new(permissions.clone())),
     );
     options.elicitation_resolver = Arc::new(ElicitationPolicyResolver::new(permissions));
+    options.env_resolver = Arc::new(env_secrets::KeychainEnv::new(secrets));
     options
 }
 

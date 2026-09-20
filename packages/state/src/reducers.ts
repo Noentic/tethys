@@ -20,6 +20,7 @@ import type {
   TurnEventBody,
   UsageSnapshot,
 } from "@tethys/bindings";
+import { cancelPhaseToState } from "./cancellation";
 
 export type CancellationState =
   | "idle"
@@ -760,6 +761,18 @@ export function sessionReducer(
       return {
         ...state,
         configOptions: event.body.options,
+        seq: currentSeq,
+      };
+    }
+
+    case "CancelPhaseChanged": {
+      // The backend owns the clock and the deadline; the webview only applies
+      // the phase it is told (a second click never advances the ladder).
+      const view = cancelPhaseToState(event.body.phase);
+      return {
+        ...state,
+        cancellationState: view.state,
+        graceDeadline: view.graceDeadline,
         seq: currentSeq,
       };
     }

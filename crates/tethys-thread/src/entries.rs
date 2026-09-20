@@ -290,6 +290,7 @@ pub(crate) fn apply_event(entries: &mut Vec<Entry>, event: &TurnEventBody, repla
         | TurnEventBody::Checkpoint { .. }
         | TurnEventBody::Unknown { .. }
         | TurnEventBody::ProviderExtension(_)
+        | TurnEventBody::CancelPhaseChanged(_)
         | TurnEventBody::Compaction { .. } => false,
     }
 }

@@ -456,6 +456,11 @@ pub enum TurnEventBody {
         outcome: crate::elicitation::ElicitationOutcome,
         values: std::collections::BTreeMap<String, crate::elicitation::ElicitationValue>,
     },
+    /// A cancel-ladder phase transition (`cancel_requested` → `grace_elapsed` →
+    /// `terminating`, or back to `idle`). Appended last, an append-only region;
+    /// emitted by M1.12's Stop backend and read by the `Stop` control. The
+    /// backend owns the clock, so the payload carries the absolute deadline.
+    CancelPhaseChanged(crate::cancel::CancelState),
 }
 
 /// Sequenced event delivered to subscribers (`events.subscribe`).

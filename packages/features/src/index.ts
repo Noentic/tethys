@@ -1,3 +1,4 @@
+export * from "./agents";
 export * from "./approvals/elicitation-card";
 export * from "./approvals/InboxDrawer";
 export * from "./approvals/notifications";
@@ -31,6 +32,7 @@ export * from "./inspector/TranscriptStage";
 export * from "./inspector/tool-call-density";
 export * from "./inspector/use-capabilities";
 export * from "./inspector/use-tail-pin";
+export * from "./monitor";
 export * from "./providers/capability-notice";
 export * from "./providers/pending-extensions";
 export * from "./providers/provider-artifact";

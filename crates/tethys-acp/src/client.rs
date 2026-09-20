@@ -19,6 +19,7 @@ use agent_client_protocol::{
     on_receive_notification, on_receive_request, Agent, Client, ConnectTo, ConnectionTo, Responder,
 };
 use async_trait::async_trait;
+use tethys_schema::agents::{AuthMethodShape, AuthMethodView};
 use tethys_schema::connection::{AcpProtocol, AgentInfo, NormalizedCapabilities};
 use tethys_schema::sync::{McpTransports, RegistryValue, SessionServer, TransportKind};
 use tethys_schema::thread::{ContentBlock, PermOutcome, PermissionRequested, TurnEventBody};
@@ -196,6 +197,7 @@ impl Shared {
 pub struct AcpConnection {
     info: AgentInfo,
     capabilities: NormalizedCapabilities,
+    auth_methods: Vec<AuthMethodView>,
     protocol: AcpProtocol,
     wire: Wire,
     shared: Arc<Shared>,
@@ -207,6 +209,57 @@ impl AcpConnection {
     /// Resolves when the transport ends (process exit or agent disconnect).
     pub async fn wait_closed(&self) {
         self.closed.cancelled().await;
+    }
+
+    /// Auth methods the agent declared at `initialize` (empty means none).
+    pub fn auth_methods(&self) -> &[AuthMethodView] {
+        &self.auth_methods
+    }
+}
+
+fn auth_method_view(id: &str, name: &str, description: Option<&str>, shape: AuthMethodShape) -> AuthMethodView {
+    AuthMethodView {
+        id: id.to_string(),
+        name: name.to_string(),
+        description: description.map(str::to_string),
+        shape,
+    }
+}
+
+#[cfg(test)]
+mod auth_shape_tests {
+    use super::*;
+
+    #[test]
+    fn view_carries_id_name_description_and_shape() {
+        let view = auth_method_view(
+            "tui-auth",
+            "Terminal Auth",
+            Some("run in a terminal"),
+            AuthMethodShape::CliPassthrough,
+        );
+        assert_eq!(view.id, "tui-auth");
+        assert_eq!(view.name, "Terminal Auth");
+        assert_eq!(view.description.as_deref(), Some("run in a terminal"));
+        assert_eq!(view.shape, AuthMethodShape::CliPassthrough);
+    }
+
+    #[test]
+    fn unknown_shape_names_the_method_id() {
+        let view = auth_method_view(
+            "future-auth",
+            "Future",
+            None,
+            AuthMethodShape::Unknown {
+                id: "future-auth".into(),
+            },
+        );
+        assert_eq!(
+            view.shape,
+            AuthMethodShape::Unknown {
+                id: "future-auth".into()
+            }
+        );
     }
 }
 
@@ -239,6 +292,55 @@ where
             }
         }
     }
+}
+
+/// Maps the v1 `auth_methods` declaration to the UI-visible shape list.
+fn auth_methods_v1(methods: &[acp1::AuthMethod]) -> Vec<AuthMethodView> {
+    methods
+        .iter()
+        .map(|method| {
+            let shape = match method {
+                acp1::AuthMethod::Terminal(_) => AuthMethodShape::CliPassthrough,
+                acp1::AuthMethod::Agent(_) => AuthMethodShape::AgentAuth,
+                _ => AuthMethodShape::Unknown {
+                    id: method.id().0.as_ref().to_string(),
+                },
+            };
+            auth_method_view(
+                method.id().0.as_ref(),
+                method.name(),
+                method.description(),
+                shape,
+            )
+        })
+        .collect()
+}
+
+/// Maps the v2 `auth_methods` declaration; unknown variants degrade to
+/// [`AuthMethodShape::Unknown`] rather than dropping the row.
+#[cfg(feature = "acp-v2")]
+fn auth_methods_v2(methods: &[acp2::AuthMethod]) -> Vec<AuthMethodView> {
+    methods
+        .iter()
+        .map(|method| {
+            let shape = match method {
+                acp2::AuthMethod::Terminal(_) => AuthMethodShape::CliPassthrough,
+                acp2::AuthMethod::Agent(_) => AuthMethodShape::AgentAuth,
+                acp2::AuthMethod::Other(other) => AuthMethodShape::Unknown {
+                    id: other.method_id.0.as_ref().to_string(),
+                },
+                _ => AuthMethodShape::Unknown {
+                    id: method.method_id().0.as_ref().to_string(),
+                },
+            };
+            auth_method_view(
+                method.method_id().0.as_ref(),
+                method.name(),
+                method.description(),
+                shape,
+            )
+        })
+        .collect()
 }
 
 async fn connect_v1<T>(
@@ -445,6 +547,7 @@ where
     Ok(AcpConnection {
         info,
         capabilities: capabilities_v1(&response.agent_capabilities, elicitation_enabled),
+        auth_methods: auth_methods_v1(&response.auth_methods),
         protocol: AcpProtocol::V1,
         wire: Wire::V1(wire),
         shared,
@@ -636,6 +739,7 @@ where
             response.info.title.as_deref(),
         ),
         capabilities: capabilities_v2(&response.capabilities, elicitation_enabled),
+        auth_methods: auth_methods_v2(&response.auth_methods),
         protocol: AcpProtocol::V2,
         wire: Wire::V2(wire),
         shared,
@@ -658,6 +762,10 @@ impl AgentConnection for AcpConnection {
 
     fn capabilities(&self) -> &NormalizedCapabilities {
         &self.capabilities
+    }
+
+    fn auth_methods(&self) -> &[AuthMethodView] {
+        &self.auth_methods
     }
 
     async fn new_session(&self, request: NewSession) -> Result<SessionHandle, ConnectionError> {

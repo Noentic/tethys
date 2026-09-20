@@ -137,6 +137,11 @@ pub trait AgentConnection: Send + Sync {
     fn info(&self) -> &AgentInfo;
     fn capabilities(&self) -> &NormalizedCapabilities;
 
+    /// Auth methods the agent declared at `initialize` (empty means none).
+    fn auth_methods(&self) -> &[tethys_schema::agents::AuthMethodView] {
+        &[]
+    }
+
     async fn new_session(&self, request: NewSession) -> Result<SessionHandle, ConnectionError>;
     async fn resume_session(
         &self,

@@ -19,6 +19,31 @@ export function selectCancellationState(
   return state.cancellationState;
 }
 
+const CANCEL_PHASE_ORDER: Record<CancellationState, number> = {
+  idle: 0,
+  cancel_requested: 1,
+  grace_elapsed: 2,
+  terminating: 3,
+};
+
+/** The furthest cancel phase reached by any thread running on this Provider. */
+export function selectProviderCancelPhase(
+  sessions: Record<string, SessionState>,
+  providerId: string,
+): CancellationState {
+  let furthest: CancellationState = "idle";
+  for (const session of Object.values(sessions)) {
+    if (
+      session.providerId === providerId &&
+      CANCEL_PHASE_ORDER[session.cancellationState] >
+        CANCEL_PHASE_ORDER[furthest]
+    ) {
+      furthest = session.cancellationState;
+    }
+  }
+  return furthest;
+}
+
 /** Absolute grace deadline while `cancel_requested`; null in every other phase. */
 export function selectGraceDeadline(state: SessionState): string | null {
   return state.graceDeadline;

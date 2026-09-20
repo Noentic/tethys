@@ -14,6 +14,7 @@ import {
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
+import { createClient } from "@tethys/client";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BenchmarkView } from "./routes/benchmark";
@@ -28,6 +29,8 @@ import { ThreadNewView } from "./routes/thread.new";
 import { WorkspacesView } from "./routes/workspaces";
 import { AppShell } from "./shell/AppShell";
 
+const client = createClient();
+
 // Root Layout wrapping AppShell
 function RootLayout() {
   const location = useLocation();
@@ -37,6 +40,11 @@ function RootLayout() {
     <AppShell
       activeRoute={location.pathname}
       onNavigate={(to) => navigate({ to })}
+      onStopSession={(id) =>
+        void client.thread.cancel(id).catch((error: unknown) => {
+          console.error("thread.cancel failed", error);
+        })
+      }
     >
       <Outlet />
     </AppShell>

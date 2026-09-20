@@ -22,6 +22,7 @@ import {
   selectGraceDeadline,
   selectInboxItems,
   selectIsStopDestructive,
+  selectProviderCancelPhase,
   selectTurnActionsVisible,
   selectWorkspaceProviderSessionGroups,
   sessionReducer,
@@ -341,6 +342,50 @@ describe("@tethys/state Store & Reducer Architecture (U7 / D5)", () => {
     expect(state.resolvedPermissions["req-100"]).toBeDefined();
     expect(state.resolvedPermissions["req-100"].autoPicked).toBe(true);
     expect(state.resolvedPermissions["req-100"].outcome).toBe("Approved");
+  });
+
+  it("reports the furthest cancel phase among a Provider's threads only", () => {
+    const at = (
+      id: string,
+      providerId: string,
+      cancellationState: "idle" | "cancel_requested" | "grace_elapsed",
+    ) => ({
+      ...createInitialSessionState(id, providerId, "ws", id),
+      cancellationState,
+    });
+    const sessions = {
+      a: at("a", "claude", "cancel_requested"),
+      b: at("b", "claude", "grace_elapsed"),
+      c: at("c", "other", "idle"),
+    };
+    expect(selectProviderCancelPhase(sessions, "claude")).toBe("grace_elapsed");
+    expect(selectProviderCancelPhase(sessions, "other")).toBe("idle");
+    expect(selectProviderCancelPhase(sessions, "unknown")).toBe("idle");
+  });
+
+  it("applies the backend's cancel phases, with a real deadline, and never invents one", () => {
+    let state = createInitialSessionState("s1", "p-1", "ws-1", "Cancel me");
+    const apply = (phase: keyof typeof cancelPhaseFixtures) => {
+      state = sessionReducer(state, {
+        type: "CancelPhaseChanged",
+        body: cancelPhaseFixtures[phase],
+      });
+    };
+
+    apply("cancel-requested");
+    expect(state.cancellationState).toBe("cancel_requested");
+    expect(state.graceDeadline).toBe(CANCEL_FIXTURE_DEADLINE);
+
+    apply("grace-elapsed");
+    expect(state.cancellationState).toBe("grace_elapsed");
+    expect(state.graceDeadline).toBeNull();
+
+    apply("terminating");
+    expect(state.cancellationState).toBe("terminating");
+
+    apply("idle");
+    expect(state.cancellationState).toBe("idle");
+    expect(state.graceDeadline).toBeNull();
   });
 
   it("cancellation state machine advances and is destructive only after grace_elapsed", () => {

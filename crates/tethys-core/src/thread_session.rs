@@ -1,7 +1,7 @@
 //! Thread sessions: connection leases, event fan-out, and the materialized
 //! thread state (architecture §6.1, §12; M1.2 in-memory until M1.1 persists).
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -11,8 +11,9 @@ use tethys_acp::AcpConnection;
 use tethys_agent_servers::{ConnectionLease, ConnectionStore, LaunchSpec};
 use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionEntry, ConnectionKey};
 use tethys_schema::sync::{McpTransports, WorkspaceId};
+use tethys_schema::cancel::{CancelPhase, CancelState};
 use tethys_schema::thread::{
-    ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView,
+    ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView, TurnEventBody,
 };
 use tethys_sync::SecretStore;
 use tethys_thread::{
@@ -21,6 +22,7 @@ use tethys_thread::{
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
+use crate::health::HealthRegistry;
 use crate::permission::pending::{Isolation, PermissionRegistry, ThreadPermissionContext};
 use crate::workspace_roots::WorkspaceRoots;
 use crate::ApiError;
@@ -46,6 +48,8 @@ struct ThreadHandle {
     inner: Mutex<ThreadInner>,
     subscribers: broadcast::Sender<EventEnvelope>,
     reader: Mutex<Option<JoinHandle<()>>>,
+    /// Grace-window timer for `cancel`; aborted when the turn settles.
+    cancel_timer: Mutex<Option<JoinHandle<()>>>,
 }
 
 struct ThreadInner {
@@ -58,6 +62,7 @@ struct ThreadInner {
     lease: Option<ConnectionLease>,
     events: Vec<EventEnvelope>,
     next_seq: u32,
+    cancel: CancelState,
 }
 
 impl ThreadInner {
@@ -80,8 +85,11 @@ pub struct ThreadSessions {
     sync: SyncSource,
     roots: RwLock<Arc<dyn WorkspaceRoots>>,
     profiles: Mutex<HashMap<String, (ConnectionKey, AgentCompat)>>,
+    /// Profiles the user switched off; the health sweep skips them.
+    disabled: Mutex<HashSet<String>>,
     threads: Mutex<HashMap<ThreadId, Arc<ThreadHandle>>>,
     permissions: RwLock<Arc<PermissionRegistry>>,
+    health: Arc<HealthRegistry>,
 }
 
 impl ThreadSessions {
@@ -90,13 +98,16 @@ impl ThreadSessions {
         sync: SyncSource,
         roots: Arc<dyn WorkspaceRoots>,
     ) -> Self {
+        let health = HealthRegistry::new(Arc::clone(&store));
         Self {
             store,
             sync,
             roots: RwLock::new(roots),
             profiles: Mutex::new(HashMap::new()),
+            disabled: Mutex::new(HashSet::new()),
             threads: Mutex::new(HashMap::new()),
             permissions: RwLock::new(PermissionRegistry::new()),
+            health,
         }
     }
 
@@ -165,7 +176,67 @@ impl ThreadSessions {
         self.profiles
             .lock()
             .insert(profile_id.clone(), (key, compat));
+        self.refresh_health_enabled();
         profile_id
+    }
+
+    /// Removes a profile from the hot cache (`agent.profiles_delete`).
+    pub fn unregister_profile(&self, profile_id: &str) -> bool {
+        let removed = self.profiles.lock().remove(profile_id).is_some();
+        self.refresh_health_enabled();
+        removed
+    }
+
+    /// The health registry shared with the `agent.*` namespace.
+    pub fn health(&self) -> &Arc<HealthRegistry> {
+        &self.health
+    }
+
+    /// The store key for a registered profile, if any.
+    pub fn connection_key(&self, profile_id: &str) -> Option<ConnectionKey> {
+        self.profiles
+            .lock()
+            .get(profile_id)
+            .map(|(key, _)| key.clone())
+    }
+
+    /// Hydrates the in-memory profile cache from persisted rows at `Core::open`.
+    pub fn hydrate_profiles(&self, rows: &[tethys_store::AgentProfileRow]) {
+        for row in rows {
+            let Ok(input) = crate::agent_profile::input_from_row(row) else {
+                continue;
+            };
+            let spec = crate::agent_profile::spec_from_input(&row.id, &input);
+            let compat = crate::agent_profile::compat_from_row(row);
+            self.register_profile(spec, compat);
+            self.set_profile_enabled(&row.id, row.enabled);
+        }
+    }
+
+    /// Records whether the user has this profile switched on. A disabled
+    /// profile stays registered but is never spawned by a health sweep.
+    pub fn set_profile_enabled(&self, profile_id: &str, enabled: bool) {
+        {
+            let mut disabled = self.disabled.lock();
+            if enabled {
+                disabled.remove(profile_id);
+            } else {
+                disabled.insert(profile_id.to_string());
+            }
+        }
+        self.refresh_health_enabled();
+    }
+
+    fn refresh_health_enabled(&self) {
+        let disabled = self.disabled.lock();
+        let keys = self
+            .profiles
+            .lock()
+            .iter()
+            .filter(|(id, _)| !disabled.contains(*id))
+            .map(|(_, (key, _))| key.clone())
+            .collect();
+        self.health.set_enabled(keys);
     }
 
     pub fn profiles_compat(&self) -> Vec<(String, ConnectionKey, AgentCompat)> {
@@ -200,9 +271,14 @@ impl ThreadSessions {
                 lease: None,
                 events: Vec::new(),
                 next_seq: 0,
+                cancel: CancelState {
+                    thread_id: id.clone(),
+                    phase: CancelPhase::Idle,
+                },
             }),
             subscribers: broadcast::channel(1024).0,
             reader: Mutex::new(None),
+            cancel_timer: Mutex::new(None),
         });
         let summary = handle.inner.lock().summary();
         self.threads.lock().insert(id, handle);
@@ -247,22 +323,108 @@ impl ThreadSessions {
         let handle = self.handle(id)?;
         self.ensure_connection(&handle).await?;
         let (connection, session) = live_connection(&handle)?;
-        connection.prompt(&session, blocks).await.map_err(|error| {
+        let result = connection.prompt(&session, blocks).await;
+        // The turn settled (acknowledged cancel, completion, or error): close
+        // the cancel window so no `grace_elapsed` follows an answered turn.
+        self.finish_cancel(id);
+        result.map_err(|error| {
             self.mark_transport_lost(&handle);
             ApiError::Internal(error.to_string())
         })
     }
 
+    /// Requests cancellation and advances the M1.6c phase contract (spec §4).
+    ///
+    /// The backend owns the clock: the first press emits `cancel_requested`
+    /// with an absolute grace deadline and sends the protocol cancel; the grace
+    /// timer moves to `grace_elapsed` when the window closes. A press while
+    /// `grace_elapsed` requests the destructive rung explicitly and emits
+    /// `terminating` — a second press during `cancel_requested` does nothing
+    /// ("a second click does not advance the ladder").
     pub async fn cancel(&self, id: &ThreadId) -> Result<(), ApiError> {
         let handle = self.handle(id)?;
         self.permissions().cancel_thread(id);
-        let Ok((connection, session)) = live_connection(&handle) else {
-            return Ok(());
+
+        let phase = handle.inner.lock().cancel.phase.clone();
+        match phase {
+            CancelPhase::GraceElapsed => {
+                let key = self.profile_key(&handle.inner.lock().agent_profile_id)?;
+                self.emit_cancel(&handle, CancelPhase::Terminating);
+                self.store
+                    .force_kill(&key)
+                    .await
+                    .map_err(|error| ApiError::Internal(error.to_string()))?;
+                Ok(())
+            }
+            CancelPhase::CancelRequested { .. } | CancelPhase::Terminating => Ok(()),
+            CancelPhase::Idle => {
+                // Nothing to cancel when no turn is in flight; do not open a
+                // window that can only expire.
+                if !matches!(
+                    handle.inner.lock().machine.state(),
+                    tethys_schema::thread::ThreadState::Running
+                        | tethys_schema::thread::ThreadState::AwaitingApproval
+                ) {
+                    return Ok(());
+                }
+                let Ok((connection, session)) = live_connection(&handle) else {
+                    return Ok(());
+                };
+                let grace = self.store.cancel_grace();
+                let deadline = rfc3339_after(grace);
+                self.emit_cancel(
+                    &handle,
+                    CancelPhase::CancelRequested {
+                        grace_deadline: deadline,
+                    },
+                );
+                // Armed before the protocol cancel is sent: if that send fails the
+                // window still closes into `grace_elapsed` (Force kill is offered)
+                // rather than sticking in `cancel_requested`, and a fast settle
+                // finds the timer to abort.
+                arm_grace_timer(&handle, grace);
+                connection
+                    .cancel(&session)
+                    .await
+                    .map_err(|error| ApiError::Internal(error.to_string()))?;
+                Ok(())
+            }
+        }
+    }
+
+    /// The last known cancel phase for a thread (`thread.cancel_state`), so a
+    /// subscriber that opens mid-cancel does not wait for the next event.
+    pub fn cancel_state(&self, id: &ThreadId) -> Result<CancelState, ApiError> {
+        let handle = self.handle(id)?;
+        let phase = handle.inner.lock().cancel.clone();
+        Ok(phase)
+    }
+
+    /// Emits a cancel phase on the same ordered stream as turn events.
+    fn emit_cancel(&self, handle: &Arc<ThreadHandle>, phase: CancelPhase) {
+        let mut inner = handle.inner.lock();
+        inner.cancel.phase = phase;
+        let body = TurnEventBody::CancelPhaseChanged(inner.cancel.clone());
+        let envelope = push_event(&mut inner, body);
+        let _ = handle.subscribers.send(envelope);
+    }
+
+    /// Closes the cancel window once the turn settles (idempotent).
+    fn finish_cancel(&self, id: &ThreadId) {
+        let Ok(handle) = self.handle(id) else {
+            return;
         };
-        connection
-            .cancel(&session)
-            .await
-            .map_err(|error| ApiError::Internal(error.to_string()))
+        if let Some(task) = handle.cancel_timer.lock().take() {
+            task.abort();
+        }
+        let mut inner = handle.inner.lock();
+        if matches!(inner.cancel.phase, CancelPhase::Idle) {
+            return;
+        }
+        inner.cancel.phase = CancelPhase::Idle;
+        let body = TurnEventBody::CancelPhaseChanged(inner.cancel.clone());
+        let envelope = push_event(&mut inner, body);
+        let _ = handle.subscribers.send(envelope);
     }
 
     /// Reconnects an interrupted thread: acquires a fresh lease and resumes the
@@ -582,4 +744,42 @@ fn live_connection(
         (Some(lease), Some(session)) => Ok((lease.connection().clone(), session.clone())),
         _ => Err(ApiError::Internal("thread has no live connection".into())),
     }
+}
+
+/// Appends an event to the thread's in-memory log and returns its envelope.
+fn push_event(inner: &mut ThreadInner, body: TurnEventBody) -> EventEnvelope {
+    let seq = inner.next_seq;
+    inner.next_seq += 1;
+    let envelope = EventEnvelope {
+        thread_id: inner.machine.id().clone(),
+        seq,
+        event: body,
+    };
+    inner.events.push(envelope.clone());
+    envelope
+}
+
+/// Moves the thread to `grace_elapsed` when the window closes unanswered.
+fn arm_grace_timer(handle: &Arc<ThreadHandle>, grace: std::time::Duration) {
+    let timer_handle = handle.clone();
+    let task = tokio::spawn(async move {
+        tokio::time::sleep(grace).await;
+        let mut inner = timer_handle.inner.lock();
+        if matches!(inner.cancel.phase, CancelPhase::CancelRequested { .. }) {
+            inner.cancel.phase = CancelPhase::GraceElapsed;
+            let body = TurnEventBody::CancelPhaseChanged(inner.cancel.clone());
+            let envelope = push_event(&mut inner, body);
+            let _ = timer_handle.subscribers.send(envelope);
+        }
+    });
+    *handle.cancel_timer.lock() = Some(task);
+}
+
+/// RFC 3339 instant `grace` after now, for `CancelPhase::CancelRequested`.
+fn rfc3339_after(grace: std::time::Duration) -> String {
+    let deadline = time::OffsetDateTime::now_utc()
+        + time::Duration::seconds_f64(grace.as_secs_f64().max(0.0));
+    deadline
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default()
 }

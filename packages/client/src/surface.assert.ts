@@ -49,6 +49,13 @@ interface ExpectedClientSurface {
     login: unknown;
     logout: unknown;
     stderr: unknown;
+    processSample: unknown;
+    process_sample: unknown;
+    healthIntervalSet: unknown;
+    health_interval_set: unknown;
+    recheck: unknown;
+    envSecretSet: unknown;
+    env_secret_set: unknown;
     configSchema: unknown;
     config_schema: unknown;
     configGet: unknown;

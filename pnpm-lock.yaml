@@ -373,6 +373,9 @@ importers:
       '@tethys/client':
         specifier: workspace:*
         version: link:../client
+      '@tethys/ui':
+        specifier: workspace:*
+        version: link:../ui
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.1.2
