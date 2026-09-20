@@ -199,6 +199,14 @@ impl TempIndex {
         let real = repo.git_dir.join("index");
         if real.is_file() {
             std::fs::copy(&real, &self.path)?;
+            // `std::fs::copy` stamps the destination with the current time.
+            // That makes git's racy-clean check trust stat entries the real
+            // index would re-hash, so a same-size edit landing in the same
+            // clock tick as the last index write can be dropped from the
+            // snapshot. Preserve the source mtime to keep the check equivalent.
+            if let Ok(mtime) = std::fs::metadata(&real).and_then(|meta| meta.modified()) {
+                let _ = std::fs::File::open(&self.path).and_then(|file| file.set_modified(mtime));
+            }
             return Ok(());
         }
         if repo.head_oid.is_some() {
@@ -231,5 +239,54 @@ impl TempIndex {
 impl Drop for TempIndex {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .expect("run git");
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// The temp index must keep the source index's mtime, or git's racy-clean
+    /// check trusts stat entries the real index would re-hash, and a same-size
+    /// edit in the index's own clock tick is dropped from the snapshot.
+    #[test]
+    fn seed_preserves_the_source_index_mtime() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        git(root, &["init", "-q", "-b", "main"]);
+        git(root, &["config", "user.email", "test@tethys.dev"]);
+        git(root, &["config", "user.name", "Tethys Test"]);
+        std::fs::write(root.join("f.txt"), "one\n").expect("write");
+        git(root, &["add", "-A"]);
+        git(root, &["commit", "-qm", "base"]);
+
+        let repo = GitRepo::discover(root).expect("discover");
+        let source = repo.git_dir.join("index");
+        let source_mtime = std::fs::metadata(&source)
+            .expect("source index metadata")
+            .modified()
+            .expect("source index mtime");
+
+        let temp = repo.temp_index("seed");
+        temp.seed(&repo).expect("seed");
+
+        let seeded_mtime = std::fs::metadata(temp.path())
+            .expect("temp index metadata")
+            .modified()
+            .expect("temp index mtime");
+        assert_eq!(seeded_mtime, source_mtime);
     }
 }
