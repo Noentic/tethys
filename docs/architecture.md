@@ -477,10 +477,10 @@ What each surface reads and writes. Surface behaviour is specified in [pages-vie
 | Diff / review | `git.diff.summary/file`, `checkpoint.*`, gated on `workspace.capabilities` | `git.stage/unstage/discard/commit` |
 | Composer `/ $ @` | `commands.list`, `search.files`, skill strategy | `commands.expand`, `thread.queue.*` |
 | MCP attachment / skills | `mcp.registry/effective` (per Workspace), Provider `mcpCapabilities`, `skills.list` | attach via `mcpServers` on `thread.create`; `mcp.projection.plan/apply/rollback` on the fallback path only; `skills.trust/enable` |
-| Profiles / monitor | `agent.profiles/registry/connections.*`, process sampling | `agent.registry.install/update`, `connections.restart`, `agent.login` |
+| Profiles / monitor | `agent.profiles/registry/connections.*`, `agent.process_sample` (one process tree per Provider, polled every 2 s) | `agent.registry.install/update`, `connections.restart` (the Provider whose table was pressed), `agent.login` |
 | Terminal / onboarding | `terminal.list/attach`, `workspace.list` | `terminal.write/resize`, `workspace.add` |
-| Provider rows | `agent.profiles.*`, `agent.connections.list`, `mcp.health` (`SYN‑09`) | toggle → profile enable; stepper → health interval; exec/protocol/env → launch spec |
-| Provider accordion | `agent.config.schema/get/validate` (`SYN‑11`), negotiated capabilities (`session/resume`, MCP transports, `elicitation`), declared `authMethods` | `agent.config.plan/apply/rollback`; login via `agent.login` per method (`AGT‑07`, `G7`) |
+| Provider rows | `agent.profiles.*`, `agent.connections.list`, `mcp.health` (`SYN‑09`) | toggle → profile enable (a switched-off Provider is skipped by every health sweep); stepper → `agent.health_interval_set` (armed at 300 s on start-up, `0` = manual only); `↻` → `agent.recheck`; exec/protocol/env → launch spec |
+| Provider accordion | `agent.config.schema/get/validate` (`SYN‑11`), negotiated capabilities (`session/resume`, MCP transports, `elicitation`), declared `authMethods` | `agent.config.plan/apply/rollback`; login via `agent.login` per method (`AGT‑07`, `G7`); an env-var method stores each value with `agent.env_secret_set` |
 | General / keybindings settings | theme manifests, font list, trust store, shortcut table | theme id, font prefs, notification toggle, shortcut rebind |
 | Workspaces without git | `workspace.capabilities` (`vcs: none`, `restore: no`, `max_concurrent_sessions: 1`) | `git.init` upsell (convenience); revert/diff/stage UI hidden with a `no git · no revert` explanation when unavailable — no snapshot fallback in MVP |
 
@@ -729,8 +729,8 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 |---|---|
 | `host` | `info`, `pair`, `health` |
 | `workspace` | `list`, `add`, `remove`, `settings.*`, `status`, `capabilities` (§10.6) |
-| `agent` | `profiles.*`, `registry.list/install/update`, `connections.list/restart`, `login`, `logout`, `stderr`, `config.schema/get/validate/plan/apply/rollback` (SYN‑11; `plan/apply/rollback` reuse the §11.3 safety path) |
-| `thread` | `create`, `list`, `get`, `prompt`, `queue.*`, `cancel`, `resume`, `importSessions`, `fork`, `archive`, `delete`, `setConfigOption`, `setPermissionMode` |
+| `agent` | `profiles.*`, `registry.list/install/update`, `connections.list/restart`, `login`, `logout`, `stderr`, `env_secret_set` (write-only: the value goes to the keychain and the profile keeps a `keychain:tethys/…` reference; there is no getter, G7), `process_sample`, `health_interval_set`, `recheck`, `config.schema/get/validate/plan/apply/rollback` (SYN‑11; `plan/apply/rollback` reuse the §11.3 safety path) |
+| `thread` | `create`, `list`, `get`, `prompt`, `queue.*`, `cancel` (emits `cancel_requested{grace_deadline}` → `grace_elapsed` → `terminating` as `CancelPhaseChanged` events on the thread's stream; a press in `grace_elapsed` is the explicit force-kill), `cancel_state` (snapshot for a late subscriber), `resume`, `importSessions`, `fork`, `archive`, `delete`, `setConfigOption`, `setPermissionMode` |
 | `events` | `subscribe {threadId, sinceSeq}`, `unsubscribe`, `inbox.subscribe` |
 | `permission` | `respond`, `rules.*` |
 | `git` | `worktree.*`, `checkpoint.*`, `diff.summary`, `diff.file`, `stage`, `unstage`, `discard`, `commit`, `merge`, `push`, `pr.create` (all return `GIT_DISABLED` where the workspace has no git capability or sets `isolation: plain`, §10.6) |
