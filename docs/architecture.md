@@ -307,6 +307,8 @@ ACP v2 is published as a draft. Its migration guide tells implementers to keep v
 | JSON‑RPC batches allowed on stdio | Framing layer accepts arrays; lifecycle messages are never batched by Tethys |
 | Remote transport (streamable HTTP / WebSocket) specified separately | Transport trait stays pluggable; remote agents remain Phase 3 |
 
+**Provider extensions.** A Provider may send vendor-specific JSON-RPC notifications under a `_`-prefixed method — Kiro CLI's `_kiro.dev/mcp/oauth_request`, raised when an MCP server needs authentication, is the first concrete case. These are neither `session/request_permission` nor `elicitation/create`, so they are not transcript entries. The connection preserves them as a typed `ProviderExtension { method, params }` event (an append-only `TurnEventBody` variant), and the webview resolves them through `registerProviderSurface(providerId, method, surface)`, the fourth registry beside `registerEntryRenderer`, `registerInspectorSlot` and `registerActionBarSlot`. An extension with no registered surface is preserved in the event log and rendered generically, the same rule as any open enum above. A Provider integration therefore contributes a handler without editing shared code. `TurnEventBody::Unknown { raw }` is not this: it carries unrecognised `session/update` variants as a raw string with no method to key a surface by, and `tethys-acp` currently registers no handler for vendor notifications at all.
+
 ### 7.3 Normalized event model
 
 ```rust
@@ -337,6 +339,22 @@ pub enum TurnEventBody {
 ```
 
 **v1 → internal translation:** `tool_call` → `ToolCallUpsert`; chunks without `messageId` get a synthetic ID per contiguous run; the prompt response's `stopReason` → `StateChanged(Idle)`; a pending permission → `RequiresAction`; `plan` → `PlanUpsert` with plan ID `default`; `current_mode_update` → a synthesized `mode` config option; diff `oldText`/`newText` → git patch computed in Rust.
+
+**Thread-view contract additions.** The event model above is the transcript's wire contract, and `docs/pages-views-spec.md` §4.1 maps every `session/update` variant to the surface that renders it. Comparing the two found fields the surfaces need and the model does not carry. All are append-only (a new field or variant, never a change of meaning) and land once, in M1.6c, so no worktree defines a piece of them:
+
+| Where | Addition | Why a surface needs it |
+|---|---|---|
+| `ToolCallPatch.kind` | a closed enum of ACP's ten tool kinds (`read`, `edit`, `delete`, `move`, `search`, `execute`, `think`, `fetch`, `switch_mode`, `other`) with an open fallback, in place of a free `String` | one icon per kind and the `activity-ledger`'s grouping; an unrecognised kind maps to `other` |
+| `ToolCallPatch.origin` | `Builtin` \| `Mcp { server }` \| `Skill { name }` \| `Subagent`; absent means `Builtin` | `tool-origin-tag`, `subagent-card`, the ledger's `Skills used` and MCP-by-server rows. ACP has no first-class field for this, so the Provider adapter fills it from `_meta` and tool naming (Wave 2.5) and the webview never infers it from a title |
+| `ToolCallPatch.parent_tool_call_id` | `Option<String>` | nests a subagent's child entries under the call that started it |
+| `ToolCallPatch.locations` | `Vec<{ path, line }>` in place of `Vec<String>` | `path:line` chips; the line is in ACP's location and `location_label` drops it today |
+| `ToolCallContent::Diff` mapping | the v1 mapper fills `Diff { path, patch }` (the patch computed in Rust, as the translation paragraph above already states) instead of `Unknown` | `tool_content_v1` maps ACP `diff` content to `Unknown(raw)` today, so the `tool-accordion` diff excerpt has nothing to render. No schema change: the variant already exists |
+| `ConfigOption` | `category` (`mode`, `model`, `model_config`, `thought_level`, or a vendor string), a select/boolean kind, and for each value its id, display name and optional description in place of the bare id | routes Model and Effort to their composer chips and everything else to the full panel; a boolean option needs a switch. Only the value id survives `config_option` today, so a Model chip would read `claude-sonnet-…` rather than the name the Provider supplied |
+| `UsageSnapshot` | context window `size` and cost currency, and `total_tokens` documented as what it is | `usage-bar` is `used ÷ size`; without `size` it can only show a number. The `usage_update` mapper stores ACP's `used` (tokens currently in context) in `total_tokens` and leaves input and output at 0, so the field is not the cumulative total its name suggests |
+| `StopReason` | `MaxTurnRequests` | one of ACP's five stop reasons is missing; `turn-notice` covers each |
+| `TurnEventBody` | an appended `Compaction` variant | the `Context compacted` divider. A Provider sends it only if the Client advertised the compaction capability, which M1.17 decides |
+
+`ProviderExtension` (above) is the other appended variant. Old payloads without the new fields still deserialize; the mock Provider carries a fixture for each addition.
 
 ### 7.4 Connection lifecycle
 
@@ -448,6 +466,11 @@ What each surface reads and writes. Surface behaviour is specified in [pages-vie
 | Workspace add / trust | trust store by resolved path + host id (mode, scope, timestamp) | `workspace.add` gated on trust grant; revoke removes the card (`TRU‑01`) |
 | Shell sessions / inspector | `events.subscribe {sinceSeq}`, `entries` materialized, `turns`, local transcript cache (independent of Provider `session/resume` support) | `thread.prompt/queue.*/cancel/resume` |
 | `plan-panel` | `session/update` plan notifications (optional per Provider) | — |
+| `tool-accordion`, `tool-run-group`, `tool-origin-tag`, `subagent-card` | `entries` tool calls: `kind`, `status`, `origin`, `parent_tool_call_id`, `locations`, content (§7.3 contract additions); the `Tool call density` preference | `permission.respond` for a child request; density preference |
+| `activity-ledger` | `entries` tool calls grouped by `kind` and `origin`; `Usage` totals when reported | — |
+| `working-indicator`, `turn-notice` | `StateChanged` stop reason, `Error`, `Compaction`, connection health | `thread.prompt` (`Continue`, `Retry`), `agent.connections.restart` (`Reconnect`) |
+| `composer-config-chip` | `ConfigOptionsChanged` by `category` (`model`, `thought_level`) with value display names | `thread.setConfigOption` (narrowed by policy, `PRM‑04`), applying from the next turn |
+| `message-actions`, `attachment-chip` | `entries` messages and content blocks; the Provider's negotiated image-prompt capability | the session `Fork`; attachment content blocks on `thread.prompt` |
 | Permission requests / inbox | `events` permission requests **including the Provider's `options` array**, `permission.rules.*` | `permission.respond` (selected option id), OS notify |
 | `elicitation-card` | `elicitation/create` request schema (Providers declaring `elicitation`) | elicitation response |
 | `usage-bar` | Session token usage as reported by the Provider (`MON‑03`; hidden when unreported) | — |

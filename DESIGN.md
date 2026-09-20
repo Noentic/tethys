@@ -1,9 +1,10 @@
 ---
-version: d0-rc4
+version: d0-rc5
 changelog:
-  d0-rc4: "Adds visual decisions on top of the accepted d0-rc3 (needs re-acceptance, see docs/milestone.md D0 note): status-dot `awaiting` is a ring, not a disc; State Precedence rules under the Universal State Matrix; global prefers-reduced-motion clause and `motion.pulse`; `stop-control` and `isolation-pill` component entries; action-bar priority and collapse order; `workspace-card-selected` (workspace-card-active renamed workspace-card-hover); session-item-chip min/max width, truncation and field-drop order; login-dialog countdown behaviour; settings-nav-item selected bar; new semantic tokens `diff-added` / `diff-removed` and full `diff-viewer` tokens; model-selector-popover config panel is the remainder width, not a second fixed 360px; terminal-sheet keeps Level 4 chrome around a sunken xterm well."
-  d0-rc3: "Re-homing only, no visual design decisions changed; metrics that existed only in prose (card borders, extra status-dot states, breakpoints, stepper button size) were added to the YAML. Page layouts, component behaviour and copy moved to docs/pages-views-spec.md; the UI data-bindings table moved to docs/architecture.md §8.3. worktree-* components renamed session-* (they render non-git workspaces too). Stale colour values in Theming Architecture removed; action-bar worktree pill renamed isolation pill."
-  d0-rc2: "Reconciled with pages-views-spec: per-Provider config selector replaces the fixed three-column selector; session-list-row / permission-request-card naming; MCP attachment replaces vendor-file projection."
+  d0-rc5: "Accepted 20 Sep 2026. `sync-grid` (MCP matrix) with 2-D grid roving; `stacking` scale, Esc unstack order derived from it (drawers now dismiss last); Inspector overlay mode defined (1100-1512px gap left open); provider surfaces (`provider-popover`, `provider-artifact`, `provider-capability-notice`, `composer-command-group`); thread-view completion (tool-run/origin/subagent, turn notices, message actions, config chips, activity ledger; docs/pages-views-spec.md §4.1); Interaction Patterns section; streaming-transcript a11y rules."
+  d0-rc4: "Accepted 20 Sep 2026. `awaiting` ring; State Precedence; reduced-motion clause and `motion.pulse`; `stop-control`, `isolation-pill`; action-bar priority and collapse order; `workspace-card-selected`; session-item-chip sizing; login-dialog countdown; `diff-added`/`diff-removed` and `diff-viewer` tokens; config panel takes the remaining popover width; terminal-sheet Level 4 chrome."
+  d0-rc3: "Re-homing only: prose-only metrics moved into the YAML, page layouts and behaviour moved to docs/pages-views-spec.md, data bindings to docs/architecture.md §8.3, `worktree-*` renamed `session-*`, stale colour values removed."
+  d0-rc2: "Reconciled with pages-views-spec: per-Provider config selector, session-list-row / permission-request-card naming, MCP attachment replaces vendor-file projection."
 name: Tethys-Precision-Monochromatic
 description: |
   The design contract for a native, high-performance desktop control plane that runs autonomous coding agents over any folder, in parallel. Built around a Tabular paradigm (icon rail + tab strip + Workspace Catalog) that expands into a four-region IDE shell (Rail/Hub | Sessions | Stage/Inspector | Action Bar/Composer). All color is a swappable Semantic Theme Contract (primitives → semantic → CSS vars); default themes are Default Dark (Obsidian Zinc) and Default Light (Clean Zinc/Slate); users ship JSON theme manifests. Precision Monochromatic chrome, Geist typography/icons, 1px hairlines, and restrained accents reserved for agent telemetry and health states. Terminology follows the ACP three-tier model — Provider (one ACP connection) / Workspace (one `cwd`) / Session (one `session/new`); see docs/pages-views-spec.md §0.
@@ -250,6 +251,20 @@ layout:
   popover-selector: 560px
   breakpoints: { sessions-icon: 800px, inspector-overlay: 1100px }
 
+# Paint order. Higher paints above lower. The Esc unstack order (Accessibility & Keyboard Map)
+# is derived from this table, topmost first, and is not maintained separately.
+stacking:
+  base: 0            # canvas, rails, stage, docked Inspector, action bar
+  drawer-scrim: 10   # {semantic.overlay-scrim} behind an overlay Inspector, peek drawer, approval drawer
+  drawer: 20         # overlay Inspector, workspace-peek-drawer, approval-queue-drawer
+  dialog-scrim: 30
+  dialog: 40         # modal-dialog, workspace-trust-dialog, login-dialog
+  sheet: 50          # terminal-sheet (opens from login-dialog CLI passthrough, so above dialog)
+  palette: 60        # command-palette
+  popover: 70        # model-selector-popover, action-bar overflow, provider-popover
+  toast: 80
+  tooltip: 90
+
 motion:
   instant: 100ms
   fast: 150ms
@@ -293,8 +308,8 @@ components:
     borderTop: "1px solid {semantic.hairline-structural}"
     padding: "0 {spacing.lg}"
     gap: "{spacing.sm}"
-    contents: "provider/config pill, mode pill, permission-mode pill, isolation pill (branch, or `no git`), usage-bar, queue count, Stop"
-    priority: "stop, isolation-pill, permission-mode pill, provider/config pill, mode pill, queue count, usage-bar (highest first)"
+    contents: "provider/config pill (Provider identity and health; opens the full `model-selector-popover` and anchors `provider-popover` — the Model and Effort controls are `composer-config-chip`s in the composer, not here), mode pill (the one home of the ACP `mode` category), permission-mode pill, isolation pill (branch, or `no git`), diff-summary pill (only when a turn has a diff in a git workspace), usage-bar, queue count, Stop"
+    priority: "stop, isolation-pill, permission-mode pill, provider/config pill, diff-summary pill, mode pill, queue count, usage-bar (highest first). The diff-summary pill is a registered slot; it sits above the mode pill so it folds after it, which keeps the fold order usage-bar, queue count, mode pill intact"
     collapseRule: "as the bar narrows toward {layout.stage-min}, elements fold in reverse priority — usage-bar first, then queue count, then mode pill — into a trailing `•••` overflow popover (Level 4). Stop and the isolation pill never fold. A folded queue count keeps a warning dot on the `•••` trigger. Slots registered through registerActionBarSlot declare a priority and fold with the same rule; an undeclared slot folds before usage-bar."
     overflowTrigger: "20px icon button, `aria-label` names the folded items"
   toast:
@@ -489,6 +504,7 @@ components:
     rounded: "{rounded.2xl}"
     padding: "{spacing.lg}"
     width: "{layout.prompt-width}"
+    threadLowerBar: "the docked in-thread composer's lower bar, left to right: `composer-config-chip`s (Model, Effort), `attachment-chip`s, then submit. `/thread/new` keeps `model-selector-pill` here because that is where the Provider is chosen"
   workspace-selector-pill:
     backgroundColor: "transparent"
     backgroundHover: "{semantic.surface-hover}"
@@ -558,6 +574,7 @@ components:
     countdownTypography: "{typography.mono-micro}"
     countdown: "URL+code method only. `m:ss` remaining in `countdownTypography` / {semantic.text-muted}, updating once per second as a text change (not an animation, so reduced motion is unaffected). At 0 the code field is disabled and reads `Code expired` with a `Request new code` action. Numeric because these codes expire on a ~300s scale; contrast `stop-control`, whose 5s grace uses a depleting fill instead"
     onClose: "closing the dialog, by any route (success, cancel, Esc, expiry), triggers an immediate provider health re-check — docs/pages-views-spec.md §5.2"
+    agentAuth: "agent-auth method only (the Provider runs its own OAuth and opens the browser): a `{typography.body-sm}` / {semantic.text-muted} line `Waiting for {Provider} to finish sign-in…` and a `Cancel` action. No code field and no countdown — the agent, not Tethys, holds the flow, and Tethys shows nothing it could read as a credential"
   permission-request-card:
     backgroundColor: "{semantic.surface-card}"
     border: "1px solid {semantic.hairline}"
@@ -570,19 +587,177 @@ components:
     rounded: "{rounded.md}"
     padding: "{spacing.lg}"
     fieldGroup: "{components.schema-field-group}"
+    decision: "a property with a fixed set of options renders as a numbered decision, one line per option (the option's title; ACP's option type carries a value and a title but no description, so the card never invents a trade-off line — the property's own description is the help text above the options). Keys `1`–`9` select. A free-text `Other` is offered only where the schema permits free text (Interaction Patterns P7)"
+    paging: "a request with more than one property may page one per step with an `n of m` counter and `Back`; the counter is text. A single property renders unpaged"
+    actions: "the three protocol outcomes stay distinct and labelled: the submit button sends `accept` with the answers, `Skip` sends `decline` (the agent proceeds on its own judgement), and dismissing without answering sends `cancel`. `Skip` is never worded `Cancel`"
+    url: "a URL-mode request renders the Provider's title, the host of the URL in {typography.mono-code}, and `Open in browser`; the page is never embedded"
+  provider-popover:
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    edge: "{semantic.edge-highlight}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.lg}"
+    width: 360px
+    stacking: "{stacking.popover}"
+    scope: "Hosts a request from the Provider that is NOT one of the two ACP-standard shapes — a vendor-extension notification such as `_kiro.dev/mcp/oauth_request`. `session/request_permission` is `permission-request-card` and `elicitation/create` is `elicitation-card`; both are inline stage entries and neither is this component. An extension notification is not anchored to a point in the transcript, so it cannot be an inline entry; it interrupts"
+    anchor: "the Provider's `model-selector-pill` in the action bar, so the request is visibly attributed to the Provider that raised it"
+    content: "a title, a body rendered from the request's schema with `schema-field-group` spacing, and the Provider's own action set in the Provider's order — never a hardcoded approve/reject pair, the same rule as `permission-request-card`. A destructive-kind action uses the Universal State Matrix `destructive` row"
+    focus: "traps `Tab` while open and restores focus to the invoker on `Esc`/close, unlike the inline cards. Because it traps focus it never opens over another trap: a request that arrives while a dialog or sheet is open waits in the Provider's pending list, the pill shows the pending count, and it opens when the topmost trap closes"
+    pendingBorder: "1px solid {semantic.status-warning}"
+    a11y: "role=dialog, aria-modal=false, aria-labelledby the title. The pending count on the pill is text, not colour alone"
+  provider-artifact:
+    backgroundColor: "{semantic.surface-card}"
+    border: "1px solid {semantic.hairline}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.lg}"
+    scope: "A Provider-emitted artifact that is neither a diff nor tool-call output. A stage entry mounted through registerEntryRenderer, so it sits in the transcript at the point it was emitted. Not the `diff-viewer`, which stays git-shaped"
+    summaryRow: "collapsed by default: kind glyph, title, size or dimensions in {typography.mono-micro} / {semantic.text-muted}, and an expand affordance. Expanding never changes the entry's position in the transcript"
+    contentKinds: "MVP: text (rendered in {typography.mono-code} on {semantic.surface-sunken}) and image (fit to `stage-measure`, alt text required). Any other kind renders the summary row plus a `provider-capability-notice`, never a blank body"
+    a11y: "the summary row is a `button` with `aria-expanded`; an image without alt text is announced by its title"
+  provider-capability-notice:
+    backgroundColor: "transparent"
+    textColor: "{semantic.text-muted}"
+    typography: "{typography.label-sm}"
+    padding: "{spacing.sm} 0px"
+    scope: "The one treatment for 'this Provider cannot do this' — no resume, no elicitation, an unsupported content kind. Distinct from workspace-capability gating (`no git · no revert`, owned by the workspace capability set): that says the FOLDER cannot, this says the PROVIDER cannot. The two vary independently"
+    form: "a muted sentence naming the Provider and the missing capability, with an inline action only if one exists (for example `Open Settings / Providers`). Never an error colour: an absent capability is a fact, not a failure"
+    rule: "surfaces do not invent their own 'unsupported' copy or styling; they render this component"
+  attachment-chip:
+    extends: "{components.composer-chip}"
+    thumbnailSize: 20px
+    removeSize: 16px
+    scope: "An image or file the user attached in the composer, or that a message carries in the transcript. An image block renders a thumbnail chip that opens at up to `stage-measure`; a resource link renders a path chip. Attaching an image to a Provider that did not declare image prompts is refused at attach time with a `provider-capability-notice`, never dropped after send. Audio and embedded-resource blocks are not rendered in MVP; they show the same notice rather than a blank"
+    a11y: "a `button` named by its file name; an image without alt text is announced by its file name; `remove` is a separate `button` with `aria-label`"
+  composer-config-chip:
+    backgroundColor: "transparent"
+    backgroundHover: "{semantic.surface-hover}"
+    textColor: "{semantic.text-secondary}"
+    typography: "{typography.label-md}"
+    rounded: "{rounded.sm}"
+    padding: 4px 8px
+    height: 28px
+    scope: "The category-aware Model and Effort controls in the docked composer's lower bar, taken from the Provider's session config options by `category`: `model` becomes the Model chip and `thought_level` the Effort chip. `mode` is not a chip: its one home is the action bar's mode pill. `model_config` and every other select or boolean option live only in the full `session-config-panel` behind the Provider pill. Each category has exactly one home; a control is never rendered twice"
+    absent: "a Provider that declares no option for a category renders no chip for it — never a disabled empty chip"
+    label: "reads the current value; the option name is shown only when the value is ambiguous on its own (`Effort · High`, not bare `High`)"
+    timing: "a change is allowed while a turn is running and applies from the next turn; the popover states this in a one-line consequence caption (Interaction Patterns P11)"
+    rejected: "if the Provider rejects a mid-session change, the chip reverts to its previous value and a `provider-capability-notice` says the Provider applies that option only when a session starts"
+    a11y: "`combobox` semantics as `model-selector-pill`; the chip's accessible name is `<option name>, <value>`"
+  config-option-popover:
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    edge: "{semantic.edge-highlight}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.sm}"
+    width: 240px
+    stacking: "{stacking.popover}"
+    scope: "The small popover behind a `composer-config-chip`: a `listbox` for a select option (the option's own description as a second `{typography.body-sm}` / {semantic.text-muted} line where the Provider supplies one), a `switch` for a boolean. Anchored above the chip because the composer is bottom-docked; flips below only if space requires. `Enter` selects and returns focus to the composer textarea, `Esc` closes. It is not the two-column `model-selector-popover`, which is Provider choice plus the full schema"
+  composer-command-group:
+    typography: "{typography.label-sm}"
+    textColor: "{semantic.text-muted}"
+    scope: "Gives a presentation to the grouping the composer `/` popup already requires — Tethys commands are 'listed apart from `/agent:name` commands the Provider advertises' (docs/pages-views-spec.md §4 `composer`), which the spec states but does not draw. Commands the Provider declares through its connection's available-commands list render as a separate group under a heading naming the Provider, after the Tethys commands, so a Provider command is never mistaken for one Tethys resolves itself. The rows reuse the existing command-row treatment; only the group heading is new. Not a second popup"
+    clash: "a Provider command whose name collides with a Tethys command renders as `/agent:name`, existing clash rule"
+    a11y: "the group is a `group` with `aria-label` naming the Provider inside the existing `listbox`"
   turn-message:
     backgroundColor: "transparent"
     textColor: "{semantic.text-primary}"
     typography: "{typography.body-md}"
+    userSurface: "a user message sits on {semantic.surface-card} with {rounded.md} and {spacing.md} padding at full measure, left-aligned. No chat-bubble alternation: the stage is a log, not a conversation widget"
+    body: "rendered by the incremental markdown worker. A fenced block is a `code-block` from its opening fence (no reflow when the closing fence arrives); a table scrolls horizontally inside `stage-measure` rather than widening it"
+    chrome: "`message-actions` on hover and on keyboard focus; `attachment-chip`s under the body"
+    replay: "a message restored from history renders exactly as a live one; a replayed user message carries no `Retry`"
+  message-actions:
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    rounded: "{rounded.sm}"
+    height: 28px
+    iconSize: "{icons.sizes.ui}"
+    scope: "An in-flow toolbar at a message's top-right corner: `Copy` (any message), `Fork from here` (where the session's `Fork` is allowed — same capability rule and tooltip as `session-list-row`), and `Retry` (last agent message only, re-sends the prompt that produced it). `Edit & resend` is not in MVP: it needs a restore point, which only some workspaces have"
+    reveal: "appears on hover and on keyboard focus of the message, never hover-only; hidden entirely while the message is still streaming"
+    a11y: "a `toolbar` with roving `tabindex`; `Copy` announces `Copied` through the polite announcer"
+  code-block:
+    backgroundColor: "{semantic.surface-sunken}"
+    border: "1px solid {semantic.hairline}"
+    rounded: "{rounded.md}"
+    typography: "{typography.mono-code}"
+    headerTypography: "{typography.mono-micro}"
+    headerColor: "{semantic.text-muted}"
+    header: "a 28px row: language label left, `Copy` icon button (24px) right. `Copy` confirms by the button label changing to `Copied` as text for a short interval, not a toast"
+    overflow: "long lines scroll horizontally and never soft-wrap by default; blocks past the same cap as `tool-accordion` streamed content collapse with `Show all N lines`"
+    a11y: "a `region` labelled `<language> code`; the copy button is reachable in tab order"
   thought-block:
     backgroundColor: "{semantic.surface-panel}"
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.sm}"
     padding: 8px 12px
+    label: "while streaming `Thinking…` with the elapsed seconds and a one-line truncated preview of the latest thought; once the turn ends it collapses to `Thought for 14s ›`. Expansion is the user's: streaming never re-expands a block the user collapsed"
+    a11y: "a `button` with `aria-expanded`"
   tool-accordion:
     backgroundColor: "{semantic.surface-nested}"
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.sm}"
+    kindIcon: "one Geist Icon per ACP tool kind — read, edit, delete, move, search, execute, think, fetch, switch_mode, other; an unrecognised kind renders `other`. The icon is decoration: the tool's title carries the meaning"
+    status: "`status-dot` per call state; `failed` also writes the word `Failed` beside the dot, so a failure is never colour alone"
+    content: "renders each tool-content item: text and image blocks; a diff as a compact excerpt on `diff-viewer` tokens with `View diff` where the workspace has git; a terminal as an inline sunken well tailing the output with an `Open terminal` action to `terminal-sheet`"
+    locations: "`path:line` chips (`composer-chip` tokens) under the header, at most three and then `+N`. Activating one opens the Inspector diff for that path when the turn changed it, otherwise copies the path"
+    origin: "a `tool-origin-tag` after the title where the call did not come from the Provider's built-in tools"
+    expansion: "collapsed by default. A `failed` call and a call awaiting permission open themselves; after that the user's own toggle wins and streaming updates never reset it"
+  tool-origin-tag:
+    backgroundColor: "{semantic.surface-hover}"
+    textColor: "{semantic.text-muted}"
+    typography: "{typography.mono-micro}"
+    rounded: "{rounded.xs}"
+    padding: 2px 6px
+    scope: "Says where a tool call came from when ACP alone cannot: `mcp · <server>`, `skill · <name>`, `subagent`. A built-in call carries no tag, so the tag is signal, not decoration. The data is the append-only `origin` field on the tool-call entry (docs/architecture.md §7.3); a Provider adapter fills it in (Wave 2.5). An entry with no origin renders as a built-in call — origin is never guessed from the tool's title in the webview"
+    truncation: "a server or skill name truncates after 16 characters with an ellipsis; the full name is the tooltip"
+    a11y: "text, never colour alone; `aria-label` `From MCP server <server>` / `Skill <name>`"
+  tool-run-group:
+    backgroundColor: "transparent"
+    textColor: "{semantic.text-secondary}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.sm}"
+    padding: 4px 8px
+    height: 28px
+    scope: "Collapses a run of consecutive tool calls into one summary row, so a 30-call turn is not 30 rows (Interaction Patterns P1). Reads `Read 3 files · ran 2 commands ›`: counts by tool kind (read → files, execute → commands, edit/delete/move → edits, search → searches, fetch → fetches, anything else → tool calls), in first-seen order, the first three kinds and then `+N more`. A run is a maximal sequence of tool-call entries; any message, plan, notice, permission or elicitation entry ends it"
+    live: "while any member is pending or executing the row shows a 16px spinner and the in-flight call's title, and the counts update in place with no layout shift"
+    expand: "expanding lists the member `tool-accordion`s, each still individually collapsible. A run containing a failed call or a call awaiting permission renders expanded with only those members open, and does not collapse while a member awaits: something that asks the user is never made unreachable (State Precedence rule 5)"
+    density: "Settings / General `Tool call density`: `Summary` (default) groups as above; `Full` renders every call as its own `tool-accordion` with no groups"
+    a11y: "a `button` with `aria-expanded` and `aria-controls` on the member list; the summary sentence is its accessible name; an in-flight run sets `aria-busy`"
+  subagent-card:
+    extends: "{components.tool-accordion}"
+    nestIndent: "{spacing.lg}"
+    nestRule: "2px solid {semantic.hairline-strong}"
+    scope: "A tool call whose origin is `subagent`. The parent row is a `tool-accordion` (title, `status-dot`, elapsed); its body is the child transcript — every entry whose `parent_tool_call_id` is that call — indented `nestIndent` behind a `nestRule` left rule. Collapsed by default with a one-line roll-up (`14 tool calls · 1 permission · running`). Children render through the same registered renderers, so a child permission request is a real `permission-request-card`"
+    depth: "one level. A subagent that starts a subagent renders that child flat inside the first, marked `depth 2` by its `tool-origin-tag`, never a third indent: the stage is 760px and every indent costs measure"
+    attention: "a child awaiting approval forces the parent open, puts the `awaiting` ring on the parent's `status-dot`, and appears in the approval inbox attributed to the subagent. A request is never hidden inside a collapsed card (State Precedence rule 5)"
+    orphan: "a child whose parent is not in the transcript (a replay gap) renders top-level with a `provider-capability-notice` line `Subagent context unavailable`, and is never dropped"
+  working-indicator:
+    textColor: "{semantic.text-muted}"
+    typography: "{typography.mono-micro}"
+    height: 20px
+    scope: "The turn is running: one row at the transcript tail, `Working · 14s`, with the running `status-dot` and, while a tool is in flight, that tool's title. It is the only 'the agent is alive' signal in the stage, so it is not a `thought-block` (content) or a spinner on one call. Removed when the turn reaches a stop reason; replaced by a `turn-notice` when that stop reason is not a normal end of turn"
+    quiet: "after an idle threshold with no event the row appends `No activity for m:ss` in muted text — a fact, not an error; `Stop` stays the affordance. The threshold is an implementation constant recorded in the results doc"
+    motion: "the elapsed time updates as text once per second; under reduced motion the dot is static and the text still updates, so nothing depends on motion"
+  turn-notice:
+    backgroundColor: "transparent"
+    border: "1px solid {semantic.hairline}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.md}"
+    typography: "{typography.body-sm}"
+    warningRule: "2px solid {semantic.status-warning} left rule"
+    errorRule: "2px solid {semantic.status-danger} left rule"
+    scope: "One inline stage entry for everything that ends or interrupts a turn other than a permission or elicitation. Kinds: `refusal` (ACP says a refused prompt and everything after it is left out of the next prompt, so the entry says that and the refused message is visibly struck from context); `max_tokens` and `max_turn_requests`, each with a `Continue` action that sends a follow-up prompt through the normal queue; `cancelled` (neutral: the user asked for it); `error` (an Error event, with `Retry` when it is retryable); `connection-lost` (the Provider connection dropped mid-session: `Reconnect`, transcript preserved); `compaction`"
+    compaction: "renders as a hairline divider labelled `Context compacted`, with the Provider's summary expandable when it streams one — the same visual grammar as `Earlier history (read-only)`"
+    redundancy: "every kind has a leading Geist Icon and a sentence; colour is never the only carrier (Interaction Patterns P2). One primary action at most, no confirm step"
+    a11y: "`role=status` for info and warning kinds, `role=alert` for `error` and `connection-lost`; each is announced once and not again on re-render"
+  jump-to-latest:
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    rounded: "{rounded.full}"
+    typography: "{typography.label-sm}"
+    height: 28px
+    scope: "A floating pill at the stage's bottom centre, shown when the user has scrolled away from the tail while the transcript is growing: `↓ Jump to latest`, or `↓ 3 new` once entries have arrived. The stage follows the tail only while pinned to it: scrolling up unpins and streaming never moves the viewport; reaching the tail or activating the pill re-pins"
+    attention: "a pending permission or elicitation that is out of view adds a warning dot to the pill (State Precedence rule 5)"
+    a11y: "a `button`; the new-entry count is not announced as it changes, to avoid chatter while streaming"
   plan-panel:
     backgroundColor: "{semantic.surface-panel}"
     border: "1px solid {semantic.hairline}"
@@ -592,6 +767,7 @@ components:
     stepPending: "{semantic.text-muted}"
     stepActive: "{semantic.accent-agent-active}"
     stepComplete: "{semantic.status-success}"
+    stepDone: "a completed step collapses to a muted check and its title; only the in-progress step keeps full weight (Interaction Patterns P1)"
   diff-viewer:
     backgroundColor: "{semantic.surface-sunken}"
     border: "1px solid {semantic.hairline}"
@@ -611,12 +787,42 @@ components:
     fillColor: "{semantic.text-muted}"
     fillWarning: "{semantic.status-warning}"
     labelTypography: "{typography.mono-micro}"
+    fill: "used ÷ context window size, so it needs the window size the Provider reports alongside usage. A Provider that reports tokens but no window size renders the number only, with no ring"
+    unreported: "hidden when the Provider reports no usage, and never estimated. A Provider that reports zero renders `0` — unreported and zero are different facts (Interaction Patterns P9)"
+    tooltip: "used / size tokens and, where reported, cumulative cost with its currency"
+  activity-ledger:
+    backgroundColor: "{semantic.surface-panel}"
+    border: "1px solid {semantic.hairline}"
+    rounded: "{rounded.sm}"
+    padding: 8px 12px
+    rowTypography: "{typography.body-sm}"
+    countTypography: "{typography.mono-micro}"
+    scope: "The Inspector's second index over the same history (Interaction Patterns P10): a rollup grouped by kind rather than by turn — `Files read 12 · Commands run 5 · MCP calls 3 · Searches 2 · Fetches 1 · Edits 4`, plus `Skills used` and `Subagents` where the origin field is present. Counts derive from tool-call entries; nothing is estimated"
+    rows: "a kind with zero calls is omitted, but the section as a whole reads `No tool calls yet` on a fresh session rather than disappearing (P9). Each row expands into its ledger — the paths, the commands, MCP tools grouped by server, the URLs — and each item links to the transcript entry that produced it. `+N` overflow expands in place"
+    scopeToggle: "whole session by default; a `This turn` toggle narrows it to the selected turn"
+    totals: "tokens and cost totals appear only when the Provider reports usage (the `usage-bar` rule)"
+    a11y: "a `list` of `button` rows with `aria-expanded`; counts are text"
   snapshot-mode-tag:
     backgroundColor: "{semantic.surface-hover}"
     textColor: "{semantic.text-muted}"
     typography: "{typography.mono-micro}"
     rounded: "{rounded.xs}"
     padding: 2px 6px
+  sync-grid:
+    backgroundColor: "transparent"
+    border: "1px solid {semantic.hairline}"
+    rounded: "{rounded.md}"
+    scope: "The Servers × Providers attachment matrix on Settings / MCP. Rows are MCP servers, columns are Providers, and the workspace is the page's scope selector, not a third axis"
+    headerRow: "sticky at the top of the scroll region, `{semantic.surface-elevated}`, 1px `{semantic.hairline-strong}` bottom border, height 36px, Provider name in {typography.label-sm} with its `status-dot`"
+    frozenColumn: "the server-name column is frozen at 220px against the left edge, `{semantic.surface-elevated}`, 1px `{semantic.hairline-strong}` right border. Both axis labels must stay visible to read any cell"
+    columnMinWidth: 132px
+    rowHeight: 40px
+    overflow: "the grid scrolls horizontally inside its own region as Providers are added (`+ Add Custom ACP Server` makes the column count unbounded); the page itself never scrolls horizontally. Scroll padding reserves the frozen column width so a focused cell is never hidden beneath it"
+    empty:
+      noServers: "zero rows: the header row still renders; the body is one full-width empty state `No MCP servers configured` with an `Add server` action"
+      noProviders: "zero columns: the frozen server column renders alone; a full-width empty state `No connected Providers` links to Settings / Providers"
+      both: "the noProviders state; there is nothing to attach to yet"
+    a11y: "role=grid with aria-rowcount and aria-colcount; header cells `columnheader`, server cells `rowheader`, attachment cells `gridcell`. Keyboard model: Accessibility & Keyboard Map, 'Grid roving'"
   sync-grid-cell:
     backgroundColor: "transparent"
     textColor: "{semantic.text-muted}"
@@ -830,8 +1036,8 @@ Four resizable regions (`UI-01`). Widths and breakpoints are the `layout:` token
 
 * **Rail** `{spacing.rail}`: `nav-rail`, `20px` icons on `36px` targets. **Hub** `{layout.shell-left}`, collapsing to `{layout.shell-left-collapsed}`.
 * **Sessions** `{layout.shell-threads}`: collapses to an icon strip below `{layout.breakpoints.sessions-icon}`.
-* **Stage**: flex, never narrower than `{layout.stage-min}` without switching to overlay mode; text holds to `{layout.stage-measure}`.
-* **Inspector** `{layout.shell-inspector}`: collapses to an overlay drawer below `{layout.breakpoints.inspector-overlay}`.
+* **Stage**: flex, never narrower than `{layout.stage-min}` without the Inspector switching to overlay mode; text holds to `{layout.stage-measure}`. The Stage itself has no overlay mode.
+* **Inspector** `{layout.shell-inspector}`: collapses to an overlay drawer below `{layout.breakpoints.inspector-overlay}`. **Overlay mode is the Inspector's, and only the Inspector's:** it renders at `{stacking.drawer}` (Level 3) over the Stage with a `{semantic.overlay-scrim}` at `{stacking.drawer-scrim}`, is opened from the action bar diff-summary pill or the tab strip, and dismisses on `Esc` or scrim click. **Open limitation (`d0-rc5`):** the threshold is the fixed `inspector-overlay` breakpoint, but the Stage reaches `{layout.stage-min}` only at `48 + 264 + 280 + 360 + 560 = 1512px` with every region expanded. Between `1100px` and `1512px` a docked Inspector leaves the Stage under its minimum, and at `1280px` it leaves 328px. The fix is a collapse ladder (Workspaces hub, then Sessions, then Inspector, each triggered by the Stage falling below `stage-min`), which changes an accepted breakpoint and is not decided here.
 * **Action Bar** `{layout.shell-actionbar}`, with the composer docked centered at `{layout.prompt-width}` and a floating `{layout.popover-selector}` variant inside the peek and queue drawers.
 * **Splitters** are `shell-splitter`; **palette** is `command-palette`, Level 4.
 
@@ -845,7 +1051,7 @@ No ambient shadows are permitted. Depth is achieved through tonal stepped layers
 | Level 1 | `{semantic.surface-card}` | 1px `{semantic.hairline}` | Default Workspace card |
 | Level 2 | `{semantic.surface-card-hover}` | 1px `{semantic.hairline-strong}` | Card hover state; selected card (`workspace-card-selected`, adds the left `2px` `{semantic.accent-focus}` bar) |
 | Level 3 | `{semantic.surface-elevated}` | 1px `{semantic.hairline-strong}` | Thread peek drawer, prompt input |
-| Level 4 | `{semantic.surface-overlay}` | 1px `{semantic.hairline-strong}` | `model-selector-popover`, `terminal-sheet`, palette, modal, toast, tooltip |
+| Level 4 | `{semantic.surface-overlay}` | 1px `{semantic.hairline-strong}` | `model-selector-popover`, `provider-popover`, `terminal-sheet`, palette, modal, toast, tooltip. Paint order within and between levels is the `stacking` scale, not the level number |
 | Nested | `{semantic.surface-nested}` | 1px `{semantic.hairline}` | `provider-accordion` interior inside a Level 0/1 settings row |
 | Sunken | `{semantic.surface-sunken}` | 1px `{semantic.hairline}` | Terminal, diff viewer wells |
 
@@ -874,7 +1080,7 @@ Every interactive component implements these 7 states + loading/empty with ident
 | `loading` | skeleton pulse `{semantic.surface-hover}↔{semantic.surface-active} {motion.skeleton}` + `16px` Geist spinner in `{semantic.text-muted}` |
 | `empty` | `24px` hero Geist icon in `{semantic.text-muted}` + `body-sm` muted copy + primary action button |
 
-Apply to: pill, popover cells, cards, chips/rows, session rows, provider rows, toggle, stepper, splitter, palette rows, tab items, topology nodes, message/plan/tool/permission/elicitation/diff/sync/profile/process/onboarding/trust-dialog/login-dialog/keybinding components below. Destructive appears on: discard hunk, delete thread/workspace, revoke trust, a Provider option whose kind rejects, the `SIGKILL` end of the cancellation ladder, rollback destructive confirm.
+Apply to: pill, popover cells, cards, chips/rows, session rows, provider rows, toggle, stepper, splitter, palette rows, tab items, topology nodes, message/plan/tool/tool-run-group/subagent/notice/permission/elicitation/diff/sync/profile/process/onboarding/trust-dialog/login-dialog/keybinding, composer config chips, attachment chips and activity-ledger rows below. Destructive appears on: discard hunk, delete thread/workspace, revoke trust, a Provider option whose kind rejects, the `SIGKILL` end of the cancellation ladder, rollback destructive confirm.
 
 ### State Precedence
 
@@ -893,11 +1099,50 @@ Rules, in the order to apply them:
 
 Worked example: a `session-item-chip` whose only action is capability-gated (`aria-disabled`, `40%` opacity, no pointer events) while it has a pending approval keeps its amber `pendingBorder` and `awaiting` ring at `40%` opacity, and the approval is still answerable from the inbox. Tabs use the "filled pill" `selected` form; every vertical list, including `settings-nav-item`, uses the bar.
 
+## Interaction Patterns
+
+Cross-component rules adopted from a reference study of how other agentic coding tools design the same screens (*Agentic Coding UI*, a private claude.ai artifact; sources listed in its footer). Component entries say what a thing looks like; these say what every surface must do the same way, so six chunks do not invent six answers (`docs/milestone.md` §1.2).
+
+**Evidence grade.** The study mixes real captures with its own sketches, so each pattern carries a grade and only graded-up patterns are adopted:
+
+* **Observed** — a real product screenshot in the study (T3 Code, Claude Code Desktop, Claude's session-inspection panel).
+* **Documented** — a product's public documentation, as cited by the study.
+* **Schematic** — the study's own diagram of documented behaviour (the Cursor, Warp, Codex-app and OpenCode panels). A hypothesis, never evidence; a schematic-only pattern is not adopted.
+
+A pattern is adopted only where it is Observed or Documented **and** fits an ACP fact. Where the pattern assumes data ACP does not carry, the row says how it was adapted.
+
+| # | Rule | Applied in | Grade | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| P1 | **Collapse execution, keep the summary.** Tool calls, thoughts, finished plan steps and unmodified diff context default to a one-line summary with depth one disclosure away. Anything that failed or asks the user opens itself | `tool-run-group`, `tool-accordion`, `thought-block`, `plan-panel.stepDone`, `diff-viewer.collapsedContext` | Observed, Documented | `tool-run-group` new; rest existing |
+| P2 | **Status is a sentence, not a colour.** Every non-healthy state carries its reason in words in the same row: the dot says *that*, the words say *what* and how to fix it | `provider-row` status subtext, `health-badge`, `turn-notice`, `tool-accordion` `Failed`, `provider-capability-notice`, `working-indicator` | Observed | Existing rule for Providers; extended to the transcript |
+| P3 | **Enabled-but-unreachable is not disabled.** Toggle and health are independent axes: a row switched on with a red dot reads as a fault; a row switched off by policy is dimmed and its reason is worded as a choice | `provider-row`, `toggle-switch` | Observed | M1.12 verifies with two fixture rows |
+| P4 | **Git context rides with the composer.** Branch and diff stat sit next to the input, never in a separate tab | `isolation-pill`, diff-summary pill | Observed | Decided (option a) |
+| P5 | **Controls that change agent behaviour sit beside the input**, not two clicks away in Settings. One home per control | `composer-config-chip`, action-bar mode and permission pills | Observed | New |
+| P6 | **The empty or disabled state names the fix.** The disabled control says what is missing and where to fix it | `prompt-card`, `model-selector-pill` zero-provider, `session-config-panel`, `sync-grid` empty states, `activity-ledger`, `turn-notice` `connection-lost` | Observed | Existing; extended |
+| P7 | **Decisions are asked, not buried in prose.** A real fork is a numbered choice with an escape hatch (`Other`) and a way to decline (`Skip`). *Adapted:* ACP's option type has a value and a title but no description, so the card renders the title and the property's help text and never invents a trade-off line | `elicitation-card`, `permission-request-card` | Observed | Extended |
+| P8 | **One primary action, pinned where the next click goes.** *Adapted:* `Approve & Commit` stays in the Inspector (decided); the pill that opens it is what is pinned | diff-summary pill, prompt submit, `turn-notice` single action | Observed | Decided |
+| P9 | **Zero reports zero honestly.** A metric that was reported as zero renders `0`; one that was not reported is hidden or says so. Never sample data, never an estimate | `usage-bar`, `activity-ledger`, `sync-grid` empty states | Observed | New wording |
+| P10 | **Two indexes over one history.** The transcript answers "what happened, in order"; the ledger answers "what did this session touch, by kind". Neither replaces the other | `activity-ledger` beside the Stage; the study's Progress and Outputs blocks already map to `plan-panel` and `provider-artifact` | Observed | New |
+| P11 | **A setting states its consequence in a sentence**, under the control, not in a tooltip: `Applies from the next turn`, `Applies to new sessions` | `composer-config-chip` caption, Settings rows | Observed | New |
+| P12 | **Where before what.** The run target is chosen at the start of a session and stays visible | `workspace-selector-pill`, `isolation-pill`, hub `Local` / `Remote` | Observed | Existing |
+| P13 | **Capabilities are sourced inventory.** Skills, Providers and MCP servers show provenance (yours, project, plugin) and a status cell that is either a fact or an action, never both | `skill-row`, `provider-row`, `sync-grid-cell` | Observed | Existing; M1.11 verifies the cell rule |
+
+**Considered, not adopted** — recorded so nobody re-proposes them without new evidence:
+
+* **Tiled grid of live agents** (Cursor). Schematic only. The sessions column and `session-topology-canvas` are Tethys's answer to many concurrent sessions.
+* **One scrollback of terminal and agent blocks** (Warp). Schematic only. Terminals stay in `terminal-sheet` and a display-only tool-call well.
+* **Async task-and-review-queue as the unit of work** (Codex app). Schematic only. The approval inbox is the equivalent for the consent decision.
+* **Usage heatmap on the new-session home** (Claude Code Desktop). Observed, but it belongs to the hub, not the thread, and its data is `usage-bar`'s (M2.10). Revisit there.
+* **`!` shell passthrough in the prompt line** (OpenCode). Documented, but it bypasses the permission path and needs its own consent story first.
+* **Edit-and-resend on a past message.** Needs a restore point, which only some workspaces have; not in MVP (`message-actions`).
+
 ## Accessibility & Keyboard Map
 
-* **axe-core gates (`M1.6`)**: every surface passes contrast (theming rules), `aria` roles for custom controls (pill `combobox`, popover `listbox/option`, drawer/dialog `dialog`, tabs `tablist/tab`, switch `switch`, stepper `spinbutton`, splitter `separator`, permission-mode radios `radiogroup`, plan steps `list` with `aria-current` on the in-progress step, `usage-bar` `img` with an `aria-label` reading the usage figure, topology canvas `img` with a text summary of node states), visible focus on all pointer targets, hit targets per Iconography.
-* **Focus trap + restore**: drawers, palette, `workspace-trust-dialog`, `login-dialog`, terminal sheet trap `Tab` while open and restore to invoker on `Esc`/close. Unstack order: popover → drawer/sheet → palette → dialog. Inline `permission-request-card` and `elicitation-card` do **not** trap focus — they live in the stage flow and are reachable by roving tabindex, so a pending request never blocks reading the transcript.
-* **Roving tabindex**: one `tabindex=0` per column/list/tab-strip; arrows move, `Home/End` jump.
+* **axe-core gates (`M1.6`)**: every surface passes contrast (theming rules), `aria` roles for custom controls (pill `combobox`, popover `listbox/option`, drawer/dialog `dialog`, tabs `tablist/tab`, switch `switch`, stepper `spinbutton`, splitter `separator`, permission-mode radios `radiogroup`, plan steps `list` with `aria-current` on the in-progress step, `usage-bar` `img` with an `aria-label` reading the usage figure, topology canvas `img` with a text summary of node states, the MCP attachment matrix `grid` with `columnheader` / `rowheader` / `gridcell`), visible focus on all pointer targets, hit targets per Iconography.
+* **Transcript semantics**: the stage is a `role="log"` region whose live announcements are **off** while streaming — a chunk is never announced. A separate polite announcer speaks only: turn complete, a new permission or elicitation request, and `turn-notice` of severity warning or above (assertive for `error` and `connection-lost`). The streaming message sets `aria-busy` until its turn ends. `tool-run-group`, `thought-block`, `subagent-card` and `tool-accordion` are `button`s with `aria-expanded`; `message-actions` is a `toolbar`; `activity-ledger` is a `list` of expandable rows; `jump-to-latest` announces itself once when it appears, not on each count change.
+* **Focus trap + restore**: drawers, palette, `workspace-trust-dialog`, `login-dialog`, terminal sheet and `provider-popover` trap `Tab` while open and restore to invoker on `Esc`/close. Unstack order is derived from `stacking`, topmost first: popover → palette → sheet → dialog → drawer. Toasts and tooltips take no focus and are not in the order. A trap never opens over another trap: a `provider-popover` request that arrives while a dialog or sheet is open waits in the Provider's pending list. Inline `permission-request-card` and `elicitation-card` do **not** trap focus — they live in the stage flow and are reachable by roving tabindex, so a pending request never blocks reading the transcript.
+* **Roving tabindex**: one `tabindex=0` per column/list/tab-strip; arrows move, `Home/End` jump. The stage's entries are one such list: `↑` / `↓` move between entries, `Enter` / `Space` toggle the focused group, block or card, and `End` scrolls to the tail and re-pins it.
+* **Grid roving** (`sync-grid` only): one `tabindex=0` for the whole grid, on the last-focused cell (the first `gridcell` on entry). `←` `→` `↑` `↓` move one cell and stop at the edge without wrapping; `Home` / `End` jump to the first / last cell of the row; `Ctrl+Home` / `Ctrl+End` to the first / last cell of the grid; `PageUp` / `PageDown` move by the visible row count. The `rowheader` is reachable with `←` from the first `gridcell`. Moving focus scrolls the cell into view past the frozen column and sticky header. `Tab` leaves the grid rather than walking cells.
 * **Global shortcuts**:
 
 | Keys | Action |
@@ -908,7 +1153,7 @@ Worked example: a `session-item-chip` whose only action is capability-gated (`ar
 | `Ctrl/Cmd+W` | Close focused tab (guard dirty state) |
 | `Ctrl/Cmd+,` | Open Settings |
 | `Enter/Space` | Open/confirm focused control |
-| `Esc` | Unstack: close popover → drawer/sheet → palette → dialog |
+| `Esc` | Unstack, derived from `stacking`: close popover → palette → sheet → dialog → drawer |
 
 All P0 actions reachable by keyboard; layout stable at 60fps under synthetic 8-stream feed.
 
@@ -931,10 +1176,16 @@ Visual and token rules. Behavioural guardrails (permissions, cancellation, MCP, 
 * Use Geist Icons at `12/16/20/24px` with `28/32/36px` targets and `1.5px` strokes; no mixed icon sets.
 * Reserve `provider-accordion` container tokens now so `SYN-09` telemetry and `SYN-11` schema forms land without re-spacing.
 * Gate every theme (default + custom JSON) on WCAG AA before ship.
+* Group by kind in the ledger and by order in the transcript; never merge the two into one list (P10).
+* Put a control in exactly one place; a config category has one home.
 
 ### Don't
 * Don't use colorful background fills on cards; all cards must remain on `{semantic.surface-card}`.
 * Don't hardcode hex/rgba inside `components:`; use the Semantic Theme Contract so light/dark/custom themes hot-swap.
 * Don't ship TOML themes; manifests are JSON only.
 * Don't use ambient shadows for depth; tonal steps, hairlines and `{semantic.edge-highlight}` only.
+* Don't show a status dot without its reason in words in the same row (P2).
+* Don't infer a tool call's origin (MCP server, skill, subagent) from its title in the webview; render the `origin` field or nothing.
+* Don't announce streamed chunks to assistive technology, and don't move the viewport while the user is reading (`jump-to-latest`).
+* Don't invent per-option descriptions or trade-off lines the protocol did not send.
 * Don't use GitHub or GitLab logos anywhere except `workspace-source-badge`, where they report where an existing folder's git remote points. A vendor logo is never an entry point, and never implies where a workspace came from.

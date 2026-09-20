@@ -73,6 +73,10 @@ Tethys supports three ways to run an agent. The user picks one per agent profile
 
 Tethys maintains a published **vendor compliance matrix**: backend class × sign‑in method × vendor statement × last‑verified date, with source links. It is product guidance, not legal advice.
 
+**First-class Providers.** The Providers Tethys connects and verifies first, against installed binaries, are **Claude Code** (Class B), **OpenCode** and **Kiro CLI** (`kiro-cli acp`, ACP v1, Class A). Codex and others follow as rolling additions; Codex's config projector already ships. The integration plan is Wave 2.5 in [milestone.md](./milestone.md).
+
+**Antigravity is not in the first-class set, and is gated on a compliance determination.** It is technically connectable: the ACP Registry lists `antigravity-acp`, a Google-distributed ACP server binary. But Antigravity's terms (§6) state that "using third party software, tools, or services to access the Service … is a breach of this Agreement" and may lead to suspension or termination of the user's Antigravity and/or Gemini CLI accounts. Whether running Google's own ACP server inside a third-party client falls under that clause is a determination the vendor compliance matrix has not made, and the matrix's Google row covers API-key and Google Cloud ADC sign-in only. Tethys will not expose a user's account to that risk on an assumption, so the integration waits for the determination (milestone M1.21). Config-sync targets for Antigravity (SYN‑05, SYN‑11) are file operations that never touch the subscription and are not changed by this note.
+
 ---
 
 ## 3. Functional Requirements
