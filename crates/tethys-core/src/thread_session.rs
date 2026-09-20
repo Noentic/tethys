@@ -6,9 +6,7 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use futures::stream::{self, StreamExt};
-use parking_lot::{Mutex, RwLock};
+use futures::stream::{self, StreamExt};use parking_lot::{Mutex, RwLock};
 use tethys_acp::AcpConnection;
 use tethys_agent_servers::{ConnectionLease, ConnectionStore, LaunchSpec};
 use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionEntry, ConnectionKey};
@@ -18,12 +16,12 @@ use tethys_schema::thread::{
 };
 use tethys_sync::SecretStore;
 use tethys_thread::{
-    AgentConnection, EventOrigin, NewSession, PermissionDecision, PermissionResolver,
-    ResumeSession, SessionId, ThreadMachine,
+    AgentConnection, EventOrigin, NewSession, ResumeSession, SessionId, ThreadMachine,
 };
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
+use crate::permission::pending::{Isolation, PermissionRegistry, ThreadPermissionContext};
 use crate::workspace_roots::WorkspaceRoots;
 use crate::ApiError;
 
@@ -41,19 +39,6 @@ impl SyncSource {
             secrets,
             disabled: BTreeSet::new(),
         }
-    }
-}
-
-/// Safe default until the M1.8 policy engine: never approve without an answer.
-pub struct DenyPermissionResolver;
-
-#[async_trait]
-impl PermissionResolver for DenyPermissionResolver {
-    async fn resolve(
-        &self,
-        _request: tethys_schema::thread::PermissionRequested,
-    ) -> PermissionDecision {
-        PermissionDecision::cancelled()
     }
 }
 
@@ -96,6 +81,7 @@ pub struct ThreadSessions {
     roots: RwLock<Arc<dyn WorkspaceRoots>>,
     profiles: Mutex<HashMap<String, (ConnectionKey, AgentCompat)>>,
     threads: Mutex<HashMap<ThreadId, Arc<ThreadHandle>>>,
+    permissions: RwLock<Arc<PermissionRegistry>>,
 }
 
 impl ThreadSessions {
@@ -110,6 +96,7 @@ impl ThreadSessions {
             roots: RwLock::new(roots),
             profiles: Mutex::new(HashMap::new()),
             threads: Mutex::new(HashMap::new()),
+            permissions: RwLock::new(PermissionRegistry::new()),
         }
     }
 
@@ -123,6 +110,44 @@ impl ThreadSessions {
 
     pub fn set_roots(&self, roots: Arc<dyn WorkspaceRoots>) {
         *self.roots.write() = roots;
+    }
+
+    /// Shares the policy registry the injected resolver reads (M1.7 U3).
+    pub fn set_permissions(&self, registry: Arc<PermissionRegistry>) {
+        *self.permissions.write() = registry;
+    }
+
+    pub fn permissions(&self) -> Arc<PermissionRegistry> {
+        self.permissions.read().clone()
+    }
+
+    /// Answers a surfaced permission request (`permission.respond`).
+    pub fn respond_permission(
+        &self,
+        thread_id: &ThreadId,
+        req_id: &str,
+        option_id: Option<String>,
+    ) -> Result<(), ApiError> {
+        self.permissions()
+            .complete_permission(thread_id, req_id, option_id)
+    }
+
+    /// Answers a surfaced elicitation (`elicitation_respond`).
+    pub fn respond_elicitation(
+        &self,
+        thread_id: &ThreadId,
+        response: tethys_schema::elicitation::ElicitationResponse,
+    ) -> Result<(), ApiError> {
+        self.permissions().complete_elicitation(thread_id, response)
+    }
+
+    /// Sets a thread's permission mode (`thread.set_permission_mode`).
+    pub fn set_permission_mode(
+        &self,
+        thread_id: &ThreadId,
+        mode: tethys_schema::workspace::PermissionMode,
+    ) -> Result<(), ApiError> {
+        self.permissions().set_mode(thread_id, mode)
     }
 
     pub fn store(&self) -> &Arc<ConnectionStore> {
@@ -230,6 +255,7 @@ impl ThreadSessions {
 
     pub async fn cancel(&self, id: &ThreadId) -> Result<(), ApiError> {
         let handle = self.handle(id)?;
+        self.permissions().cancel_thread(id);
         let Ok((connection, session)) = live_connection(&handle) else {
             return Ok(());
         };
@@ -258,7 +284,12 @@ impl ThreadSessions {
     }
 
     pub fn delete(&self, id: &ThreadId) -> Result<(), ApiError> {
+        self.permissions().cancel_thread(id);
         if let Some(handle) = self.threads.lock().remove(id) {
+            let session = handle.inner.lock().session.clone();
+            if let Some(session) = session {
+                self.permissions().unregister_session(&session);
+            }
             if let Some(reader) = handle.reader.lock().take() {
                 reader.abort();
             }
@@ -427,13 +458,60 @@ impl ThreadSessions {
         };
 
         let connection = lease.connection().clone();
+        let existing_mode = self
+            .permissions()
+            .context(&session)
+            .map(|context| context.mode);
         {
             let mut inner = handle.inner.lock();
             inner.session = Some(session.clone());
             inner.lease = Some(lease);
         }
+        self.register_permission_context(handle, &session, existing_mode);
         self.start_reader(handle, connection, session);
         Ok(())
+    }
+
+    /// Publishes the thread's workspace, isolation and mode to the policy
+    /// registry so the injected resolver can decide requests for this session.
+    fn register_permission_context(
+        &self,
+        handle: &Arc<ThreadHandle>,
+        session: &SessionId,
+        existing_mode: Option<tethys_schema::workspace::PermissionMode>,
+    ) {
+        let (thread_id, workspace_id, workdir, workspace_root) = {
+            let inner = handle.inner.lock();
+            (
+                inner.machine.id().clone(),
+                inner.workspace_id.clone(),
+                inner.workdir.clone(),
+                inner.workspace_root.clone(),
+            )
+        };
+        // A worktree is a linked checkout whose `.git` is a file. A subdirectory
+        // of the main checkout (or a caller-supplied path) is not one, so it
+        // stays `MainCheckout` and YOLO is refused (SEC-02).
+        let is_worktree = workdir != workspace_root && workdir.join(".git").is_file();
+        let isolation = if is_worktree {
+            Isolation::Worktree
+        } else {
+            Isolation::MainCheckout
+        };
+        let is_git = workspace_root.join(".git").exists();
+        self.permissions().register_session(
+            session,
+            ThreadPermissionContext {
+                thread_id,
+                workspace_id,
+                workspace_root,
+                workdir,
+                isolation,
+                is_git,
+                mode: existing_mode.unwrap_or(tethys_schema::workspace::PermissionMode::Supervised),
+                yolo_opt_in: false,
+            },
+        );
     }
 
     fn start_reader(
@@ -446,6 +524,7 @@ impl ThreadSessions {
             return;
         }
         let task_handle = handle.clone();
+        let permissions = self.permissions();
         let task = tokio::spawn(async move {
             let mut events = connection.events(&session);
             loop {
@@ -466,6 +545,7 @@ impl ThreadSessions {
                 }
             }
             let mut inner = task_handle.inner.lock();
+            let thread_id = inner.machine.id().clone();
             if matches!(
                 inner.machine.state(),
                 tethys_schema::thread::ThreadState::Running
@@ -474,15 +554,23 @@ impl ThreadSessions {
                 inner.machine.mark_interrupted();
             }
             inner.lease = None;
+            drop(inner);
+            // Answer anything parked when the transport died, so no resolver is
+            // left awaiting a decision that can never arrive (SEC-07).
+            permissions.cancel_thread(&thread_id);
             *task_handle.reader.lock() = None;
         });
         *handle.reader.lock() = Some(task);
     }
 
     fn mark_transport_lost(&self, handle: &Arc<ThreadHandle>) {
-        let mut inner = handle.inner.lock();
-        inner.lease = None;
-        inner.machine.mark_interrupted();
+        let thread_id = {
+            let mut inner = handle.inner.lock();
+            inner.lease = None;
+            inner.machine.mark_interrupted();
+            inner.machine.id().clone()
+        };
+        self.permissions().cancel_thread(&thread_id);
     }
 }
 

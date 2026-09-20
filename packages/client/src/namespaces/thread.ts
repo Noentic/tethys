@@ -4,7 +4,7 @@
 //! TODO(C): type `create`, `queue*`, `prompt` and friends against tethys-api;
 //! every wrapper is still `call<void>()` with no arguments.
 
-import type { CancelState } from "@tethys/bindings";
+import type { CancelState, PermissionMode } from "@tethys/bindings";
 
 import type { Call } from "../transport";
 
@@ -35,7 +35,9 @@ export function threadNamespace(call: Call) {
     delete: () => call<void>("thread_delete"),
     setConfigOption: () => call<void>("thread_set_config_option"),
     set_config_option: () => call<void>("thread_set_config_option"),
-    setPermissionMode: () => call<void>("thread_set_permission_mode"),
-    set_permission_mode: () => call<void>("thread_set_permission_mode"),
+    setPermissionMode: (id: string, mode: PermissionMode) =>
+      call<void>("thread_set_permission_mode", { id, mode }),
+    set_permission_mode: (id: string, mode: PermissionMode) =>
+      call<void>("thread_set_permission_mode", { id, mode }),
   };
 }

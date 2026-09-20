@@ -69,6 +69,7 @@ fn permission_request_parks_and_resolution_returns_to_running() {
             req_id: "req-1".into(),
             outcome: PermOutcome::Approved,
             decided_by: tethys_schema::thread::Decider::User,
+            option_id: Some("allow".into()),
         },
         EventOrigin::Live,
     );

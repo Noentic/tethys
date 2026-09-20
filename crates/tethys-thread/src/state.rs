@@ -117,6 +117,16 @@ impl ThreadMachine {
                     self.state = ThreadState::Running;
                 }
             }
+            TurnEventBody::ElicitationRequested(_) => {
+                apply_event(&mut self.entries, event, false);
+                self.state = ThreadState::AwaitingApproval;
+            }
+            TurnEventBody::ElicitationResolved { .. } => {
+                apply_event(&mut self.entries, event, false);
+                if self.state == ThreadState::AwaitingApproval {
+                    self.state = ThreadState::Running;
+                }
+            }
             TurnEventBody::SessionInfo(info) => {
                 if info.title.is_some() {
                     self.title.clone_from(&info.title);

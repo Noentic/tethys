@@ -14,7 +14,7 @@ use tethys_acp::mock::MOCK_ENV;
 use tethys_agent_servers::{ConnectionStore, LaunchSpec, RecoveryOutcome, StoreOptions};
 use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionKey, ConnectionState};
 use tethys_schema::thread::{Decider, PermOutcome, PermissionRequested};
-use tethys_thread::{AgentConnection, NewSession, PermissionDecision, PermissionResolver};
+use tethys_thread::{AgentConnection, NewSession, PermissionDecision, PermissionResolver, SessionId};
 
 const IDLE_GRACE: Duration = Duration::from_millis(50);
 const CANCEL_GRACE: Duration = Duration::from_millis(500);
@@ -23,7 +23,7 @@ struct ApproveAll;
 
 #[async_trait]
 impl PermissionResolver for ApproveAll {
-    async fn resolve(&self, _request: PermissionRequested) -> PermissionDecision {
+    async fn resolve(&self, _session: &SessionId, _request: PermissionRequested) -> PermissionDecision {
         PermissionDecision {
             outcome: PermOutcome::Approved,
             option_id: Some("allow".to_string()),

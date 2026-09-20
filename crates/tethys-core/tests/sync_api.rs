@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use tethys_agent_servers::{ConnectionStore, StoreOptions};
 use tethys_api::{ApiError, McpApi, SkillsApi};
-use tethys_core::thread_session::{DenyPermissionResolver, SyncSource, ThreadSessions};
+use tethys_core::permission::DenyPermissionResolver;
+use tethys_core::thread_session::{SyncSource, ThreadSessions};
 use tethys_core::Core;
 use tethys_schema::connection::AcpProtocol;
 use tethys_schema::sync::{
@@ -305,6 +306,7 @@ async fn mcp_attachments_returns_grid_through_core() {
                 sse: false,
             },
             prompt_embedded_context: false,
+            elicitation: false,
         }),
     );
 
@@ -324,6 +326,7 @@ async fn mcp_attachments_returns_grid_through_core() {
             resume: false,
             mcp: tethys_schema::sync::McpTransports::default(),
             prompt_embedded_context: false,
+            elicitation: false,
         }),
     );
 
@@ -390,6 +393,7 @@ async fn projection_plan_names_matching_providers_and_handles_unmatched_target()
             resume: false,
             mcp: tethys_schema::sync::McpTransports::default(),
             prompt_embedded_context: false,
+            elicitation: false,
         }),
     );
 

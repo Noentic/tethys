@@ -417,6 +417,10 @@ pub enum TurnEventBody {
         req_id: String,
         outcome: PermOutcome,
         decided_by: Decider,
+        /// The Provider's option that was chosen, when one was. Append-only
+        /// field (M1.7) so a resolved card can name the auto-picked option.
+        #[serde(default)]
+        option_id: Option<String>,
     },
     FileWrite {
         path: String,
@@ -442,6 +446,15 @@ pub enum TurnEventBody {
     /// A Provider's context-compaction notice (unstable ACP `compaction_update`).
     Compaction {
         summary: Option<String>,
+    },
+    /// An elicitation request (`elicitation/create`). Appended last, an
+    /// append-only region (M1.7).
+    ElicitationRequested(crate::elicitation::ElicitationRequest),
+    /// The user's answer to an elicitation. Appended last (M1.7).
+    ElicitationResolved {
+        req_id: String,
+        outcome: crate::elicitation::ElicitationOutcome,
+        values: std::collections::BTreeMap<String, crate::elicitation::ElicitationValue>,
     },
 }
 
@@ -480,6 +493,12 @@ pub enum Entry {
         request: PermissionRequested,
         outcome: Option<PermOutcome>,
     },
+    Elicitation {
+        req_id: String,
+        request: crate::elicitation::ElicitationRequest,
+        outcome: Option<crate::elicitation::ElicitationOutcome>,
+        values: std::collections::BTreeMap<String, crate::elicitation::ElicitationValue>,
+    },
     Error {
         code: String,
         message: String,
@@ -495,6 +514,7 @@ impl Entry {
             Entry::Plan { plan_id, .. } => plan_id,
             Entry::Terminal { terminal_id, .. } => terminal_id,
             Entry::Permission { req_id, .. } => req_id,
+            Entry::Elicitation { req_id, .. } => req_id,
             Entry::Error { .. } => "error",
         }
     }

@@ -23,8 +23,8 @@ use tethys_schema::connection::{AcpProtocol, AgentInfo, NormalizedCapabilities};
 use tethys_schema::sync::{McpTransports, RegistryValue, SessionServer, TransportKind};
 use tethys_schema::thread::{ContentBlock, PermOutcome, PermissionRequested, TurnEventBody};
 use tethys_thread::{
-    AgentConnection, ConnectionError, ConnectionEvent, EventStream, NewSession, PermissionDecision,
-    PermissionResolver, ResumeSession, SessionHandle, SessionId,
+    AgentConnection, ConnectionError, ConnectionEvent, ElicitationResolver, EventStream,
+    NewSession, PermissionDecision, PermissionResolver, ResumeSession, SessionHandle, SessionId,
 };
 use tokio::sync::{broadcast, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -36,6 +36,10 @@ pub struct AcpConnectOptions {
     pub protocol: AcpProtocol,
     pub client_name: String,
     pub permission_resolver: Arc<dyn PermissionResolver>,
+    pub elicitation_resolver: Arc<dyn ElicitationResolver>,
+    /// Whether Tethys advertises form elicitation and registers the
+    /// `elicitation/create` handler (M1.7). Defaults to `true`.
+    pub elicitation: bool,
 }
 
 impl AcpConnectOptions {
@@ -44,7 +48,27 @@ impl AcpConnectOptions {
             protocol,
             client_name: "tethys".to_string(),
             permission_resolver,
+            elicitation_resolver: Arc::new(crate::client::NoopElicitationResolver),
+            elicitation: true,
         }
+    }
+}
+
+/// Refuses elicitation until a real responder is injected (never surfaces a
+/// request, mirroring the pre-M1.8 deny-by-default posture).
+pub struct NoopElicitationResolver;
+
+#[async_trait]
+impl ElicitationResolver for NoopElicitationResolver {
+    async fn resolve(
+        &self,
+        _session: &SessionId,
+        request: tethys_schema::elicitation::ElicitationRequest,
+    ) -> tethys_schema::elicitation::ElicitationResponse {
+        tethys_schema::elicitation::ElicitationResponse::without_values(
+            request.req_id,
+            tethys_schema::elicitation::ElicitationOutcome::Cancelled,
+        )
     }
 }
 
@@ -67,17 +91,23 @@ struct Shared {
     synthetic: Mutex<HashMap<String, SyntheticMessageIds>>,
     replaying: Mutex<HashMap<String, bool>>,
     resolver: Arc<dyn PermissionResolver>,
+    elicitation_resolver: Arc<dyn ElicitationResolver>,
+    elicitation: bool,
     permission_seq: AtomicU32,
+    elicitation_seq: AtomicU32,
 }
 
 impl Shared {
-    fn new(resolver: Arc<dyn PermissionResolver>) -> Self {
+    fn new(options: &AcpConnectOptions) -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
             synthetic: Mutex::new(HashMap::new()),
             replaying: Mutex::new(HashMap::new()),
-            resolver,
+            resolver: Arc::clone(&options.permission_resolver),
+            elicitation_resolver: Arc::clone(&options.elicitation_resolver),
+            elicitation: options.elicitation,
             permission_seq: AtomicU32::new(0),
+            elicitation_seq: AtomicU32::new(0),
         }
     }
 
@@ -108,6 +138,13 @@ impl Shared {
         format!(
             "perm-{}",
             self.permission_seq.fetch_add(1, Ordering::Relaxed) + 1
+        )
+    }
+
+    fn next_elicitation_id(&self) -> String {
+        format!(
+            "elicit-{}",
+            self.elicitation_seq.fetch_add(1, Ordering::Relaxed) + 1
         )
     }
 
@@ -211,7 +248,7 @@ async fn connect_v1<T>(
 where
     T: ConnectTo<Client> + Send + 'static,
 {
-    let shared = Arc::new(Shared::new(options.permission_resolver));
+    let shared = Arc::new(Shared::new(&options));
     let (handle_tx, handle_rx) = oneshot::channel();
     let shutdown = CancellationToken::new();
     let token = shutdown.clone();
@@ -220,7 +257,9 @@ where
 
     let notify_shared = shared.clone();
     let request_shared = shared.clone();
+    let elicitation_shared = shared.clone();
     let client_name = options.client_name.clone();
+    let elicitation_enabled = options.elicitation;
     tokio::spawn(async move {
         let result = Client
             .builder()
@@ -256,9 +295,7 @@ where
                             req_id,
                             title,
                             description: None,
-                            subject: Some(tethys_schema::thread::PermissionSubject::ToolCall {
-                                tool_call_id: request.tool_call.tool_call_id.to_string(),
-                            }),
+                            subject: Some(map::permission_subject(&request.tool_call)),
                             options: request
                                 .options
                                 .iter()
@@ -276,16 +313,88 @@ where
                         let resolver = shared.resolver.clone();
                         let resolve_shared = shared.clone();
                         connection.spawn(async move {
-                            let decision = resolver.resolve(permission.clone()).await;
+                            let decision = resolver
+                                .resolve(&SessionId::new(session_id.clone()), permission.clone())
+                                .await;
                             resolve_shared.emit(
                                 &session_id,
                                 TurnEventBody::PermissionResolved {
                                     req_id: permission.req_id.clone(),
                                     outcome: decision.outcome,
                                     decided_by: decision.decided_by,
+                                    option_id: decision.option_id.clone(),
                                 },
                             );
                             responder.respond(v1_permission_response(decision))
+                        })?;
+                        Ok(())
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_request(
+                move |request: acp1::CreateElicitationRequest,
+                      responder: Responder<acp1::CreateElicitationResponse>,
+                      connection: ConnectionTo<Agent>| {
+                    let shared = elicitation_shared.clone();
+                    async move {
+                        let Some(session_id) = elicitation_session_v1(&request) else {
+                            responder.respond(v1_elicitation_response(
+                                tethys_schema::elicitation::ElicitationResponse::without_values(
+                                    String::new(),
+                                    tethys_schema::elicitation::ElicitationOutcome::Cancelled,
+                                ),
+                            ))?;
+                            return Ok(());
+                        };
+                        if !shared.elicitation {
+                            responder.respond(v1_elicitation_response(
+                                tethys_schema::elicitation::ElicitationResponse::without_values(
+                                    String::new(),
+                                    tethys_schema::elicitation::ElicitationOutcome::Cancelled,
+                                ),
+                            ))?;
+                            return Ok(());
+                        }
+                        let mut normalized = crate::elicitation::from_sdk_v1(&request)
+                            .or_else(|| {
+                                crate::elicitation::from_sdk_v1_url(&request).map(|url| {
+                                    tethys_schema::elicitation::ElicitationRequest {
+                                        req_id: String::new(),
+                                        title: request.message.clone(),
+                                        description: None,
+                                        url: Some(url),
+                                        fields: Vec::new(),
+                                    }
+                                })
+                            })
+                            .unwrap_or_else(|| tethys_schema::elicitation::ElicitationRequest {
+                                req_id: String::new(),
+                                title: request.message.clone(),
+                                description: None,
+                                url: None,
+                                fields: Vec::new(),
+                            });
+                        normalized.req_id = shared.next_elicitation_id();
+                        shared.emit(
+                            &session_id,
+                            TurnEventBody::ElicitationRequested(normalized.clone()),
+                        );
+                        let resolver = shared.elicitation_resolver.clone();
+                        let resolve_shared = shared.clone();
+                        connection.spawn(async move {
+                            let response = resolver
+                                .resolve(&SessionId::new(session_id.clone()), normalized)
+                                .await;
+                            resolve_shared.emit(
+                                &session_id,
+                                TurnEventBody::ElicitationResolved {
+                                    req_id: response.req_id.clone(),
+                                    outcome: response.outcome,
+                                    values: response.values.clone(),
+                                },
+                            );
+                            responder.respond(v1_elicitation_response(response))
                         })?;
                         Ok(())
                     }
@@ -316,9 +425,12 @@ where
     })?;
     let response = wire
         .send_request(
-            acp1::InitializeRequest::new(ProtocolVersion::V1).client_info(
-                acp1::Implementation::new(client_name, env!("CARGO_PKG_VERSION")),
-            ),
+            acp1::InitializeRequest::new(ProtocolVersion::V1)
+                .client_info(acp1::Implementation::new(
+                    client_name,
+                    env!("CARGO_PKG_VERSION"),
+                ))
+                .client_capabilities(v1_client_capabilities(elicitation_enabled)),
         )
         .block_task()
         .await
@@ -332,7 +444,7 @@ where
 
     Ok(AcpConnection {
         info,
-        capabilities: capabilities_v1(&response.agent_capabilities),
+        capabilities: capabilities_v1(&response.agent_capabilities, elicitation_enabled),
         protocol: AcpProtocol::V1,
         wire: Wire::V1(wire),
         shared,
@@ -349,7 +461,7 @@ async fn connect_v2<T>(
 where
     T: ConnectTo<Client> + Send + 'static,
 {
-    let shared = Arc::new(Shared::new(options.permission_resolver));
+    let shared = Arc::new(Shared::new(&options));
     let (handle_tx, handle_rx) = oneshot::channel();
     let shutdown = CancellationToken::new();
     let token = shutdown.clone();
@@ -358,7 +470,9 @@ where
 
     let notify_shared = shared.clone();
     let request_shared = shared.clone();
+    let elicitation_shared = shared.clone();
     let client_name = options.client_name.clone();
+    let elicitation_enabled = options.elicitation;
     tokio::spawn(async move {
         let result = Client
             .v2()
@@ -393,16 +507,88 @@ where
                         let resolver = shared.resolver.clone();
                         let resolve_shared = shared.clone();
                         connection.spawn(async move {
-                            let decision = resolver.resolve(permission.clone()).await;
+                            let decision = resolver
+                                .resolve(&SessionId::new(session_id.clone()), permission.clone())
+                                .await;
                             resolve_shared.emit(
                                 &session_id,
                                 TurnEventBody::PermissionResolved {
                                     req_id: permission.req_id.clone(),
                                     outcome: decision.outcome,
                                     decided_by: decision.decided_by,
+                                    option_id: decision.option_id.clone(),
                                 },
                             );
                             responder.respond(v2_permission_response(decision))
+                        })?;
+                        Ok(())
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_request(
+                move |request: acp2::CreateElicitationRequest,
+                      responder: Responder<acp2::CreateElicitationResponse>,
+                      connection: V2ConnectionTo<Agent>| {
+                    let shared = elicitation_shared.clone();
+                    async move {
+                        let Some(session_id) = elicitation_session_v2(&request) else {
+                            responder.respond(v2_elicitation_response(
+                                tethys_schema::elicitation::ElicitationResponse::without_values(
+                                    String::new(),
+                                    tethys_schema::elicitation::ElicitationOutcome::Cancelled,
+                                ),
+                            ))?;
+                            return Ok(());
+                        };
+                        if !shared.elicitation {
+                            responder.respond(v2_elicitation_response(
+                                tethys_schema::elicitation::ElicitationResponse::without_values(
+                                    String::new(),
+                                    tethys_schema::elicitation::ElicitationOutcome::Cancelled,
+                                ),
+                            ))?;
+                            return Ok(());
+                        }
+                        let mut normalized = crate::elicitation::from_sdk_v2(&request)
+                            .or_else(|| {
+                                crate::elicitation::from_sdk_v2_url(&request).map(|url| {
+                                    tethys_schema::elicitation::ElicitationRequest {
+                                        req_id: String::new(),
+                                        title: request.message.clone(),
+                                        description: None,
+                                        url: Some(url),
+                                        fields: Vec::new(),
+                                    }
+                                })
+                            })
+                            .unwrap_or_else(|| tethys_schema::elicitation::ElicitationRequest {
+                                req_id: String::new(),
+                                title: request.message.clone(),
+                                description: None,
+                                url: None,
+                                fields: Vec::new(),
+                            });
+                        normalized.req_id = shared.next_elicitation_id();
+                        shared.emit(
+                            &session_id,
+                            TurnEventBody::ElicitationRequested(normalized.clone()),
+                        );
+                        let resolver = shared.elicitation_resolver.clone();
+                        let resolve_shared = shared.clone();
+                        connection.spawn(async move {
+                            let response = resolver
+                                .resolve(&SessionId::new(session_id.clone()), normalized)
+                                .await;
+                            resolve_shared.emit(
+                                &session_id,
+                                TurnEventBody::ElicitationResolved {
+                                    req_id: response.req_id.clone(),
+                                    outcome: response.outcome,
+                                    values: response.values.clone(),
+                                },
+                            );
+                            responder.respond(v2_elicitation_response(response))
                         })?;
                         Ok(())
                     }
@@ -432,10 +618,13 @@ where
         ConnectionError::Transport("connection ended before initialize".to_string())
     })?;
     let response = wire
-        .send_request(acp2::InitializeRequest::new(
-            ProtocolVersion::V2,
-            acp2::Implementation::new(client_name, env!("CARGO_PKG_VERSION")),
-        ))
+        .send_request(
+            acp2::InitializeRequest::new(
+                ProtocolVersion::V2,
+                acp2::Implementation::new(client_name, env!("CARGO_PKG_VERSION")),
+            )
+            .capabilities(v2_client_capabilities(elicitation_enabled)),
+        )
         .block_task()
         .await
         .map_err(map_sdk_error)?;
@@ -446,7 +635,7 @@ where
             response.info.version.as_str(),
             response.info.title.as_deref(),
         ),
-        capabilities: capabilities_v2(&response.capabilities),
+        capabilities: capabilities_v2(&response.capabilities, elicitation_enabled),
         protocol: AcpProtocol::V2,
         wire: Wire::V2(wire),
         shared,
@@ -722,7 +911,10 @@ fn v2_permission_response(decision: PermissionDecision) -> acp2::RequestPermissi
     acp2::RequestPermissionResponse::new(outcome)
 }
 
-fn capabilities_v1(capabilities: &acp1::AgentCapabilities) -> NormalizedCapabilities {
+fn capabilities_v1(
+    capabilities: &acp1::AgentCapabilities,
+    elicitation: bool,
+) -> NormalizedCapabilities {
     NormalizedCapabilities {
         load_session: capabilities.load_session,
         resume: capabilities.load_session,
@@ -732,11 +924,25 @@ fn capabilities_v1(capabilities: &acp1::AgentCapabilities) -> NormalizedCapabili
             sse: capabilities.mcp_capabilities.sse,
         },
         prompt_embedded_context: capabilities.prompt_capabilities.embedded_context,
+        elicitation,
     }
 }
 
+fn v1_client_capabilities(elicitation: bool) -> acp1::ClientCapabilities {
+    let mut capabilities = acp1::ClientCapabilities::new();
+    if elicitation {
+        capabilities.elicitation = Some(
+            acp1::ElicitationCapabilities::new().form(acp1::ElicitationFormCapabilities::new()),
+        );
+    }
+    capabilities
+}
+
 #[cfg(feature = "acp-v2")]
-fn capabilities_v2(capabilities: &acp2::AgentCapabilities) -> NormalizedCapabilities {
+fn capabilities_v2(
+    capabilities: &acp2::AgentCapabilities,
+    elicitation: bool,
+) -> NormalizedCapabilities {
     let session = capabilities.session.as_ref();
     let mcp = session.and_then(|session| session.mcp.as_ref());
     NormalizedCapabilities {
@@ -750,7 +956,103 @@ fn capabilities_v2(capabilities: &acp2::AgentCapabilities) -> NormalizedCapabili
         prompt_embedded_context: session
             .and_then(|session| session.prompt.as_ref())
             .is_some(),
+        elicitation,
     }
+}
+
+#[cfg(feature = "acp-v2")]
+fn v2_client_capabilities(elicitation: bool) -> acp2::ClientCapabilities {
+    let mut capabilities = acp2::ClientCapabilities::new();
+    if elicitation {
+        capabilities.elicitation = Some(
+            acp2::ElicitationCapabilities::new().form(acp2::ElicitationFormCapabilities::new()),
+        );
+    }
+    capabilities
+}
+
+/// The session an elicitation is scoped to, when session-scoped.
+fn elicitation_session_v1(request: &acp1::CreateElicitationRequest) -> Option<String> {
+    match request.scope() {
+        acp1::ElicitationScope::Session(scope) => Some(scope.session_id.to_string()),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "acp-v2")]
+fn elicitation_session_v2(request: &acp2::CreateElicitationRequest) -> Option<String> {
+    match request.scope() {
+        acp2::ElicitationScope::Session(scope) => Some(scope.session_id.to_string()),
+        _ => None,
+    }
+}
+
+fn elicitation_content(
+    values: std::collections::BTreeMap<String, tethys_schema::elicitation::ElicitationValue>,
+) -> std::collections::BTreeMap<String, acp1::ElicitationContentValue> {
+    use tethys_schema::elicitation::ElicitationValue;
+    values
+        .into_iter()
+        .map(|(key, value)| {
+            let value = match value {
+                ElicitationValue::Text(text) => acp1::ElicitationContentValue::String(text),
+                ElicitationValue::Number(number) => acp1::ElicitationContentValue::Number(number),
+                ElicitationValue::Boolean(boolean) => {
+                    acp1::ElicitationContentValue::Boolean(boolean)
+                }
+            };
+            (key, value)
+        })
+        .collect()
+}
+
+fn v1_elicitation_response(
+    response: tethys_schema::elicitation::ElicitationResponse,
+) -> acp1::CreateElicitationResponse {
+    use tethys_schema::elicitation::ElicitationOutcome;
+    let action = match response.outcome {
+        ElicitationOutcome::Accepted => acp1::ElicitationAction::Accept(
+            acp1::ElicitationAcceptAction::new().content(elicitation_content(response.values)),
+        ),
+        ElicitationOutcome::Declined => acp1::ElicitationAction::Decline,
+        ElicitationOutcome::Cancelled => acp1::ElicitationAction::Cancel,
+    };
+    acp1::CreateElicitationResponse::new(action)
+}
+
+#[cfg(feature = "acp-v2")]
+fn v2_elicitation_response(
+    response: tethys_schema::elicitation::ElicitationResponse,
+) -> acp2::CreateElicitationResponse {
+    use tethys_schema::elicitation::ElicitationOutcome;
+    let action = match response.outcome {
+        ElicitationOutcome::Accepted => acp2::ElicitationAction::Accept(
+            acp2::ElicitationAcceptAction::new().content(v2_elicitation_content(response.values)),
+        ),
+        ElicitationOutcome::Declined => acp2::ElicitationAction::Decline,
+        ElicitationOutcome::Cancelled => acp2::ElicitationAction::Cancel,
+    };
+    acp2::CreateElicitationResponse::new(action)
+}
+
+#[cfg(feature = "acp-v2")]
+fn v2_elicitation_content(
+    values: std::collections::BTreeMap<String, tethys_schema::elicitation::ElicitationValue>,
+) -> std::collections::BTreeMap<String, acp2::ElicitationContentValue> {
+    use tethys_schema::elicitation::ElicitationValue;
+    values
+        .into_iter()
+        .map(|(key, value)| {
+            let value = match value {
+                ElicitationValue::Text(text) => acp2::ElicitationContentValue::String(text),
+                ElicitationValue::Number(number) => acp2::ElicitationContentValue::Number(number),
+                ElicitationValue::Boolean(boolean) => {
+                    acp2::ElicitationContentValue::Boolean(boolean)
+                }
+            };
+            (key, value)
+        })
+        .collect()
 }
 
 fn parse_session_servers(values: &[serde_json::Value]) -> Vec<SessionServer> {

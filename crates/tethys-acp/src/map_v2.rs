@@ -3,9 +3,9 @@
 use agent_client_protocol::schema::v2 as acp2;
 use agent_client_protocol::schema::MaybeUndefined;
 use tethys_schema::thread::{
-    AgentCommand, ConfigOption, ContentBlock, MessageChunk, MessageUpsert, Patch, PlanContent,
-    PlanEntry, PlanEntryPriority, PlanEntryStatus, Role, SessionState, StopReason, ToolCallContent,
-    ToolCallPatch, ToolCallStatus, TurnEventBody,
+    AgentCommand, ConfigOption, ContentBlock, MessageChunk, MessageUpsert, Patch, PermissionSubject,
+    PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, Role, SessionState, StopReason,
+    ToolCallContent, ToolCallPatch, ToolCallStatus, TurnEventBody,
 };
 
 use crate::map::{json_string, state_changed};
@@ -356,8 +356,21 @@ fn subject(subject: &acp2::RequestPermissionSubject) -> tethys_schema::thread::P
             }
         }
         acp2::RequestPermissionSubject::ToolCall(tool_call) => {
-            tethys_schema::thread::PermissionSubject::ToolCall {
-                tool_call_id: tool_call.tool_call.tool_call_id.to_string(),
+            let update = &tool_call.tool_call;
+            let edit_like = matches!(
+                maybe_value(&update.kind),
+                Some(acp2::ToolKind::Edit | acp2::ToolKind::Delete | acp2::ToolKind::Move)
+            );
+            if edit_like {
+                if let Some(location) = maybe_value(&update.locations).and_then(|list| list.first())
+                {
+                    return PermissionSubject::File {
+                        path: location.path.0.display().to_string(),
+                    };
+                }
+            }
+            PermissionSubject::ToolCall {
+                tool_call_id: update.tool_call_id.to_string(),
             }
         }
         other => tethys_schema::thread::PermissionSubject::Unknown(json_string(other)),

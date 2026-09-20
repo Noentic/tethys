@@ -36,6 +36,10 @@ async fn thread_defaults_return_unimplemented() {
     );
     assert_unimplemented(
         "thread.set_permission_mode",
-        api.thread_set_permission_mode().await,
+        api.thread_set_permission_mode(
+            ThreadId::from("t1"),
+            tethys_schema::workspace::PermissionMode::Supervised,
+        )
+        .await,
     );
 }

@@ -20,6 +20,10 @@ pub mod cancel;
 
 pub use cancel::*;
 
+pub mod elicitation;
+
+pub use elicitation::*;
+
 use serde::{Deserialize, Serialize};
 use specta::{Type, Types};
 
@@ -192,5 +196,12 @@ pub fn registered_types() -> Types {
         .register::<workspace::Vcs>()
         .register::<workspace::GitHost>()
         .register::<workspace::PermissionMode>()
+        .register::<elicitation::ElicitationEnumOption>()
+        .register::<elicitation::ElicitationFieldKind>()
+        .register::<elicitation::ElicitationField>()
+        .register::<elicitation::ElicitationRequest>()
+        .register::<elicitation::ElicitationValue>()
+        .register::<elicitation::ElicitationOutcome>()
+        .register::<elicitation::ElicitationResponse>()
 }
 

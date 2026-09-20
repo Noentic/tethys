@@ -37,6 +37,11 @@ pub struct NormalizedCapabilities {
     pub resume: bool,
     pub mcp: McpTransports,
     pub prompt_embedded_context: bool,
+    /// Whether Tethys advertised form elicitation and may receive
+    /// `elicitation/create` for this connection (M1.7). An agent that never
+    /// sends elicitation requests never materializes an entry.
+    #[serde(default)]
+    pub elicitation: bool,
 }
 
 /// Per-profile ACP compatibility preferences (architecture §12).

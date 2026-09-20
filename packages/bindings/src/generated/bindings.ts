@@ -307,6 +307,57 @@ export type DiffSummary = {
 	deletions: number,
 };
 
+/**  One selectable value of an [`ElicitationFieldKind::Enum`] field. */
+export type ElicitationEnumOption = {
+	value: string,
+	label: string,
+	description: string | null,
+};
+
+/**  One field of an elicitation form. */
+export type ElicitationField = {
+	key: string,
+	label: string,
+	description: string | null,
+	required: boolean,
+	kind: ElicitationFieldKind,
+};
+
+/**  The shape of one elicitation field, carrying its constraints and default. */
+export type ElicitationFieldKind = { kind: "text"; default: string | null; min_len: number | null; max_len: number | null; 
+/**
+ *  A named format (`email`, `uri`, `date`, `date-time`) or `None` when
+ *  the Provider declared an unrecognised one.
+ */
+format: string | null } | { kind: "number"; default: number | null; min: number | null; max: number | null } | { kind: "boolean"; default: boolean | null } | { kind: "enum"; options: ElicitationEnumOption[]; default: string | null };
+
+/**  The three terminal outcomes of an elicitation (UI-04 / U9). */
+export type ElicitationOutcome = "accepted" | "declined" | "cancelled";
+
+/**
+ *  A normalized `elicitation/create` request.
+ * 
+ *  Form mode carries `fields`; URL mode carries `url` and no fields (U9 renders
+ *  the host and an `Open in browser` action, never an embedded frame).
+ */
+export type ElicitationRequest = {
+	req_id: string,
+	title: string,
+	description: string | null,
+	url?: string | null,
+	fields: ElicitationField[],
+};
+
+/**  The user's answer to an elicitation request. */
+export type ElicitationResponse = {
+	req_id: string,
+	outcome: ElicitationOutcome,
+	values: { [key in string]: ElicitationValue },
+};
+
+/**  One typed answer value. */
+export type ElicitationValue = { type: "text"; value: string } | { type: "number"; value: number | null } | { type: "boolean"; value: boolean };
+
 /**  Materialized thread entry representation. */
 export type Entry = {
 	thread_id: ThreadId,
@@ -441,6 +492,12 @@ export type NormalizedCapabilities = {
 	resume: boolean,
 	mcp: McpTransports,
 	prompt_embedded_context: boolean,
+	/**
+	 *  Whether Tethys advertised form elicitation and may receive
+	 *  `elicitation/create` for this connection (M1.7). An agent that never
+	 *  sends elicitation requests never materializes an entry.
+	 */
+	elicitation?: boolean,
 };
 
 /**  Three-state field for v2 patch semantics. */
@@ -807,6 +864,11 @@ export type TurnEventBody = { type: "StateChanged"; body: StateChanged } | { typ
 	req_id: string,
 	outcome: PermOutcome,
 	decided_by: Decider,
+	/**
+	 *  The Provider's option that was chosen, when one was. Append-only
+	 *  field (M1.7) so a resolved card can name the auto-picked option.
+	 */
+	option_id?: string | null,
 } } | { type: "FileWrite"; body: {
 	path: string,
 	before: string | null,
@@ -830,6 +892,17 @@ export type TurnEventBody = { type: "StateChanged"; body: StateChanged } | { typ
 /**  A Provider's context-compaction notice (unstable ACP `compaction_update`). */
 { type: "Compaction"; body: {
 	summary: string | null,
+} } | 
+/**
+ *  An elicitation request (`elicitation/create`). Appended last, an
+ *  append-only region (M1.7).
+ */
+{ type: "ElicitationRequested"; body: ElicitationRequest } | 
+/**  The user's answer to an elicitation. Appended last (M1.7). */
+{ type: "ElicitationResolved"; body: {
+	req_id: string,
+	outcome: ElicitationOutcome,
+	values: { [key in string]: ElicitationValue },
 } };
 
 /**  Refs holding the pre-restore state so restore is itself reversible. */

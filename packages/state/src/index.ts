@@ -1,4 +1,5 @@
 export * from "./cancellation";
+export * from "./inspector";
 export * from "./provider-extension";
 export * from "./reducers";
 export * from "./selectors";

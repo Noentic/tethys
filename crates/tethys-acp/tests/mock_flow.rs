@@ -18,14 +18,14 @@ use tethys_schema::thread::{
 #[cfg(feature = "acp-v2")]
 use tethys_thread::ResumeSession;
 use tethys_thread::{
-    AgentConnection, ConnectionEvent, NewSession, PermissionDecision, PermissionResolver,
+    AgentConnection, ConnectionEvent, NewSession, PermissionDecision, PermissionResolver, SessionId,
 };
 
 struct AutoApprove;
 
 #[async_trait]
 impl PermissionResolver for AutoApprove {
-    async fn resolve(&self, request: PermissionRequested) -> PermissionDecision {
+    async fn resolve(&self, _session: &SessionId, request: PermissionRequested) -> PermissionDecision {
         PermissionDecision {
             outcome: PermOutcome::Approved,
             option_id: request

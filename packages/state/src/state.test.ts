@@ -18,7 +18,9 @@ import {
   SessionStreamManager,
   selectCancellationState,
   selectGraceDeadline,
+  selectInboxItems,
   selectIsStopDestructive,
+  selectTurnActionsVisible,
   selectWorkspaceProviderSessionGroups,
   sessionReducer,
   setCustomRafScheduler,
@@ -481,5 +483,205 @@ describe("Thread-view contract fixtures (M1.6c U13)", () => {
   it("does not populate origin or parent_tool_call_id by default", () => {
     expect(providerExtensionFixture.method).toBe("_kiro.dev/mcp/oauth_request");
     expect(toolCallPatchFixture.parent_tool_call_id).toBeNull();
+  });
+});
+
+describe("Inspector session model (M1.7 U5)", () => {
+  beforeEach(() => {
+    clearAllSessionStoresForTesting();
+    setCustomRafScheduler(null, null);
+  });
+
+  it("keeps one plan entry updated in place", () => {
+    const event = (contents: string[]): TurnEventBody =>
+      ({
+        type: "PlanUpsert",
+        body: {
+          plan_id: "default",
+          plan: {
+            entries: contents.map((content) => ({
+              content,
+              priority: "Medium",
+              status: "Pending",
+            })),
+          },
+        },
+      }) as TurnEventBody;
+
+    let state = createInitialSessionState("s-1", "p-1", "ws-1");
+    state = sessionReducer(state, event(["a", "b"]));
+    state = sessionReducer(state, event(["a", "b", "c"]));
+
+    const plans = state.liveEntries.filter((entry) => entry.kind === "plan");
+    expect(plans).toHaveLength(1);
+    expect((plans[0] as { steps: unknown[] }).steps).toHaveLength(3);
+  });
+
+  it("accumulates terminal output chunks in order", () => {
+    let state = createInitialSessionState("s-1", "p-1", "ws-1");
+    state = sessionReducer(state, {
+      type: "TerminalUpsert",
+      body: { terminal_id: "t1", patch: { type: "Set", value: "hello " } },
+    } as TurnEventBody);
+    state = sessionReducer(state, {
+      type: "TerminalOutputChunk",
+      body: { terminal_id: "t1", bytes: "world" },
+    } as TurnEventBody);
+    state = sessionReducer(state, {
+      type: "TerminalOutputChunk",
+      body: { terminal_id: "t1", bytes: "!" },
+    } as TurnEventBody);
+
+    const terminals = state.liveEntries.filter(
+      (entry) => entry.kind === "terminal",
+    );
+    expect(terminals).toHaveLength(1);
+    expect((terminals[0] as { output: string }).output).toBe("hello world!");
+  });
+
+  it("materializes one elicitation entry and clears it from pending", () => {
+    let state = createInitialSessionState("s-1", "p-1", "ws-1");
+    state = sessionReducer(state, {
+      type: "ElicitationRequested",
+      body: {
+        req_id: "elicit-1",
+        title: "Project details",
+        description: null,
+        url: null,
+        fields: [],
+      },
+    } as TurnEventBody);
+    expect(state.pendingElicitations).toHaveLength(1);
+    expect(state.status).toBe("awaiting_approval");
+
+    state = sessionReducer(state, {
+      type: "ElicitationResolved",
+      body: { req_id: "elicit-1", outcome: "accepted", values: {} },
+    } as TurnEventBody);
+
+    expect(state.pendingElicitations).toHaveLength(0);
+    const entry = state.liveEntries.find((e) => e.kind === "elicitation");
+    expect((entry as { resolution?: unknown }).resolution).toBeDefined();
+  });
+
+  it("aggregates the inbox across sessions from one source of truth", () => {
+    const withPermission = (sessionId: string) => {
+      let state = createInitialSessionState(sessionId, "p-1", "ws-1");
+      state = sessionReducer(state, {
+        type: "PermissionRequested",
+        body: {
+          req_id: `perm-${sessionId}`,
+          title: "Run tests",
+          description: null,
+          subject: null,
+          options: [],
+        },
+      } as TurnEventBody);
+      return state;
+    };
+
+    const first = withPermission("s-1");
+    const second = withPermission("s-2");
+    const inbox = selectInboxItems([first, second]);
+    expect(inbox).toHaveLength(2);
+    expect(inbox.map((item) => item.sessionId)).toEqual(["s-1", "s-2"]);
+
+    const resolved = sessionReducer(second, {
+      type: "PermissionResolved",
+      body: { req_id: "perm-s-2", outcome: "Approved", decided_by: "User" },
+    } as TurnEventBody);
+    expect(selectInboxItems([first, resolved])).toHaveLength(1);
+  });
+
+  it("gates per-turn actions on capability", () => {
+    expect(
+      selectTurnActionsVisible(workspaceCapabilityFixtures["no-git"]),
+    ).toEqual({
+      viewDiff: false,
+      restore: false,
+    });
+    expect(
+      selectTurnActionsVisible(workspaceCapabilityFixtures["git-remote"]),
+    ).toEqual({ viewDiff: true, restore: true });
+    expect(
+      selectTurnActionsVisible(workspaceCapabilityFixtures["git-no-restore"]),
+    ).toEqual({ viewDiff: true, restore: false });
+  });
+});
+
+describe("turn endings and attachments (M1.7 U17/U18)", () => {
+  function idle(stop_reason: unknown): TurnEventBody {
+    return {
+      type: "StateChanged",
+      body: { state: { Idle: { stop_reason } } },
+    } as TurnEventBody;
+  }
+
+  it("materializes a visible turn-notice for every non-normal stop reason", () => {
+    for (const stop_reason of [
+      "Refusal",
+      "MaxTokens",
+      "MaxTurnRequests",
+      "Cancelled",
+    ]) {
+      const state = sessionReducer(
+        createInitialSessionState("s", "p", "ws"),
+        idle(stop_reason),
+      );
+      expect(state.entries.some((entry) => entry.kind === "turn_notice")).toBe(
+        true,
+      );
+    }
+  });
+
+  it("renders no notice for a normal end of turn", () => {
+    const state = sessionReducer(
+      createInitialSessionState("s", "p", "ws"),
+      idle("EndTurn"),
+    );
+    expect(state.entries.some((entry) => entry.kind === "turn_notice")).toBe(
+      false,
+    );
+  });
+
+  it("materializes a retryable error notice", () => {
+    const state = sessionReducer(createInitialSessionState("s", "p", "ws"), {
+      type: "Error",
+      body: { code: "boom", message: "Boom", retryable: true },
+    } as TurnEventBody);
+    const notice = state.entries.find((entry) => entry.kind === "turn_notice");
+    expect(notice).toBeTruthy();
+    expect((notice as { retryable?: boolean }).retryable).toBe(true);
+  });
+
+  it("keeps non-text attachments and clears streaming at the stop reason", () => {
+    const withMessage = sessionReducer(
+      createInitialSessionState("s", "p", "ws"),
+      {
+        type: "MessageUpsert",
+        body: {
+          message_id: "m1",
+          role: "Agent",
+          content: {
+            type: "Set",
+            value: [
+              { Text: "hello" },
+              { Image: { mime_type: "image/png", data: "AAAA" } },
+            ],
+          },
+        },
+      } as unknown as TurnEventBody,
+    );
+    const entry = withMessage.entries.find(
+      (candidate) => candidate.id === "m1",
+    ) as TurnMessageEntry;
+    expect(entry.attachments).toHaveLength(1);
+    expect(entry.streaming).toBe(true);
+
+    const ended = sessionReducer(withMessage, idle("EndTurn"));
+    const endedEntry = ended.entries.find(
+      (candidate) => candidate.id === "m1",
+    ) as TurnMessageEntry;
+    expect(endedEntry.streaming).toBe(false);
   });
 });

@@ -25,6 +25,7 @@
     "@tauri-apps/api": "^2.4.0",
     "@tethys/bindings": "workspace:*",
     "@tethys/client": "workspace:*",
+    "@tethys/features": "workspace:*",
     "@tethys/state": "workspace:*",
     "@tethys/ui": "workspace:*",
     "cmdk": "^1.1.1",

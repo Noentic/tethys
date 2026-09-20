@@ -4,6 +4,7 @@ mod api;
 pub mod composer;
 mod git_registry;
 pub mod mcp;
+pub mod permission;
 pub mod skills;
 pub mod synthetic;
 pub mod thread_session;
@@ -23,7 +24,8 @@ use tethys_schema::{CheckpointPhase, DiffSource, RestoreTarget, WorkspaceGitConf
 use tethys_search::{SearchError, SearchIndexManager};
 
 use crate::composer::SkillCandidate;
-use crate::thread_session::{DenyPermissionResolver, ThreadSessions};
+use crate::permission::{ElicitationPolicyResolver, PermissionRegistry, PolicyResolver};
+use crate::thread_session::ThreadSessions;
 use git_registry::{GitRegistry, RegisteredWorktree};
 
 /// Resolved paths used to bootstrap Core and open persistent state.
@@ -93,21 +95,18 @@ impl Default for Core {
 
 impl Core {
     pub fn new(version: impl Into<String>) -> Self {
-        let store = ConnectionStore::new(StoreOptions::new(
-            AcpProtocol::V1,
-            Arc::new(DenyPermissionResolver),
-        ));
+        let permissions = PermissionRegistry::new();
+        let store = ConnectionStore::new(policy_store_options(permissions.clone()));
         let home = dirs::home_dir().unwrap_or_default();
         let sync =
             crate::thread_session::SyncSource::new(home, Arc::new(tethys_sync::KeyringSecrets));
-        Self::with_sessions(
-            version,
-            Arc::new(ThreadSessions::new(
-                store,
-                sync,
-                Arc::new(workspace_roots::StaticWorkspaces::new()),
-            )),
-        )
+        let sessions = Arc::new(ThreadSessions::new(
+            store,
+            sync,
+            Arc::new(workspace_roots::StaticWorkspaces::new()),
+        ));
+        sessions.set_permissions(permissions);
+        Self::with_sessions(version, sessions)
     }
 
     pub fn with_sessions(version: impl Into<String>, sessions: Arc<ThreadSessions>) -> Self {
@@ -135,12 +134,11 @@ impl Core {
                 .map_err(|e| ApiError::Internal(e.to_string()))?,
         );
         let sync = crate::thread_session::SyncSource::new(home, Arc::new(tethys_sync::KeyringSecrets));
-        let agent_store = ConnectionStore::new(StoreOptions::new(
-            AcpProtocol::V1,
-            Arc::new(DenyPermissionResolver),
-        ));
+        let permissions = PermissionRegistry::new();
+        let agent_store = ConnectionStore::new(policy_store_options(permissions.clone()));
         let workspace_roots = Arc::new(workspace_roots::StoreWorkspaceRoots::new((*store).clone()));
         let sessions = Arc::new(ThreadSessions::new(agent_store, sync, workspace_roots.clone()));
+        sessions.set_permissions(permissions);
         let core = Self {
             version: env!("CARGO_PKG_VERSION").to_string(),
             search: SearchIndexManager::new(),
@@ -250,6 +248,17 @@ impl Core {
             ApiError::Internal(format!("no worktree registered for thread {thread_id}"))
         })
     }
+}
+
+/// Builds connection options backed by the M1.8 policy engine and the
+/// elicitation responder, both sharing one registry.
+fn policy_store_options(permissions: Arc<PermissionRegistry>) -> StoreOptions {
+    let mut options = StoreOptions::new(
+        AcpProtocol::V1,
+        Arc::new(PolicyResolver::new(permissions.clone())),
+    );
+    options.elicitation_resolver = Arc::new(ElicitationPolicyResolver::new(permissions));
+    options
 }
 
 async fn blocking<T, F>(operation: F) -> Result<T, ApiError>
@@ -363,7 +372,7 @@ fn worktree_path_allowed(
 /// Lexically resolves a path, canonicalizing the deepest existing ancestor so
 /// symlinks cannot smuggle an out-of-jail path past the check. The leaf may
 /// not exist yet (the worktree is created after validation).
-fn normalize_path(path: &Path) -> PathBuf {
+pub(crate) fn normalize_path(path: &Path) -> PathBuf {
     if let Ok(canonical) = path.canonicalize() {
         return canonical;
     }

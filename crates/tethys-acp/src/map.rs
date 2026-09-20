@@ -8,9 +8,9 @@ use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDi
 use serde::Serialize;
 use tethys_schema::thread::{
     AgentCommand, ConfigOption, ConfigOptionKind, ConfigOptionValue, ContentBlock, MessageChunk,
-    PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, Role, SessionState, StateChanged,
-    StopReason, ToolCallContent, ToolCallPatch, ToolCallStatus, ToolKind, ToolLocation,
-    TurnEventBody,
+    PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, PermissionSubject, Role,
+    SessionState, StateChanged, StopReason, ToolCallContent, ToolCallPatch, ToolCallStatus, ToolKind,
+    ToolLocation, TurnEventBody,
 };
 
 /// Deterministic synthetic message IDs for v1 chunks that omit `messageId`:
@@ -343,6 +343,27 @@ pub(crate) fn tool_location(location: &acp1::ToolCallLocation) -> ToolLocation {
     }
 }
 
+/// The normalized subject for a permission request. An edit-like tool call with
+/// a known location becomes a `File` subject so the Auto-edit policy can scope
+/// it to the thread root (M1.8 U3); everything else stays a `ToolCall`.
+pub(crate) fn permission_subject(tool_call: &acp1::ToolCallUpdate) -> PermissionSubject {
+    let fields = &tool_call.fields;
+    let edit_like = matches!(
+        fields.kind.as_ref(),
+        Some(acp1::ToolKind::Edit | acp1::ToolKind::Delete | acp1::ToolKind::Move)
+    );
+    if edit_like {
+        if let Some(location) = fields.locations.as_ref().and_then(|list| list.first()) {
+            return PermissionSubject::File {
+                path: location.path.display().to_string(),
+            };
+        }
+    }
+    PermissionSubject::ToolCall {
+        tool_call_id: tool_call.tool_call_id.to_string(),
+    }
+}
+
 fn text_or_raw(block: &acp1::ContentBlock) -> String {
     match block {
         acp1::ContentBlock::Text(text) => text.text.clone(),
@@ -363,4 +384,39 @@ pub(crate) fn json_string(value: &impl Serialize) -> String {
 
 pub(crate) fn state_changed(state: SessionState) -> TurnEventBody {
     TurnEventBody::StateChanged(StateChanged { state })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn edit_tool_call_with_location_becomes_a_file_subject() {
+        let update = acp1::ToolCallUpdate::new(
+            "tool-1",
+            acp1::ToolCallUpdateFields::new()
+                .kind(acp1::ToolKind::Edit)
+                .locations(vec![acp1::ToolCallLocation::new("/repo/src/a.rs")]),
+        );
+        assert_eq!(
+            permission_subject(&update),
+            PermissionSubject::File {
+                path: "/repo/src/a.rs".into()
+            }
+        );
+    }
+
+    #[test]
+    fn non_edit_tool_call_stays_a_tool_call_subject() {
+        let update = acp1::ToolCallUpdate::new(
+            "tool-2",
+            acp1::ToolCallUpdateFields::new().kind(acp1::ToolKind::Execute),
+        );
+        assert_eq!(
+            permission_subject(&update),
+            PermissionSubject::ToolCall {
+                tool_call_id: "tool-2".into()
+            }
+        );
+    }
 }

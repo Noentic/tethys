@@ -86,6 +86,7 @@ pub fn run() {
 
             // permission
             permission_respond,
+            elicitation_respond,
             permission_rules_list,
             permission_rules_set,
             permission_rules_delete,

@@ -37,4 +37,12 @@ impl ThreadApi for Core {
     async fn thread_delete(&self, id: ThreadId) -> Result<(), ApiError> {
         self.sessions.delete(&id)
     }
+
+    async fn thread_set_permission_mode(
+        &self,
+        id: ThreadId,
+        mode: tethys_schema::workspace::PermissionMode,
+    ) -> Result<(), ApiError> {
+        self.sessions.set_permission_mode(&id, mode)
+    }
 }

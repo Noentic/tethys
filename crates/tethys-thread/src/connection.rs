@@ -119,7 +119,10 @@ impl PermissionDecision {
 
 #[async_trait]
 pub trait PermissionResolver: Send + Sync {
-    async fn resolve(&self, request: PermissionRequested) -> PermissionDecision;
+    /// Resolves one request. The session is supplied so a policy resolver can
+    /// read that thread's workspace, isolation and mode without reaching back
+    /// into the reader task (M1.7 U3).
+    async fn resolve(&self, session: &SessionId, request: PermissionRequested) -> PermissionDecision;
 }
 
 /// Optional capability: agents that can delete sessions (architecture §6.1).

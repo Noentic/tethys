@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use tethys_agent_servers::{ConnectionStore, LaunchSpec, StoreOptions};
 use tethys_api::ApiError;
-use tethys_core::thread_session::{DenyPermissionResolver, SyncSource, ThreadSessions};
+use tethys_core::permission::DenyPermissionResolver;
+use tethys_core::thread_session::{SyncSource, ThreadSessions};
 use tethys_core::workspace_roots::StaticWorkspaces;
 use tethys_schema::connection::{
     AcpProtocol, AgentCompat, ConnectionKey, NormalizedCapabilities,
@@ -72,6 +73,7 @@ async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
                 sse: false,
             },
             prompt_embedded_context: false,
+            elicitation: false,
         }),
     );
 
@@ -153,6 +155,7 @@ async fn resume_and_recovery_spawn_carry_workspace_root_servers() {
                 sse: false,
             },
             prompt_embedded_context: false,
+            elicitation: false,
         }),
     );
 
@@ -267,6 +270,7 @@ fn v1_connection_always_keeps_stdio_servers_http_only_with_mcp_capabilities() {
                 sse: false,
             },
             prompt_embedded_context: false,
+            elicitation: false,
         }),
     );
     let transports = sessions.transports_for(&key).expect("transports");
@@ -285,6 +289,7 @@ fn v1_connection_always_keeps_stdio_servers_http_only_with_mcp_capabilities() {
                 sse: false,
             },
             prompt_embedded_context: false,
+            elicitation: false,
         }),
     );
     let transports_http = sessions.transports_for(&key).expect("transports with http");

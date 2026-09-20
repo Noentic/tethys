@@ -11,7 +11,7 @@ use tethys_schema::connection::{
     NormalizedCapabilities,
 };
 use tethys_supervisor::SupervisedChild;
-use tethys_thread::{AgentConnection, PermissionResolver};
+use tethys_thread::{AgentConnection, ElicitationResolver, PermissionResolver};
 
 use crate::launch::LaunchSpec;
 
@@ -19,6 +19,7 @@ pub struct StoreOptions {
     pub protocol: AcpProtocol,
     pub client_name: String,
     pub permission_resolver: Arc<dyn PermissionResolver>,
+    pub elicitation_resolver: Arc<dyn ElicitationResolver>,
     pub idle_grace: Duration,
     pub cancel_grace: Duration,
 }
@@ -29,6 +30,7 @@ impl StoreOptions {
             protocol,
             client_name: "tethys".to_string(),
             permission_resolver,
+            elicitation_resolver: Arc::new(tethys_acp::client::NoopElicitationResolver),
             idle_grace: Duration::from_secs(30),
             cancel_grace: Duration::from_secs(5),
         }
@@ -381,6 +383,8 @@ impl ConnectionStore {
             protocol: compat.preferred_protocol.unwrap_or(self.options.protocol),
             client_name: self.options.client_name.clone(),
             permission_resolver: Arc::clone(&self.options.permission_resolver),
+            elicitation_resolver: Arc::clone(&self.options.elicitation_resolver),
+            elicitation: true,
         };
         let transport = ByteStreams::new(stdin.compat_write(), stdout.compat());
         match tethys_acp::connect(options, transport).await {

@@ -98,4 +98,18 @@ pub async fn thread_delete(state: State<'_, CoreState>, id: ThreadId) -> Result<
 }
 
 stub_cmd!(thread_set_config_option);
-stub_cmd!(thread_set_permission_mode);
+
+/// `thread.set_permission_mode` — sets the Supervised / Auto-edit / YOLO mode
+/// for one thread (M1.8).
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_set_permission_mode(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+    mode: tethys_schema::workspace::PermissionMode,
+) -> Result<(), String> {
+    state
+        .thread_set_permission_mode(id, mode)
+        .await
+        .map_err(|e| e.to_string())
+}

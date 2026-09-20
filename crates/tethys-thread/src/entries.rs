@@ -214,6 +214,50 @@ pub(crate) fn apply_event(entries: &mut Vec<Entry>, event: &TurnEventBody, repla
                 _ => false,
             }
         }
+        TurnEventBody::ElicitationRequested(request) => {
+            if replayed && find_mut(entries, &request.req_id).is_some() {
+                return false;
+            }
+            match find_mut(entries, &request.req_id) {
+                Some(Entry::Elicitation {
+                    request: existing, ..
+                }) => {
+                    existing.clone_from(request);
+                    true
+                }
+                Some(_) => false,
+                None => {
+                    entries.push(Entry::Elicitation {
+                        req_id: request.req_id.clone(),
+                        request: request.clone(),
+                        outcome: None,
+                        values: std::collections::BTreeMap::new(),
+                    });
+                    true
+                }
+            }
+        }
+        TurnEventBody::ElicitationResolved {
+            req_id,
+            outcome,
+            values,
+        } => {
+            if replayed {
+                return false;
+            }
+            match find_mut(entries, req_id) {
+                Some(Entry::Elicitation {
+                    outcome: existing,
+                    values: existing_values,
+                    ..
+                }) => {
+                    *existing = Some(*outcome);
+                    existing_values.clone_from(values);
+                    true
+                }
+                _ => false,
+            }
+        }
         TurnEventBody::Error { code, message, .. } => {
             if replayed && find_mut(entries, "error").is_some() {
                 return false;

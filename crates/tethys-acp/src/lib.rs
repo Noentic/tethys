@@ -4,6 +4,7 @@
 //! over a supplied transport (architecture §7).
 
 pub mod client;
+pub mod elicitation;
 pub mod map;
 #[cfg(feature = "acp-v2")]
 pub mod map_v2;

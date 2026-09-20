@@ -110,6 +110,8 @@ pub trait ThreadApi: Send + Sync {
 
     fn thread_set_permission_mode(
         &self,
+        _id: ThreadId,
+        _mode: tethys_schema::workspace::PermissionMode,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.set_permission_mode")) }
     }

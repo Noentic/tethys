@@ -1,10 +1,20 @@
 import type {
   ContentBlock,
   Decider,
+  ElicitationOutcome,
+  ElicitationRequest,
+  ElicitationValue,
   Patch,
+  PermissionMode,
   PermOption,
   PermOutcome,
+  PlanEntryPriority,
+  PlanEntryStatus,
   Role,
+  StopReason,
+  ToolKind,
+  ToolLocation,
+  ToolOrigin,
   TurnEventBody,
   UsageSnapshot,
 } from "@tethys/bindings";
@@ -19,6 +29,7 @@ export interface PermissionResolution {
   outcome: PermOutcome;
   autoPicked: boolean;
   decidedBy: Decider;
+  optionId?: string | null;
   policy?: string;
   timestamp: number;
 }
@@ -29,6 +40,18 @@ export interface PermissionRequestItem {
   description: string | null;
   options: PermOption[];
   resolution?: PermissionResolution;
+}
+
+export interface ElicitationRequestItem {
+  reqId: string;
+  request: ElicitationRequest;
+  resolution?: ElicitationResolution;
+}
+
+export interface ElicitationResolution {
+  outcome: ElicitationOutcome;
+  values: Record<string, ElicitationValue>;
+  timestamp: number;
 }
 
 export interface BaseSessionEntry {
@@ -42,6 +65,10 @@ export interface TurnMessageEntry extends BaseSessionEntry {
   kind: "turn_message";
   role: Role;
   content: string;
+  /** Non-text blocks the message carried (images, resource links). */
+  attachments?: ContentBlock[];
+  /** True while the message is still streaming (toolbar hidden, aria-busy). */
+  streaming?: boolean;
 }
 
 export interface ToolCallEntry extends BaseSessionEntry {
@@ -49,6 +76,10 @@ export interface ToolCallEntry extends BaseSessionEntry {
   toolCallId: string;
   title: string;
   status: "Pending" | "Executing" | "Completed" | "Failed";
+  toolKind?: ToolKind | null;
+  origin?: ToolOrigin | null;
+  parentToolCallId?: string | null;
+  locations: ToolLocation[];
   input?: string | null;
   output?: string | null;
 }
@@ -58,9 +89,51 @@ export interface PermissionRequestEntry extends BaseSessionEntry {
   request: PermissionRequestItem;
 }
 
+export interface ElicitationEntry extends BaseSessionEntry {
+  kind: "elicitation";
+  reqId: string;
+  request: ElicitationRequest;
+  resolution?: ElicitationResolution;
+}
+
+export interface PlanStep {
+  content: string;
+  priority: PlanEntryPriority;
+  status: PlanEntryStatus;
+}
+
+export interface PlanEntry extends BaseSessionEntry {
+  kind: "plan";
+  planId: string;
+  steps: PlanStep[];
+}
+
+export interface TerminalEntry extends BaseSessionEntry {
+  kind: "terminal";
+  terminalId: string;
+  output: string;
+}
+
 export interface HistoryDividerEntry extends BaseSessionEntry {
   kind: "history_divider";
   label: string;
+}
+
+export type TurnNoticeKind =
+  | "refusal"
+  | "max_tokens"
+  | "max_turn_requests"
+  | "cancelled"
+  | "error"
+  | "connection_lost"
+  | "compaction";
+
+export interface TurnNoticeEntry extends BaseSessionEntry {
+  kind: "turn_notice";
+  noticeKind: TurnNoticeKind;
+  message: string;
+  retryable?: boolean;
+  summary?: string | null;
 }
 
 export interface GenericEntry extends BaseSessionEntry {
@@ -72,7 +145,11 @@ export type SessionEntry =
   | TurnMessageEntry
   | ToolCallEntry
   | PermissionRequestEntry
+  | ElicitationEntry
+  | PlanEntry
+  | TerminalEntry
   | HistoryDividerEntry
+  | TurnNoticeEntry
   | GenericEntry;
 
 export interface SessionState {
@@ -87,10 +164,13 @@ export interface SessionState {
   graceDeadline: string | null;
   turnCount: number;
   seq: number;
+  /** Supervised / Auto-edit / YOLO; the permission-mode pill reads and writes it. */
+  permissionMode: PermissionMode;
   historyEntries: SessionEntry[];
   liveEntries: SessionEntry[];
   entries: SessionEntry[]; // Derived or ordered concatenation: [...historyEntries, divider?, ...liveEntries]
   pendingPermissions: PermissionRequestItem[];
+  pendingElicitations: ElicitationRequestItem[];
   resolvedPermissions: Record<string, PermissionResolution>;
   usage?: UsageSnapshot;
   error?: string | null;
@@ -150,10 +230,12 @@ export function createInitialSessionState(
     graceDeadline: null,
     turnCount: 0,
     seq: 0,
+    permissionMode: "supervised",
     historyEntries: [],
     liveEntries: [],
     entries: [],
     pendingPermissions: [],
+    pendingElicitations: [],
     resolvedPermissions: {},
     usage: undefined,
     error: null,
@@ -180,6 +262,53 @@ function rebuildCombinedEntries(
   return [...live];
 }
 
+function nonTextAttachments(blocks: ContentBlock[]): ContentBlock[] {
+  return blocks.filter(
+    (block) => !("Text" in block && typeof block.Text === "string"),
+  );
+}
+
+/**
+ * Materializes the one visible `turn-notice` for a stop reason. `EndTurn` and
+ * `StopSequence` are normal ends and render nothing; `Error` is emitted by the
+ * `Error` event so it is not duplicated here.
+ */
+export function turnNoticeForStopReason(
+  stopReason: StopReason | null,
+): TurnNoticeEntry | null {
+  if (stopReason === null) {
+    return null;
+  }
+  const id = `turn-notice-${Date.now()}`;
+  const timestamp = Date.now();
+  const make = (
+    noticeKind: TurnNoticeKind,
+    message: string,
+  ): TurnNoticeEntry => ({
+    id,
+    kind: "turn_notice",
+    noticeKind,
+    message,
+    timestamp,
+  });
+  if (stopReason === "Refusal") {
+    return make(
+      "refusal",
+      "The prompt was refused and is excluded from the next prompt.",
+    );
+  }
+  if (stopReason === "MaxTokens") {
+    return make("max_tokens", "The turn hit the token limit.");
+  }
+  if (stopReason === "MaxTurnRequests") {
+    return make("max_turn_requests", "The turn hit its request limit.");
+  }
+  if (stopReason === "Cancelled") {
+    return make("cancelled", "The turn was cancelled.");
+  }
+  return null;
+}
+
 export function sessionReducer(
   state: SessionState,
   event: TurnEventBody,
@@ -198,9 +327,21 @@ export function sessionReducer(
         newStatus = "running";
       } else if (bindingState === "RequiresAction") {
         newStatus = "awaiting_approval";
-      } else if (typeof bindingState === "object" && "Idle" in bindingState) {
+      }
+
+      let nextLive = state.liveEntries;
+      if (typeof bindingState === "object" && "Idle" in bindingState) {
         newStatus = "idle";
         newCancellation = "idle";
+        nextLive = state.liveEntries.map((entry) =>
+          entry.kind === "turn_message" && (entry as TurnMessageEntry).streaming
+            ? { ...(entry as TurnMessageEntry), streaming: false }
+            : entry,
+        );
+        const notice = turnNoticeForStopReason(bindingState.Idle.stop_reason);
+        if (notice) {
+          nextLive = [...nextLive, notice];
+        }
       }
 
       return {
@@ -208,6 +349,8 @@ export function sessionReducer(
         status: newStatus,
         cancellationState: newCancellation,
         graceDeadline: newCancellation === "idle" ? null : state.graceDeadline,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
         seq: currentSeq,
       };
     }
@@ -231,6 +374,10 @@ export function sessionReducer(
         nextLive[existingIndex] = {
           ...existing,
           content: msg.content.type === "Set" ? content : existing.content,
+          attachments:
+            msg.content.type === "Set"
+              ? nonTextAttachments(msg.content.value)
+              : existing.attachments,
         };
       } else {
         const newEntry: TurnMessageEntry = {
@@ -238,6 +385,11 @@ export function sessionReducer(
           kind: "turn_message",
           role,
           content,
+          attachments:
+            msg.content.type === "Set"
+              ? nonTextAttachments(msg.content.value)
+              : [],
+          streaming: role !== "User",
           timestamp: Date.now(),
         };
         nextLive = [...state.liveEntries, newEntry];
@@ -274,6 +426,7 @@ export function sessionReducer(
           kind: "turn_message",
           role: chunk.role,
           content: textDelta,
+          streaming: chunk.role !== "User",
           timestamp: Date.now(),
         };
         nextLive = [...state.liveEntries, newEntry];
@@ -310,6 +463,14 @@ export function sessionReducer(
           status: newStatus,
           input: newInput,
           output: newOutput,
+          toolKind: patch.kind ?? existing.toolKind ?? null,
+          origin: patch.origin ?? existing.origin ?? null,
+          parentToolCallId:
+            patch.parent_tool_call_id ?? existing.parentToolCallId ?? null,
+          locations:
+            patch.locations && patch.locations.length > 0
+              ? patch.locations
+              : existing.locations,
         };
       } else {
         const newTitle = patch.title ?? "tool_call";
@@ -321,6 +482,10 @@ export function sessionReducer(
           toolCallId: tool_call_id,
           title: newTitle,
           status: newStatus,
+          toolKind: patch.kind ?? null,
+          origin: patch.origin ?? null,
+          parentToolCallId: patch.parent_tool_call_id ?? null,
+          locations: patch.locations ?? [],
           input: patch.input,
           output: patch.output,
           timestamp: Date.now(),
@@ -369,13 +534,14 @@ export function sessionReducer(
     }
 
     case "PermissionResolved": {
-      const { req_id, outcome, decided_by } = event.body;
+      const { req_id, outcome, decided_by, option_id } = event.body;
       const isAuto = decided_by === "Policy";
 
       const resolution: PermissionResolution = {
         outcome,
         autoPicked: isAuto,
         decidedBy: decided_by,
+        optionId: option_id ?? null,
         policy: isAuto ? "workspace-trust-policy" : undefined,
         timestamp: Date.now(),
       };
@@ -417,6 +583,155 @@ export function sessionReducer(
       };
     }
 
+    case "PlanUpsert": {
+      const { plan_id, plan } = event.body;
+      const id = `plan-${plan_id}`;
+      const steps: PlanStep[] = plan.entries.map((entry) => ({
+        content: entry.content,
+        priority: entry.priority,
+        status: entry.status,
+      }));
+      const existingIndex = state.liveEntries.findIndex((e) => e.id === id);
+      let nextLive: SessionEntry[];
+      if (existingIndex >= 0) {
+        nextLive = [...state.liveEntries];
+        nextLive[existingIndex] = {
+          ...(nextLive[existingIndex] as PlanEntry),
+          steps,
+        };
+      } else {
+        const entry: PlanEntry = {
+          id,
+          kind: "plan",
+          planId: plan_id,
+          steps,
+          timestamp: Date.now(),
+        };
+        nextLive = [...state.liveEntries, entry];
+      }
+      return {
+        ...state,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
+    case "TerminalUpsert": {
+      const { terminal_id, patch } = event.body;
+      const id = `terminal-${terminal_id}`;
+      const existingIndex = state.liveEntries.findIndex((e) => e.id === id);
+      const replacement = applyPatch<string>("", patch);
+      let nextLive: SessionEntry[];
+      if (existingIndex >= 0) {
+        nextLive = [...state.liveEntries];
+        const existing = nextLive[existingIndex] as TerminalEntry;
+        nextLive[existingIndex] = {
+          ...existing,
+          output:
+            patch.type === "Unchanged" ? existing.output : (replacement ?? ""),
+        };
+      } else {
+        const entry: TerminalEntry = {
+          id,
+          kind: "terminal",
+          terminalId: terminal_id,
+          output: patch.type === "Set" ? (patch.value ?? "") : "",
+          timestamp: Date.now(),
+        };
+        nextLive = [...state.liveEntries, entry];
+      }
+      return {
+        ...state,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
+    case "TerminalOutputChunk": {
+      const { terminal_id, bytes } = event.body;
+      const id = `terminal-${terminal_id}`;
+      const existingIndex = state.liveEntries.findIndex((e) => e.id === id);
+      let nextLive: SessionEntry[];
+      if (existingIndex >= 0) {
+        nextLive = [...state.liveEntries];
+        const existing = nextLive[existingIndex] as TerminalEntry;
+        nextLive[existingIndex] = {
+          ...existing,
+          output: existing.output + bytes,
+        };
+      } else {
+        const entry: TerminalEntry = {
+          id,
+          kind: "terminal",
+          terminalId: terminal_id,
+          output: bytes,
+          timestamp: Date.now(),
+        };
+        nextLive = [...state.liveEntries, entry];
+      }
+      return {
+        ...state,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
+    case "ElicitationRequested": {
+      const request = event.body;
+      const item: ElicitationRequestItem = { reqId: request.req_id, request };
+      const entry: ElicitationEntry = {
+        id: `elicit-${request.req_id}`,
+        kind: "elicitation",
+        reqId: request.req_id,
+        request,
+        timestamp: Date.now(),
+      };
+      const nextLive = [...state.liveEntries, entry];
+      const nextPending = [
+        ...state.pendingElicitations.filter(
+          (pending) => pending.reqId !== request.req_id,
+        ),
+        item,
+      ];
+      return {
+        ...state,
+        status: "awaiting_approval",
+        pendingElicitations: nextPending,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
+    case "ElicitationResolved": {
+      const { req_id, outcome, values } = event.body;
+      const resolution: ElicitationResolution = {
+        outcome,
+        values: values ?? {},
+        timestamp: Date.now(),
+      };
+      const nextPending = state.pendingElicitations.filter(
+        (pending) => pending.reqId !== req_id,
+      );
+      const nextLive = state.liveEntries.map((entry) =>
+        entry.kind === "elicitation" &&
+        (entry as ElicitationEntry).reqId === req_id
+          ? { ...(entry as ElicitationEntry), resolution }
+          : entry,
+      );
+      return {
+        ...state,
+        status: nextPending.length > 0 ? "awaiting_approval" : "running",
+        pendingElicitations: nextPending,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
     case "Usage": {
       return {
         ...state,
@@ -426,10 +741,21 @@ export function sessionReducer(
     }
 
     case "Error": {
+      const notice: TurnNoticeEntry = {
+        id: `turn-notice-error-${Date.now()}`,
+        kind: "turn_notice",
+        noticeKind: "error",
+        message: event.body.message,
+        retryable: event.body.retryable,
+        timestamp: Date.now(),
+      };
+      const nextLive = [...state.liveEntries, notice];
       return {
         ...state,
         status: "error",
         error: event.body.message,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
         seq: currentSeq,
       };
     }

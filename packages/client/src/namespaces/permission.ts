@@ -1,13 +1,20 @@
 //! `permission.*` client namespace. Wave 2 owner: A (M1.8).
 //!
-//! TODO(A): type `respond` and the rules methods against tethys-api; every
-//! wrapper is still `call<void>()`.
+//! `respond` sends the user's chosen `option_id` back to the parked resolver;
+//! `elicitationRespond` sends the typed answer to the elicitation responder.
+
+import type { ElicitationResponse } from "@tethys/bindings";
 
 import type { Call } from "../transport";
 
 export function permissionNamespace(call: Call) {
   return {
-    respond: () => call<void>("permission_respond"),
+    respond: (threadId: string, reqId: string, optionId?: string | null) =>
+      call<void>("permission_respond", { threadId, reqId, optionId }),
+    elicitationRespond: (threadId: string, response: ElicitationResponse) =>
+      call<void>("elicitation_respond", { threadId, response }),
+    elicitation_respond: (threadId: string, response: ElicitationResponse) =>
+      call<void>("elicitation_respond", { threadId, response }),
     rulesList: () => call<void>("permission_rules_list"),
     rules_list: () => call<void>("permission_rules_list"),
     rulesSet: () => call<void>("permission_rules_set"),

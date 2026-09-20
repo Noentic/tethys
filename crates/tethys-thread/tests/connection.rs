@@ -33,6 +33,7 @@ impl FakeConnection {
                 resume: true,
                 mcp: tethys_schema::sync::McpTransports::default(),
                 prompt_embedded_context: false,
+                elicitation: false,
             },
             senders: Mutex::new(HashMap::new()),
             receivers: Mutex::new(HashMap::new()),
@@ -267,7 +268,7 @@ async fn permission_resolver_is_dyn_and_returns_typed_decision() {
 
     #[async_trait]
     impl PermissionResolver for AutoApprove {
-        async fn resolve(&self, request: PermissionRequested) -> PermissionDecision {
+        async fn resolve(&self, _session: &SessionId, request: PermissionRequested) -> PermissionDecision {
             PermissionDecision {
                 outcome: PermOutcome::Approved,
                 option_id: request
@@ -292,7 +293,7 @@ async fn permission_resolver_is_dyn_and_returns_typed_decision() {
         }],
     };
 
-    let decision = resolver.resolve(request).await;
+    let decision = resolver.resolve(&SessionId::new("s1"), request).await;
     assert_eq!(decision.outcome, PermOutcome::Approved);
     assert_eq!(decision.option_id.as_deref(), Some("allow"));
     assert_eq!(decision.decided_by, Decider::Policy);
