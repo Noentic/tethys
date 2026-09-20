@@ -36,3 +36,5 @@ Thumbs.db
 
 # Agents
 .agents/
+.claude/
+.kiro/
