@@ -16,7 +16,7 @@ use tethys_schema::sync::WorkspaceId;
 use tethys_schema::{
     CheckpointInfo, CheckpointPhase, CheckpointResult, CommitResult, DiffFileDetail, DiffHunk,
     DiffSource, DiffSummary, HealthStatus, HostInfo, HunkRef, RestoreOutcome, RestorePolicy,
-    RestoreTarget, SearchItem, WorktreeInfo, WorktreeSpec,
+    RestoreTarget, SearchItem, WorkspaceCapabilities, WorktreeInfo, WorktreeSpec,
 };
 
 use thiserror::Error;
@@ -62,7 +62,8 @@ pub enum ApiError {
 ///
 /// Mapping architecture.md §12.1 methods to Rust:
 /// - `host`: `info` (host_info), `pair` (host_pair), `health` (health)
-/// - `project`: `list`, `add`, `remove`, `settings_get`, `settings_set`, `status`
+/// - `workspace`: `list`, `add`, `remove`, `settings_get`, `settings_set`, `status`,
+///   `capabilities`
 /// - `agent`: `profiles_list`, `profiles_create`, `profiles_update`, `profiles_delete`,
 ///   `registry_list`, `registry_install`, `registry_update`, `connections_list`,
 ///   `connections_restart`, `login`, `logout`, `stderr`, `config_schema`, `config_get`,
@@ -115,6 +116,12 @@ pub trait TethysApi: Send + Sync + McpApi + SkillsApi {
     }
     fn workspace_status(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("workspace.status")) }
+    }
+    fn workspace_capabilities(
+        &self,
+        _workspace_id: WorkspaceId,
+    ) -> impl std::future::Future<Output = Result<WorkspaceCapabilities, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("workspace.capabilities")) }
     }
 
     // === agent ===

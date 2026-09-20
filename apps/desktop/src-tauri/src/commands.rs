@@ -21,8 +21,8 @@ use tethys_schema::thread::{
 use tethys_schema::{
     BenchmarkConfig, BenchmarkResult, CheckpointInfo, CheckpointPhase, CheckpointResult,
     CommitResult, DiffFileDetail, DiffHunk, DiffSource, DiffSummary, HealthStatus, HostInfo,
-    HunkRef, RestoreOutcome, RestorePolicy, RestoreTarget, SearchItem, StreamChunk, WorktreeInfo,
-    WorktreeSpec,
+    HunkRef, RestoreOutcome, RestorePolicy, RestoreTarget, SearchItem, StreamChunk,
+    WorkspaceCapabilities, WorktreeInfo, WorktreeSpec,
 };
 
 pub type CoreState = Arc<Core>;
@@ -63,6 +63,19 @@ stub_cmd!(workspace_remove);
 stub_cmd!(workspace_settings_get);
 stub_cmd!(workspace_settings_set);
 stub_cmd!(workspace_status);
+
+/// `workspace.capabilities` — resolved capability set for one workspace (§10.6).
+#[tauri::command]
+#[specta::specta]
+pub async fn workspace_capabilities(
+    state: State<'_, CoreState>,
+    workspace_id: WorkspaceId,
+) -> Result<WorkspaceCapabilities, String> {
+    state
+        .workspace_capabilities(workspace_id)
+        .await
+        .map_err(|e| e.to_string())
+}
 
 // === agent ===
 stub_cmd!(agent_profiles_list);

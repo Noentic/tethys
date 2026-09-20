@@ -32,6 +32,7 @@ pub fn run() {
             workspace_settings_get,
             workspace_settings_set,
             workspace_status,
+            workspace_capabilities,
             // agent
             agent_profiles_list,
             agent_profiles_create,

@@ -48,6 +48,7 @@ import type {
   TargetId,
   UndoCapture,
   VerifyStatus,
+  WorkspaceCapabilities,
   WorkspaceGitConfig,
   WorkspaceId,
   WorktreeInfo,
@@ -95,6 +96,8 @@ export function createClient(options: ClientOptions = {}) {
       settingsSet: () => call<void>("workspace_settings_set"),
       settings_set: () => call<void>("workspace_settings_set"),
       status: () => call<void>("workspace_status"),
+      capabilities: (workspaceId: string) =>
+        call<WorkspaceCapabilities>("workspace_capabilities", { workspaceId }),
     },
 
     // === agent namespace ===
