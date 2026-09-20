@@ -12,6 +12,10 @@ pub mod git;
 
 pub use git::*;
 
+pub mod workspace;
+
+pub use workspace::*;
+
 use serde::{Deserialize, Serialize};
 use specta::{Type, Types};
 
@@ -176,5 +180,9 @@ pub fn registered_types() -> Types {
         .register::<sync::AttachmentCell>()
         .register::<sync::AttachmentState>()
         .register::<sync::AttachmentGrid>()
+        .register::<workspace::WorkspaceCapabilities>()
+        .register::<workspace::Vcs>()
+        .register::<workspace::GitHost>()
+        .register::<workspace::PermissionMode>()
 }
 

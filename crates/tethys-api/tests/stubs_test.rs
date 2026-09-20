@@ -46,6 +46,11 @@ async fn test_stub_defaults_return_unimplemented() {
         other => panic!("expected Unimplemented, got {other:?}"),
     }
 
+    match api.workspace_capabilities("w1".into()).await {
+        Err(ApiError::Unimplemented(m)) => assert_eq!(m, "workspace.capabilities"),
+        other => panic!("expected Unimplemented, got {other:?}"),
+    }
+
     match api.agent_profiles_list().await {
         Err(ApiError::Unimplemented(m)) => assert_eq!(m, "agent.profiles_list"),
         other => panic!("expected Unimplemented, got {other:?}"),

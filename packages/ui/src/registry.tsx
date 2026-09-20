@@ -11,8 +11,15 @@ export type InspectorSlotComponent<T = unknown> = React.ComponentType<{
   className?: string;
 }>;
 
+export type ActionBarSlotComponent<T = unknown> = React.ComponentType<{
+  sessionId?: string;
+  data?: T;
+  className?: string;
+}>;
+
 export const entryRenderers = new Map<string, EntryRendererComponent>();
 export const inspectorSlots = new Map<string, InspectorSlotComponent>();
+export const actionBarSlots = new Map<string, ActionBarSlotComponent>();
 
 export function UnknownEntryRenderer({
   entry,
@@ -70,7 +77,21 @@ export function getAllInspectorSlots(): Array<
   return Array.from(inspectorSlots.entries());
 }
 
+export function registerActionBarSlot(
+  id: string,
+  component: ActionBarSlotComponent,
+): void {
+  actionBarSlots.set(id, component);
+}
+
+export function getAllActionBarSlots(): Array<
+  [string, ActionBarSlotComponent]
+> {
+  return Array.from(actionBarSlots.entries());
+}
+
 export function clearRegistriesForTesting(): void {
   entryRenderers.clear();
   inspectorSlots.clear();
+  actionBarSlots.clear();
 }

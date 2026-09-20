@@ -1,12 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import { createInitialSessionState, createSessionStore } from "@tethys/state";
 import {
+  getAllActionBarSlots,
   getAllInspectorSlots,
   getEntryRenderer,
+  registerActionBarSlot,
   registerEntryRenderer,
   registerInspectorSlot,
 } from "@tethys/ui";
 import { describe, expect, it } from "vitest";
+import { ActionBar } from "./ActionBar";
 import { InspectorPane } from "./InspectorPane";
 import { Stage } from "./Stage";
 
@@ -96,5 +99,21 @@ describe("Wave-2 Composition Seam", () => {
 
     expect(screen.getByTestId("checkpoint-slot")).toBeDefined();
     expect(screen.getByText("Checkpoint for test-sess-slot")).toBeDefined();
+  });
+
+  it("dynamically renders action-bar slots registered via registerActionBarSlot", () => {
+    function MockPermissionPill({ sessionId }: { sessionId?: string }) {
+      return <div data-testid="permission-slot">Mode for {sessionId}</div>;
+    }
+
+    registerActionBarSlot("permission", MockPermissionPill);
+
+    const slots = getAllActionBarSlots();
+    expect(slots.some(([id]) => id === "permission")).toBe(true);
+
+    render(<ActionBar cancellationState="idle" sessionId="test-sess-bar" />);
+
+    expect(screen.getByTestId("permission-slot")).toBeDefined();
+    expect(screen.getByText("Mode for test-sess-bar")).toBeDefined();
   });
 });
