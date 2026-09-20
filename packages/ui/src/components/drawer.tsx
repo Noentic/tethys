@@ -71,7 +71,7 @@ export function Drawer({
     <div
       role="presentation"
       className={cn(
-        "fixed inset-0 z-40 flex",
+        "fixed inset-0 z-(--tethys-z-drawer) flex",
         side === "right" ? "justify-end" : "justify-start",
         showScrim ? "bg-(--tethys-overlay-scrim)" : "pointer-events-none",
       )}

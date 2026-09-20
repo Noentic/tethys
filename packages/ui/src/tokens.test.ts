@@ -9,10 +9,12 @@ import {
   SEMANTIC_TOKEN_KEYS,
   SEMANTIC_TOKEN_TO_CSS_VAR,
   type SemanticTokenKey,
+  STACKING_SCALE,
+  STACKING_TOKEN_TO_CSS_VAR,
   validateThemeManifest,
 } from "./tokens/manifest";
 
-// List of all 31 semantic tokens defined in DESIGN.md `semantic:` block
+// List of all 33 semantic tokens defined in DESIGN.md `semantic:` block
 const DESIGN_SEMANTIC_NAMES: SemanticTokenKey[] = [
   "canvas",
   "surface-rail",
@@ -45,6 +47,8 @@ const DESIGN_SEMANTIC_NAMES: SemanticTokenKey[] = [
   "status-success",
   "status-warning",
   "status-danger",
+  "diff-added",
+  "diff-removed",
 ];
 
 describe("Semantic Tokens Parity (U1 / D1)", () => {
@@ -173,5 +177,72 @@ describe("Semantic Tokens Parity (U1 / D1)", () => {
     );
     expect(element.getAttribute("data-theme")).toBe("light");
     expect(element.style.getPropertyValue("--tethys-canvas")).toBe("#123456");
+  });
+});
+
+describe("Diff tokens and stacking (M1.6c U7 / U11)", () => {
+  it("diff-added and diff-removed are known, validated theme keys", () => {
+    const res = validateThemeManifest({
+      id: "diff-only",
+      name: "Diff Only",
+      base: "default-light",
+      vars: { "diff-added": "#00ff00" },
+    });
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.vars["diff-added"]).toBe("#00ff00");
+    }
+  });
+
+  it("both diff tokens carry the same bright value in both default themes", () => {
+    expect(DEFAULT_DARK_TOKENS["diff-added"]).toBe("#10b981");
+    expect(DEFAULT_LIGHT_TOKENS["diff-added"]).toBe("#10b981");
+    expect(DEFAULT_DARK_TOKENS["diff-removed"]).toBe("#ef4444");
+    expect(DEFAULT_LIGHT_TOKENS["diff-removed"]).toBe("#ef4444");
+  });
+
+  it("stacking scale equals the DESIGN.md stacking block, key for key", () => {
+    const design = readFileSync(
+      resolve(__dirname, "../../../DESIGN.md"),
+      "utf-8",
+    );
+    const lines = design.split("\n");
+    const start = lines.findIndex((line) => line.startsWith("stacking:"));
+    expect(start, "DESIGN.md stacking block").toBeGreaterThanOrEqual(0);
+
+    const parsed: Record<string, number> = {};
+    for (let i = start + 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (line.trim() === "" || !/^\s/.test(line)) break;
+      const match = line.match(/^\s+([a-z0-9-]+):\s*(\d+)/);
+      if (match) parsed[match[1]] = Number.parseInt(match[2], 10);
+    }
+
+    expect(parsed).toEqual({ ...STACKING_SCALE });
+  });
+
+  it("stacking order is drawer < dialog < sheet < palette < popover < toast < tooltip", () => {
+    const order = [
+      "drawer",
+      "dialog",
+      "sheet",
+      "palette",
+      "popover",
+      "toast",
+      "tooltip",
+    ] as const;
+    for (let i = 1; i < order.length; i += 1) {
+      expect(STACKING_SCALE[order[i]]).toBeGreaterThan(
+        STACKING_SCALE[order[i - 1]],
+      );
+    }
+  });
+
+  it("exports a CSS var per stacking tier, defined in tokens.css", () => {
+    const css = readFileSync(resolve(__dirname, "tokens/tokens.css"), "utf-8");
+    for (const [tier, cssVar] of Object.entries(STACKING_TOKEN_TO_CSS_VAR)) {
+      expect(css, cssVar).toContain(`${cssVar}:`);
+      expect(STACKING_SCALE).toHaveProperty(tier);
+    }
   });
 });

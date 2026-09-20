@@ -85,8 +85,8 @@ pub enum ApiError {
 ///   `connections_restart`, `login`, `logout`, `stderr`, `config_schema`, `config_get`,
 ///   `config_validate`, `config_plan`, `config_apply`, `config_rollback`
 /// - `thread`: `create`, `list`, `get`, `prompt`, `queue_list`, `queue_add`, `queue_remove`,
-///   `queue_reorder`, `cancel`, `resume`, `import_sessions`, `fork`, `archive`, `delete`,
-///   `set_config_option`, `set_permission_mode`
+///   `queue_reorder`, `cancel`, `cancel_state`, `resume`, `import_sessions`, `fork`, `archive`,
+///   `delete`, `set_config_option`, `set_permission_mode`
 /// - `events`: `subscribe`, `unsubscribe`, `inbox_subscribe`
 /// - `permission`: `respond`, `rules_list`, `rules_set`, `rules_delete`
 /// - `git`: `worktree_create`, `worktree_remove`, `worktree_list`, `checkpoint_create`,

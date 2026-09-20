@@ -244,7 +244,9 @@ pub(crate) fn apply_event(entries: &mut Vec<Entry>, event: &TurnEventBody, repla
         | TurnEventBody::Usage { .. }
         | TurnEventBody::FileWrite { .. }
         | TurnEventBody::Checkpoint { .. }
-        | TurnEventBody::Unknown { .. } => false,
+        | TurnEventBody::Unknown { .. }
+        | TurnEventBody::ProviderExtension(_)
+        | TurnEventBody::Compaction { .. } => false,
     }
 }
 
@@ -270,5 +272,13 @@ fn merge_tool_call(existing: &mut ToolCallPatch, incoming: &ToolCallPatch) {
     }
     if !incoming.locations.is_empty() {
         existing.locations.clone_from(&incoming.locations);
+    }
+    if incoming.origin.is_some() {
+        existing.origin.clone_from(&incoming.origin);
+    }
+    if incoming.parent_tool_call_id.is_some() {
+        existing
+            .parent_tool_call_id
+            .clone_from(&incoming.parent_tool_call_id);
     }
 }

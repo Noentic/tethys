@@ -36,6 +36,20 @@
   --tethys-status-success: #10b981;
   --tethys-status-warning: #f59e0b;
   --tethys-status-danger: #ef4444;
+  --tethys-diff-added: #10b981;
+  --tethys-diff-removed: #ef4444;
+
+  /* Paint order (DESIGN.md stacking). Structural, so it is not themeable. */
+  --tethys-z-base: 0;
+  --tethys-z-drawer-scrim: 10;
+  --tethys-z-drawer: 20;
+  --tethys-z-dialog-scrim: 30;
+  --tethys-z-dialog: 40;
+  --tethys-z-sheet: 50;
+  --tethys-z-palette: 60;
+  --tethys-z-popover: 70;
+  --tethys-z-toast: 80;
+  --tethys-z-tooltip: 90;
 
   /* Typography families */
   --font-sans:
@@ -115,4 +129,6 @@
   --tethys-status-success: #059669;
   --tethys-status-warning: #d97706;
   --tethys-status-danger: #dc2626;
+  --tethys-diff-added: #10b981;
+  --tethys-diff-removed: #ef4444;
 }

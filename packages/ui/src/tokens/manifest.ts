@@ -30,6 +30,8 @@ export const SEMANTIC_TOKEN_KEYS = [
   "status-success",
   "status-warning",
   "status-danger",
+  "diff-added",
+  "diff-removed",
 ] as const;
 
 export type SemanticTokenKey = (typeof SEMANTIC_TOKEN_KEYS)[number];
@@ -66,6 +68,8 @@ export const SEMANTIC_TOKEN_TO_CSS_VAR: Record<SemanticTokenKey, string> = {
   "status-success": "--tethys-status-success",
   "status-warning": "--tethys-status-warning",
   "status-danger": "--tethys-status-danger",
+  "diff-added": "--tethys-diff-added",
+  "diff-removed": "--tethys-diff-removed",
 };
 
 export const DEFAULT_DARK_TOKENS: Record<SemanticTokenKey, string> = {
@@ -100,6 +104,8 @@ export const DEFAULT_DARK_TOKENS: Record<SemanticTokenKey, string> = {
   "status-success": "#10b981",
   "status-warning": "#f59e0b",
   "status-danger": "#ef4444",
+  "diff-added": "#10b981",
+  "diff-removed": "#ef4444",
 };
 
 export const DEFAULT_LIGHT_TOKENS: Record<SemanticTokenKey, string> = {
@@ -134,6 +140,41 @@ export const DEFAULT_LIGHT_TOKENS: Record<SemanticTokenKey, string> = {
   "status-success": "#059669",
   "status-warning": "#d97706",
   "status-danger": "#dc2626",
+  "diff-added": "#10b981",
+  "diff-removed": "#ef4444",
+};
+
+/**
+ * DESIGN.md `stacking` — paint order, higher paints above lower. Structural,
+ * so it is not a themeable semantic token and lives outside
+ * `SEMANTIC_TOKEN_KEYS`. The `Esc` unstack order is derived from it.
+ */
+export const STACKING_SCALE = {
+  base: 0,
+  "drawer-scrim": 10,
+  drawer: 20,
+  "dialog-scrim": 30,
+  dialog: 40,
+  sheet: 50,
+  palette: 60,
+  popover: 70,
+  toast: 80,
+  tooltip: 90,
+} as const;
+
+export type StackingTier = keyof typeof STACKING_SCALE;
+
+export const STACKING_TOKEN_TO_CSS_VAR: Record<StackingTier, string> = {
+  base: "--tethys-z-base",
+  "drawer-scrim": "--tethys-z-drawer-scrim",
+  drawer: "--tethys-z-drawer",
+  "dialog-scrim": "--tethys-z-dialog-scrim",
+  dialog: "--tethys-z-dialog",
+  sheet: "--tethys-z-sheet",
+  palette: "--tethys-z-palette",
+  popover: "--tethys-z-popover",
+  toast: "--tethys-z-toast",
+  tooltip: "--tethys-z-tooltip",
 };
 
 export interface ThemeManifest {

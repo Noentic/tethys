@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import {
   ActionIconButton,
   ApprovalInboxPill,
@@ -13,13 +13,16 @@ import {
   KeycapPill,
   Listbox,
   ModalDialog,
+  ProtocolPill,
   registerEntryRenderer,
+  SchemaFieldGroup,
   SegmentedControl,
   SessionGroupHeader,
   SessionListRow,
   Splitter,
   StatusDot,
   StepperInput,
+  StopControl,
   TabStrip,
   Textarea,
   ToggleSwitch,
@@ -433,5 +436,168 @@ describe("WorkspaceSourceBadge (M1.6b)", () => {
 
     rerender(<WorkspaceSourceBadge vcs={{ kind: "git-local" }} />);
     expect(screen.queryByText("Remote")).toBeNull();
+  });
+});
+
+describe("StatusDot shape and Button reduced motion (M1.6c U5)", () => {
+  it("renders awaiting_approval as a ring and auth_required as a filled disc", () => {
+    const { rerender } = render(<StatusDot status="awaiting_approval" />);
+    const ring = screen.getByRole("status");
+    expect(ring.getAttribute("aria-label")).toBe("Awaiting approval");
+    expect(ring.style.backgroundColor).toBe("transparent");
+    expect(ring.style.border).toContain(
+      "2px solid var(--tethys-status-warning)",
+    );
+
+    rerender(<StatusDot status="auth_required" />);
+    const disc = screen.getByRole("status");
+    expect(disc.style.backgroundColor).toBe("var(--tethys-status-warning)");
+    expect(disc.style.border).toBe("");
+  });
+
+  it("renders the inline ring at 1.5px and the same outer size as the disc", () => {
+    const { rerender } = render(<StatusDot status="awaiting" inline />);
+    const ring = screen.getByRole("status");
+    expect(ring.style.border).toContain("1.5px solid");
+    expect(ring.className).toContain("h-1.5");
+
+    rerender(<StatusDot status="idle" inline />);
+    expect(screen.getByRole("status").className).toContain("h-1.5");
+  });
+
+  it("keeps running, awaiting and auth_required distinguishable by shape and label", () => {
+    const { rerender } = render(<StatusDot status="running" />);
+    expect(screen.getByRole("status").getAttribute("aria-label")).toBe(
+      "Running",
+    );
+
+    rerender(<StatusDot status="awaiting" />);
+    const awaiting = screen.getByRole("status");
+    expect(awaiting.style.backgroundColor).toBe("transparent");
+    expect(awaiting.getAttribute("aria-label")).toBe("Awaiting approval");
+
+    rerender(<StatusDot status="auth_required" />);
+    const auth = screen.getByRole("status");
+    expect(auth.style.backgroundColor).toBe("var(--tethys-status-warning)");
+  });
+
+  it("normalizes the generated PascalCase AwaitingApproval spelling to the ring", () => {
+    render(<StatusDot status="AwaitingApproval" />);
+    const dot = screen.getByRole("status");
+    expect(dot.getAttribute("aria-label")).toBe("Awaiting approval");
+    expect(dot.style.backgroundColor).toBe("transparent");
+  });
+
+  it("falls back to the neutral idle disc for an unknown status", () => {
+    render(<StatusDot status="something_unmapped" />);
+    const dot = screen.getByRole("status");
+    expect(dot.getAttribute("aria-label")).toBe("Idle");
+    expect(dot.style.backgroundColor).toBe("var(--tethys-agent-idle)");
+  });
+
+  it("suspends the Button spinner under reduced motion", () => {
+    render(<Button loading>Saving</Button>);
+    const spinner = document.querySelector("svg");
+    expect(spinner?.getAttribute("class")).toContain(
+      "motion-safe:animate-spin",
+    );
+  });
+});
+
+describe("StopControl phases (M1.6c U4)", () => {
+  it("idle reads Stop and calls onStop exactly once", () => {
+    const onStop = vi.fn();
+    render(<StopControl phase="idle" onStop={onStop} />);
+    const control = screen.getByRole("button", { name: "Stop" });
+    expect(control.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(control);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancel_requested is busy, non-interactive, not destructive, and depletes to 0", async () => {
+    const deadline = new Date(Date.now() + 5000).toISOString();
+    render(<StopControl phase="cancel_requested" graceDeadline={deadline} />);
+    const control = screen.getByRole("button", { name: /Cancelling/ });
+    expect(control.getAttribute("aria-busy")).toBe("true");
+    expect(control.hasAttribute("disabled")).toBe(true);
+    expect(control.className).not.toContain("text-(--tethys-status-danger)");
+
+    const fill = screen.getByTestId("stop-fill");
+    expect(fill.style.transitionProperty).toBe("width");
+    expect(fill.style.transitionTimingFunction).toBe("linear");
+    expect(Number.parseInt(fill.style.transitionDuration, 10)).toBeGreaterThan(
+      0,
+    );
+    await waitFor(() => expect(fill.style.width).toBe("0%"));
+  });
+
+  it("grace_elapsed is destructive and interactive again", () => {
+    const onStop = vi.fn();
+    render(<StopControl phase="grace_elapsed" onStop={onStop} />);
+    const control = screen.getByRole("button", { name: /Force kill/ });
+    expect(control.className).toContain("text-(--tethys-status-danger)");
+    expect(control.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(control);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("terminating is busy and non-interactive", () => {
+    render(<StopControl phase="terminating" />);
+    const control = screen.getByRole("button", { name: /Terminating/ });
+    expect(control.getAttribute("aria-busy")).toBe("true");
+    expect(control.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("announces once per phase change and not on a same-phase re-render", () => {
+    const { rerender } = render(<StopControl phase="cancel_requested" />);
+    expect(screen.getAllByText("Cancelling")).toHaveLength(1);
+
+    rerender(<StopControl phase="cancel_requested" />);
+    expect(screen.getAllByText("Cancelling")).toHaveLength(1);
+
+    rerender(<StopControl phase="grace_elapsed" />);
+    expect(screen.getAllByText("Force kill available")).toHaveLength(1);
+
+    rerender(<StopControl phase="terminating" />);
+    expect(screen.getAllByText("Terminating")).toHaveLength(1);
+  });
+});
+
+describe("SchemaFieldGroup and ProtocolPill (M1.6c U8)", () => {
+  it("SchemaFieldGroup associates its label with the group", () => {
+    render(
+      <SchemaFieldGroup label="Server">
+        <input aria-label="server url" />
+      </SchemaFieldGroup>,
+    );
+    const group = screen.getByRole("group");
+    const labelId = group.getAttribute("aria-labelledby");
+    expect(labelId).toBeTruthy();
+    expect(document.getElementById(labelId as string)?.textContent).toBe(
+      "Server",
+    );
+  });
+
+  it("SchemaFieldGroup renders no heading when given no label", () => {
+    render(
+      <SchemaFieldGroup>
+        <input aria-label="server url" />
+      </SchemaFieldGroup>,
+    );
+    expect(screen.queryByText("Server")).toBeNull();
+    expect(
+      screen.getByRole("group").getAttribute("aria-labelledby"),
+    ).toBeNull();
+  });
+
+  it("ProtocolPill renders free text and two pills keep their own text", () => {
+    render(
+      <div>
+        <ProtocolPill>ACP v2</ProtocolPill>
+        <ProtocolPill>Early Access</ProtocolPill>
+      </div>,
+    );
+    expect(screen.getByText("ACP v2")).toBeDefined();
+    expect(screen.getByText("Early Access")).toBeDefined();
   });
 });

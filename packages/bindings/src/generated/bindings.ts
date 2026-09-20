@@ -67,6 +67,40 @@ export type BenchmarkResult = {
 /**  Content-addressed blob identifier (hex-encoded BLAKE3 hash). */
 export type BlobHash = string;
 
+/**
+ *  Which phase of the cancellation ladder a thread is in.
+ * 
+ *  Tagged `phase` in kebab-case, so TypeScript gets a discriminated union the
+ *  `Stop` control can switch on exhaustively. The wire spelling
+ *  (`cancel-requested`) differs from the webview-local store's snake_case
+ *  union; `@tethys/state` reconciles the two in one mapper.
+ */
+export type CancelPhase = 
+/**  No cancellation in flight. */
+{ phase: "idle" } | 
+/**
+ *  The protocol-level cancel was sent; the grace window is open. The
+ *  deadline is an absolute RFC 3339 instant the backend supplies, not a
+ *  remaining duration that would go stale across an IPC hop.
+ */
+{ phase: "cancel-requested"; grace_deadline: string } | 
+/**
+ *  The grace window closed without acknowledgement; the destructive
+ *  fallback ladder is armed.
+ */
+{ phase: "grace-elapsed" } | 
+/**  The escalation is running (`SIGKILL`). */
+{ phase: "terminating" };
+
+/**
+ *  Phase envelope, so the phase can later ride an event without inventing a
+ *  second shape.
+ */
+export type CancelState = {
+	thread_id: ThreadId,
+	phase: CancelPhase,
+};
+
 /**  One checkpoint ref, newest fields resolved. */
 export type CheckpointInfo = {
 	thread_id: string,
@@ -136,7 +170,24 @@ export type ConfigOption = {
 	name: string,
 	description: string | null,
 	current_value: string,
+	/**
+	 *  Kept and still populated for existing readers; `value_options` adds the
+	 *  display names and descriptions beside it.
+	 */
 	values: string[],
+	category?: string | null,
+	kind?: ConfigOptionKind | null,
+	value_options?: ConfigOptionValue[],
+};
+
+/**  Select vs boolean config option, for the composer's category-aware chips. */
+export type ConfigOptionKind = "select" | "boolean";
+
+/**  One selectable value of a [`ConfigOption`]. */
+export type ConfigOptionValue = {
+	id: string,
+	name: string,
+	description: string | null,
 };
 
 export type ConnectionEntry = {
@@ -460,6 +511,20 @@ export type ProviderColumn = {
 	target?: ProjectionTarget | null,
 };
 
+/**  One untyped vendor-extension request, keyed by Provider and method. */
+export type ProviderExtension = {
+	/**  Provider that raised the request (its profile/registry id). */
+	provider_id: string,
+	/**  The ACP extension method, verbatim (`_kiro.dev/mcp/oauth_request`). */
+	method: string,
+	/**
+	 *  The request payload as a JSON string, matching
+	 *  `TurnEventBody::Unknown { raw }`'s convention and keeping this crate's
+	 *  runtime dependencies at serde + specta.
+	 */
+	params: string,
+};
+
 /**  What a resolved composer reference points at. */
 export type ReferenceKind = "skill" | "path";
 
@@ -634,7 +699,7 @@ export type StateChanged = {
 	state: SessionState,
 };
 
-export type StopReason = "EndTurn" | "MaxTokens" | "StopSequence" | "Refusal" | "Cancelled" | "Error" | { Other: string };
+export type StopReason = "EndTurn" | "MaxTokens" | "MaxTurnRequests" | "StopSequence" | "Refusal" | "Cancelled" | "Error" | { Other: string };
 
 /**  An immutable event stored in the append-only event log. */
 export type StoredEvent = {
@@ -679,14 +744,39 @@ export type ToolCallContent = ({ Text: string }) & { Diff?: never; Terminal?: ne
 
 export type ToolCallPatch = {
 	title: string | null,
-	kind: string | null,
+	kind: ToolKind | null,
 	status: ToolCallStatus | null,
 	input: string | null,
 	output: string | null,
-	locations: string[],
+	origin?: ToolOrigin | null,
+	parent_tool_call_id?: string | null,
+	locations?: ToolLocation[],
 };
 
 export type ToolCallStatus = "Pending" | "Executing" | "Completed" | "Failed";
+
+/**
+ *  Closed ACP tool taxonomy, plus an open `Other` fallback.
+ * 
+ *  Wire spellings are ACP's snake_case (`read`, `edit`, …, `other`), which is
+ *  what the v1 mapper already emitted as a bare string before this type landed.
+ */
+export type ToolKind = "read" | "edit" | "delete" | "move" | "search" | "execute" | "think" | "fetch" | "switch_mode" | "other";
+
+/**
+ *  A file location a tool call touched. Deserializes from either the new
+ *  `{ path, line }` object or the legacy bare path string.
+ */
+export type ToolLocation = {
+	path: string,
+	line: number | null,
+};
+
+/**
+ *  Where a tool call came from. Populated by Provider adapters (Wave 2.5);
+ *  no code in M1.6c sets it, and an entry with no `origin` is a built-in call.
+ */
+export type ToolOrigin = { kind: "builtin" } | { kind: "mcp"; server: string } | { kind: "skill"; name: string } | { kind: "subagent" };
 
 /**  MCP transport of a registry entry. */
 export type TransportKind = "stdio" | "http" | "sse";
@@ -731,6 +821,15 @@ export type TurnEventBody = { type: "StateChanged"; body: StateChanged } | { typ
 	retryable: boolean,
 } } | { type: "Unknown"; body: {
 	raw: string,
+} } | 
+/**
+ *  A vendor-extension request (`_`-prefixed ACP method). Appended last, an
+ *  append-only region; transport is M1.17.
+ */
+{ type: "ProviderExtension"; body: ProviderExtension } | 
+/**  A Provider's context-compaction notice (unstable ACP `compaction_update`). */
+{ type: "Compaction"; body: {
+	summary: string | null,
 } };
 
 /**  Refs holding the pre-restore state so restore is itself reversible. */
@@ -744,8 +843,14 @@ export type UndoCapture = {
 export type UsageSnapshot = {
 	input_tokens: number,
 	output_tokens: number,
+	/**
+	 *  Tokens currently in context: the v1 mapper stores ACP's `used` here and
+	 *  leaves `input_tokens` / `output_tokens` at 0 (see `tethys-acp` `map.rs`).
+	 */
 	total_tokens: number,
 	cost: number | null,
+	context_size?: number | null,
+	cost_currency?: string | null,
 };
 
 /**  Version control state of a workspace root. */

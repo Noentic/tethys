@@ -15,7 +15,7 @@ export function ActivityRail({
   return (
     <aside
       aria-label="Activity Rail"
-      className="z-20 flex h-full w-rail shrink-0 flex-col items-center justify-between border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-rail) py-3 select-none"
+      className="z-(--tethys-z-base) flex h-full w-rail shrink-0 flex-col items-center justify-between border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-rail) py-3 select-none"
     >
       {/* Top cluster */}
       <div className="flex flex-col items-center gap-2">

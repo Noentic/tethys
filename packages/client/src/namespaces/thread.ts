@@ -4,6 +4,8 @@
 //! TODO(C): type `create`, `queue*`, `prompt` and friends against tethys-api;
 //! every wrapper is still `call<void>()` with no arguments.
 
+import type { CancelState } from "@tethys/bindings";
+
 import type { Call } from "../transport";
 
 export function threadNamespace(call: Call) {
@@ -21,6 +23,10 @@ export function threadNamespace(call: Call) {
     queueReorder: () => call<void>("thread_queue_reorder"),
     queue_reorder: () => call<void>("thread_queue_reorder"),
     cancel: () => call<void>("thread_cancel"),
+    cancelState: (id: string) =>
+      call<CancelState>("thread_cancel_state", { id }),
+    cancel_state: (id: string) =>
+      call<CancelState>("thread_cancel_state", { id }),
     resume: () => call<void>("thread_resume"),
     importSessions: () => call<void>("thread_import_sessions"),
     import_sessions: () => call<void>("thread_import_sessions"),

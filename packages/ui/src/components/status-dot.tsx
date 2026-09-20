@@ -20,6 +20,13 @@ export function StatusDot({
   const info = getSessionStateInfo(status);
   const shouldPulse = explicitPulse ?? info.pulse;
   const label = explicitLabel ?? info.label;
+  const style =
+    info.shape === "ring"
+      ? {
+          backgroundColor: "transparent",
+          border: `${inline ? 1.5 : 2}px solid ${info.colorVar}`,
+        }
+      : { backgroundColor: info.colorVar };
 
   return (
     <span
@@ -33,9 +40,7 @@ export function StatusDot({
         shouldPulse && "motion-safe:animate-pulse",
         className,
       )}
-      style={{
-        backgroundColor: info.colorVar,
-      }}
+      style={style}
       {...props}
     />
   );

@@ -40,8 +40,8 @@ export const Splitter = React.forwardRef<HTMLDivElement, SplitterProps>(
         className={cn(
           "focus-ring group relative flex items-center justify-center transition-colors duration-150 select-none",
           isVertical
-            ? "w-[6px] mx-[-2.5px] cursor-col-resize h-full z-10"
-            : "h-[6px] my-[-2.5px] cursor-row-resize w-full z-10",
+            ? "w-[6px] mx-[-2.5px] cursor-col-resize h-full z-(--tethys-z-base)"
+            : "h-[6px] my-[-2.5px] cursor-row-resize w-full z-(--tethys-z-base)",
           className,
         )}
         {...props}

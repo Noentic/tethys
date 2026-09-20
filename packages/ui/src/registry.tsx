@@ -17,9 +17,39 @@ export type ActionBarSlotComponent<T = unknown> = React.ComponentType<{
   className?: string;
 }>;
 
+/** A registered action-bar slot, with its DESIGN.md fold priority. */
+export interface ActionBarSlotEntry {
+  component: ActionBarSlotComponent;
+  /**
+   * Higher folds later. Undefined is treated as below `usage-bar` — DESIGN's
+   * rule that an undeclared slot folds first.
+   */
+  priority?: number;
+}
+
+export type ApprovalDrawerBodyComponent = React.ComponentType<{
+  sessions: Array<{ sessionId: string; title: string; status: string }>;
+  onOpenSession: (sessionId: string) => void;
+  className?: string;
+}>;
+
+/** Mounted by the caller wherever a Provider extension request should render. */
+export type ProviderSurfaceComponent = React.ComponentType<{
+  providerId: string;
+  method: string;
+  params: string;
+  className?: string;
+}>;
+
 export const entryRenderers = new Map<string, EntryRendererComponent>();
 export const inspectorSlots = new Map<string, InspectorSlotComponent>();
-export const actionBarSlots = new Map<string, ActionBarSlotComponent>();
+export const actionBarSlots = new Map<string, ActionBarSlotEntry>();
+export const providerSurfaces = new Map<string, ProviderSurfaceComponent>();
+let approvalDrawerBody: ApprovalDrawerBodyComponent | null = null;
+
+function providerSurfaceKey(providerId: string, method: string): string {
+  return `${providerId}\u0000${method}`;
+}
 
 export function UnknownEntryRenderer({
   entry,
@@ -80,18 +110,49 @@ export function getAllInspectorSlots(): Array<
 export function registerActionBarSlot(
   id: string,
   component: ActionBarSlotComponent,
+  priority?: number,
 ): void {
-  actionBarSlots.set(id, component);
+  actionBarSlots.set(id, { component, priority });
 }
 
-export function getAllActionBarSlots(): Array<
-  [string, ActionBarSlotComponent]
-> {
-  return Array.from(actionBarSlots.entries());
+/** Registered action-bar slots, highest priority first. */
+export function getAllActionBarSlots(): Array<[string, ActionBarSlotEntry]> {
+  return Array.from(actionBarSlots.entries()).sort(
+    (a, b) =>
+      (b[1].priority ?? Number.NEGATIVE_INFINITY) -
+      (a[1].priority ?? Number.NEGATIVE_INFINITY),
+  );
+}
+
+export function registerApprovalDrawerBody(
+  component: ApprovalDrawerBodyComponent,
+): void {
+  approvalDrawerBody = component;
+}
+
+export function getApprovalDrawerBody(): ApprovalDrawerBodyComponent | null {
+  return approvalDrawerBody;
+}
+
+export function registerProviderSurface(
+  providerId: string,
+  method: string,
+  component: ProviderSurfaceComponent,
+): void {
+  providerSurfaces.set(providerSurfaceKey(providerId, method), component);
+}
+
+export function getProviderSurface(
+  providerId: string,
+  method: string,
+): ProviderSurfaceComponent | undefined {
+  return providerSurfaces.get(providerSurfaceKey(providerId, method));
 }
 
 export function clearRegistriesForTesting(): void {
   entryRenderers.clear();
   inspectorSlots.clear();
   actionBarSlots.clear();
+  providerSurfaces.clear();
+  approvalDrawerBody = null;
 }

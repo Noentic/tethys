@@ -4,11 +4,13 @@
 
 use agent_client_protocol::schema::v1 as acp1;
 use agent_client_protocol::schema::MaybeUndefined;
+use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDiffConfig};
 use serde::Serialize;
 use tethys_schema::thread::{
-    AgentCommand, ConfigOption, ContentBlock, MessageChunk, PlanContent, PlanEntry,
-    PlanEntryPriority, PlanEntryStatus, Role, SessionState, StateChanged, StopReason,
-    ToolCallContent, ToolCallPatch, ToolCallStatus, TurnEventBody,
+    AgentCommand, ConfigOption, ConfigOptionKind, ConfigOptionValue, ContentBlock, MessageChunk,
+    PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, Role, SessionState, StateChanged,
+    StopReason, ToolCallContent, ToolCallPatch, ToolCallStatus, ToolKind, ToolLocation,
+    TurnEventBody,
 };
 
 /// Deterministic synthetic message IDs for v1 chunks that omit `messageId`:
@@ -100,6 +102,9 @@ pub fn v1_update(
                     description: None,
                     current_value: update.current_mode_id.to_string(),
                     values: vec![],
+                    category: Some("mode".to_string()),
+                    kind: Some(ConfigOptionKind::Select),
+                    value_options: vec![],
                 }],
             }]
         }
@@ -122,6 +127,8 @@ pub fn v1_update(
                 output_tokens: 0,
                 total_tokens: update.used.min(u32::MAX as u64) as u32,
                 cost: update.cost.as_ref().map(|cost| cost.amount),
+                context_size: Some(update.size.min(u32::MAX as u64) as u32),
+                cost_currency: update.cost.as_ref().map(|cost| cost.currency.clone()),
             },
         }],
         other => vec![TurnEventBody::Unknown {
@@ -153,25 +160,29 @@ fn message_chunk(
 pub(crate) fn v1_tool_patch(tool_call: &acp1::ToolCall) -> ToolCallPatch {
     ToolCallPatch {
         title: Some(tool_call.title.clone()),
-        kind: Some(label(&tool_call.kind)),
+        kind: Some(tool_kind(&tool_call.kind)),
         status: Some(tool_status_v1(tool_call.status)),
         input: tool_call.raw_input.as_ref().map(json_string),
         output: tool_call.raw_output.as_ref().map(json_string),
-        locations: tool_call.locations.iter().map(location_label).collect(),
+        origin: None,
+        parent_tool_call_id: None,
+        locations: tool_call.locations.iter().map(tool_location).collect(),
     }
 }
 
 pub(crate) fn v1_tool_update_patch(fields: &acp1::ToolCallUpdateFields) -> ToolCallPatch {
     ToolCallPatch {
         title: fields.title.clone(),
-        kind: fields.kind.as_ref().map(label),
+        kind: fields.kind.as_ref().map(tool_kind),
         status: fields.status.map(tool_status_v1),
         input: fields.raw_input.as_ref().map(json_string),
         output: fields.raw_output.as_ref().map(json_string),
+        origin: None,
+        parent_tool_call_id: None,
         locations: fields
             .locations
             .as_ref()
-            .map(|locations| locations.iter().map(location_label).collect())
+            .map(|locations| locations.iter().map(tool_location).collect())
             .unwrap_or_default(),
     }
 }
@@ -192,9 +203,28 @@ pub(crate) fn tool_content_v1(content: &acp1::ToolCallContent) -> ToolCallConten
         acp1::ToolCallContent::Terminal(terminal) => ToolCallContent::Terminal {
             terminal_id: terminal.terminal_id.to_string(),
         },
-        acp1::ToolCallContent::Diff(diff) => ToolCallContent::Unknown(json_string(diff)),
+        acp1::ToolCallContent::Diff(diff) => ToolCallContent::Diff {
+            path: diff.path.display().to_string(),
+            patch: unified_diff(diff.old_text.as_deref().unwrap_or(""), &diff.new_text),
+        },
         other => ToolCallContent::Unknown(json_string(other)),
     }
+}
+
+/// Renders a unified diff between two texts (empty when identical).
+pub(crate) fn unified_diff(before: &str, after: &str) -> String {
+    if before == after {
+        return String::new();
+    }
+    let input = InternedInput::new(before, after);
+    let mut diff = Diff::compute(Algorithm::Histogram, &input);
+    diff.postprocess_lines(&input);
+    diff.unified_diff(
+        &BasicLineDiffPrinter(&input.interner),
+        UnifiedDiffConfig::default(),
+        &input,
+    )
+    .to_string()
 }
 
 pub(crate) fn content_block(block: &acp1::ContentBlock) -> ContentBlock {
@@ -217,7 +247,7 @@ pub(crate) fn stop_reason(reason: &acp1::StopReason) -> StopReason {
     match reason {
         acp1::StopReason::EndTurn => StopReason::EndTurn,
         acp1::StopReason::MaxTokens => StopReason::MaxTokens,
-        acp1::StopReason::MaxTurnRequests => StopReason::Other("max_turn_requests".to_string()),
+        acp1::StopReason::MaxTurnRequests => StopReason::MaxTurnRequests,
         acp1::StopReason::Refusal => StopReason::Refusal,
         acp1::StopReason::Cancelled => StopReason::Cancelled,
         _ => StopReason::Other("unknown".to_string()),
@@ -251,28 +281,50 @@ pub(crate) fn command(command: &acp1::AvailableCommand) -> AgentCommand {
 }
 
 pub(crate) fn config_option(option: &acp1::SessionConfigOption) -> ConfigOption {
+    let (current_value, values, value_options, kind) = match &option.kind {
+        acp1::SessionConfigKind::Select(select) => {
+            let (values, value_options) = match &select.options {
+                acp1::SessionConfigSelectOptions::Ungrouped(options) => (
+                    options
+                        .iter()
+                        .map(|option| option.value.to_string())
+                        .collect(),
+                    options
+                        .iter()
+                        .map(|option| ConfigOptionValue {
+                            id: option.value.to_string(),
+                            name: option.name.clone(),
+                            description: option.description.clone(),
+                        })
+                        .collect(),
+                ),
+                _ => (vec![], vec![]),
+            };
+            (
+                select.current_value.to_string(),
+                values,
+                value_options,
+                ConfigOptionKind::Select,
+            )
+        }
+        acp1::SessionConfigKind::Boolean(boolean) => (
+            boolean.current_value.to_string(),
+            vec!["true".to_string(), "false".to_string()],
+            vec![],
+            ConfigOptionKind::Boolean,
+        ),
+        _ => (String::new(), vec![], vec![], ConfigOptionKind::Select),
+    };
+
     ConfigOption {
         id: option.id.to_string(),
         name: option.name.clone(),
         description: option.description.clone(),
-        current_value: match &option.kind {
-            acp1::SessionConfigKind::Select(select) => select.current_value.to_string(),
-            acp1::SessionConfigKind::Boolean(boolean) => boolean.current_value.to_string(),
-            _ => String::new(),
-        },
-        values: match &option.kind {
-            acp1::SessionConfigKind::Select(select) => match &select.options {
-                acp1::SessionConfigSelectOptions::Ungrouped(options) => options
-                    .iter()
-                    .map(|option| option.value.to_string())
-                    .collect(),
-                _ => vec![],
-            },
-            acp1::SessionConfigKind::Boolean(_) => {
-                vec!["true".to_string(), "false".to_string()]
-            }
-            _ => vec![],
-        },
+        current_value,
+        values,
+        category: option.category.as_ref().map(label),
+        kind: Some(kind),
+        value_options,
     }
 }
 
@@ -280,8 +332,15 @@ pub(crate) fn label(value: &impl Serialize) -> String {
     json_string(value).trim_matches('"').to_string()
 }
 
-pub(crate) fn location_label(location: &acp1::ToolCallLocation) -> String {
-    location.path.display().to_string()
+pub(crate) fn tool_kind(kind: &acp1::ToolKind) -> ToolKind {
+    ToolKind::parse(&label(kind))
+}
+
+pub(crate) fn tool_location(location: &acp1::ToolCallLocation) -> ToolLocation {
+    ToolLocation {
+        path: location.path.display().to_string(),
+        line: location.line,
+    }
 }
 
 fn text_or_raw(block: &acp1::ContentBlock) -> String {

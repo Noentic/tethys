@@ -1,15 +1,28 @@
 import { useStore } from "@tanstack/react-store";
 import {
   advanceCancellationState,
+  CANCEL_FIXTURE_GRACE_MS,
   getOrCreateSessionStore,
   sessionsRegistryStore,
 } from "@tethys/state";
-import { Badge, Button, Drawer } from "@tethys/ui";
+import {
+  Drawer,
+  getApprovalDrawerBody,
+  type InspectorControl,
+  InspectorControlProvider,
+} from "@tethys/ui";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Group, Panel, Separator } from "react-resizable-panels";
+import {
+  Group,
+  Panel,
+  type PanelImperativeHandle,
+  Separator,
+  usePanelRef,
+} from "react-resizable-panels";
 import { ActionBar } from "./ActionBar";
 import { ActivityRail } from "./ActivityRail";
+import { ApprovalDrawerBody } from "./ApprovalDrawerBody";
 import { CommandPalette } from "./CommandPalette";
 import { InspectorPane } from "./InspectorPane";
 import { setupGlobalKeyboardMap } from "./keyboard";
@@ -80,6 +93,8 @@ export function AppShell({
   const [approvalDrawerOpen, setApprovalDrawerOpen] = useState<boolean>(false);
   const [inspectorOverlayOpen, setInspectorOverlayOpen] =
     useState<boolean>(false);
+  const inspectorPanelRef =
+    usePanelRef() as React.RefObject<PanelImperativeHandle | null>;
   const [sessionsSidebarOpen, setSessionsSidebarOpen] =
     useState<boolean>(false);
 
@@ -103,6 +118,9 @@ export function AppShell({
     }
     return count;
   }, [sessions]);
+
+  // Replaceable default: a registered drawer body supersedes the placeholder.
+  const DrawerBody = getApprovalDrawerBody() ?? ApprovalDrawerBody;
 
   // Track window resize and blur/focus
   useEffect(() => {
@@ -259,6 +277,18 @@ export function AppShell({
   const shouldShowSessions =
     sessionsSidebarOpen || (activeView === "thread" && !isCompactSessions);
 
+  // Shell-provided control for slot components: overlay at narrow widths,
+  // expand the collapsed docked panel above the overlay breakpoint.
+  const inspectorControl: InspectorControl = {
+    open: () => {
+      if (isOverlayInspector) {
+        setInspectorOverlayOpen(true);
+      } else {
+        inspectorPanelRef.current?.expand();
+      }
+    },
+  };
+
   // Active session store for Action Bar
   const activeSessionStore = activeSessionId
     ? getOrCreateSessionStore(activeSessionId)
@@ -269,204 +299,176 @@ export function AppShell({
     : undefined;
 
   const handleStopSession = () => {
-    if (activeSessionStore) {
-      const current = activeSessionStore.state.cancellationState;
-      if (current === "idle") {
-        advanceCancellationState(activeSessionStore, "cancel_requested");
-      } else if (current === "cancel_requested") {
-        advanceCancellationState(activeSessionStore, "grace_elapsed");
-      } else if (current === "grace_elapsed") {
-        advanceCancellationState(activeSessionStore, "terminating");
-      }
-    }
+    if (!activeSessionStore) return;
+    // One press sends the cancel and enters the pending phase. The ladder is
+    // no longer advanced by click: `grace_elapsed` / `terminating` arrive from
+    // the backend, which owns the clock and the deadline (M1.12). Until then
+    // the phase is fixture-driven.
+    if (activeSessionStore.state.cancellationState !== "idle") return;
+    const deadline = new Date(
+      Date.now() + CANCEL_FIXTURE_GRACE_MS,
+    ).toISOString();
+    advanceCancellationState(activeSessionStore, "cancel_requested", deadline);
   };
 
   return (
-    <div
-      data-window-focused={isWindowFocused}
-      className={`flex h-screen w-screen flex-col overflow-hidden bg-(--tethys-canvas) font-sans text-(--tethys-text-primary) antialiased select-none ${
-        !isWindowFocused ? "opacity-95" : ""
-      }`}
-    >
-      {/* 1. Window Header (40px) */}
-      <WindowHeader
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onSelectTab={handleSelectTab}
-        onCloseTab={handleCloseTab}
-        approvalCount={approvalCount}
-        onOpenApprovalQueue={() => setApprovalDrawerOpen(true)}
-        onOpenPalette={() => setPaletteOpen(true)}
-        platformInset={platformInset}
-        onToggleSidebar={() => setSessionsSidebarOpen((prev) => !prev)}
-        onNewThread={() => onNavigate?.("/thread/new")}
-      />
-
-      {/* 2. Main Middle Workspace Area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Activity Rail (48px) */}
-        <ActivityRail
-          activeView={activeView}
-          onNavigate={(view) => {
-            if (view === "workspaces") onNavigate?.("/workspaces");
-            else if (view === "thread-new") onNavigate?.("/thread/new");
-            else if (view === "settings") onNavigate?.("/settings/general");
-          }}
-          daemonHealthy={true}
+    <InspectorControlProvider value={inspectorControl}>
+      <div
+        data-window-focused={isWindowFocused}
+        className={`flex h-screen w-screen flex-col overflow-hidden bg-(--tethys-canvas) font-sans text-(--tethys-text-primary) antialiased select-none ${
+          !isWindowFocused ? "opacity-95" : ""
+        }`}
+      >
+        {/* 1. Window Header (40px) */}
+        <WindowHeader
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onSelectTab={handleSelectTab}
+          onCloseTab={handleCloseTab}
+          approvalCount={approvalCount}
+          onOpenApprovalQueue={() => setApprovalDrawerOpen(true)}
+          onOpenPalette={() => setPaletteOpen(true)}
+          platformInset={platformInset}
+          onToggleSidebar={() => setSessionsSidebarOpen((prev) => !prev)}
+          onNewThread={() => onNavigate?.("/thread/new")}
         />
 
-        {/* Resizable 3-Column Region */}
-        <Group
-          id="shell-main-group"
-          orientation="horizontal"
-          className="flex-1 overflow-hidden"
-        >
-          {/* Sessions Column (280px / Collapsible) - shown when toggled or on active thread */}
-          {shouldShowSessions && (
-            <>
-              <Panel
-                id="shell-sessions"
-                defaultSize={isCompactSessions ? 48 : 280}
-                minSize={isCompactSessions ? 48 : 200}
-                maxSize={isCompactSessions ? 48 : 400}
-                collapsible={!isCompactSessions}
-                className="h-full"
-              >
-                <SessionsColumn
-                  sessions={sessions}
-                  activeSessionId={activeSessionId}
-                  collapsed={isCompactSessions}
-                  onSelectSession={(sessId) =>
-                    onNavigate?.(`/thread/${sessId}`)
-                  }
-                  onNewSession={() => onNavigate?.("/thread/new")}
-                />
-              </Panel>
+        {/* 2. Main Middle Workspace Area */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Activity Rail (48px) */}
+          <ActivityRail
+            activeView={activeView}
+            onNavigate={(view) => {
+              if (view === "workspaces") onNavigate?.("/workspaces");
+              else if (view === "thread-new") onNavigate?.("/thread/new");
+              else if (view === "settings") onNavigate?.("/settings/general");
+            }}
+            daemonHealthy={true}
+          />
 
-              <Separator className={SHELL_SEPARATOR_CLASS} />
-            </>
-          )}
-
-          {/* Center Stage Panel */}
-          <Panel
-            id="shell-stage"
-            minSize={560}
-            className="flex-1 h-full flex flex-col overflow-hidden bg-(--tethys-canvas)"
+          {/* Resizable 3-Column Region */}
+          <Group
+            id="shell-main-group"
+            orientation="horizontal"
+            className="flex-1 overflow-hidden"
           >
-            <div className="flex-1 overflow-hidden flex flex-col">
-              {children}
-            </div>
+            {/* Sessions Column (280px / Collapsible) - shown when toggled or on active thread */}
+            {shouldShowSessions && (
+              <>
+                <Panel
+                  id="shell-sessions"
+                  defaultSize={isCompactSessions ? 48 : 280}
+                  minSize={isCompactSessions ? 48 : 200}
+                  maxSize={isCompactSessions ? 48 : 400}
+                  collapsible={!isCompactSessions}
+                  className="h-full"
+                >
+                  <SessionsColumn
+                    sessions={sessions}
+                    activeSessionId={activeSessionId}
+                    collapsed={isCompactSessions}
+                    onSelectSession={(sessId) =>
+                      onNavigate?.(`/thread/${sessId}`)
+                    }
+                    onNewSession={() => onNavigate?.("/thread/new")}
+                  />
+                </Panel>
 
-            {/* Action Bar (56px) - only for active thread */}
-            {activeView === "thread" && (
-              <ActionBar
-                cancellationState={
-                  currentSessionState?.cancellationState ?? "idle"
-                }
-                providerName={currentSessionState?.providerId ?? "Provider"}
-                worktreeBranch={currentSessionState?.branchName}
-                onStop={handleStopSession}
+                <Separator className={SHELL_SEPARATOR_CLASS} />
+              </>
+            )}
+
+            {/* Center Stage Panel */}
+            <Panel
+              id="shell-stage"
+              minSize={560}
+              className="flex-1 h-full flex flex-col overflow-hidden bg-(--tethys-canvas)"
+            >
+              <div className="flex-1 overflow-hidden flex flex-col">
+                {children}
+              </div>
+
+              {/* Action Bar (56px) - only for active thread */}
+              {activeView === "thread" && (
+                <ActionBar
+                  cancellationState={
+                    currentSessionState?.cancellationState ?? "idle"
+                  }
+                  graceDeadline={currentSessionState?.graceDeadline ?? null}
+                  providerName={currentSessionState?.providerId ?? "Provider"}
+                  worktreeBranch={currentSessionState?.branchName}
+                  onStop={handleStopSession}
+                />
+              )}
+            </Panel>
+
+            {/* Inspector Panel (360px) - In desktop mode */}
+            {activeView === "thread" && !isOverlayInspector && (
+              <>
+                <Separator className={SHELL_SEPARATOR_CLASS} />
+                <Panel
+                  id="shell-inspector"
+                  panelRef={inspectorPanelRef}
+                  defaultSize={360}
+                  minSize={240}
+                  maxSize={500}
+                  collapsible
+                  className="h-full"
+                >
+                  <InspectorPane sessionId={activeSessionId} />
+                </Panel>
+              </>
+            )}
+          </Group>
+
+          {/* Overlay Inspector for <1100px */}
+          {activeView === "thread" &&
+            isOverlayInspector &&
+            inspectorOverlayOpen && (
+              <InspectorPane
+                sessionId={activeSessionId}
+                isOverlay={true}
+                onCloseOverlay={() => setInspectorOverlayOpen(false)}
               />
             )}
-          </Panel>
-
-          {/* Inspector Panel (360px) - In desktop mode */}
-          {activeView === "thread" && !isOverlayInspector && (
-            <>
-              <Separator className={SHELL_SEPARATOR_CLASS} />
-              <Panel
-                id="shell-inspector"
-                defaultSize={360}
-                minSize={240}
-                maxSize={500}
-                collapsible
-                className="h-full"
-              >
-                <InspectorPane sessionId={activeSessionId} />
-              </Panel>
-            </>
-          )}
-        </Group>
-
-        {/* Overlay Inspector for <1100px */}
-        {activeView === "thread" &&
-          isOverlayInspector &&
-          inspectorOverlayOpen && (
-            <InspectorPane
-              sessionId={activeSessionId}
-              isOverlay={true}
-              onCloseOverlay={() => setInspectorOverlayOpen(false)}
-            />
-          )}
-      </div>
-
-      {/* 3. Command Palette Dialog */}
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        onSelectCommand={(cmd) => {
-          if (cmd === "new-thread") onNavigate?.("/thread/new");
-          else if (cmd === "go-workspaces") onNavigate?.("/workspaces");
-          else if (cmd === "open-settings") onNavigate?.("/settings/general");
-          else if (cmd === "toggle-theme") {
-            const html = document.documentElement;
-            const current = html.getAttribute("data-theme");
-            html.setAttribute(
-              "data-theme",
-              current === "light" ? "dark" : "light",
-            );
-          }
-        }}
-      />
-
-      {/* 4. Approval Queue Drawer */}
-      <Drawer
-        open={approvalDrawerOpen}
-        onClose={() => setApprovalDrawerOpen(false)}
-        title={`Pending Approvals (${approvalCount})`}
-        side="right"
-        width="w-(--layout-drawer-queue)"
-      >
-        <div className="flex flex-col gap-md">
-          {approvalCount === 0 ? (
-            <div className="py-2xl text-center text-body-sm text-(--tethys-text-muted)">
-              No pending approval requests.
-            </div>
-          ) : (
-            sessions
-              .filter((s) => s.status === "awaiting_approval")
-              .map((sess) => (
-                <div
-                  key={sess.sessionId}
-                  className="flex flex-col gap-sm rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested) p-md"
-                >
-                  <div className="flex items-center justify-between gap-sm">
-                    <span className="truncate text-body-sm text-(--tethys-text-primary)">
-                      {sess.title}
-                    </span>
-                    <Badge variant="warning" size="sm">
-                      Action required
-                    </Badge>
-                  </div>
-                  <p className="text-body-sm text-(--tethys-text-secondary)">
-                    Session is awaiting tool execution permission.
-                  </p>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="self-end"
-                    onClick={() => {
-                      setApprovalDrawerOpen(false);
-                      onNavigate?.(`/thread/${sess.sessionId}`);
-                    }}
-                  >
-                    Open session
-                  </Button>
-                </div>
-              ))
-          )}
         </div>
-      </Drawer>
-    </div>
+
+        {/* 3. Command Palette Dialog */}
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          onSelectCommand={(cmd) => {
+            if (cmd === "new-thread") onNavigate?.("/thread/new");
+            else if (cmd === "go-workspaces") onNavigate?.("/workspaces");
+            else if (cmd === "open-settings") onNavigate?.("/settings/general");
+            else if (cmd === "toggle-theme") {
+              const html = document.documentElement;
+              const current = html.getAttribute("data-theme");
+              html.setAttribute(
+                "data-theme",
+                current === "light" ? "dark" : "light",
+              );
+            }
+          }}
+        />
+
+        {/* 4. Approval Queue Drawer */}
+        <Drawer
+          open={approvalDrawerOpen}
+          onClose={() => setApprovalDrawerOpen(false)}
+          title={`Pending Approvals (${approvalCount})`}
+          side="right"
+          width="w-(--layout-drawer-queue)"
+        >
+          <DrawerBody
+            sessions={sessions}
+            onOpenSession={(sessionId) => {
+              setApprovalDrawerOpen(false);
+              onNavigate?.(`/thread/${sessionId}`);
+            }}
+          />
+        </Drawer>
+      </div>
+    </InspectorControlProvider>
   );
 }

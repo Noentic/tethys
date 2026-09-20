@@ -57,7 +57,7 @@ export function Popover({
       role={role}
       tabIndex={-1}
       className={cn(
-        "edge-lit absolute z-30 rounded-md border border-(--tethys-hairline-strong) bg-(--tethys-surface-overlay) p-1 outline-none",
+        "edge-lit absolute z-(--tethys-z-popover) rounded-md border border-(--tethys-hairline-strong) bg-(--tethys-surface-overlay) p-1 outline-none",
         className,
       )}
     >

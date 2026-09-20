@@ -70,6 +70,7 @@ pub fn run() {
             thread_queue_remove,
             thread_queue_reorder,
             thread_cancel,
+            thread_cancel_state,
             thread_resume,
             thread_import_sessions,
             thread_fork,

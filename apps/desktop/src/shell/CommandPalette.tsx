@@ -45,7 +45,7 @@ export function CommandPalette({
     // biome-ignore lint/a11y/noStaticElementInteractions: backdrop scrim dismiss
     <div
       role="presentation"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-(--tethys-overlay-scrim) pt-[15vh]"
+      className="fixed inset-0 z-(--tethys-z-palette) flex items-start justify-center bg-(--tethys-overlay-scrim) pt-[15vh]"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();

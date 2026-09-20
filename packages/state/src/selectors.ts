@@ -19,6 +19,11 @@ export function selectCancellationState(
   return state.cancellationState;
 }
 
+/** Absolute grace deadline while `cancel_requested`; null in every other phase. */
+export function selectGraceDeadline(state: SessionState): string | null {
+  return state.graceDeadline;
+}
+
 /**
  * Stop button destructiveness (D5 / U3 / U7):
  * Neutral in idle and cancel_requested (protocol cancel sent);

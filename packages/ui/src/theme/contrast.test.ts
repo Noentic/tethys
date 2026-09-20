@@ -152,6 +152,32 @@ describe("WCAG Contrast Gate (D6 / U8)", () => {
     });
   });
 
+  describe("Diff tokens on surface-sunken", () => {
+    // `diff-viewer` always sits on `surface-sunken`, which is dark in both
+    // themes, so both tokens are evaluated against that well, not the canvas.
+    for (const [themeName, tokens] of [
+      ["default-dark", DEFAULT_DARK_TOKENS],
+      ["default-light", DEFAULT_LIGHT_TOKENS],
+    ] as const) {
+      const sunken = tokens["surface-sunken"];
+      it(`${themeName}: diff-added on surface-sunken passes (>= 4.5:1)`, () => {
+        const ratio = getContrastRatio(tokens["diff-added"], sunken, sunken);
+        expect(
+          ratio,
+          `diff-added on ${themeName} surface-sunken measured ${ratio.toFixed(2)}:1`,
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+
+      it(`${themeName}: diff-removed on surface-sunken passes (>= 4.5:1)`, () => {
+        const ratio = getContrastRatio(tokens["diff-removed"], sunken, sunken);
+        expect(
+          ratio,
+          `diff-removed on ${themeName} surface-sunken measured ${ratio.toFixed(2)}:1`,
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  });
+
   describe("Default Light Theme", () => {
     const light = DEFAULT_LIGHT_TOKENS;
     const canvas = light.canvas;

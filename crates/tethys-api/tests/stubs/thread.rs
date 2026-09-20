@@ -18,6 +18,10 @@ async fn thread_defaults_return_unimplemented() {
     assert_unimplemented("thread.queue_remove", api.thread_queue_remove().await);
     assert_unimplemented("thread.queue_reorder", api.thread_queue_reorder().await);
     assert_unimplemented("thread.cancel", api.thread_cancel(ThreadId::from("t1")).await);
+    assert_unimplemented(
+        "thread.cancel_state",
+        api.thread_cancel_state(ThreadId::from("t1")).await,
+    );
     assert_unimplemented("thread.resume", api.thread_resume(ThreadId::from("t1")).await);
     assert_unimplemented(
         "thread.import_sessions",

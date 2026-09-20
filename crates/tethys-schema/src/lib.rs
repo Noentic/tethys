@@ -16,11 +16,16 @@ pub mod workspace;
 
 pub use workspace::*;
 
+pub mod cancel;
+
+pub use cancel::*;
+
 use serde::{Deserialize, Serialize};
 use specta::{Type, Types};
 
 pub mod composer;
 pub mod connection;
+pub mod provider_extension;
 pub mod search;
 pub mod sync;
 pub mod thread;
@@ -140,6 +145,9 @@ pub fn registered_types() -> Types {
         .register::<thread::ThreadState>()
         .register::<thread::TurnEventBody>()
         .register::<thread::EventEnvelope>()
+        .register::<cancel::CancelPhase>()
+        .register::<cancel::CancelState>()
+        .register::<provider_extension::ProviderExtension>()
         .register::<store::BlobHash>()
         .register::<store::SeqRange>()
         .register::<store::EntryKind>()

@@ -3,7 +3,13 @@ import {
   clearAllSessionStoresForTesting,
   createInitialSessionState,
   createSessionStore,
+  getOrCreateSessionStore,
+  selectCancellationState,
 } from "@tethys/state";
+import {
+  clearRegistriesForTesting,
+  registerApprovalDrawerBody,
+} from "@tethys/ui";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ActionBar } from "./ActionBar";
 import { AppShell } from "./AppShell";
@@ -95,23 +101,26 @@ describe("ActionBar Stop Button States", () => {
   it("renders neutral Stop button during idle and cancel_requested", () => {
     const { rerender } = render(<ActionBar cancellationState="idle" />);
     const stopBtn = screen.getByRole("button", { name: "Stop" });
-    expect(stopBtn.className).not.toContain("bg-[rgba(239,68,68");
+    expect(stopBtn.className).not.toContain("text-(--tethys-status-danger)");
 
     rerender(<ActionBar cancellationState="cancel_requested" />);
-    const cancellingBtn = screen.getByRole("button", { name: "Cancelling..." });
-    expect(cancellingBtn.className).not.toContain("bg-[rgba(239,68,68");
+    const cancellingBtn = screen.getByRole("button", { name: /Cancelling/ });
+    expect(cancellingBtn.className).not.toContain(
+      "text-(--tethys-status-danger)",
+    );
+    expect(cancellingBtn.getAttribute("aria-busy")).toBe("true");
   });
 
   it("renders destructive styling exclusively during grace_elapsed and terminating", () => {
     const { rerender } = render(
       <ActionBar cancellationState="grace_elapsed" />,
     );
-    const forceKillBtn = screen.getByRole("button", { name: "Force Kill" });
+    const forceKillBtn = screen.getByRole("button", { name: /Force kill/ });
     expect(forceKillBtn.className).toContain("text-(--tethys-status-danger)");
 
     rerender(<ActionBar cancellationState="terminating" />);
     const termBtn = screen.getByRole("button", {
-      name: "Terminating (SIGKILL)",
+      name: /Terminating \(SIGKILL\)/,
     });
     expect(termBtn.className).toContain("text-(--tethys-status-danger)");
   });
@@ -127,5 +136,42 @@ describe("ActionBar Stop Button States", () => {
 
     rerender(<ActionBar cancellationState="idle" />);
     expect(screen.queryByText("no git")).toBeNull();
+  });
+});
+
+describe("Cancel ladder and replaceable drawer body (M1.6c U4 / U10)", () => {
+  beforeEach(() => {
+    clearAllSessionStoresForTesting();
+    clearRegistriesForTesting();
+  });
+
+  it("one press sends a cancel request; a second press does not advance the ladder", () => {
+    createSessionStore(
+      createInitialSessionState("thread-stop", "p-1", "ws-1", "Stop me"),
+    );
+    render(<AppShell activeRoute="/thread/thread-stop" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    const store = getOrCreateSessionStore("thread-stop");
+    expect(selectCancellationState(store.state)).toBe("cancel_requested");
+
+    const pending = screen.getByRole("button", { name: /Cancelling/ });
+    expect(pending.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(pending);
+    expect(selectCancellationState(store.state)).toBe("cancel_requested");
+  });
+
+  it("renders a registered approval drawer body instead of the default", () => {
+    registerApprovalDrawerBody(({ sessions }) => (
+      <div data-testid="registered-body">registered {sessions.length}</div>
+    ));
+    createSessionStore({
+      ...createInitialSessionState("thread-approve", "p-1", "ws-1", "Approve"),
+      status: "awaiting_approval",
+    });
+
+    render(<AppShell activeRoute="/workspaces" />);
+    fireEvent.click(screen.getByLabelText(/Waiting on you/i));
+    expect(screen.getByTestId("registered-body")).toBeDefined();
   });
 });

@@ -57,7 +57,8 @@ fn v1_transcript_is_schema_valid_and_normalizes() {
             if tool_call_id == "tool-1"
                 && patch.title.as_deref() == Some("Read file")
                 && patch.status == Some(ToolCallStatus::Executing)
-                && patch.locations == ["src/main.rs"]
+                && patch.locations.len() == 1
+                && patch.locations[0].path == "src/main.rs"
     ));
     assert!(matches!(
         &events[3],

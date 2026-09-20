@@ -115,4 +115,10 @@ describe("token discipline", () => {
     }
     expect(undefinedRefs).toEqual([]);
   });
+
+  it("derives paint order from the stacking tokens, never a literal z-index", () => {
+    expect(findAll(/(?<![\w-])z-\d+\b/g)).toEqual([]);
+    expect(findAll(/(?<![\w-])z-\[/g)).toEqual([]);
+    expect(findAll(/\bzIndex\b/g)).toEqual([]);
+  });
 });

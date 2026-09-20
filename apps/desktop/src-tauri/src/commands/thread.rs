@@ -2,6 +2,7 @@
 
 use tauri::State;
 use tethys_api::ThreadApi;
+use tethys_schema::cancel::CancelState;
 use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView};
 
 use crate::commands::CoreState;
@@ -57,6 +58,19 @@ stub_cmd!(thread_queue_reorder);
 #[specta::specta]
 pub async fn thread_cancel(state: State<'_, CoreState>, id: ThreadId) -> Result<(), String> {
     state.thread_cancel(id).await.map_err(|e| e.to_string())
+}
+
+/// `thread.cancel_state` — the typed cancel phase/grace-deadline stub (M1.6c).
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_cancel_state(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+) -> Result<CancelState, String> {
+    state
+        .thread_cancel_state(id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// `thread.resume` — see `architecture.md §12.1`.

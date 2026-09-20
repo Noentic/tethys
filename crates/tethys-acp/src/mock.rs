@@ -146,6 +146,20 @@ pub async fn serve_v1(transport: impl agent_client_protocol::ConnectTo<Agent>) -
                         if prompt.contains("slow") {
                             tokio::time::sleep(std::time::Duration::from_millis(750)).await;
                         }
+                        if prompt.contains("contract") {
+                            for update in contract_fixture_updates() {
+                                notify
+                                    .send_notification(acp1::SessionNotification::new(
+                                        session_id.clone(),
+                                        update,
+                                    ))
+                                    .map_err(Error::into_internal_error)?;
+                            }
+                            responder.respond(acp1::PromptResponse::new(
+                                acp1::StopReason::MaxTurnRequests,
+                            ))?;
+                            return Ok(());
+                        }
                         if prompt.contains("permission") {
                             let options = vec![
                                 acp1::PermissionOption::new(
@@ -231,6 +245,77 @@ fn prompt_text_v1(blocks: &[acp1::ContentBlock]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// The M1.6c U13 contract fixtures: one tool call per kind, a `diff` content,
+/// a `usage_update` with a context size, and config options with categories.
+/// Sent when a prompt contains `contract`.
+pub fn contract_fixture_updates() -> Vec<acp1::SessionUpdate> {
+    use acp1::ToolKind as Kind;
+
+    let kinds = [
+        Kind::Read,
+        Kind::Edit,
+        Kind::Delete,
+        Kind::Move,
+        Kind::Search,
+        Kind::Execute,
+        Kind::Think,
+        Kind::Fetch,
+        Kind::SwitchMode,
+        Kind::Other,
+    ];
+
+    let mut updates: Vec<acp1::SessionUpdate> = kinds
+        .into_iter()
+        .enumerate()
+        .map(|(index, kind)| {
+            acp1::SessionUpdate::ToolCall(
+                acp1::ToolCall::new(format!("contract-tool-{index}"), format!("Contract {kind:?}"))
+                    .kind(kind)
+                    .status(acp1::ToolCallStatus::Completed),
+            )
+        })
+        .collect();
+
+    updates.push(acp1::SessionUpdate::ToolCall(
+        acp1::ToolCall::new("contract-diff", "Edit contract.txt")
+            .kind(Kind::Edit)
+            .content(vec![acp1::ToolCallContent::Diff(
+                acp1::Diff::new("/tmp/contract.txt", "line two\n")
+                    .old_text("line one\n"),
+            )]),
+    ));
+
+    updates.push(acp1::SessionUpdate::UsageUpdate(
+        acp1::UsageUpdate::new(1_200, 200_000).cost(acp1::Cost::new(0.42, "USD")),
+    ));
+
+    let select = |id: &'static str, name: &'static str, category: acp1::SessionConfigOptionCategory| {
+        acp1::SessionConfigOption::select(
+            id,
+            name,
+            "medium",
+            vec![
+                acp1::SessionConfigSelectOption::new("low", "Low")
+                    .description("Fastest"),
+                acp1::SessionConfigSelectOption::new("medium", "Medium"),
+            ],
+        )
+        .category(category)
+    };
+    updates.push(acp1::SessionUpdate::ConfigOptionUpdate(
+        acp1::ConfigOptionUpdate::new(vec![
+            select(
+                "thought_level",
+                "Effort",
+                acp1::SessionConfigOptionCategory::ThoughtLevel,
+            ),
+            select("model", "Model", acp1::SessionConfigOptionCategory::Model),
+        ]),
+    ));
+
+    updates
 }
 #[cfg(feature = "acp-v2")]
 mod v2 {

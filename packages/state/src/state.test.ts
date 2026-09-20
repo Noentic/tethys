@@ -3,20 +3,32 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   advanceCancellationState,
   applyPatch,
+  CANCEL_FIXTURE_DEADLINE,
+  cancelPhaseFixtures,
+  cancelPhaseToState,
   clearAllSessionStoresForTesting,
+  configOptionFixtures,
   createInitialSessionState,
   createSessionStore,
   getOrCreateSessionStore,
   type HistoryDividerEntry,
   loadHistoryIntoSession,
   PERMISSION_MODE_LABELS,
+  providerExtensionFixture,
   SessionStreamManager,
   selectCancellationState,
+  selectGraceDeadline,
   selectIsStopDestructive,
   selectWorkspaceProviderSessionGroups,
   sessionReducer,
   setCustomRafScheduler,
+  stopReasonFixtures,
   type TurnMessageEntry,
+  threadStateToStatusKey,
+  toolCallPatchFixture,
+  toolKindFixtures,
+  toolOriginFixtures,
+  usageSnapshotFixture,
   workspaceCapabilityFixtures,
 } from "./index";
 
@@ -356,6 +368,52 @@ describe("@tethys/state Store & Reducer Architecture (U7 / D5)", () => {
     expect(selectCancellationState(store.state)).toBe("idle");
     expect(selectIsStopDestructive(store.state.cancellationState)).toBe(false);
   });
+
+  it("refuses an illegal jump and clears the deadline on grace_elapsed", () => {
+    const store = createSessionStore(
+      createInitialSessionState("s-cancel", "p-1", "ws-1"),
+    );
+
+    // idle -> terminating is not a legal transition.
+    advanceCancellationState(store, "terminating");
+    expect(selectCancellationState(store.state)).toBe("idle");
+
+    advanceCancellationState(
+      store,
+      "cancel_requested",
+      CANCEL_FIXTURE_DEADLINE,
+    );
+    expect(selectGraceDeadline(store.state)).toBe(CANCEL_FIXTURE_DEADLINE);
+
+    advanceCancellationState(store, "grace_elapsed");
+    expect(selectGraceDeadline(store.state)).toBeNull();
+  });
+
+  it("maps each schema CancelPhase fixture onto the store union", () => {
+    const expected: Record<string, string> = {
+      idle: "idle",
+      "cancel-requested": "cancel_requested",
+      "grace-elapsed": "grace_elapsed",
+      terminating: "terminating",
+    };
+
+    for (const [phaseKey, fixture] of Object.entries(cancelPhaseFixtures)) {
+      const view = cancelPhaseToState(fixture.phase);
+      expect(view.state).toBe(expected[phaseKey]);
+      expect(view.graceDeadline === null).toBe(phaseKey !== "cancel-requested");
+    }
+    expect(
+      cancelPhaseToState(cancelPhaseFixtures["cancel-requested"].phase),
+    ).toEqual({
+      state: "cancel_requested",
+      graceDeadline: CANCEL_FIXTURE_DEADLINE,
+    });
+  });
+
+  it("threadStateToStatusKey covers all seven generated ThreadState values", () => {
+    expect(Object.keys(threadStateToStatusKey)).toHaveLength(7);
+    expect(threadStateToStatusKey.AwaitingApproval).toBe("awaiting_approval");
+  });
 });
 
 describe("Workspace capability seams (M1.6b)", () => {
@@ -388,5 +446,40 @@ describe("Workspace capability seams (M1.6b)", () => {
       expect(PERMISSION_MODE_LABELS[mode]).toBeTruthy();
     }
     expect(PERMISSION_MODE_LABELS.yolo).toBe("YOLO");
+  });
+});
+
+describe("Thread-view contract fixtures (M1.6c U13)", () => {
+  it("covers all ten ACP tool kinds and four origins", () => {
+    expect(toolKindFixtures).toHaveLength(10);
+    expect(toolOriginFixtures.map((origin) => origin.kind)).toEqual([
+      "builtin",
+      "mcp",
+      "skill",
+      "subagent",
+    ]);
+  });
+
+  it("carries the new config, usage and stop-reason fields", () => {
+    expect(
+      configOptionFixtures.find((option) => option.id === "thought_level")
+        ?.category,
+    ).toBe("thought_level");
+    const modelOption = configOptionFixtures.find(
+      (option) => option.id === "model",
+    );
+    expect(modelOption?.value_options).toContainEqual({
+      id: "sonnet",
+      name: "Sonnet",
+      description: null,
+    });
+    expect(usageSnapshotFixture.context_size).toBe(200_000);
+    expect(usageSnapshotFixture.cost_currency).toBe("USD");
+    expect(stopReasonFixtures).toContain("MaxTurnRequests");
+  });
+
+  it("does not populate origin or parent_tool_call_id by default", () => {
+    expect(providerExtensionFixture.method).toBe("_kiro.dev/mcp/oauth_request");
+    expect(toolCallPatchFixture.parent_tool_call_id).toBeNull();
   });
 });

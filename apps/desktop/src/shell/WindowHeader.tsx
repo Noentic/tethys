@@ -35,7 +35,7 @@ export function WindowHeader({
   return (
     <header
       data-tauri-drag-region
-      className="z-10 flex h-titlebar w-full items-center gap-sm border-b border-(--tethys-hairline-structural) bg-(--tethys-surface-rail) px-sm select-none"
+      className="z-(--tethys-z-base) flex h-titlebar w-full items-center gap-sm border-b border-(--tethys-hairline-structural) bg-(--tethys-surface-rail) px-sm select-none"
     >
       {/* Platform window controls inset (macOS traffic lights drag region) */}
       {platformInset && (

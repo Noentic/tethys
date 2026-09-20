@@ -57,7 +57,7 @@ export function InspectorPane({
 
   if (isOverlay) {
     return (
-      <div className="fixed inset-0 z-30 flex justify-end bg-(--tethys-overlay-scrim)">
+      <div className="fixed inset-0 z-(--tethys-z-drawer) flex justify-end bg-(--tethys-overlay-scrim)">
         {content}
       </div>
     );

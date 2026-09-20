@@ -12,10 +12,19 @@ export interface SessionStateInfo {
   className: string;
   pulse: boolean;
   label: string;
+  /**
+   * Glanceable shape. Every state is a filled disc except `awaiting`, which is
+   * a ring so it stays distinct from the amber `auth_required` disc when the
+   * pulse is suspended (DESIGN.md status-dot `shape` / `rule`).
+   */
+  shape: "disc" | "ring";
 }
 
 export function getSessionStateInfo(status: string): SessionStateInfo {
-  const normalized = status.toLowerCase().replace(/[\s-]+/g, "_");
+  const normalized = status
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
 
   switch (normalized) {
     case "running":
@@ -24,15 +33,17 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         className: "bg-(--tethys-agent-active) motion-safe:animate-pulse",
         pulse: true,
         label: "Running",
+        shape: "disc",
       };
     case "awaiting_approval":
     case "awaiting":
     case "requires_action":
       return {
         colorVar: "var(--tethys-status-warning)",
-        className: "bg-(--tethys-status-warning) motion-safe:animate-pulse",
+        className: "motion-safe:animate-pulse",
         pulse: true,
         label: "Awaiting approval",
+        shape: "ring",
       };
     // Provider / daemon health (DESIGN.md status-dot: healthy, awaiting, error).
     case "healthy":
@@ -42,6 +53,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         className: "bg-(--tethys-status-success)",
         pulse: false,
         label: "Healthy",
+        shape: "disc",
       };
     case "auth_required":
       return {
@@ -49,6 +61,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         className: "bg-(--tethys-status-warning)",
         pulse: false,
         label: "Authentication required",
+        shape: "disc",
       };
     case "not_found":
     case "missing":
@@ -57,6 +70,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         className: "bg-(--tethys-status-danger)",
         pulse: false,
         label: "Not found",
+        shape: "disc",
       };
     case "error":
     case "failed":
@@ -65,6 +79,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         className: "bg-(--tethys-status-danger)",
         pulse: false,
         label: "Error",
+        shape: "disc",
       };
     case "interrupted":
       return {
@@ -72,6 +87,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         className: "bg-(--tethys-text-muted)",
         pulse: false,
         label: "Interrupted",
+        shape: "disc",
       };
     case "suspended":
       return {
@@ -79,6 +95,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         className: "bg-(--tethys-hairline-strong)",
         pulse: false,
         label: "Suspended",
+        shape: "disc",
       };
     case "archived":
       return {
@@ -86,6 +103,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         className: "bg-(--tethys-hairline)",
         pulse: false,
         label: "Archived",
+        shape: "disc",
       };
     default:
       return {
@@ -93,6 +111,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
         className: "bg-(--tethys-agent-idle)",
         pulse: false,
         label: "Idle",
+        shape: "disc",
       };
   }
 }

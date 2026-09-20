@@ -76,6 +76,7 @@ export function getOrCreateSessionStore(
 export function advanceCancellationState(
   store: SessionStore,
   target: CancellationState,
+  graceDeadline: string | null = null,
 ): void {
   const current = store.state.cancellationState;
 
@@ -91,6 +92,12 @@ export function advanceCancellationState(
     store.setState((prev) => ({
       ...prev,
       cancellationState: target,
+      // Only the pending phase carries a deadline; a stale one must not keep
+      // the fill animating after the window closed.
+      graceDeadline:
+        target === "cancel_requested"
+          ? (graceDeadline ?? prev.graceDeadline)
+          : null,
     }));
   }
 }

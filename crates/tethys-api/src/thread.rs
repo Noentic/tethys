@@ -1,8 +1,7 @@
 //! `thread.*` namespace (`architecture.md` §12.1).
 
-use tethys_schema::thread::{
-    ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView,
-};
+use tethys_schema::cancel::CancelState;
+use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView};
 
 use crate::ApiError;
 
@@ -61,6 +60,15 @@ pub trait ThreadApi: Send + Sync {
         _id: ThreadId,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.cancel")) }
+    }
+
+    /// Current cancel phase and (while pending) the grace deadline.
+    /// Overridden by M1.12; the webview renders from the deadline.
+    fn thread_cancel_state(
+        &self,
+        _id: ThreadId,
+    ) -> impl std::future::Future<Output = Result<CancelState, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("thread.cancel_state")) }
     }
 
     fn thread_resume(

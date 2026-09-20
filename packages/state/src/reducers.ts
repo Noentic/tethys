@@ -83,6 +83,8 @@ export interface SessionState {
   branchName?: string;
   status: string; // "idle" | "running" | "awaiting_approval" | "error" | "interrupted" | "suspended" | "archived"
   cancellationState: CancellationState;
+  /** Absolute RFC 3339 grace deadline while `cancel_requested`; null otherwise. */
+  graceDeadline: string | null;
   turnCount: number;
   seq: number;
   historyEntries: SessionEntry[];
@@ -145,6 +147,7 @@ export function createInitialSessionState(
     branchName,
     status: "idle",
     cancellationState: "idle",
+    graceDeadline: null,
     turnCount: 0,
     seq: 0,
     historyEntries: [],
@@ -204,6 +207,7 @@ export function sessionReducer(
         ...state,
         status: newStatus,
         cancellationState: newCancellation,
+        graceDeadline: newCancellation === "idle" ? null : state.graceDeadline,
         seq: currentSeq,
       };
     }

@@ -7,12 +7,15 @@ import {
   Button,
   IconButton,
   Input,
+  ProtocolPill,
+  SchemaFieldGroup,
   SegmentedControl,
   SessionGroupHeader,
   SessionListRow,
   Splitter,
   StatusDot,
   StepperInput,
+  StopControl,
   TabStrip,
   Textarea,
   ToggleSwitch,
@@ -30,6 +33,33 @@ async function runAxe(container: HTMLElement) {
 }
 
 describe("A11y automated axe-core gates (D6 / U2 / U8)", () => {
+  it("SchemaFieldGroup, ProtocolPill and StopControl have zero a11y violations", async () => {
+    const { container } = render(
+      <div>
+        <SchemaFieldGroup label="Server">
+          <input aria-label="server url" />
+        </SchemaFieldGroup>
+        <ProtocolPill>ACP v2</ProtocolPill>
+        <StopControl phase="idle" />
+        <StopControl phase="cancel_requested" />
+      </div>,
+    );
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
+  });
+
+  it("StatusDot ring and disc shapes have zero a11y violations", async () => {
+    const { container } = render(
+      <div>
+        <StatusDot status="awaiting_approval" />
+        <StatusDot status="auth_required" />
+        <StatusDot status="running" />
+      </div>,
+    );
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
+  });
+
   it("Button has zero a11y violations", async () => {
     const { container } = render(
       <div>

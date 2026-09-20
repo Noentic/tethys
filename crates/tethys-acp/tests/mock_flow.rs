@@ -140,6 +140,107 @@ async fn v1_mock_streams_chunks_and_permission_round_trip() {
     let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
 }
 
+#[tokio::test]
+async fn v1_contract_fixtures_reach_normalized_events() {
+    use tethys_schema::thread::{StopReason, ToolCallContent, ToolKind};
+
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v1(agent_channel).await });
+    let connection = connect(options(), client_channel)
+        .await
+        .expect("connect v1");
+    let session = connection
+        .new_session(NewSession {
+            cwd: PathBuf::from("/tmp/mock-v1"),
+            additional_directories: vec![],
+            mcp_servers: vec![],
+        })
+        .await
+        .expect("new session");
+    let mut events = connection.events(&session.id);
+
+    connection
+        .prompt(
+            &session.id,
+            vec![ContentBlock::Text("contract fixtures".into())],
+        )
+        .await
+        .expect("prompt");
+
+    let collected = collect_until_idle(&mut events, 64, false).await;
+
+    let kinds: Vec<ToolKind> = collected
+        .iter()
+        .filter_map(|event| match &event.body {
+            TurnEventBody::ToolCallUpsert { patch, .. } => patch.kind,
+            _ => None,
+        })
+        .collect();
+    for kind in [
+        ToolKind::Read,
+        ToolKind::Edit,
+        ToolKind::Delete,
+        ToolKind::Move,
+        ToolKind::Search,
+        ToolKind::Execute,
+        ToolKind::Think,
+        ToolKind::Fetch,
+        ToolKind::SwitchMode,
+        ToolKind::Other,
+    ] {
+        assert!(kinds.contains(&kind), "missing kind {kind:?}: {kinds:?}");
+    }
+
+    assert!(
+        collected.iter().any(|event| matches!(
+            &event.body,
+            TurnEventBody::ToolCallContentChunk {
+                item: ToolCallContent::Diff { path, patch },
+                ..
+            } if path == "/tmp/contract.txt" && !patch.is_empty()
+        )),
+        "diff content: {collected:?}"
+    );
+
+    assert!(
+        collected.iter().any(|event| matches!(
+            &event.body,
+            TurnEventBody::Usage { snapshot }
+                if snapshot.context_size == Some(200_000)
+                    && snapshot.cost_currency.as_deref() == Some("USD")
+        )),
+        "usage: {collected:?}"
+    );
+
+    assert!(
+        collected.iter().any(|event| matches!(
+            &event.body,
+            TurnEventBody::ConfigOptionsChanged { options }
+                if options.iter().any(|option| option.category.as_deref() == Some("thought_level")
+                    && option.kind == Some(tethys_schema::thread::ConfigOptionKind::Select)
+                    && option.value_options.iter().any(|value| value.id == "low" && value.name == "Low"))
+                    && options.iter().any(|option| option.category.as_deref() == Some("model"))
+        )),
+        "config options: {collected:?}"
+    );
+
+    assert!(
+        collected.iter().any(|event| matches!(
+            &event.body,
+            TurnEventBody::StateChanged(changed)
+                if changed.state
+                    == tethys_schema::thread::SessionState::Idle {
+                        stop_reason: Some(StopReason::MaxTurnRequests),
+                    }
+        )),
+        "max turn requests stop reason: {collected:?}"
+    );
+
+    drop(events);
+    drop(connection);
+    let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
 #[cfg(feature = "acp-v2")]
 #[tokio::test]
 async fn v2_mock_streams_state_chunks_and_replay() {

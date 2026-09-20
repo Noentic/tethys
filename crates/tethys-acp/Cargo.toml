@@ -14,6 +14,7 @@ mock = []
 agent-client-protocol.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+imara-diff.workspace = true
 parking_lot = "0.12"
 serde.workspace = true
 serde_json.workspace = true
