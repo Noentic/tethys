@@ -788,7 +788,7 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 | AD‑6 | HTTP MCP servers for agents without HTTP support | Skip with warning · local stdio bridge | V1 |
 | AD‑7 | Remote approval notifications | None · webhook · mobile companion | Phase 3 |
 | AD‑8 | ACP versions | **v1 + v2 side by side, v2‑shaped internal model** | **Decided** (Spike S0.2) |
-| AD‑9 | Composer editor | TipTap · Lexical · custom contenteditable | MVP |
+| AD‑9 | Composer editor | TipTap · Lexical · custom contenteditable | **Decided** (M1.10): TipTap/ProseMirror behind an `EditorHandle` interface; gate measured trigger→first popup result 1.9 ms (≤ 30 ms) through the real suggestion pipeline and 1 MB paste + serialize 4.2 ms (no > 32 ms frame gap), on `@tethys/composer`'s harness (`pnpm --filter @tethys/composer bench`). Real-WebView compositor smoke is a follow-up (risk-recorded); textarea + chip strip remains the fallback if it regresses |
 | AD‑10 | Diff renderer | **Custom virtualized over git patches** · CodeMirror merge only | **Decided** (Spike S0.1) |
 | AD‑11 | Client data layer | Query + Store (proposed) · add TanStack DB when stable | V1 |
 | AD‑12 | v1 client `fs` capability | Off by default, per‑profile opt‑in (proposed) · always on | MVP |
