@@ -5,7 +5,7 @@
       "type": "frame",
       "id": "KGRAr",
       "x": 0,
-      "y": 0,
+      "y": -1945,
       "name": "Foundations - Cover",
       "theme": {
         "mode": "dark"
@@ -479,7 +479,7 @@
       "type": "frame",
       "id": "klHiF",
       "x": 1540,
-      "y": 0,
+      "y": -1945,
       "name": "Foundations - Colour (Dark)",
       "theme": {
         "mode": "dark"
@@ -4328,7 +4328,7 @@
       "type": "frame",
       "id": "lK5Vz",
       "x": 3080,
-      "y": 0,
+      "y": -1945,
       "name": "Foundations - Colour (Light)",
       "theme": {
         "mode": "light"
@@ -8177,7 +8177,7 @@
       "type": "frame",
       "id": "BicEX",
       "x": 4620,
-      "y": 0,
+      "y": -1945,
       "name": "Foundations - Typography",
       "theme": {
         "mode": "dark"
@@ -8989,7 +8989,7 @@
       "type": "frame",
       "id": "xfWeJ",
       "x": 0,
-      "y": 1124,
+      "y": -660,
       "name": "Foundations - Scale",
       "theme": {
         "mode": "dark"
@@ -10909,7 +10909,7 @@
       "type": "frame",
       "id": "TUGlk",
       "x": 1540,
-      "y": 1124,
+      "y": -660,
       "name": "Foundations - Elevation",
       "theme": {
         "mode": "dark"
@@ -12081,7 +12081,7 @@
       "type": "frame",
       "id": "M3ihM",
       "x": 3080,
-      "y": 1124,
+      "y": -660,
       "name": "Foundations - Iconography",
       "theme": {
         "mode": "dark"
@@ -14675,7 +14675,7 @@
       "type": "frame",
       "id": "YAjLO",
       "x": 0,
-      "y": 2248,
+      "y": 1133,
       "name": "Components - Atoms",
       "theme": {
         "mode": "dark"
@@ -16861,7 +16861,7 @@
       "type": "frame",
       "id": "GXqRe",
       "x": 1540,
-      "y": 2248,
+      "y": 1133,
       "name": "Components - Badges and chips",
       "theme": {
         "mode": "dark"
@@ -17847,7 +17847,7 @@
       "type": "frame",
       "id": "NFjmT",
       "x": 3080,
-      "y": 2248,
+      "y": 1133,
       "name": "Components - Status chips",
       "theme": {
         "mode": "dark"
@@ -18847,7 +18847,7 @@
       "type": "frame",
       "id": "kXDtA",
       "x": 4620,
-      "y": 2248,
+      "y": 1133,
       "name": "Components - Shell parts",
       "theme": {
         "mode": "dark"
@@ -20274,7 +20274,7 @@
       "type": "frame",
       "id": "E9FhXL",
       "x": 0,
-      "y": 3372,
+      "y": 2494,
       "name": "Components - Shell regions",
       "theme": {
         "mode": "dark"
@@ -20657,7 +20657,7 @@
       "type": "frame",
       "id": "uZABp",
       "x": 1540,
-      "y": 3372,
+      "y": 2494,
       "name": "Components - Catalog",
       "theme": {
         "mode": "dark"
@@ -21640,7 +21640,7 @@
       "type": "frame",
       "id": "YaoEP",
       "x": 3080,
-      "y": 3372,
+      "y": 2494,
       "name": "Components - Transcript",
       "theme": {
         "mode": "dark"
@@ -22735,7 +22735,7 @@
       "type": "frame",
       "id": "qk7hr",
       "x": 4620,
-      "y": 3372,
+      "y": 2494,
       "name": "Components - Requests and notices",
       "theme": {
         "mode": "dark"
@@ -23487,7 +23487,7 @@
       "type": "frame",
       "id": "ZcFfY",
       "x": 0,
-      "y": 4496,
+      "y": 3732,
       "name": "Components - Inspector parts",
       "theme": {
         "mode": "dark"
@@ -24282,8 +24282,8 @@
     {
       "type": "frame",
       "id": "Phnat",
-      "x": 6453,
-      "y": 4496,
+      "x": 4620,
+      "y": 3732,
       "name": "Components - Prompt and popovers",
       "theme": {
         "mode": "dark"
@@ -26138,8 +26138,8 @@
     {
       "type": "frame",
       "id": "IAptZ",
-      "x": 3080,
-      "y": 4496,
+      "x": 1540,
+      "y": 3732,
       "name": "Components - Dialogs",
       "theme": {
         "mode": "dark"
@@ -27322,8 +27322,8 @@
     {
       "type": "frame",
       "id": "X2BK1f",
-      "x": 4620,
-      "y": 4496,
+      "x": 3080,
+      "y": 3732,
       "name": "Components - Drawers and sheet",
       "theme": {
         "mode": "dark"
@@ -28051,7 +28051,7 @@
       "type": "frame",
       "id": "b3VCG",
       "x": 0,
-      "y": 5620,
+      "y": 5301,
       "name": "Components - Settings providers",
       "theme": {
         "mode": "dark"
@@ -29130,7 +29130,7 @@
       "type": "frame",
       "id": "wYI3y",
       "x": 1540,
-      "y": 5620,
+      "y": 5301,
       "name": "Components - Settings inventory",
       "theme": {
         "mode": "dark"
@@ -29852,7 +29852,7 @@
       "type": "frame",
       "id": "RMaOc",
       "x": 4620,
-      "y": 1124,
+      "y": -660,
       "name": "Foundations - State colours",
       "theme": {
         "mode": "dark"
@@ -32476,8 +32476,8 @@
     {
       "type": "frame",
       "id": "ObHEA",
-      "x": 0,
-      "y": 6744,
+      "x": -10290,
+      "y": 3800,
       "name": "Views - Workspaces",
       "theme": {
         "mode": "dark"
@@ -32815,8 +32815,8 @@
     {
       "type": "frame",
       "id": "ur2Kk",
-      "x": 1540,
-      "y": 6744,
+      "x": -8750,
+      "y": 3800,
       "name": "Views - Workspaces (peek drawer)",
       "theme": {
         "mode": "dark"
@@ -33074,8 +33074,8 @@
     {
       "type": "frame",
       "id": "oVFh3",
-      "x": 3609,
-      "y": 7963,
+      "x": -7188,
+      "y": 499,
       "name": "Views - New thread",
       "theme": {
         "mode": "dark"
@@ -33196,8 +33196,8 @@
     {
       "type": "frame",
       "id": "VzScV",
-      "x": 5194,
-      "y": 7963,
+      "x": -5602,
+      "y": 499,
       "name": "Views - New thread (selector open)",
       "theme": {
         "mode": "dark"
@@ -33327,8 +33327,8 @@
     {
       "type": "frame",
       "id": "Hs3Sk",
-      "x": 0,
-      "y": 7868,
+      "x": -8750,
+      "y": 1815,
       "name": "Views - Thread (running)",
       "theme": {
         "mode": "dark"
@@ -33890,8 +33890,8 @@
     {
       "type": "frame",
       "id": "YiIzP",
-      "x": 1540,
-      "y": 7868,
+      "x": -7188,
+      "y": 1815,
       "name": "Views - Thread (awaiting approval)",
       "theme": {
         "mode": "dark"
@@ -34412,8 +34412,8 @@
     {
       "type": "frame",
       "id": "z23yYi",
-      "x": 1490,
-      "y": 9695,
+      "x": -8746,
+      "y": 6325,
       "name": "Views - Settings / Providers",
       "theme": {
         "mode": "dark"
@@ -34889,8 +34889,8 @@
     {
       "type": "frame",
       "id": "aKhyM",
-      "x": 3030,
-      "y": 9695,
+      "x": -7206,
+      "y": 6325,
       "name": "Views - Settings / Skills",
       "theme": {
         "mode": "dark"
@@ -35450,8 +35450,8 @@
     {
       "type": "frame",
       "id": "JfRw1",
-      "x": 4570,
-      "y": 9695,
+      "x": -5666,
+      "y": 6325,
       "name": "Views - Settings / MCP",
       "theme": {
         "mode": "dark"
@@ -35992,8 +35992,8 @@
     {
       "type": "frame",
       "id": "KGjf5",
-      "x": 6872,
-      "y": 9695,
+      "x": -12503,
+      "y": 499,
       "name": "Views - Thread (awaiting approval, Light)",
       "theme": {
         "mode": "light"
@@ -36562,8 +36562,8 @@
     {
       "type": "frame",
       "id": "FYkeK",
-      "x": 6872,
-      "y": 10992,
+      "x": -12503,
+      "y": 1815,
       "name": "Views - Workspaces (Light)",
       "theme": {
         "mode": "light"
@@ -36901,8 +36901,8 @@
     {
       "type": "frame",
       "id": "HL2ay",
-      "x": -50,
-      "y": 10819,
+      "x": -10290,
+      "y": 6325,
       "name": "Views - Settings / General",
       "theme": {
         "mode": "dark"
@@ -37718,8 +37718,8 @@
     {
       "type": "frame",
       "id": "SFcXO",
-      "x": 1490,
-      "y": 10819,
+      "x": -10290,
+      "y": 7502,
       "name": "Views - Settings / Keybindings",
       "theme": {
         "mode": "dark"
@@ -38491,8 +38491,8 @@
     {
       "type": "frame",
       "id": "kpRuW",
-      "x": 3030,
-      "y": 10819,
+      "x": -10290,
+      "y": 499,
       "name": "Views - Onboarding",
       "theme": {
         "mode": "dark"
@@ -38767,8 +38767,8 @@
     {
       "type": "frame",
       "id": "x2g0A",
-      "x": 3060,
-      "y": 5620,
+      "x": 3080,
+      "y": 5301,
       "name": "Components - Settings config",
       "width": 900,
       "fill": "$canvas",
@@ -41496,8 +41496,8 @@
     {
       "type": "frame",
       "id": "VEtJR",
-      "x": 3030,
-      "y": 11963,
+      "x": -8746,
+      "y": 7502,
       "name": "Views - Settings / Commands",
       "theme": {
         "mode": "dark"
@@ -42031,8 +42031,8 @@
     {
       "type": "frame",
       "id": "xFxUE",
-      "x": 0,
-      "y": 11923,
+      "x": -5602,
+      "y": 1815,
       "name": "Views - Thread (running, inspector collapsed)",
       "theme": {
         "mode": "dark"
@@ -42288,8 +42288,8 @@
     {
       "type": "frame",
       "id": "fnKEg",
-      "x": 0,
-      "y": 13027,
+      "x": -10290,
+      "y": 1815,
       "name": "Views - Thread (idle)",
       "theme": {
         "mode": "dark"
@@ -42575,8 +42575,8 @@
     {
       "type": "frame",
       "id": "IAlPm",
-      "x": 6779,
-      "y": 7963,
+      "x": -8750,
+      "y": 499,
       "name": "Views - New thread (nothing selected)",
       "theme": {
         "mode": "dark"
