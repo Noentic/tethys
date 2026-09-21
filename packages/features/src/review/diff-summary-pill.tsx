@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { defaultDiffSource, useDiffSummary } from "./use-review-diff";
 
 /**
- * DESIGN.md `action-bar.priority` for the D6 diff-summary pill: between the
+ * DESIGN.md `prompt-card.contextBarFold` for the D6 diff-summary pill: between the
  * Provider/config pill (60) and the mode pill (40), so it folds after the queue
  * count and the mode pill and before `Stop` and the isolation pill.
  */

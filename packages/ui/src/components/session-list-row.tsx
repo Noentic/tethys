@@ -1,5 +1,6 @@
 import React from "react";
 import { cn } from "../lib/utils";
+import { getSessionStateInfo } from "../session-state";
 import { StatusDot } from "./status-dot";
 
 export interface SessionListRowProps
@@ -37,6 +38,7 @@ export const SessionListRow = React.forwardRef<
     },
     ref,
   ) => {
+    const stateInfo = getSessionStateInfo(status);
     return (
       // biome-ignore lint/a11y/useSemanticElements: complex row containing child action buttons
       <div
@@ -78,6 +80,11 @@ export const SessionListRow = React.forwardRef<
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {stateInfo.needsWords && (
+            <span className="text-label-sm text-(--tethys-text-muted)">
+              {stateInfo.label}
+            </span>
+          )}
           {dirty && (
             <span
               className="h-1.5 w-1.5 rounded-full bg-(--tethys-status-warning)"

@@ -85,7 +85,7 @@ export function ProviderArtifactRenderer({
       {expanded && (
         <div id={regionId} className="mt-sm">
           {artifact.kind === "text" && (
-            <pre className="overflow-x-auto rounded-sm bg-(--tethys-surface-sunken) p-sm font-mono text-mono-code text-(--tethys-text-secondary)">
+            <pre className="overflow-x-auto rounded-sm bg-(--tethys-surface-sunken) p-sm font-mono text-mono-code text-(--tethys-text-on-sunken-secondary)">
               {artifact.text ?? ""}
             </pre>
           )}

@@ -119,7 +119,7 @@ export function ProjectionPreviewDialog({
             <h3 className="text-label-sm text-(--tethys-text-muted)">Diff</h3>
             <pre
               data-testid="projection-diff"
-              className="max-h-72 overflow-auto rounded-sm border border-(--tethys-hairline) bg-(--tethys-surface-sunken) p-md font-mono text-mono-micro text-(--tethys-text-secondary)"
+              className="max-h-72 overflow-auto rounded-sm border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) p-md font-mono text-mono-micro text-(--tethys-text-on-sunken-secondary)"
             >
               {plan.diff}
             </pre>

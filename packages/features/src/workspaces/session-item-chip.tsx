@@ -25,7 +25,7 @@ export function ProviderGlyph({ providerId }: { providerId: string }) {
     <span
       aria-hidden="true"
       data-testid="provider-glyph"
-      className="flex h-4 w-4 items-center justify-center rounded-xs bg-(--tethys-surface-hover) font-mono text-[9px] text-(--tethys-text-secondary)"
+      className="flex h-4 w-4 items-center justify-center rounded-xs bg-(--tethys-surface-hover) font-mono text-mono-micro text-(--tethys-text-secondary)"
     >
       {initials}
     </span>

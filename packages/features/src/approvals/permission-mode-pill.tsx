@@ -7,7 +7,7 @@ import { useMemo, useSyncExternalStore } from "react";
 const client = createClient();
 
 /**
- * The permission-mode pill (PRM-01). Registered through the action-bar slot
+ * The permission-mode pill (PRM-01). Registered through the composer context slot
  * registry under the id `permission-mode`, which supersedes the shell's default
  * `Mode:` badge. Reads `PERMISSION_MODE_LABELS` so a schema rename is a compile
  * error, and writes `thread.set_permission_mode`.

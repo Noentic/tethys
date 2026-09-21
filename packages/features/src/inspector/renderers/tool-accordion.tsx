@@ -113,7 +113,7 @@ export function ToolAccordionRenderer({
             </pre>
           )}
           {output && (
-            <pre className="mt-sm max-h-64 overflow-auto rounded-sm bg-(--tethys-surface-sunken) p-sm font-mono text-mono-code text-(--tethys-text-secondary)">
+            <pre className="mt-sm max-h-64 overflow-auto rounded-sm bg-(--tethys-surface-sunken) p-sm font-mono text-mono-code text-(--tethys-text-on-sunken-secondary)">
               {capped ? output.slice(0, OUTPUT_CAP) : output}
             </pre>
           )}

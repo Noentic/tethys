@@ -16,7 +16,21 @@ export type SessionStatus =
 export type StatusMotion = "breathe" | "breatheAwaiting" | "none";
 
 export interface SessionStateInfo {
+  /** The marker colour: the dot's fill, or its ring. */
   colorVar: string;
+  /**
+   * The colour for words that name the state. Absent means "same as the
+   * marker". The quiet states (idle, suspended, archived) set it to
+   * `text-muted` because their markers are below text contrast by design, so
+   * the label is what keeps the state legible (DESIGN.md state-badge).
+   */
+  labelColorVar?: string;
+  /**
+   * The marker alone is not enough: a row that shows this state must also say
+   * it in words (P2). Set for the stopped states, whose dots are quiet by
+   * design (interrupted 3:1, suspended 2:1, archived 1.5:1).
+   */
+  needsWords?: true;
   className: string;
   motion: StatusMotion;
   label: string;
@@ -102,24 +116,29 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
       };
     case "interrupted":
       return {
-        colorVar: "var(--tethys-text-muted)",
-        className: "bg-(--tethys-text-muted)",
+        colorVar: "var(--tethys-status-interrupted)",
+        needsWords: true,
+        className: "bg-(--tethys-status-interrupted)",
         motion: "none",
         label: "Interrupted",
         shape: "disc",
       };
     case "suspended":
       return {
-        colorVar: "var(--tethys-hairline-strong)",
-        className: "bg-(--tethys-hairline-strong)",
+        colorVar: "var(--tethys-status-suspended)",
+        labelColorVar: "var(--tethys-text-muted)",
+        needsWords: true,
+        className: "bg-(--tethys-status-suspended)",
         motion: "none",
         label: "Suspended",
         shape: "disc",
       };
     case "archived":
       return {
-        colorVar: "var(--tethys-hairline)",
-        className: "bg-(--tethys-hairline)",
+        colorVar: "var(--tethys-status-archived)",
+        labelColorVar: "var(--tethys-text-muted)",
+        needsWords: true,
+        className: "bg-(--tethys-status-archived)",
         motion: "none",
         label: "Archived",
         shape: "disc",
@@ -127,6 +146,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
     default:
       return {
         colorVar: "var(--tethys-agent-idle)",
+        labelColorVar: "var(--tethys-text-muted)",
         className: "bg-(--tethys-agent-idle)",
         motion: "none",
         label: "Idle",

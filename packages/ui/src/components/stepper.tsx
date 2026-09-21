@@ -68,7 +68,7 @@ export const StepperInput = React.forwardRef<HTMLDivElement, StepperInputProps>(
         aria-valuemax={max}
         onKeyDown={handleKeyDown}
         className={cn(
-          "focus-ring inline-flex h-8 items-center rounded-sm border border-(--tethys-hairline-strong) bg-(--tethys-surface-panel) transition-colors",
+          "focus-ring inline-flex h-8 items-center rounded-sm border border-(--tethys-border-control) bg-(--tethys-surface-panel) transition-colors",
           disabled && "cursor-not-allowed opacity-40",
           className,
         )}

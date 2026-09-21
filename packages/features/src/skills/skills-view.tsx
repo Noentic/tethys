@@ -263,7 +263,7 @@ export function SkillsView({
             </div>
             <pre
               data-testid="skill-update-diff"
-              className="max-h-72 overflow-auto rounded-sm border border-(--tethys-hairline) bg-(--tethys-surface-sunken) p-md font-mono text-mono-micro text-(--tethys-text-secondary)"
+              className="max-h-72 overflow-auto rounded-sm border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) p-md font-mono text-mono-micro text-(--tethys-text-on-sunken-secondary)"
             >
               {previewPlan.diff}
             </pre>

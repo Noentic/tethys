@@ -12,7 +12,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div
         className={cn(
-          "relative flex h-8 w-full items-center rounded-sm border border-(--tethys-hairline-strong) bg-(--tethys-surface-panel) transition-colors duration-150",
+          "relative flex h-8 w-full items-center rounded-sm border border-(--tethys-border-control) bg-(--tethys-surface-panel) transition-colors duration-150",
           "focus-ring-within focus-within:border-(--tethys-accent-focus)",
           disabled && "opacity-40 pointer-events-none",
         )}

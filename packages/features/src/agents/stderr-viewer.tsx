@@ -16,7 +16,7 @@ export function StderrViewer({
       <div
         data-testid="stderr-viewer"
         className={cn(
-          "rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-sunken) p-3 font-mono text-mono-micro text-(--tethys-text-muted)",
+          "rounded-md border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) p-3 font-mono text-mono-micro text-(--tethys-text-on-sunken-muted)",
           className,
         )}
       >
@@ -29,7 +29,7 @@ export function StderrViewer({
     <pre
       data-testid="stderr-viewer"
       className={cn(
-        "max-h-64 overflow-auto rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-sunken) p-3 font-mono text-mono-micro whitespace-pre-wrap text-(--tethys-text-secondary)",
+        "max-h-64 overflow-auto rounded-md border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) p-3 font-mono text-mono-micro whitespace-pre-wrap text-(--tethys-text-on-sunken-secondary)",
         className,
       )}
     >

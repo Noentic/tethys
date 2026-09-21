@@ -40,7 +40,7 @@ export const ToggleSwitch = React.forwardRef<
           "focus-ring relative inline-flex h-[18px] w-[32px] shrink-0 cursor-pointer items-center rounded-full transition-colors duration-150",
           checked
             ? "bg-(--tethys-accent-toggle)"
-            : "bg-(--tethys-hairline-strong)",
+            : "bg-(--tethys-border-control)",
           disabled && "cursor-not-allowed opacity-40",
           className,
         )}

@@ -11,7 +11,8 @@ export interface StateBadgeProps {
 /**
  * The labelled form of `status-dot` (DESIGN.md state-badge): the marker plus the
  * state name, both in the state's own token so the badge carries the state
- * rather than decorating it. Geometry follows `approval-inbox-pill` minus the
+ * rather than decorating it. The quiet states keep their label in `text-muted`
+ * (`labelColorVar`), since their markers are below text contrast by design. Geometry follows `approval-inbox-pill` minus the
  * count. Used by the `thread-inspector` header, the active tab and the session
  * list row.
  */
@@ -28,7 +29,10 @@ export function StateBadge({ status, label, className }: StateBadgeProps) {
       )}
     >
       <StatusDot status={status} inline />
-      <span className="text-label-md" style={{ color: info.colorVar }}>
+      <span
+        className="text-label-md"
+        style={{ color: info.labelColorVar ?? info.colorVar }}
+      >
         {label ?? info.label}
       </span>
     </span>

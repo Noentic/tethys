@@ -1,4 +1,4 @@
-//! Action-bar mode pill (spec §4) — the one home of the ACP `mode` category.
+//! Mode pill (spec §4, DESIGN.md `mode-pill`) — the one home of the ACP `mode` category.
 //! Every other option lives in the composer chips or the full config panel.
 
 import type { ConfigOption } from "@tethys/bindings";
