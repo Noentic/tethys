@@ -210,7 +210,7 @@ export function LoginSurface({
       >
         <div className={className} data-testid="login-surface-url-code">
           <a
-            className="text-body-sm text-(--tethys-text-link)"
+            className="focus-ring rounded-xs text-body-sm text-(--tethys-text-primary) underline underline-offset-2"
             href="https://agentclientprotocol.com"
             rel="noreferrer"
             target="_blank"
@@ -272,10 +272,10 @@ export function LoginSurface({
         maxWidth="max-w-[560px]"
       >
         <div
-          className={`rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-sunken) p-3 font-mono text-mono-micro ${className ?? ""}`}
+          className={`rounded-md border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) p-3 font-mono text-mono-micro ${className ?? ""}`}
           data-testid="login-surface-cli-passthrough"
         >
-          <span className="text-(--tethys-text-muted)">
+          <span className="text-(--tethys-text-on-sunken-muted)">
             $ {vendorCommand} login
           </span>
         </div>

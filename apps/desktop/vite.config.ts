@@ -10,6 +10,12 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
   },
+  // The diff highlighter's worker lazily imports Shiki, which needs code
+  // splitting, and Vite's default `iife` worker format cannot do that. The
+  // client already starts it as `{ type: "module" }`.
+  worker: {
+    format: "es",
+  },
   build: {
     outDir: "dist",
   },

@@ -4,11 +4,16 @@
  * side effects and stays importable under jsdom.
  */
 
-/** One coloured run within a line, half-open `[start, end)`. */
+/**
+ * One coloured run within a line, half-open `[start, end)`. It carries a colour
+ * for each theme rather than the active one, so a theme swap is a CSS change
+ * and never a second trip to the worker.
+ */
 export interface HighlightSpan {
   start: number;
   end: number;
-  color: string;
+  light: string;
+  dark: string;
   /** Shiki font-style bit flags: 1 italic, 2 bold, 4 underline. */
   fontStyle?: number;
 }

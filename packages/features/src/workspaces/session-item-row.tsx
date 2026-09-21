@@ -7,7 +7,7 @@ import {
   isAwaiting,
   sessionStatusKey,
 } from "@tethys/state";
-import { Button, cn, StatusDot } from "@tethys/ui";
+import { Button, cn, getSessionStateInfo, StatusDot } from "@tethys/ui";
 import { ProviderGlyph } from "./session-item-chip";
 
 export interface SessionItemRowProps {
@@ -24,6 +24,7 @@ export function SessionItemRow({
   onOpen,
 }: SessionItemRowProps) {
   const stateKey = sessionStatusKey(session.status);
+  const stateInfo = getSessionStateInfo(stateKey);
   const showDiff = hasGit && hasRestore && session.diffStat !== null;
 
   return (
@@ -32,7 +33,7 @@ export function SessionItemRow({
       className={cn(
         "flex flex-col gap-sm rounded-md border bg-(--tethys-surface-nested) p-md",
         isAwaiting(session.status)
-          ? "border-warning-soft bg-(--tethys-status-warning-soft)"
+          ? "wash-warning border-(--tethys-hairline) border-l-2 border-l-(--tethys-status-warning)"
           : "border-(--tethys-hairline)",
       )}
     >
@@ -45,6 +46,7 @@ export function SessionItemRow({
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-label-sm text-(--tethys-text-muted)">
           <StatusDot status={stateKey} />
+          {stateInfo.needsWords && <span>{stateInfo.label}</span>}
           <span>{session.providerId}</span>
         </div>
       </div>

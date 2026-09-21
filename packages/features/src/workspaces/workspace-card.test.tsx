@@ -53,6 +53,36 @@ describe("workspace-card", () => {
     );
   });
 
+  it("shows attention as a wash and a ringed dot, never a full perimeter", () => {
+    render(<WorkspaceCard workspace={workspace({ sessions: [awaiting] })} />);
+    const card = screen.getByTestId("workspace-card");
+    expect(card.className).toContain("wash-warning");
+    expect(card.className).not.toContain("border-warning-soft");
+    // The header dot is the awaiting ring, so the state is not hue alone.
+    const dot = screen.getByTitle("A session is awaiting your approval");
+    expect(dot.style.backgroundColor).toBe("transparent");
+    expect(dot.style.border).toContain("--tethys-status-warning");
+  });
+
+  it("lets attention and selection coexist without colliding", () => {
+    render(
+      <WorkspaceCard
+        workspace={workspace({ sessions: [awaiting] })}
+        selected
+      />,
+    );
+    const card = screen.getByTestId("workspace-card");
+    expect(card.className).toContain("before:bg-(--tethys-accent-focus)");
+    expect(card.className).toContain("wash-warning");
+  });
+
+  it("carries no attention treatment when nothing is waiting", () => {
+    render(<WorkspaceCard workspace={workspace()} />);
+    expect(screen.getByTestId("workspace-card").className).not.toContain(
+      "wash-warning",
+    );
+  });
+
   it("marks the selected card with the accent bar and aria-current", () => {
     render(<WorkspaceCard workspace={workspace()} selected />);
     const card = screen.getByTestId("workspace-card");

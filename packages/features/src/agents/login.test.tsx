@@ -98,6 +98,23 @@ describe("login surfaces per authMethods shape (M1.12 U9)", () => {
     );
   });
 
+  it("url-code link is primary text with an underline, not an undefined token", () => {
+    // `--tethys-text-link` was never defined, so the link rendered with no
+    // colour. Links are rare in a monochrome identity: primary text plus an
+    // underline says "link" without borrowing accent-focus's meaning.
+    render(
+      <LoginSurface
+        profile={authProfile([{ shape: "url-code" }])}
+        onClose={vi.fn()}
+      />,
+    );
+    const link = screen.getByRole("link", { name: /Sign in with Gemini CLI/ });
+    expect(link.className).toContain("text-(--tethys-text-primary)");
+    expect(link.className).toContain("underline");
+    expect(link.className).not.toContain("text-link");
+    expect(link.getAttribute("rel")).toContain("noreferrer");
+  });
+
   it("url-code expiry reads Code expired, offers a new code, and fires onExpiry", async () => {
     const onExpiry = vi.fn();
     render(

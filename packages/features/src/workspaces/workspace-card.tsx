@@ -77,7 +77,7 @@ export function WorkspaceCard({
         "group relative flex h-[220px] flex-col justify-between p-lg",
         selected &&
           "border-(--tethys-hairline-strong) before:absolute before:top-2 before:bottom-2 before:left-0 before:w-0.5 before:rounded-r-xs before:bg-(--tethys-accent-focus)",
-        attention && !selected && "border-warning-soft",
+        attention && "wash-warning",
       )}
     >
       <div className="flex w-full items-center justify-between gap-sm">

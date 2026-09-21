@@ -32,7 +32,7 @@ describe("diff highlight facade (M1.9 U3)", () => {
     const highlighter = createDiffHighlighter({
       transport: async () => {
         calls += 1;
-        return [[{ start: 0, end: 1, color: "#fff" }]];
+        return [[{ start: 0, end: 1, light: "#000000", dark: "#ffffff" }]];
       },
     });
     const first = await highlighter.highlight("same", "a.ts");
@@ -47,7 +47,7 @@ describe("diff highlight facade (M1.9 U3)", () => {
     const highlighter = createDiffHighlighter({
       transport: async () => {
         calls += 1;
-        return [[{ start: 0, end: 1, color: "#fff" }]];
+        return [[{ start: 0, end: 1, light: "#000000", dark: "#ffffff" }]];
       },
     });
     await expect(highlighter.highlight("mystery", "a.zzz")).resolves.toEqual(

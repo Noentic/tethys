@@ -102,7 +102,7 @@ export function topVisibleAnchor(
 interface Segment {
   start: number;
   end: number;
-  color?: string;
+  syntax?: Pick<HighlightSpan, "light" | "dark">;
   changed: boolean;
 }
 
@@ -129,15 +129,32 @@ function buildSegments(
     const start = points[index];
     const end = points[index + 1];
     if (end <= start) continue;
-    const color = highlight?.find(
+    const syntax = highlight?.find(
       (span) => span.start <= start && span.end >= end,
-    )?.color;
+    );
     const changed = wordSpans.some(
       (span) => span.start <= start && span.end >= end,
     );
-    segments.push({ start, end, color, changed });
+    segments.push({ start, end, syntax, changed });
   }
   return segments;
+}
+
+/**
+ * Both themes' colours ride on the token as custom properties; the
+ * `syntax-token` utility picks one by the active theme, in CSS. A theme swap
+ * therefore repaints without another highlight request.
+ */
+function syntaxColors(
+  syntax: Pick<HighlightSpan, "light" | "dark"> | undefined,
+): React.CSSProperties | undefined {
+  if (syntax === undefined || (syntax.light === "" && syntax.dark === "")) {
+    return undefined;
+  }
+  return {
+    ...(syntax.light !== "" && { "--syntax-light": syntax.light }),
+    ...(syntax.dark !== "" && { "--syntax-dark": syntax.dark }),
+  } as React.CSSProperties;
 }
 
 function CellText({
@@ -158,15 +175,22 @@ function CellText({
   const segments = buildSegments(cell.text.length, highlight, wordSpans);
   return (
     <span className="whitespace-pre">
-      {segments.map((segment) => (
-        <span
-          key={`${segment.start}-${segment.end}`}
-          style={segment.color ? { color: segment.color } : undefined}
-          className={segment.changed ? fill : undefined}
-        >
-          {cell.text.slice(segment.start, segment.end)}
-        </span>
-      ))}
+      {segments.map((segment) => {
+        const colors = syntaxColors(segment.syntax);
+        return (
+          <span
+            key={`${segment.start}-${segment.end}`}
+            style={colors}
+            className={
+              [colors ? "syntax-token" : "", segment.changed ? fill : ""]
+                .filter(Boolean)
+                .join(" ") || undefined
+            }
+          >
+            {cell.text.slice(segment.start, segment.end)}
+          </span>
+        );
+      })}
     </span>
   );
 }
@@ -210,10 +234,10 @@ function UnifiedRow({
       data-row-kind={row.kind}
       className={`flex h-6 items-center gap-2 px-2 font-mono text-mono-code ${fill ?? ""}`}
     >
-      <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-muted)">
+      <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)">
         {cell.oldLine ?? ""}
       </span>
-      <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-muted)">
+      <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)">
         {cell.newLine ?? ""}
       </span>
       <Gutter cell={cell} />
@@ -253,9 +277,9 @@ function SplitRow({
       className="flex h-6 items-stretch font-mono text-mono-code"
     >
       <div
-        className={`flex w-1/2 items-center gap-2 border-r border-(--tethys-hairline) px-2 ${leftFill ?? ""}`}
+        className={`flex w-1/2 items-center gap-2 border-r border-(--tethys-hairline-on-sunken) px-2 ${leftFill ?? ""}`}
       >
-        <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-muted)">
+        <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)">
           {row.left?.oldLine ?? row.left?.newLine ?? ""}
         </span>
         {row.left ? <Gutter cell={row.left} /> : null}
@@ -268,7 +292,7 @@ function SplitRow({
         ) : null}
       </div>
       <div className={`flex w-1/2 items-center gap-2 px-2 ${rightFill ?? ""}`}>
-        <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-muted)">
+        <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)">
           {row.right?.newLine ?? row.right?.oldLine ?? ""}
         </span>
         {row.right ? <Gutter cell={row.right} /> : null}
@@ -434,7 +458,7 @@ export function DiffViewer({
       data-testid="diff-viewer"
       data-mode={mode}
       aria-label={`Diff for ${detail.path}`}
-      className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-sunken) font-mono text-mono-code ${className ?? ""}`}
+      className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) font-mono text-mono-code text-(--tethys-text-on-sunken) ${className ?? ""}`}
     >
       <header className="flex shrink-0 items-center justify-between border-b border-(--tethys-hairline) bg-(--tethys-surface-panel) px-2 py-1">
         <span className="truncate text-mono-micro text-(--tethys-text-muted)">
@@ -454,7 +478,7 @@ export function DiffViewer({
       {collapsed ? (
         <div
           data-row-kind="collapsed-context"
-          className="flex h-8 items-center gap-2 px-3 text-mono-micro text-(--tethys-text-muted)"
+          className="flex h-8 items-center gap-2 px-3 text-mono-micro text-(--tethys-text-on-sunken-muted)"
         >
           <span>
             {detail.binary
@@ -465,7 +489,7 @@ export function DiffViewer({
             <button
               type="button"
               onClick={onLoadFile}
-              className="focus-ring rounded-xs border border-(--tethys-hairline) px-1.5 py-0.5 text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)"
+              className="focus-ring rounded-xs border border-(--tethys-hairline-on-sunken) px-1.5 py-0.5 text-(--tethys-text-on-sunken-secondary) hover:bg-(--tethys-wash-on-sunken)"
             >
               Load file
             </button>
@@ -500,7 +524,7 @@ export function DiffViewer({
                   }}
                 >
                   {row.kind === "hunk-header" && row.header ? (
-                    <div className="flex h-6 items-center bg-(--tethys-surface-hover) px-2 text-mono-micro text-(--tethys-text-muted)">
+                    <div className="flex h-6 items-center bg-(--tethys-wash-on-sunken) px-2 text-mono-micro text-(--tethys-text-on-sunken-muted)">
                       {`@@ -${row.header.oldStart},${row.header.oldLines} +${row.header.newStart},${row.header.newLines} @@`}
                     </div>
                   ) : mode === "split" ? (

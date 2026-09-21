@@ -81,6 +81,14 @@ describe("workspaces-view", () => {
     expect(screen.getByTestId("drawer-approval-entry")).toBeTruthy();
   });
 
+  it("marks a pending approval in the drawer with a left rule, not a perimeter", () => {
+    render(<WorkspacesView workspaces={[tethys]} client={emptyClient()} />);
+    fireEvent.click(screen.getByRole("button", { name: "tethys" }));
+    const entry = screen.getByTestId("drawer-approval-entry");
+    expect(entry.className).toContain("border-l-(--tethys-status-warning)");
+    expect(entry.className).not.toContain("border-warning-soft");
+  });
+
   it("filters the grid to pending-approval cards", () => {
     render(
       <WorkspacesView

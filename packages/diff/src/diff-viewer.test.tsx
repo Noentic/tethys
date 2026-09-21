@@ -118,6 +118,70 @@ describe("DiffViewer (M1.9 U4)", () => {
     expect(deletion?.querySelector('[data-gutter="−"]')).toBeTruthy();
   });
 
+  it("paints a syntax token from both themes' colours, chosen in CSS, not in the worker", async () => {
+    const highlight = vi.fn(async (text: string) => [
+      [
+        { start: 0, end: 3, light: "#0550ae", dark: "#79c0ff" },
+        { start: 3, end: text.length, light: "", dark: "" },
+      ],
+    ]);
+    const highlighter = { highlight, cacheSize: 0 };
+    const { container } = render(
+      <DiffViewer detail={smallDetail} highlighter={highlighter} />,
+    );
+
+    const token = await vi.waitFor(() => {
+      const found = container.querySelector(".syntax-token") as HTMLElement;
+      expect(found).not.toBeNull();
+      return found;
+    });
+    expect(token.style.getPropertyValue("--syntax-light")).toBe("#0550ae");
+    expect(token.style.getPropertyValue("--syntax-dark")).toBe("#79c0ff");
+    // No inline `color`: which variable applies is the stylesheet's decision.
+    expect(token.style.color).toBe("");
+
+    // A theme swap is an attribute change. It must not ask the highlighter again.
+    const before = highlight.mock.calls.length;
+    document.documentElement.setAttribute("data-theme", "light");
+    document.documentElement.removeAttribute("data-theme");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(highlight.mock.calls.length).toBe(before);
+  });
+
+  it("leaves an uncoloured token to inherit the well's text colour", async () => {
+    const highlighter = {
+      highlight: async (text: string) => [
+        [{ start: 0, end: text.length, light: "", dark: "" }],
+      ],
+      cacheSize: 0,
+    };
+    const { container } = render(
+      <DiffViewer detail={smallDetail} highlighter={highlighter} />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(container.querySelector(".syntax-token")).toBeNull();
+  });
+
+  it("reads its own well tokens, so a custom theme's dark well stays legible", () => {
+    const { getByTestId, container } = render(
+      <DiffViewer detail={smallDetail} />,
+    );
+    const well = getByTestId("diff-viewer");
+    expect(well.className).toContain("bg-(--tethys-surface-sunken)");
+    expect(well.className).toContain("text-(--tethys-text-on-sunken)");
+    expect(well.className).toContain("border-(--tethys-hairline-on-sunken)");
+
+    // Every line-number cell inside the well uses the well's muted text.
+    const gutters = container.querySelectorAll(
+      '[data-row-kind] span[class*="w-10"]',
+    );
+    expect(gutters.length).toBeGreaterThan(0);
+    for (const cell of gutters) {
+      expect(cell.className).toContain("text-(--tethys-text-on-sunken-muted)");
+      expect(cell.className).not.toContain("text-(--tethys-text-muted)");
+    }
+  });
+
   it("marks a one-token edit with a 32% word fill in split mode", () => {
     const { container } = render(
       <DiffViewer detail={smallDetail} mode="split" />,

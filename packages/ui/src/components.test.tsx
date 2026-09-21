@@ -8,6 +8,7 @@ import {
   Drawer,
   getDaemonHealthDotState,
   getEntryRenderer,
+  getSessionStateInfo,
   IconButton,
   Input,
   KeycapPill,
@@ -26,6 +27,7 @@ import {
   StopControl,
   TabStrip,
   Textarea,
+  Toast,
   ToggleSwitch,
   UnknownEntryRenderer,
   WorkspaceSourceBadge,
@@ -69,6 +71,31 @@ describe("Component Kit & State Matrix (U2 & U6)", () => {
     expect(textarea).toBeDefined();
   });
 
+  it("form controls draw their edge with border-control, not the surface border", () => {
+    const { container: inputBox } = render(<Input placeholder="field" />);
+    const wrapper = inputBox.firstElementChild as HTMLElement;
+    expect(wrapper.className).toContain("border-(--tethys-border-control)");
+    expect(wrapper.className).not.toContain("hairline-strong");
+
+    const { container: areaBox } = render(<Textarea placeholder="area" />);
+    const area = areaBox.querySelector("textarea") as HTMLElement;
+    expect(area.className).toContain("border-(--tethys-border-control)");
+    expect(area.className).not.toContain("hairline-strong");
+
+    const { container: switchBox } = render(
+      <ToggleSwitch checked={false} label="off track" />,
+    );
+    const track = switchBox.querySelector("button") as HTMLElement;
+    expect(track.className).toContain("bg-(--tethys-border-control)");
+    expect(track.className).not.toContain("hairline-strong");
+  });
+
+  it("a textarea in error keeps the danger stroke over the control stroke", () => {
+    const { container } = render(<Textarea error placeholder="bad" />);
+    const area = container.querySelector("textarea") as HTMLElement;
+    expect(area.className).toContain("border-(--tethys-status-danger)");
+  });
+
   it("Badge and KeycapPill render typography and tokens", () => {
     render(<Badge variant="warning">Awaiting</Badge>);
     expect(screen.getByText("Awaiting")).toBeDefined();
@@ -99,6 +126,21 @@ describe("Component Kit & State Matrix (U2 & U6)", () => {
     const { container } = render(<StatusDot status="future_unknown_state" />);
     const dot = container.querySelector("span");
     expect(dot).toBeDefined();
+  });
+
+  it("stopped states take their own dot token, never a border token as a fill", () => {
+    const expected = {
+      interrupted: "--tethys-status-interrupted",
+      suspended: "--tethys-status-suspended",
+      archived: "--tethys-status-archived",
+    } as const;
+    for (const [status, cssVar] of Object.entries(expected)) {
+      const info = getSessionStateInfo(status);
+      expect(info.colorVar, status).toBe(`var(${cssVar})`);
+      expect(info.className, status).toBe(`bg-(${cssVar})`);
+      expect(info.className, status).not.toContain("hairline");
+      expect(info.motion, status).toBe("none");
+    }
   });
 
   it("Daemon health dot aggregation behaves aggregate-optimistically", () => {
@@ -252,6 +294,79 @@ describe("Component Kit & State Matrix (U2 & U6)", () => {
     expect(closed).toBe("tab-1");
   });
 
+  it("keeps a tab's close control beside the tab, not inside it, and names the tab without it", () => {
+    render(
+      <TabStrip
+        activeTabId="tab-1"
+        onSelectTab={() => {}}
+        onCloseTab={() => {}}
+        tabs={[
+          { id: "workspaces", title: "Workspaces", pinned: true },
+          { id: "tab-1", title: "main" },
+        ]}
+      />,
+    );
+    const tab = screen.getByRole("tab", { name: "main" });
+    expect(tab.querySelector("button")).toBeNull();
+    const close = screen.getByLabelText("Close main");
+    expect(tab.contains(close)).toBe(false);
+    // Pinned tabs have no close control at all.
+    expect(screen.queryByLabelText("Close Workspaces")).toBeNull();
+  });
+
+  it("closes a focused tab with Delete, and never a pinned one", () => {
+    // A tablist may own only tabs, so the close button is a pointer affordance
+    // hidden from the accessibility tree and the keyboard path is Delete
+    // (WAI-ARIA tabs pattern, deletable tabs).
+    const closed: string[] = [];
+    render(
+      <TabStrip
+        activeTabId="tab-1"
+        onSelectTab={() => {}}
+        onCloseTab={(id) => closed.push(id)}
+        tabs={[
+          { id: "workspaces", title: "Workspaces", pinned: true },
+          { id: "tab-1", title: "main" },
+        ]}
+      />,
+    );
+    const pinned = screen.getByRole("tab", { name: "Workspaces" });
+    fireEvent.keyDown(pinned, { key: "Delete" });
+    expect(closed).toEqual([]);
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: "main" }), {
+      key: "Delete",
+    });
+    expect(closed).toEqual(["tab-1"]);
+
+    expect(
+      screen.getByLabelText("Close main").getAttribute("aria-hidden"),
+    ).toBe("true");
+  });
+
+  it("moves between tabs with the arrow keys, wrapper or not", () => {
+    const selected: string[] = [];
+    render(
+      <TabStrip
+        activeTabId="a"
+        onSelectTab={(id) => selected.push(id)}
+        onCloseTab={() => {}}
+        tabs={[
+          { id: "a", title: "Alpha" },
+          { id: "b", title: "Beta" },
+          { id: "c", title: "Gamma" },
+        ]}
+      />,
+    );
+    const alpha = screen.getByRole("tab", { name: "Alpha" });
+    alpha.focus();
+    fireEvent.keyDown(alpha, { key: "ArrowRight" });
+    expect(selected).toEqual(["b"]);
+    expect(document.activeElement).toBe(
+      screen.getByRole("tab", { name: "Beta" }),
+    );
+  });
+
   it("ApprovalInboxPill hides at count 0 and shows when count >= 1", () => {
     const { container, rerender } = render(<ApprovalInboxPill count={0} />);
     expect(container.firstChild).toBeNull();
@@ -312,6 +427,25 @@ describe("Component Kit & State Matrix (U2 & U6)", () => {
     expect(screen.getByText("Implement OAuth")).toBeDefined();
     expect(screen.getByText("feat/auth")).toBeDefined();
     expect(screen.getByText("T8")).toBeDefined();
+  });
+
+  it("SessionListRow names a stopped state in words, and stays quiet for a live one", () => {
+    // A suspended or archived dot is below text contrast by design, so the row
+    // has to say the state (P2). A running row already reads as live.
+    const { rerender } = render(
+      <SessionListRow sessionId="s-1" title="Refactor" status="suspended" />,
+    );
+    expect(screen.getByText("Suspended")).toBeDefined();
+
+    rerender(
+      <SessionListRow sessionId="s-1" title="Refactor" status="archived" />,
+    );
+    expect(screen.getByText("Archived")).toBeDefined();
+
+    rerender(
+      <SessionListRow sessionId="s-1" title="Refactor" status="running" />,
+    );
+    expect(screen.queryByText("Running")).toBeNull();
   });
 
   it("SessionGroupHeader toggles collapse state", () => {
@@ -631,6 +765,128 @@ describe("SchemaFieldGroup and ProtocolPill (M1.6c U8)", () => {
   });
 });
 
+describe("Drawer bare mode (d0-rc11)", () => {
+  it("lets the child own its header while the drawer keeps scrim, trap and Esc", () => {
+    const onClose = vi.fn();
+    render(
+      <Drawer open onClose={onClose} bare label="Thread Inspector">
+        <header>My own header</header>
+        <button type="button">inside</button>
+      </Drawer>,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Thread Inspector" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    // No second title bar and no second close button: the child supplies both.
+    expect(screen.queryByLabelText("Close drawer")).toBeNull();
+    expect(screen.getByText("My own header")).toBeDefined();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps focus inside when the parent re-renders with a new onClose", () => {
+    // AppShell re-renders on every session-store update and passes an inline
+    // handler. A drawer whose effect re-ran on that would hand focus back to the
+    // invoker and pull it into the dialog again on each streamed event.
+    const view = (onClose: () => void) => (
+      <div>
+        <button type="button">open</button>
+        <Drawer open onClose={onClose} bare label="Sessions">
+          <button type="button">inside</button>
+        </Drawer>
+      </div>
+    );
+    const { rerender } = render(view(() => {}));
+    const inside = screen.getByRole("button", { name: "inside" });
+    inside.focus();
+    expect(document.activeElement).toBe(inside);
+
+    rerender(view(() => {}));
+    rerender(view(() => {}));
+    expect(document.activeElement).toBe(inside);
+  });
+
+  it("closes from a scrim click, and not from a click inside", () => {
+    const onClose = vi.fn();
+    render(
+      <Drawer open onClose={onClose} bare label="Thread Inspector">
+        <button type="button">inside</button>
+      </Drawer>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "inside" }));
+    expect(onClose).not.toHaveBeenCalled();
+    const scrim = screen.getByRole("dialog").parentElement as HTMLElement;
+    fireEvent.click(scrim);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns focus to the invoking control on close", () => {
+    const { rerender } = render(
+      <div>
+        <button type="button">open</button>
+        <Drawer open={false} onClose={() => {}} bare label="Sessions">
+          <button type="button">inside</button>
+        </Drawer>
+      </div>,
+    );
+    const opener = screen.getByRole("button", { name: "open" });
+    opener.focus();
+    rerender(
+      <div>
+        <button type="button">open</button>
+        <Drawer open onClose={() => {}} bare label="Sessions">
+          <button type="button">inside</button>
+        </Drawer>
+      </div>,
+    );
+    expect(document.activeElement).not.toBe(opener);
+    rerender(
+      <div>
+        <button type="button">open</button>
+        <Drawer open={false} onClose={() => {}} bare label="Sessions">
+          <button type="button">inside</button>
+        </Drawer>
+      </div>,
+    );
+    expect(document.activeElement).toBe(opener);
+  });
+});
+
+describe("Toast state treatment (d0-rc11)", () => {
+  it("marks a state with a left rule and an icon, never a full perimeter", () => {
+    for (const [variant, token] of [
+      ["danger", "--tethys-status-danger"],
+      ["warning", "--tethys-status-warning"],
+      ["success", "--tethys-status-success"],
+    ] as const) {
+      const { container, unmount } = render(
+        <Toast id={variant} variant={variant} message={`${variant} message`} />,
+      );
+      const toast = container.firstElementChild as HTMLElement;
+      expect(toast.className, variant).toContain("border-l-2");
+      expect(toast.className, variant).toContain(`border-l-(${token})`);
+      // The perimeter stays the neutral Level 4 border on every side.
+      expect(toast.className, variant).toContain(
+        "border-(--tethys-hairline-strong)",
+      );
+      expect(toast.className, variant).not.toContain(`border-(${token})`);
+      // State is not carried by hue alone.
+      expect(
+        container.querySelector('[data-testid="toast-icon"]'),
+        variant,
+      ).not.toBeNull();
+      unmount();
+    }
+  });
+
+  it("keeps a default toast neutral: no rule, no icon", () => {
+    const { container } = render(<Toast id="d" message="Saved" />);
+    const toast = container.firstElementChild as HTMLElement;
+    expect(toast.className).not.toContain("border-l-2");
+    expect(container.querySelector('[data-testid="toast-icon"]')).toBeNull();
+  });
+});
+
 describe("StateBadge (d0-rc9)", () => {
   it("carries the state colour on both the marker and the label, per state", () => {
     const { rerender } = render(<StateBadge status="awaiting_approval" />);
@@ -651,10 +907,41 @@ describe("StateBadge (d0-rc9)", () => {
       "var(--tethys-status-danger)",
     );
 
-    rerender(<StateBadge status="idle" />);
-    expect(screen.getByText("Idle").style.color).toBe(
-      "var(--tethys-agent-idle)",
+    rerender(<StateBadge status="interrupted" />);
+    expect(screen.getByText("Interrupted").style.color).toBe(
+      "var(--tethys-status-interrupted)",
     );
+  });
+
+  it("keeps the label of a quiet state at text contrast while its dot stays quiet", () => {
+    // idle, suspended and archived dots sit below 4.5:1 by design, so the words
+    // that make them legible are drawn in text-muted, not in the dot's token.
+    const { rerender } = render(<StateBadge status="idle" />);
+    expect(screen.getByText("Idle").style.color).toBe(
+      "var(--tethys-text-muted)",
+    );
+
+    rerender(<StateBadge status="suspended" />);
+    expect(screen.getByText("Suspended").style.color).toBe(
+      "var(--tethys-text-muted)",
+    );
+
+    rerender(<StateBadge status="archived" />);
+    expect(screen.getByText("Archived").style.color).toBe(
+      "var(--tethys-text-muted)",
+    );
+  });
+
+  it("names a stopped state in words even when its dot is ignored", () => {
+    for (const [status, word] of [
+      ["interrupted", "Interrupted"],
+      ["suspended", "Suspended"],
+      ["archived", "Archived"],
+    ] as const) {
+      const { unmount } = render(<StateBadge status={status} />);
+      expect(screen.getByTestId("state-badge").textContent).toBe(word);
+      unmount();
+    }
   });
 
   it("names the state in words so the badge survives the dot being ignored", () => {

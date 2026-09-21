@@ -7,6 +7,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Navigate,
   Outlet,
   RouterProvider,
@@ -14,10 +15,8 @@ import {
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
-import { createClient } from "@tethys/client";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BenchmarkView } from "./routes/benchmark";
 import { SettingsLayout } from "./routes/settings";
 import { SettingsGeneralView } from "./routes/settings.general";
 import { SettingsKeybindingsView } from "./routes/settings.keybindings";
@@ -29,8 +28,6 @@ import { ThreadNewView } from "./routes/thread.new";
 import { WorkspacesView } from "./routes/workspaces";
 import { AppShell } from "./shell/AppShell";
 
-const client = createClient();
-
 // Root Layout wrapping AppShell
 function RootLayout() {
   const location = useLocation();
@@ -40,11 +37,6 @@ function RootLayout() {
     <AppShell
       activeRoute={location.pathname}
       onNavigate={(to) => navigate({ to })}
-      onStopSession={(id) =>
-        void client.thread.cancel(id).catch((error: unknown) => {
-          console.error("thread.cancel failed", error);
-        })
-      }
     >
       <Outlet />
     </AppShell>
@@ -143,12 +135,17 @@ const settingsKeybindingsRoute = createRoute({
   component: SettingsKeybindingsView,
 });
 
-// S0.1 Dev-only Benchmark Route
+// S0.1 spike harness. Development builds only: it is not a product surface, so
+// a production build neither registers the route nor loads its module.
 const benchmarkRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/benchmark",
-  component: BenchmarkView,
+  component: lazyRouteComponent(
+    () => import("./routes/benchmark"),
+    "BenchmarkView",
+  ),
 });
+const devRoutes = import.meta.env.DEV ? [benchmarkRoute] : [];
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -163,7 +160,7 @@ const routeTree = rootRoute.addChildren([
     settingsSkillsRoute,
     settingsKeybindingsRoute,
   ]),
-  benchmarkRoute,
+  ...devRoutes,
 ]);
 
 export const router = createRouter({

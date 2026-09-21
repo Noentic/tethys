@@ -110,7 +110,7 @@ export function WorkspaceTrustDialog({
         {kind === "git-remote" && (
           <p
             data-testid="trust-copy-remote"
-            className="rounded-md border border-warning-soft bg-(--tethys-status-warning-soft) p-md text-(--tethys-status-warning)"
+            className="rounded-md border border-(--tethys-hairline) border-l-2 border-l-(--tethys-status-warning) bg-(--tethys-status-warning-soft) p-md text-(--tethys-status-warning)"
           >
             This folder has a remote. Tethys reads the remote URL for the source
             badge only; it never fetches, pushes, or authenticates on its own.

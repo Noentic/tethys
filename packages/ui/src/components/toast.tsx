@@ -1,4 +1,9 @@
-import { Cross } from "@nebutra/icons";
+import {
+  CheckCircleFill,
+  Cross,
+  CrossCircleFill,
+  WarningFill,
+} from "@nebutra/icons";
 import { cn } from "../lib/utils";
 
 export interface ToastProps {
@@ -10,6 +15,27 @@ export interface ToastProps {
   className?: string;
 }
 
+// A state is carried by an icon and a 2px left rule, not by the perimeter: the
+// border stays the neutral Level 4 hairline on every side (DESIGN.md State
+// colour). The icon means a state is never hue alone.
+const STATE_TREATMENT = {
+  danger: {
+    rule: "border-l-(--tethys-status-danger)",
+    icon: CrossCircleFill,
+    iconColor: "text-(--tethys-status-danger)",
+  },
+  warning: {
+    rule: "border-l-(--tethys-status-warning)",
+    icon: WarningFill,
+    iconColor: "text-(--tethys-status-warning)",
+  },
+  success: {
+    rule: "border-l-(--tethys-status-success)",
+    icon: CheckCircleFill,
+    iconColor: "text-(--tethys-status-success)",
+  },
+} as const;
+
 export function Toast({
   id,
   title,
@@ -18,6 +44,10 @@ export function Toast({
   onDismiss,
   className,
 }: ToastProps) {
+  const treatment =
+    variant === "default" ? undefined : STATE_TREATMENT[variant];
+  const StateIcon = treatment?.icon;
+
   return (
     <div
       role="status"
@@ -25,12 +55,17 @@ export function Toast({
       className={cn(
         "edge-lit flex w-full max-w-96 items-start gap-md rounded-lg border p-md transition-colors duration-200",
         "border-(--tethys-hairline-strong) bg-(--tethys-surface-overlay) text-(--tethys-text-primary)",
-        variant === "danger" && "border-(--tethys-status-danger)",
-        variant === "warning" && "border-(--tethys-status-warning)",
-        variant === "success" && "border-(--tethys-status-success)",
+        treatment && ["border-l-2", treatment.rule],
         className,
       )}
     >
+      {StateIcon && (
+        <StateIcon
+          data-testid="toast-icon"
+          aria-hidden="true"
+          className={cn("mt-0.5 size-4 shrink-0", treatment.iconColor)}
+        />
+      )}
       <div className="flex-1 min-w-0">
         {title && (
           <h4 className="text-label-md text-(--tethys-text-primary)">

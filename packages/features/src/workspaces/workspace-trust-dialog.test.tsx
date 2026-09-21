@@ -44,6 +44,21 @@ describe("workspace-trust-dialog", () => {
     expect(screen.getByTestId("trust-copy-remote")).toBeTruthy();
   });
 
+  it("marks the remote warning with a left rule, not a warning perimeter", () => {
+    render(
+      <WorkspaceTrustDialog
+        open
+        path="/home/dev/repo"
+        vcs={{ kind: "git-remote", host: "github" }}
+        onClose={() => {}}
+        onConfirm={() => {}}
+      />,
+    );
+    const callout = screen.getByTestId("trust-copy-remote");
+    expect(callout.className).toContain("border-l-(--tethys-status-warning)");
+    expect(callout.className).not.toContain("border-warning-soft");
+  });
+
   it("gates the primary on a resolved path", () => {
     const { rerender } = render(
       <WorkspaceTrustDialog
