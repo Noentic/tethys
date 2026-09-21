@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DARK_TOKENS, DEFAULT_LIGHT_TOKENS } from "../tokens/manifest";
+import {
+  DEFAULT_DARK_TOKENS,
+  DEFAULT_LIGHT_TOKENS,
+  type SemanticTokenKey,
+} from "../tokens/manifest";
 
 interface RGBA {
   r: number;
@@ -244,6 +248,124 @@ describe("WCAG Contrast Gate (D6 / U8)", () => {
       const ratio = getContrastRatio(light["status-success"], canvas, canvas);
       expect(ratio).toBeGreaterThanOrEqual(3.0);
     });
+  });
+
+  describe("Muted text, control strokes and inactive states (d0-rc11)", () => {
+    // `text-muted` carries placeholders, telemetry and timestamps, so it is read
+    // as text on every surface it can land on, wells included. The previous
+    // shared value (#71717a) measured 3.3-4.2:1 in dark and 3.8:1 on the light
+    // well, which is why it was never in this suite.
+    const allSurfaces = [
+      "canvas",
+      "surface-rail",
+      "surface-panel",
+      "surface-card",
+      "surface-card-hover",
+      "surface-nested",
+      "surface-elevated",
+      "surface-overlay",
+      "surface-sunken",
+    ] as const;
+    const boundarySurfaces = [
+      "surface-panel",
+      "surface-card",
+      "surface-elevated",
+      "surface-overlay",
+    ] as const;
+
+    for (const [themeName, tokens] of [
+      ["default-dark", DEFAULT_DARK_TOKENS],
+      ["default-light", DEFAULT_LIGHT_TOKENS],
+    ] as const) {
+      it(`${themeName}: text-muted reads as text on every surface (>= 4.5:1)`, () => {
+        for (const surface of allSurfaces) {
+          const host = tokens[surface];
+          const ratio = getContrastRatio(tokens["text-muted"], host, host);
+          expect(
+            ratio,
+            `text-muted on ${surface} measured ${ratio.toFixed(2)}:1`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+
+      it(`${themeName}: the on-sunken text family reads on surface-sunken (>= 4.5:1)`, () => {
+        const well = tokens["surface-sunken"];
+        for (const key of [
+          "text-on-sunken",
+          "text-on-sunken-secondary",
+          "text-on-sunken-muted",
+        ] as const) {
+          const ratio = getContrastRatio(tokens[key], well, well);
+          expect(
+            ratio,
+            `${key} on surface-sunken measured ${ratio.toFixed(2)}:1`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+
+      it(`${themeName}: border-control bounds a control on every boundary surface (>= 3:1)`, () => {
+        // WCAG 1.4.11: the edge of an input, toggle track or radio is the only
+        // thing that says "this is a control".
+        for (const surface of [
+          ...boundarySurfaces,
+          "surface-sunken",
+        ] as const) {
+          const host = tokens[surface];
+          const ratio = getContrastRatio(tokens["border-control"], host, host);
+          expect(
+            ratio,
+            `border-control on ${surface} measured ${ratio.toFixed(2)}:1`,
+          ).toBeGreaterThanOrEqual(3.0);
+        }
+      });
+
+      it(`${themeName}: hairline-strong stays visible as a Level 3-4 border (>= 1.4:1)`, () => {
+        // Structure, not a control stroke: it only has to be seen. At the old
+        // dark value it measured 1.08:1 on surface-overlay.
+        for (const surface of boundarySurfaces) {
+          const host = tokens[surface];
+          const ratio = getContrastRatio(tokens["hairline-strong"], host, host);
+          expect(
+            ratio,
+            `hairline-strong on ${surface} measured ${ratio.toFixed(2)}:1`,
+          ).toBeGreaterThanOrEqual(1.4);
+        }
+      });
+
+      // Inactive states are deliberately quiet, and P2 puts their reason in
+      // words in the same row, so each carries its own floor rather than the
+      // 3:1 a live marker needs. The floors stop them being invisible without
+      // turning them into attention-getters.
+      const inactiveFloors = [
+        ["status-interrupted", 3.0],
+        ["status-suspended", 2.0],
+        ["status-archived", 1.5],
+      ] as const;
+      for (const [key, floor] of inactiveFloors) {
+        it(`${themeName}: ${key} dot is present on panel and card (>= ${floor}:1)`, () => {
+          for (const surface of ["surface-panel", "surface-card"] as const) {
+            const host = tokens[surface];
+            const ratio = getContrastRatio(tokens[key], host, host);
+            expect(
+              ratio,
+              `${key} on ${surface} measured ${ratio.toFixed(2)}:1`,
+            ).toBeGreaterThanOrEqual(floor);
+          }
+        });
+      }
+
+      it(`${themeName}: the inactive states keep their order interrupted > suspended > archived`, () => {
+        const host = tokens["surface-card"];
+        const measure = (key: SemanticTokenKey) =>
+          getContrastRatio(tokens[key], host, host);
+        expect(measure("status-interrupted")).toBeGreaterThan(
+          measure("status-suspended"),
+        );
+        expect(measure("status-suspended")).toBeGreaterThan(
+          measure("status-archived"),
+        );
+      });
+    }
   });
 
   describe("State colour, two tiers (d0-rc9)", () => {

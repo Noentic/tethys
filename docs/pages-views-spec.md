@@ -32,7 +32,7 @@ A Workspace is a folder. Any folder can be one, git-initialized or not. What Tet
 
 | Capability | Values | What it gates |
 |---|---|---|
-| `vcs` | `none` · `git-local` · `git-remote` (host: GitHub / GitLab / other) | Source badge, canvas mode, `git-init-upsell-chip`, worktree isolation |
+| `vcs` | `none` · `git-local` · `git-remote` (host: GitHub / GitLab / other) | Source badge, workspace-card variant, `git-init-upsell-chip`, worktree isolation |
 | `restore` | yes / no | `Revert Turn`, restore triggers, per-turn checkpoints |
 | `max_concurrent_sessions` | 1 (no worktree mechanism to isolate parallel sessions) · many | `+ New Thread`, fork |
 | `isolation` (V1) | `worktree` · `plain` | Worktree creation; `plain` hides git UI even in a git folder |
@@ -54,7 +54,7 @@ The global application shell wraps all windows in a native, lightweight window f
 **Layout**
 
 - **Activity Rail (Left)**: Fixed `48px` width, background `{semantic.surface-rail}`. Structural border on the right (`{semantic.hairline-structural}`).
-- **Hub list**: collapsible workspace list beside the rail, `264px` → collapsed `48px`. Rows are workspace icon + name (`body-sm`) + status dot. Collapsing preserves the rail; `Esc` never collapses it while the palette is open.
+- **Sessions drawer (on demand)**: not a docked region. A titlebar toggle opens `sessions-column` (`280px`) as a Level 3 overlay drawer over the Stage with a `{semantic.overlay-scrim}`; `Esc`, a scrim click or choosing a session closes it, and focus returns to the toggle. Session switching is a moment of navigation, not a standing surface, so the Stage keeps its width; everyday switching runs through the tab strip and the Workspaces catalog. There is no docked workspace list: the Workspaces catalog (§2) is a view on the Stage.
 - **Window Header & Tab Strip (Top)**: Height `40px`, background `{semantic.surface-rail}`. Structural border along the bottom. Insets `~70px` left padding on macOS for traffic lights, or reserves `140px` right padding on Windows for native caption controls. Linux uses an in-app header bar with minimize/maximize/close (`16px` glyphs, `32px` targets). The header doubles as the window drag region.
 - **Splitters**: every column edge is a `1px` structural line with a `6px` transparent hit area. Hover recolors only — width never changes, so the layout never shifts. Dragging shows the focus accent; double-click resets to the token width. `separator` role with `aria-valuenow`.
 - **Command Palette Modal (`command-palette`)**: Centered overlay (`600px × 400px`, Level 4 elevation) triggered anywhere via `Ctrl/Cmd + K`. An input row over a grouped list (commands, files, threads, actions) with `36px` rows and `mono-micro` hints. `↑↓` moves, `Enter` runs, `Esc` unstacks. Empty shows `No results`; loading shows skeleton rows. First-result target is sub-millisecond via FFF-backed `search.files`.
@@ -64,7 +64,7 @@ The global application shell wraps all windows in a native, lightweight window f
 - `nav-rail`: Contains top cluster (Workspaces `grid` icon, New Thread `compose` icon) and bottom cluster (Global Settings `gear` icon, daemon health dot). Icons use `{icons.sizes.rail}` (20px) with `36px` hit targets. The selected item carries a `2px` accent bar on its left edge.
 - `tab-bar` & `tab-item`: Horizontally scrollable tab strip supporting multi-workspace tabs. The Workspaces hub is pinned permanently at index 0 with no close affordance. Sibling tabs render as `[Icon] [workspace / branch] [×]`; a session with no branch (a non-git folder) shows `[Icon] [workspace / session title] [×]`.
 - `approval-inbox-pill`: Persistent tab-bar pill `Waiting on you (N)` rendered with a `{semantic.status-warning}` breathing dot and a `mono-micro` count. Hidden when the queue count is 0. The hub's `Needs attention (N)` filter chip reuses it in its selected state — same component, different placement.
-- `status-dot`: one shared dot for every state surface (rail daemon health, hub rows, session rows, provider rows, topology nodes), so `UI-02` states map exactly once. `Idle` → agent-idle, `Running` → agent-active filled disc (breathe), `Awaiting approval` → warning **ring** (breathe), `Error` → danger, `Interrupted` → muted, `Suspended` → strong hairline, `Archived` → hairline. Provider and daemon health reuse it: `Healthy` → success, `Authentication required` → warning filled disc (no breathe), `Not found` → danger. Shape is part of the encoding, not decoration: the ring is what separates "blocked, needs you" from "working" and from `Authentication required` once motion is suspended (`prefers-reduced-motion`, unfocused window), so `Awaiting approval` never shares both hue and shape with another state. An unrecognized state renders the neutral idle dot rather than failing.
+- `status-dot`: one shared dot for every state surface (rail daemon health, workspace rows, session rows, provider rows), so `UI-02` states map exactly once. `Idle` → agent-idle, `Running` → agent-active filled disc (breathe), `Awaiting approval` → warning **ring** (breathe), `Error` → danger, `Interrupted` → `status-interrupted`, `Suspended` → `status-suspended`, `Archived` → `status-archived` (all static, and quiet by design, so each is also named in words in its row, P2). Provider and daemon health reuse it: `Healthy` → success, `Authentication required` → warning filled disc (no breathe), `Not found` → danger. Shape is part of the encoding, not decoration: the ring is what separates "blocked, needs you" from "working" and from `Authentication required` once motion is suspended (`prefers-reduced-motion`, unfocused window), so `Awaiting approval` never shares both hue and shape with another state. An unrecognized state renders the neutral idle dot rather than failing.
 
 **Behaviour**
 
@@ -124,7 +124,7 @@ A Railway-style catalog presenting workspaces — any folder, git-tracked or not
 - Single-clicking a card body or header opens the `workspace-peek-drawer` (modeless; catalog stays interactive). If the workspace has pending approvals, the drawer opens directly to its `Approvals` tab. A card never performs full-window navigation.
 - Clicking a `session-item-chip` spawns a dedicated top-level tab for that session, immediately focused.
 - Double-clicking a card opens or focuses the primary/most-recent thread for that workspace.
-- Hovering an idle card surfaces a `+ New Thread` overlay button in the canvas, so starting work on a dormant workspace doesn't require opening the drawer first.
+- Hovering an idle card surfaces a `+ New Thread` overlay button on the card, so starting work on a dormant workspace doesn't require opening the drawer first.
 - **Concurrency gate**: where `max_concurrent_sessions` is 1 and a session is already running, `+ New Thread` is disabled (tooltip: "This folder isn't version-controlled, so only one agent can run here at a time. Initialize git to run threads in parallel.") rather than silently allowing a second agent to write into the same tree. Core enforces the same limit (§0.1).
 - The catalog stays mounted while a session tab is open; switching tabs never unmounts it.
 - Card footers show only as many chips as fit at the chip `minWidth` (never more than 3); further sessions collapse into a `+N more` chip that opens the peek drawer. Never crowd the footer. The figures behind this (a 320px card leaves ~286px inside its padding and border) are indicative — the implementing chunk verifies them against the rendered font.
@@ -134,7 +134,7 @@ A Railway-style catalog presenting workspaces — any folder, git-tracked or not
 
 - User lands on Catalog → clicks a `fix-auth` chip → a new tab `[ ⌗ acme-web / fix-auth × ]` slides in smoothly next to the pinned `Workspaces` tab → user immediately enters the thread execution view.
 - User has three workspaces running sessions in parallel → clicks `Needs attention (2)` → grid filters to only the `acme-web`-style cards with a pending approval → user works the queue card by card without hunting across an unfiltered grid.
-- User drops a scratch folder with no git history into Tethys → card renders in single-node mode, footer reads `no version control · 1 agent (max)` with an `Initialize git →` chip → user clicks it once they're ready to parallelize, and the card upgrades in place.
+- User drops a scratch folder with no git history into Tethys → card renders as a `workspace-card-no-vcs`, footer reads `no version control · 1 agent (max)` with an `Initialize git →` chip → user clicks it once they're ready to parallelize, and the card upgrades in place.
 
 ### 2.1 Add Workspace Flow & Trust (`workspace-add-flow`, `workspace-trust-dialog`)
 
@@ -154,7 +154,7 @@ Adding a workspace and trusting it are treated as one flow, not two — the fold
 - `workspace-source-badge` echoed inline so the trust decision is made with full context (git+remote / git local-only / no VCS; local disk / remote host).
 - Body copy branches by source:
   - **Local, git-tracked**: "Coding agents will be able to read, edit, and run commands inside this folder and its subfolders. Tethys creates an isolated git worktree per thread so parallel agents can't collide."
-  - **Local, no VCS**: "This folder isn't tracked by git yet, so Tethys can't isolate agent runs into separate worktrees — only one thread can run here at a time until you initialize git." Inline `Initialize git now` checkbox lets the user opt into git-topology mode as part of trusting, instead of doing it later from the card.
+  - **Local, no VCS**: "This folder isn't tracked by git yet, so Tethys can't isolate agent runs into separate worktrees — only one thread can run here at a time until you initialize git." Inline `Initialize git now` checkbox lets the user opt into a git workspace as part of trusting, instead of doing it later from the card.
   - **Remote (SSH/container)**: adds a heavier-weight warning line — "This folder lives on `{host}`. Trusting it means agent commands run directly on that machine; Tethys does not sandbox execution on remote hosts." Rendered with `{semantic.status-warning}` emphasis, not the default body color.
 - Permission mode radio — `Supervised` (default) / `Auto-edit` / `YOLO`, the modes of PRM‑01. `Auto-edit` allows file edits inside the thread root and still asks for commands and network.
 - Trust scope checkbox: `Just this folder` (default) vs `This folder and subfolders opened later`.
@@ -169,14 +169,14 @@ Adding a workspace and trusting it are treated as one flow, not two — the fold
 
 **UX Flow**
 
-- User clicks `+` in the Workspaces hub → picks a local folder that has no `.git` → `workspace-trust-dialog` opens, source badge reads `Folder · no VCS`, body warns about the single-thread cap, user ticks `Initialize git now` and confirms → card lands in the grid already in git-topology mode with a fresh initial commit.
-- The same flow with `Initialize git now` left unticked is fully supported: the card lands in single-node mode and stays there until the user chooses otherwise. Nothing in Tethys requires git.
+- User clicks `+` in the Workspaces hub → picks a local folder that has no `.git` → `workspace-trust-dialog` opens, source badge reads `Folder · no VCS`, body warns about the single-thread cap, user ticks `Initialize git now` and confirms → card lands in the grid already as a git `workspace-card` with a fresh initial commit.
+- The same flow with `Initialize git now` left unticked is fully supported: the card lands as a `workspace-card-no-vcs` and stays there until the user chooses otherwise. Nothing in Tethys requires git.
 
 **Design rationale — vs. the Railway reference**
 
-Railway's card is optimized to answer "is this service up?" — a static, mostly-boolean question, so a single centered glyph plus a footer stat line is enough. A Tethys workspace is running N autonomous Sessions concurrently, possibly across several Providers, some of which are actively blocked waiting on a human decision — that's the thing the hub exists to surface. So the canvas itself became a small live topology (trunk + branch nodes) instead of one icon, and "needs attention" got promoted from a footer detail to a first-class filter, since triaging across workspaces is the primary loop, not just monitoring uptime.
+Railway's card is optimized to answer "is this service up?" — a static, mostly-boolean question, so a single centered glyph plus a footer stat line is enough. A Tethys workspace is running N autonomous Sessions concurrently, possibly across several Providers, some of which are actively blocked waiting on a human decision — that's the thing the hub exists to surface. So the card carries the sessions themselves — a cluster of `session-item-chip`s with live diff stats, awaiting-approval first — instead of one icon, and "needs attention" got promoted from a footer detail to a first-class filter, since triaging across workspaces is the primary loop, not just monitoring uptime.
 
-A second divergence: Railway's projects are always fully-formed, connected git repos by construction. Tethys workspaces are just folders — some git-tracked with a remote, some git-tracked locally only, some not version-controlled at all, local or remote in any combination. The topology canvas is therefore a *capability the folder has earned*, not a default — a plain folder gets a single-node canvas and a one-thread-at-a-time cap until it's git-initialized, and the safety guarantees that depend on git (isolated parallel worktrees, instant Revert Turn) degrade explicitly rather than silently.
+A second divergence: Railway's projects are always fully-formed, connected git repos by construction. Tethys workspaces are just folders — some git-tracked with a remote, some git-tracked locally only, some not version-controlled at all, local or remote in any combination. Session-level detail is therefore a *capability the folder has earned*, not a default — a plain folder gets the no-VCS card (an `Initialize git →` chip instead of branch and session chips) and a one-thread-at-a-time cap until it's git-initialized, and the safety guarantees that depend on git (isolated parallel worktrees, instant Revert Turn) degrade explicitly rather than silently.
 
 ---
 
@@ -231,7 +231,7 @@ The distraction-free orchestration stage for composing the `session/new` call th
 
 ## 4. Active Thread Workspace (`/thread/:id`)
 
-The four-region control plane for executing turns, inspecting thought streams, approving commands, and — where the workspace has git — reviewing worktree diffs (`UI-01`, `UI-04`, `WT-04`).
+The three-region control plane (Rail | Stage | Inspector, with Sessions opened on demand as a drawer) for executing turns, inspecting thought streams, approving commands, and — where the workspace has git — reviewing worktree diffs (`UI-01`, `UI-04`, `WT-04`).
 
 ```
 ┌────┬─────────────────────────────────────────────┬───────────────────────────┐
@@ -258,11 +258,12 @@ The four-region control plane for executing turns, inspecting thought streams, a
 
 **Layout**
 
-- **Main Stage (Center-Flex, min 560px)**: Streamed Markdown turns, collapsible thought blocks, plan panel, inline tool-call cards, and inline permission-request cards. Below `560px` the stage switches to overlay mode rather than shrinking. The redundant 280px sessions column is omitted in the execution view to maximize reading and editing focus; thread and workspace switching is driven directly by the top tab strip and the Workspaces Catalog Hub (`/workspaces`).
+- **Main Stage (Center-Flex, min 560px)**: Streamed Markdown turns, collapsible thought blocks, plan panel, inline tool-call cards, and inline permission-request cards. The Stage never shrinks below `stage-min` and has no overlay mode: the Inspector docks only at `1100px` and wider, and `48 + 560 + 360 = 968px`, so the Stage always has at least 560px. Thread and workspace switching runs through the top tab strip and the Workspaces catalog (`/workspaces`); a titlebar toggle opens the Sessions drawer (§1) to browse every session on demand.
 - **Thread Inspector & Diff Panel (`360px`, Right)**: Collapsible sidebar housing session-level rollup telemetry, active plan steps, raw payloads, and — where the workspace has git — patch inspection and checkpoint restore triggers. Operates on a **thread-wide scope** (aggregating tool runs, edited files, and cumulative diffs across all turns of the session), rather than being locked to a single turn. Collapses to an overlay drawer when the viewport drops below `1100px`.
 - **Unified Prompt Card (Docked Bottom, `{layout.prompt-width}`)**: Consolidates composer input, session context pills, and runtime actions into a single control surface, replacing the separate 56px Action Bar. Features:
-  - Top Context Bar: Collapsible pills for Git Context (`branch` + live diff stats in `{semantic.diff-added}` and `{semantic.diff-removed}`), Provider & Model Selector (`[Glyph] Provider · Model ∨`), and Permission Mode (`Supervised` / `Auto-edit` / `YOLO`).
+  - Top Context Bar: Collapsible pills for Git Context (`isolation-pill`: `branch`, or `no git`), Provider & Model Selector (`[Glyph] Provider · Model ∨`), Permission Mode (`Supervised` / `Auto-edit` / `YOLO`), the ACP `mode` (`mode-pill`), the queue count, and the `diff-summary-pill` (`+a −b` in `{semantic.diff-added}` and `{semantic.diff-removed}`). When the row does not fit, pills fold into a `•••` overflow, lowest priority first; the isolation pill and the stop control never fold (DESIGN.md `prompt-card.contextBarFold`).
   - Textarea: Auto-expanding composer with quiet inline guide (`Type / for commands · @ for files · $ for skills`).
+  - Lower bar: attachment chips, and the Model and Effort chips (`composer-config-chip`), taken from the Provider's config options by `category`.
   - Action Button: Single state-switching trigger on the right — Send up-arrow (`ez7XI`) when idle/typing; Stop square (`mfejm`) when an agent turn is actively executing.
 
 **Components**
@@ -302,7 +303,7 @@ The four-region control plane for executing turns, inspecting thought streams, a
 - **History doesn't depend on what a Provider can replay.** `session/resume` and history replay (`replayFrom`) are optional, per-Provider capabilities (§5.2 shows which Providers support them) — Tethys keeps its own local transcript cache of every Session regardless, so reopening a tab always shows full history from that cache. Resume is used only to reconnect a *live* Provider-side session when supported; when it isn't, reopening a tab starts a fresh `session/new` and displays the cached transcript as read history above the new live turns, divided by a hairline labelled `Earlier history (read-only)`.
 - **Review is capability-driven.** Revert, diff, stage and commit affordances render only when the workspace's `vcs` is git and (for revert) `restore` is yes. Otherwise they are hidden or disabled with a `no git · no revert` explanation, so a fresh session never looks broken. Git is a feature, not enforcement: the hub accepts any folder, and there is no app-managed snapshot fallback in MVP. In-place `git init` is the upgrade path to full worktree behaviour, and `isolation: plain` (WT‑11, V1) is the explicit opt-out that hides git UI even where it would otherwise be available.
 
-> **Decided — commit/diff visibility from the composer (option a).** The isolation pill pins *branch context* to the action bar, but `Approve & Commit` lives only in the Inspector's `diff-viewer`: `360px`, docked, collapsing to an overlay drawer below `1100px` viewport, where the commit action is off-screen until the user opens the drawer. **Decision:** when a turn has a diff and the workspace's `vcs` is git, an action-bar **diff-summary pill** shows the changed-file count and `+a −b` from the diff summary and opens the Inspector; `Approve & Commit` stays in the Inspector's `diff-viewer`. *Why:* it needs no new surface and no shell edit — `registerActionBarSlot` is the sanctioned seam and slots carry a priority. The alternatives were rejected: hoisting `Approve & Commit` into the bar (b) duplicates the commit surface and spends width the fold order has already budgeted, and auto-opening the Inspector on a turn's first diff (c) moves focus mid-turn, which contradicts "switching tabs never unmounts background execution streams". The pill carries **no staged-hunk count**: `git.stage` is path-level and only `git.discard` is hunk-granular, so the count is not computable. It sits between the Provider/config pill and the mode pill in the priority order (DESIGN.md `action-bar`), so it folds after the queue count and the mode pill and before `Stop` and the isolation pill. **Known limitation:** between `1100px` and `1512px` (the width at which all four regions plus `stage-min` (560px) fit) the Inspector is docked but the Stage falls below `stage-min`; DESIGN.md Shell Structure records it, and the collapse ladder that would fix it is not decided here.
+> **Decided — commit/diff visibility from the composer (option a).** The isolation pill pins *branch context* to the prompt card's context bar, but `Approve & Commit` lives only in the Inspector's `diff-viewer`: `360px`, docked, collapsing to an overlay drawer below `1100px` viewport, where the commit action is off-screen until the user opens the drawer. **Decision:** when a turn has a diff and the workspace's `vcs` is git, a **diff-summary pill** in that context bar shows the changed-file count and `+a −b` from the diff summary and opens the Inspector; `Approve & Commit` stays in the Inspector's `diff-viewer`. *Why:* it needs no new surface and no shell edit — `registerComposerContextSlot` (named `registerActionBarSlot` while the 56px action bar existed) is the sanctioned seam and slots carry a priority. The alternatives were rejected: hoisting `Approve & Commit` into the context bar (b) duplicates the commit surface and spends width the fold order has already budgeted, and auto-opening the Inspector on a turn's first diff (c) moves focus mid-turn, which contradicts "switching tabs never unmounts background execution streams". The pill carries **no staged-hunk count**: `git.stage` is path-level and only `git.discard` is hunk-granular, so the count is not computable. It sits between the Provider/config pill and the mode pill in the priority order (DESIGN.md `prompt-card.contextBarFold`), so it folds after the queue count and the mode pill and before the stop control and the isolation pill. The `d0-rc5` limitation (a docked Inspector leaving the Stage below `stage-min` between `1100px` and `1512px`) is closed by the three-region shell: with no docked Sessions or Hub column, `48 + 560 + 360 = 968px` fits under the `1100px` threshold.
 
 **UX Flow**
 
@@ -324,7 +325,7 @@ Every ACP `session/update` variant and client-side request a thread can receive,
 | tool content `terminal`, `terminal/*` | `Terminal*` | inline well, `terminal-sheet` | M1.7 | none |
 | `plan` | `PlanUpsert` | `plan-panel` | M1.7 | none (`plan_update` / `plan_removed` are unstable and not in MVP) |
 | `available_commands_update` | `CommandsAvailable` | `composer-command-group` | M1.10 | none |
-| `current_mode_update` | synthesized `mode` option | action-bar mode pill | M1.10 | none (see `category` below) |
+| `current_mode_update` | synthesized `mode` option | `mode-pill` (prompt-card context bar) | M1.10 | none (see `category` below) |
 | `config_option_update` | `ConfigOptionsChanged` | `composer-config-chip`, `session-config-panel` | M1.10 | **`ConfigOption` gains `category`, a select/boolean kind, and per value an id, display name and optional description (only the id survives today)** |
 | `session_info_update` | `SessionInfo` | session row and tab title | M1.6 shell | none |
 | `usage_update` | `Usage` | `usage-bar`; totals in `activity-ledger` | M2.10 (values) | **`UsageSnapshot` gains context `size` and cost currency** |
@@ -338,7 +339,7 @@ Every ACP `session/update` variant and client-side request a thread can receive,
 | Provider artifact | entry | `provider-artifact` | M1.7 | none |
 | checkpoint, file write | `Checkpoint`, `FileWrite` | per-turn `View diff` / `Restore`; `diff-viewer` | M1.7, M1.9 | none |
 | *(derived)* tool-call kinds | — | `activity-ledger` | M1.7 (Inspector slot) | none; needs the fields above |
-| queued prompts | queue | composer queue, action-bar count | M1.10 | none |
+| queued prompts | queue | composer queue, context-bar queue count | M1.10 | none |
 
 **Contract additions are append-only** — a new field or a new variant, never a change of meaning — and land once, in M1.6d, so worktrees A and C build against the final types instead of each defining a piece. Provider adapters populate `origin`, `parent_tool_call_id`, `category` and the usage `size` in Wave 2.5; until then the webview renders fixtures and an entry with no `origin` renders as a built-in call.
 
@@ -523,7 +524,7 @@ Rules that hold across pages. Visual and token rules are in DESIGN's Do's and Do
 - Gate every git-dependent surface on the workspace's capabilities (§0.1) and explain what is unavailable.
 - Return focus on every dismiss (`Esc` in popover/drawer/sheet → invoker) and trap focus in palette, dialogs and sheets.
 - Keep the stage pinned to the tail only while the user is at the tail, and end every turn with something visible (`working-indicator`, then a `turn-notice` for any stop reason other than a normal end).
-- Give every config category one home: `mode` in the action bar, `model` and `thought_level` as composer chips, everything else in the full panel.
+- Give every config category one home: `mode` in the prompt card's `mode-pill`, `model` and `thought_level` as composer chips, everything else in the full panel.
 
 **Don't**
 
@@ -551,9 +552,9 @@ Rules that hold across pages. Visual and token rules are in DESIGN's Do's and Do
 
 | Page / Route | Primary View Type | Key Tokens & Sizes | Distinctive UX / Behaviours |
 |---|---|---|---|
-| **`/workspaces`** | Card Grid + Peek Drawer | Cards: `220px`, Drawer: `380px` | Dual canvas modes (git-topology / single-node), Local vs. Remote switch, "Needs attention" filter, trust dialog gating every new folder, zero-click thread chips. |
+| **`/workspaces`** | Card Grid + Peek Drawer | Cards: `220px`, Drawer: `380px` | Git and no-VCS card variants, Local vs. Remote switch, "Needs attention" filter, trust dialog gating every new folder, zero-click thread chips. |
 | **`/thread/new`** | Centered Prompt Canvas | Card: `820px` max, Popover: `560px` | Explicit workspace picker, per-Provider config schema (not a fixed Model/Effort grid), auth-gated Provider selection. |
-| **`/thread/:id`** | Four-Region IDE Shell | Sessions col: `280px`, Inspector: `360px` | Workspace → Provider → Session grouping, plan panel, grouped tool-call summaries with skill / MCP / subagent origin, category-aware Model and Effort chips, an activity ledger, a visible ending for every turn, protocol-native permission requests, dual-layer cancellation, capability-driven review (turn rollback in <150ms, unified/split diffs, only where git exists). |
+| **`/thread/:id`** | Three-Region IDE Shell | Sessions drawer: `280px`, Inspector: `360px` | Workspace → Provider → Session grouping, plan panel, grouped tool-call summaries with skill / MCP / subagent origin, category-aware Model and Effort chips, an activity ledger, a visible ending for every turn, protocol-native permission requests, dual-layer cancellation, capability-driven review (turn rollback in <150ms, unified/split diffs, only where git exists). |
 | **`/settings/providers`** | Accordion Registry List | Rows: `12px 16px` padding | Per-Provider auth method adapts (env var / URL+code / CLI passthrough), negotiated-capabilities panel (resume, MCP transports, elicitation). |
 | **`/settings/skills`** | Two-Pane Skill & Command Browser | List + detail pane: `360px`; rows: `44px` | Kind switch `Skills` / `Commands`; scope (`Global` / `Workspace`) is the only classification. `skill-row` with `scope-badge` and provenance, `skill-detail` viewer with rendered `SKILL.md`, trust and per-workspace allow-list; `command-row` with `args-tag` and shadow note, `command-editor` with a `Markdown | Preview` body. `/agent:*` commands stay composer-only. |
 | **`/settings/mcp`** | Per-Provider Config Editor | `code-editor-well`, `provider-tab` strip | Read/edit each Provider's own MCP file (JSON / JSONC / TOML) scoped Global or Workspace, with `mcp-server-form`; the retired `sync-grid` matrix is replaced by a footer injection note. |

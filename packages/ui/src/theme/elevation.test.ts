@@ -111,12 +111,36 @@ const DARK_ONLY: Adjacency[] = [
 
 // Light recesses by darkening, so the recessed planes are *below* their parent
 // rather than above it. Sunken is the one recess that holds in both themes.
+//
+// Not asserted here, by design: rail, elevated, card and overlay are all
+// #ffffff in Default Light, so pairs made only of those (popover on card, palette
+// over drawer, active tab on titlebar) have no tonal gap to measure. Their
+// separation is the 1px `hairline-strong` border, which contrast.test.ts holds
+// at >= 1.4:1 on each of them.
 const LIGHT_ONLY: Adjacency[] = [
   {
     above: "canvas",
     below: "surface-sunken",
     minGap: 1.0,
     where: "terminal well in stage (light)",
+  },
+  {
+    above: "surface-elevated",
+    below: "canvas",
+    minGap: 3.0,
+    where: "prompt card on stage (light)",
+  },
+  {
+    above: "surface-card",
+    below: "surface-card-hover",
+    minGap: 1.5,
+    where: "card hover darkens (light)",
+  },
+  {
+    above: "surface-panel",
+    below: "surface-nested",
+    minGap: 1.0,
+    where: "tool accordion body inside a panel (light)",
   },
 ];
 
@@ -134,9 +158,9 @@ describe("Elevation ramp", () => {
       DEFAULT_DARK_TOKENS,
       [...SHELL_PLANES, ...STACKED_SURFACES, ...DARK_ONLY],
     ],
-    // Light recesses by darkening, so hover/nested steps invert and are covered
-    // by the dark checks only. The shell cascade, card-on-stage and the sunken
-    // well (recessed in both themes) hold.
+    // Light recesses by darkening, so hover/nested steps invert: they are
+    // asserted the right way round in LIGHT_ONLY instead of reusing the dark
+    // pairs. The shell cascade, card-on-stage and the sunken well hold in both.
     [
       "light",
       DEFAULT_LIGHT_TOKENS,

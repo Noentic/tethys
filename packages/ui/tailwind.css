@@ -4,6 +4,15 @@
 /* Tailwind auto-detects sources from the consuming app's root, so classes that
    appear only inside these primitives were never generated. Scan them explicitly. */
 @source "./src";
+/* The same holds for every other package that draws UI: a utility used only in
+   features, diff, terminal, composer or markdown is generated only if it is
+   scanned, and a production build otherwise drops it silently. Explicit paths:
+   a glob here matches nothing. */
+@source "../features/src";
+@source "../diff/src";
+@source "../terminal/src";
+@source "../composer/src";
+@source "../markdown/src";
 
 /* Literal design scales (not themeable): the type ramp from DESIGN.md
    typography.*. Each step carries size, leading, tracking and weight, so
@@ -109,6 +118,15 @@
   --color-status-success-soft: var(--tethys-status-success-soft);
   --color-status-warning-soft: var(--tethys-status-warning-soft);
   --color-status-danger-soft: var(--tethys-status-danger-soft);
+  --color-status-interrupted: var(--tethys-status-interrupted);
+  --color-status-suspended: var(--tethys-status-suspended);
+  --color-status-archived: var(--tethys-status-archived);
+  --color-border-control: var(--tethys-border-control);
+  --color-text-on-sunken: var(--tethys-text-on-sunken);
+  --color-text-on-sunken-secondary: var(--tethys-text-on-sunken-secondary);
+  --color-text-on-sunken-muted: var(--tethys-text-on-sunken-muted);
+  --color-hairline-on-sunken: var(--tethys-hairline-on-sunken);
+  --color-wash-on-sunken: var(--tethys-wash-on-sunken);
   --color-diff-added: var(--tethys-diff-added);
   --color-diff-removed: var(--tethys-diff-removed);
 
@@ -156,6 +174,28 @@
   outline-offset: 2px;
   &:focus-within {
     outline-color: var(--tethys-accent-focus);
+  }
+}
+
+/* The attention wash, painted as an image layer so it tints the surface it is on
+   instead of replacing that surface's opaque background (a translucent
+   `bg-*` would let the canvas show through a card). Pair with a 2px left rule
+   or a ringed status-dot; never with a full-perimeter border. */
+@utility wash-warning {
+  background-image: linear-gradient(
+    var(--tethys-status-warning-soft),
+    var(--tethys-status-warning-soft)
+  );
+}
+
+/* A syntax token carries both themes' colours as `--syntax-light` and
+   `--syntax-dark` (packages/diff). The active theme picks one here, so a theme
+   swap repaints in CSS and never asks the highlight worker again. An absent
+   variable falls through to the inherited well text colour. */
+@utility syntax-token {
+  color: var(--syntax-dark);
+  [data-theme="light"] & {
+    color: var(--syntax-light);
   }
 }
 

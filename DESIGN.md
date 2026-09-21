@@ -1,6 +1,7 @@
 ---
-version: d0-rc10
+version: d0-rc11
 changelog:
+  d0-rc11: "Accepted 21 Sep 2026. Token ratification: the pen's values are ported into the contract, and the contrast gates, not the pen, now decide the final numbers. `text-muted` (`#71717a` in both themes) is retired as a text value because it measured 3.3-4.2:1 in dark and 3.8:1 on the light well against the contract's own 4.5:1 rule; it becomes `#8e8e98` / `#63636c` and is now under test on every surface. Dark `hairline-strong` (`#27272a`, 1.08:1 on `surface-overlay`) becomes `#3f3f46` / `#c2c2ca` and stops being a control stroke. Nine tokens the pen already used and the contract only referenced are defined: `border-control` (the input, textarea, toggle-track, radio and checkbox stroke, 3:1), the `text-on-sunken` family with `hairline-on-sunken` and `wash-on-sunken` (the previously dangling `*-on-sunken` reference), and `status-interrupted` / `status-suspended` / `status-archived` so those dots stop borrowing border tokens as fills. Two values differ from the pen because the gates rejected them: light `text-muted` / `text-on-sunken-muted` `#686871` measured 4.35:1 on the slate well and is `#63636c` (4.69:1), and light `status-archived` `#d4d4d8` measured 1.40:1 on panel and is `#c8c8cf` (1.58:1); the pen is updated to match. Dark `diff-removed` is `#ff8a84` (`signal-red-bright`), as d0-rc9 already said in the theme table; `manifest.ts` and `tokens.css` had kept the pre-soften `#fe6c66`. `tokens.test.ts` now reads the semantic names, CSS variables and both default themes from this front matter instead of a hand-copied list, and `design-refs.test.ts` fails on any `{...}` reference here that names nothing. Shell: the thread view is three regions, Rail | Stage | Inspector. The four-region diagram was never built (no Hub column exists in the pen or in code), and Sessions leaves the docked layout to become an on-demand overlay drawer, which closes the d0-rc5 open limitation: with the Inspector docked only at 1100px or wider, the Stage holds its 560px minimum at every width (48 + 560 + 360 = 968px). The 56px action bar is removed from the contract, not just deprecated in it: its controls live in the `prompt-card` context bar and lower bar, the fold order it carried moves to `prompt-card.contextBarFold`, and `layout.shell-actionbar`, `layout.shell-left`, `layout.shell-left-collapsed` and `breakpoints.sessions-icon` are deleted. `mode-pill` and `diff-summary-pill`, referenced since d0-rc5 and never defined, are defined. `sync-grid` and `session-topology-canvas` are marked deprecated-but-shipping instead of removed, because their replacements are not built; d0-rc5's 2-D grid roving applied only to `sync-grid` and is superseded by the `provider-tab` tablist (one tab stop, arrows, `Home` / `End`). State on content surfaces: the toast gains an icon and a left rule instead of a perimeter (`toast.stateTreatment`), the workspace card takes a wash and the `awaiting` ring with no rule (`workspace-card.attention`), the session row, drawer callout and trust-dialog callout follow the wash + 2px left rule grammar, and `provider-popover` finally carries the `pendingTreatment` d0-rc9 gave it in the contract, as a wash over its overlay surface."
   d0-rc10: "Accepted 21 Sep 2026. New Thread cold start. The canvas gains an explicit nothing-selected state, derived rather than invented: P6 already required a disabled control to name its fix, and §3 already required submit to stay disabled while the workspace pill was unresolved. What is new is the order — with several preconditions missing the composer names only the first, workspace → provider, so the empty state gives one instruction rather than three. `workspace-selector-pill` gains an `unresolved` state (source badge dropped, label `Choose a folder` — an instruction, not a status) and the prompt card drops its attachment-and-guide cluster when its input is disabled, because `/ for commands` is a lie against a dead textarea. Revisits M1.10's New Thread canvas. Also retires `motion.skeleton` (`d0-rc4`): it was documented at 1200ms and shipped as a `--motion-skeleton` variable, but no component ever read it — the skeleton has always run the 2000ms `motion.pulse`, which is now the single loading-loop token. Closing the gap this way rather than retiming the shipped animation keeps d0-rc9's calmer direction (breathe 2400ms > pulse 2000ms) and changes no rendered pixel."
   d0-rc9: "Accepted 21 Sep 2026. State colour and motion. State colour is split into two tiers: a saturated `status-*` tone for markers, labels and rules, and a new low-chroma `status-warning-soft` / `status-danger-soft` surface tier for cards, rows and rules. The pen's rebalanced signal palette is ratified into the contract (it had drifted: `DESIGN.md` still shipped `#f59e0b` / `#ef4444` / `#10b981` / `#38bdf8`, whose Default Light values failed AA as text at 2.9 / 4.4 / 3.4 / 3.7), with `status-warning` and `status-danger` softened one further notch in dark. `motion.breathe` replaces the 50%-opacity pulse for liveness: `running` and `awaiting` breathe at 2400ms / 3200ms on a new `status-dot` halo, and stopped, errored, interrupted, suspended, archived and idle states are deliberately static. State colour no longer paints a full perimeter: `permission-request-card` / `elicitation-card` / `provider-popover` trade `pendingBorder` for a `pendingTreatment` (hairline + soft tint + 2px left rule + breathing dot), matching `turn-notice.warningRule`. New `state-badge` and `thread-inspector` components; `diff-viewer` gains a two-colour stat."
   d0-rc8: "Accepted 21 Sep 2026. Light-mode wells. `surface-sunken` is no longer dark in Default Light: the terminal, code and diff wells recess with `slate-200` instead of obsidian, so light mode has no black blocks. `diff-added` / `diff-removed` gain a deeper light pair (`green-700` / `red-700`) because the bright dark-well values lose contrast on a slate well; the dark pair is unchanged. xterm's own canvas reads the well tokens, so a terminal follows the theme instead of painting black."
@@ -12,11 +13,10 @@ changelog:
   d0-rc2: "Reconciled with pages-views-spec: per-Provider config selector, session-list-row / permission-request-card naming, MCP attachment replaces vendor-file projection."
 name: Tethys-Precision-Monochromatic
 description: |
-  The design contract for a native, high-performance desktop control plane that runs autonomous coding agents over any folder, in parallel. Built around a Tabular paradigm (icon rail + tab strip + Workspace Catalog) that expands into a four-region IDE shell (Rail/Hub | Sessions | Stage/Inspector | Action Bar/Composer). All color is a swappable Semantic Theme Contract (primitives → semantic → CSS vars); default themes are Default Dark (Obsidian Zinc) and Default Light (Clean Zinc/Slate); users ship JSON theme manifests. Precision Monochromatic chrome, Geist typography/icons, 1px hairlines, and restrained accents reserved for agent telemetry and health states. Terminology follows the ACP three-tier model — Provider (one ACP connection) / Workspace (one `cwd`) / Session (one `session/new`); see docs/pages-views-spec.md §0.
+  The design contract for a native, high-performance desktop control plane that runs autonomous coding agents over any folder, in parallel. Built around a Tabular paradigm (icon rail + tab strip + Workspace Catalog) that expands into a three-region IDE shell (Rail | Stage | Inspector) with the composer docked at the foot of the Stage and Sessions opened on demand as a drawer. All color is a swappable Semantic Theme Contract (primitives → semantic → CSS vars); default themes are Default Dark (Obsidian Zinc) and Default Light (Clean Zinc/Slate); users ship JSON theme manifests. Precision Monochromatic chrome, Geist typography/icons, 1px hairlines, and restrained accents reserved for agent telemetry and health states. Terminology follows the ACP three-tier model — Provider (one ACP connection) / Workspace (one `cwd`) / Session (one `session/new`); see docs/pages-views-spec.md §0.
 
 primitives:
   zinc-950: "#09090b"
-  zinc-700: "#27272a"
   obsidian-1000: "#050507"
   obsidian-960: "#0b0b0d"
   obsidian-940: "#0f0f12"
@@ -26,7 +26,10 @@ primitives:
   obsidian-860: "#17171a"
   obsidian-840: "#1b1b1e"
   obsidian-800: "#212124"
+  zinc-400: "#a1a1aa"
+  zinc-450: "#8e8e98"
   zinc-500: "#71717a"
+  zinc-600: "#52525b"
   zinc-300: "#bfbfc9"
   zinc-50: "#f4f4f5"
   slate-0: "#ffffff"
@@ -35,7 +38,10 @@ primitives:
   slate-100: "#f4f4f5"
   slate-200: "#e4e4e7"
   slate-300: "#d4d4d8"
+  slate-325: "#c8c8cf"
+  slate-350: "#c2c2ca"
   slate-500: "#71717a"
+  slate-600: "#63636c"
   slate-700: "#3f3f46"
   slate-900: "#18181b"
   blue-500: "#3b82f6"
@@ -68,13 +74,13 @@ themes:
     surface-active: "rgba(255, 255, 255, 0.08)"
     overlay-scrim: "rgba(0, 0, 0, 0.50)"
     hairline: "rgba(255, 255, 255, 0.08)"
-    hairline-strong: "{primitives.zinc-700}"
+    hairline-strong: "{primitives.slate-700}"
     hairline-structural: "rgba(255, 255, 255, 0.13)"
     edge-highlight: "rgba(255, 255, 255, 0.055)"
     grid-dot: "rgba(255, 255, 255, 0.12)"
     text-primary: "{primitives.zinc-50}"
     text-secondary: "{primitives.zinc-300}"
-    text-muted: "{primitives.zinc-500}"
+    text-muted: "{primitives.zinc-450}"
     text-inverse: "{primitives.zinc-950}"
     primary: "{primitives.zinc-50}"
     on-primary: "{primitives.zinc-950}"
@@ -91,6 +97,15 @@ themes:
     status-success-soft: "rgba(91, 204, 128, 0.14)"
     status-warning-soft: "rgba(236, 193, 90, 0.14)"
     status-danger-soft: "rgba(255, 138, 132, 0.14)"
+    status-interrupted: "{primitives.zinc-400}"
+    status-suspended: "{primitives.zinc-600}"
+    status-archived: "{primitives.slate-700}"
+    border-control: "{primitives.zinc-500}"
+    text-on-sunken: "{primitives.zinc-50}"
+    text-on-sunken-secondary: "{primitives.zinc-300}"
+    text-on-sunken-muted: "{primitives.zinc-450}"
+    hairline-on-sunken: "rgba(255, 255, 255, 0.10)"
+    wash-on-sunken: "rgba(255, 255, 255, 0.05)"
   default-light:
     canvas: "{primitives.slate-100}"
     surface-rail: "{primitives.slate-0}"
@@ -105,13 +120,13 @@ themes:
     surface-active: "rgba(0, 0, 0, 0.08)"
     overlay-scrim: "rgba(0, 0, 0, 0.30)"
     hairline: "rgba(0, 0, 0, 0.08)"
-    hairline-strong: "{primitives.slate-300}"
+    hairline-strong: "{primitives.slate-350}"
     hairline-structural: "rgba(0, 0, 0, 0.12)"
     edge-highlight: "rgba(255, 255, 255, 0.90)"
     grid-dot: "rgba(0, 0, 0, 0.12)"
     text-primary: "{primitives.slate-900}"
     text-secondary: "{primitives.slate-700}"
-    text-muted: "{primitives.slate-500}"
+    text-muted: "{primitives.slate-600}"
     text-inverse: "{primitives.slate-50}"
     primary: "{primitives.slate-900}"
     on-primary: "{primitives.slate-0}"
@@ -128,6 +143,15 @@ themes:
     status-success-soft: "rgba(0, 128, 58, 0.10)"
     status-warning-soft: "rgba(158, 96, 0, 0.10)"
     status-danger-soft: "rgba(205, 52, 55, 0.10)"
+    status-interrupted: "{primitives.zinc-600}"
+    status-suspended: "{primitives.zinc-400}"
+    status-archived: "{primitives.slate-325}"
+    border-control: "{primitives.slate-500}"
+    text-on-sunken: "{primitives.slate-900}"
+    text-on-sunken-secondary: "{primitives.slate-700}"
+    text-on-sunken-muted: "{primitives.slate-600}"
+    hairline-on-sunken: "rgba(0, 0, 0, 0.10)"
+    wash-on-sunken: "rgba(0, 0, 0, 0.05)"
 
 semantic:
   canvas: { var: "--tethys-canvas", role: "Global canvas background" }
@@ -143,8 +167,8 @@ semantic:
   surface-active: { var: "--tethys-surface-active", role: "Pressed / selected wash" }
   overlay-scrim: { var: "--tethys-overlay-scrim", role: "Dismiss scrim" }
   hairline: { var: "--tethys-hairline", role: "1px default divider" }
-  hairline-strong: { var: "--tethys-hairline-strong", role: "Inputs, toggles, drawer edge, Level 3-4 surface borders" }
-  hairline-structural: { var: "--tethys-hairline-structural", role: "Shell region dividers only: titlebar, rail, sessions/inspector edges, action bar, splitters" }
+  hairline-strong: { var: "--tethys-hairline-strong", role: "Drawer edge and Level 3-4 surface borders. Structure only; control edges use border-control" }
+  hairline-structural: { var: "--tethys-hairline-structural", role: "Shell region dividers only: titlebar, rail, inspector edge, splitters" }
   edge-highlight: { var: "--tethys-edge-highlight", role: "Lit top 1px of a Level 2+ surface border. Border treatment, not a shadow" }
   grid-dot: { var: "--tethys-grid-dot", role: "Dot-matrix canvas dots" }
   text-primary: { var: "--tethys-text-primary", role: "Primary text" }
@@ -164,6 +188,15 @@ semantic:
   status-success-soft: { var: "--tethys-status-success-soft", role: "Healthy surface tier: the wash behind a healthy or resolved row. Background only, never text" }
   status-warning-soft: { var: "--tethys-status-warning-soft", role: "Attention surface tier: the wash behind a pending approval or a warning row. Background only, never text, never a full perimeter" }
   status-danger-soft: { var: "--tethys-status-danger-soft", role: "Failure surface tier: the wash behind a destructive or failed row. Background only, never text" }
+  status-interrupted: { var: "--tethys-status-interrupted", role: "Dot of a session that was cut off and can be resumed. Inactive-state tier: quiet by design, 3:1 on panel and card" }
+  status-suspended: { var: "--tethys-status-suspended", role: "Dot of a session that is parked. Inactive-state tier, 2:1 on panel and card; its reason is also in words (P2)" }
+  status-archived: { var: "--tethys-status-archived", role: "Dot of a session put away. Inactive-state tier, the quietest, 1.5:1 on panel and card; its reason is also in words (P2)" }
+  border-control: { var: "--tethys-border-control", role: "The stroke of an input, textarea, toggle track, radio and checkbox. Clears 3:1 on every boundary surface (WCAG 1.4.11); hairline-strong no longer does this job" }
+  text-on-sunken: { var: "--tethys-text-on-sunken", role: "Primary text drawn on surface-sunken. Equals text-primary in both default themes; separate so a custom theme can keep a dark well on a light base" }
+  text-on-sunken-secondary: { var: "--tethys-text-on-sunken-secondary", role: "Secondary text drawn on surface-sunken" }
+  text-on-sunken-muted: { var: "--tethys-text-on-sunken-muted", role: "Muted text drawn on surface-sunken: line numbers, hunk headers, terminal prompt" }
+  hairline-on-sunken: { var: "--tethys-hairline-on-sunken", role: "1px divider inside a well: gutter rule, diff hunk edge" }
+  wash-on-sunken: { var: "--tethys-wash-on-sunken", role: "Hover / hunk-header wash inside a well; surface-hover reads wrong on a well whose tone does not follow the theme" }
   diff-added: { var: "--tethys-diff-added", role: "Added lines and `+` gutter mark in diff-viewer. Separate from status-success so a theme can restyle diffs (e.g. colour-blind-safe) without touching health colours" }
   diff-removed: { var: "--tethys-diff-removed", role: "Removed lines and `−` gutter mark in diff-viewer. Separate from status-danger for the same reason" }
 
@@ -258,11 +291,8 @@ spacing:
   titlebar: 40px
 
 layout:
-  shell-left: 264px
-  shell-left-collapsed: 48px
-  shell-threads: 280px
+  shell-threads: 280px      # the Sessions drawer's width
   shell-inspector: 360px
-  shell-actionbar: 56px
   splitter-hit: 6px
   palette-width: 600px
   palette-height: 400px
@@ -272,19 +302,19 @@ layout:
   stage-measure: 760px
   stage-min: 560px
   popover-selector: 560px
-  breakpoints: { sessions-icon: 800px, inspector-overlay: 1100px }
+  breakpoints: { inspector-overlay: 1100px }
 
 # Paint order. Higher paints above lower. The Esc unstack order (Accessibility & Keyboard Map)
 # is derived from this table, topmost first, and is not maintained separately.
 stacking:
-  base: 0            # canvas, rails, stage, docked Inspector, action bar
-  drawer-scrim: 10   # {semantic.overlay-scrim} behind an overlay Inspector, peek drawer, approval drawer
-  drawer: 20         # overlay Inspector, workspace-peek-drawer, approval-queue-drawer
+  base: 0            # canvas, rails, stage, docked Inspector, prompt card
+  drawer-scrim: 10   # {semantic.overlay-scrim} behind an overlay Inspector, Sessions drawer, peek drawer, approval drawer
+  drawer: 20         # overlay Inspector, Sessions drawer, workspace-peek-drawer, approval-queue-drawer
   dialog-scrim: 30
   dialog: 40         # modal-dialog, workspace-trust-dialog, login-dialog
   sheet: 50          # terminal-sheet (opens from login-dialog CLI passthrough, so above dialog)
   palette: 60        # command-palette
-  popover: 70        # model-selector-popover, action-bar overflow, provider-popover
+  popover: 70        # model-selector-popover, context-bar overflow, provider-popover
   toast: 80
   tooltip: 90
 
@@ -316,8 +346,9 @@ components:
   sessions-column:
     backgroundColor: "{semantic.surface-panel}"
     width: "{layout.shell-threads}"
-    borderRight: "1px solid {semantic.hairline-structural}"
+    edge: "1px {semantic.hairline-strong} on its trailing edge, like every Level 3 drawer"
     header: "12px padding, 1px hairline bottom"
+    presentation: "the body of the Sessions drawer (Level 3, `{stacking.drawer}` with `{semantic.overlay-scrim}` at `{stacking.drawer-scrim}`), never a docked region. Opened from the titlebar Sessions toggle; focus is trapped and returns to the toggle on close; `Esc`, a scrim click, or choosing a session dismisses it. Session switching is a moment of navigation, not a standing surface, so the Stage keeps its width"
   stage:
     backgroundColor: "{semantic.canvas}"
     measure: "{layout.stage-measure}"
@@ -350,6 +381,7 @@ components:
     padding: "{spacing.md}"
     maxWidth: 384px
     typography: "{typography.body-sm}"
+    stateTreatment: "a state (`success`, `warning`, `danger`) is a 16px leading Geist icon in the state's own token and a 2px left rule in the same token. The perimeter stays the neutral `{semantic.hairline-strong}` on every side, exactly as on the other Level 4 surfaces, and a `default` toast has neither icon nor rule. The icon means a state is never carried by hue alone"
   tooltip:
     backgroundColor: "{semantic.surface-overlay}"
     border: "1px solid {semantic.hairline-strong}"
@@ -378,9 +410,9 @@ components:
     awaiting: "{semantic.status-warning}"
     healthy: "{semantic.status-success}"
     error: "{semantic.status-danger}"
-    interrupted: "{semantic.text-muted}"
-    suspended: "{semantic.hairline-strong}"
-    archived: "{semantic.hairline}"
+    interrupted: "{semantic.status-interrupted}"
+    suspended: "{semantic.status-suspended}"
+    archived: "{semantic.status-archived}"
     unknown: "{semantic.accent-agent-idle}"
     authRequired: "{semantic.status-warning}"
     shape: "filled disc for every state except `awaiting`"
@@ -389,7 +421,7 @@ components:
     ringWidthInline: 1.5px
     halo: "a soft ring at 20% of the state colour, built with `color-mix` from the marker's own token so it needs no extra variable, drawn in a box one step larger than the marker (`size` + 4px). The halo is what animates; the marker itself stays crisp at full opacity, so 'alive' never means 'blurry'. Rendered only for states that breathe"
     motion: "`running` and `awaiting` breathe the halo per {motion.breathe} / {motion.breatheAwaiting}; every other state is static ({motion.stateMotion}). Motion is decoration: state must stay legible with it suspended (prefers-reduced-motion, unfocused window), so the permitted differentiators between `running` and `awaiting` are hue AND shape together, with rate a third channel that is never load-bearing"
-    rule: "`awaiting` (ring) is a session/turn state. Provider amber (`auth_required`, detected-but-disabled) stays a filled disc so the two amber meanings never collapse when the breathe is off. Applies identically on chips, topology nodes, session rows and the rail; `provider-row` additionally keeps its status subtext"
+    rule: "`awaiting` (ring) is a session/turn state. Provider amber (`auth_required`, detected-but-disabled) stays a filled disc so the two amber meanings never collapse when the breathe is off. Applies identically on chips, session rows and the rail; `provider-row` additionally keeps its status subtext"
     a11y: "role=status with aria-label and title carrying the state name — unchanged; shape is for glanceable, non-hover reading"
   state-badge:
     backgroundColor: "{semantic.surface-hover}"
@@ -398,7 +430,7 @@ components:
     height: 20px
     typography: "{typography.label-md}"
     geometry: "{components.approval-inbox-pill} minus the count — `status-dot.sizeInline` + the state name"
-    colour: "the dot and the label take the state's own token per theme: `running` {semantic.accent-agent-active}, `awaiting` {semantic.status-warning}, `error` {semantic.status-danger}, `idle` / `interrupted` {semantic.text-muted}. Never a fixed colour, and never `text-primary` — the badge's whole job is to carry the state"
+    colour: "the dot and the label take the state's own token per theme: `running` {semantic.accent-agent-active}, `awaiting` {semantic.status-warning}, `error` {semantic.status-danger}, `interrupted` {semantic.status-interrupted}, `idle` {semantic.text-muted}. `suspended` and `archived` take their own dot token but keep the label in {semantic.text-muted}: those dots sit below text contrast by design, so the label is what makes the state legible. Never a fixed colour, and never `text-primary` — the badge's whole job is to carry the state"
     motion: "the dot breathes for `running` / `awaiting` and is static otherwise ({motion.stateMotion})"
     scope: "The labelled form of `status-dot`: used by the `thread-inspector` header, the `tab-item.statusMarker` on the active tab, and the `session-list-row`. A surface that needs the state named in words renders this, not a bare dot"
     a11y: "the state name is text, so the badge is legible with the dot ignored; the dot keeps `role=status` and its own label"
@@ -427,7 +459,32 @@ components:
     padding: 2px 8px
     branch: "outline pill, 1px {semantic.hairline} border, {semantic.text-secondary} text, the session's branch; `maxWidth` 160px, ellipsis truncation with the full name as tooltip"
     noGit: "muted pill, {semantic.surface-hover} fill, {semantic.text-muted} text, reads `no git`. Not a button. Tooltip: `No git — edits are applied in place and cannot be reverted`. This is a first-class state, not an error: no danger or warning colour"
-    priority: "never folds into the action-bar overflow"
+    priority: "never folds into the context-bar overflow"
+  mode-pill:
+    backgroundColor: "{semantic.surface-hover}"
+    backgroundHover: "{semantic.surface-active}"
+    textColor: "{semantic.text-secondary}"
+    typography: "{typography.mono-micro}"
+    rounded: "{rounded.xs}"
+    height: 20px
+    padding: 0 6px
+    label: "`Mode · <current value name>`, for example `Mode · Supervised`"
+    scope: "The one home of the ACP `mode` category (P5): a Provider's `mode` option is never a `composer-config-chip` and never a row in the `session-config-panel`. Sits in the `prompt-card` context bar"
+    absent: "a Provider that declares no `mode` option renders no pill, never a disabled one"
+    popover: "a `listbox` at `{stacking.popover}` opening upward from the pill, one row per value, the current value `aria-selected`"
+    priority: "folds at 40 (`prompt-card.contextBarFold`)"
+    a11y: "a `button` with `aria-haspopup=listbox` and `aria-expanded`"
+  diff-summary-pill:
+    textColor: "{semantic.text-secondary}"
+    typography: "{typography.mono-micro}"
+    border: "1px solid {semantic.hairline-strong}"
+    backgroundHover: "{semantic.surface-hover}"
+    rounded: "{rounded.xs}"
+    padding: 2px 8px
+    content: "`N files`, then `+a` in {semantic.diff-added} and `−b` in {semantic.diff-removed}, two colours as in `diff-viewer.stat`. Never a staged-hunk count: `git.stage` is path-level"
+    action: "opens the Inspector, where `Approve & Commit` lives, so the pill is the one pinned primary path to the decision (P8)"
+    absent: "not rendered without a git or review capability, nor while the session has no changed files: never an empty `0 files` pill"
+    priority: "folds at 50 (`prompt-card.contextBarFold`)"
   shell-splitter:
     backgroundColor: "{semantic.hairline-structural}"
     hitArea: "{layout.splitter-hit}"
@@ -465,6 +522,7 @@ components:
     rounded: "{rounded.lg}"
     padding: "{spacing.lg}"
     height: 220px
+    attention: "while a session in the workspace is awaiting approval the card takes a {semantic.status-warning-soft} wash over its own tone and the header `status-dot` renders as the `awaiting` ring, breathing. It has no left rule: the 2px left bar already means `selected` on this card (`workspace-card-selected`), so attention is carried by the wash and the ring alone. Attention and selection coexist without colliding (State Precedence 3): a selected card in attention shows the accent bar, the wash and the ring"
   workspace-card-hover:
     backgroundColor: "{semantic.surface-card-hover}"
     border: "1px solid {semantic.hairline-strong}"
@@ -492,7 +550,7 @@ components:
     glyphOnly: "renders icon-only source glyphs (e.g. folder, git branch) without redundant textual labels"
     legacyAlias: workspace-source-glyph
   session-topology-canvas:
-    deprecated: "Removed. Obsolete canvas visualization is superseded by clean workspace cards and aggregate thread inspectors."
+    deprecated: "Superseded by clean workspace cards and aggregate thread inspectors. Still rendered by the shipping `workspace-card` until the workspace-card revisit removes it; no new surface references it"
   git-init-upsell-chip:
     backgroundColor: "{semantic.surface-hover}"
     textColor: "{semantic.text-secondary}"
@@ -544,6 +602,8 @@ components:
     padding: "{spacing.lg}"
     width: "{layout.prompt-width}"
     topContextPills: "collapsible context pills pinned across the top edge: git context (`isolation-pill`), provider/model selector pill with popover trigger (`model-selector-pill`), execution mode pill (`mode-pill`), and diff summary pill (`diff-summary-pill`)"
+    contextBarFold: "the context bar shares the card's content width and folds when its pills do not fit, lowest priority first: `usage-bar` 20, `queue-count` 30, `mode-pill` 40, `diff-summary-pill` 50, the provider/config pill 60, the permission-mode pill 70. `isolation-pill` (90) never folds, and neither does the stop control in the lower bar (100). A pill a Provider surface registers with no declared priority folds before all of them"
+    overflowTrigger: "a 20px `•••` button at the end of the context bar, `aria-haspopup=dialog`, opening a `popover` at `{stacking.popover}` that lists the folded items in the same order. When the folded set holds a non-empty `queue-count` the trigger carries the same `{semantic.status-warning}` dot the count does, so a pending queue is never hidden by narrowing the window"
     composerGuide: "subtle command guide in input placeholder (`/ commands · @ files · $ skills`); pills removed from composer body"
     threadLowerBar: "docked in-thread composer's lower bar: mention triggers, attachment chips, and single dual-state `action-icon-button` on the right"
   composer-suggestion-popover:
@@ -661,7 +721,7 @@ components:
     width: 360px
     stacking: "{stacking.popover}"
     scope: "Hosts a request from the Provider that is NOT one of the two ACP-standard shapes — a vendor-extension notification such as `_kiro.dev/mcp/oauth_request`. `session/request_permission` is `permission-request-card` and `elicitation/create` is `elicitation-card`; both are inline stage entries and neither is this component. An extension notification is not anchored to a point in the transcript, so it cannot be an inline entry; it interrupts"
-    anchor: "the Provider's `model-selector-pill` in the action bar, so the request is visibly attributed to the Provider that raised it"
+    anchor: "the Provider's `model-selector-pill` in the `prompt-card` context bar, so the request is visibly attributed to the Provider that raised it"
     content: "a title, a body rendered from the request's schema with `schema-field-group` spacing, and the Provider's own action set in the Provider's order — never a hardcoded approve/reject pair, the same rule as `permission-request-card`. A destructive-kind action uses the Universal State Matrix `destructive` row"
     focus: "traps `Tab` while open and restores focus to the invoker on `Esc`/close, unlike the inline cards. Because it traps focus it never opens over another trap: a request that arrives while a dialog or sheet is open waits in the Provider's pending list, the pill shows the pending count, and it opens when the topmost trap closes"
     pendingTreatment: "{components.permission-request-card.pendingTreatment}"
@@ -697,7 +757,7 @@ components:
     rounded: "{rounded.sm}"
     padding: 4px 8px
     height: 28px
-    scope: "The category-aware Model and Effort controls in the docked composer's lower bar, taken from the Provider's session config options by `category`: `model` becomes the Model chip and `thought_level` the Effort chip. `mode` is not a chip: its one home is the action bar's mode pill. `model_config` and every other select or boolean option live only in the full `session-config-panel` behind the Provider pill. Each category has exactly one home; a control is never rendered twice"
+    scope: "The category-aware Model and Effort controls in the docked composer's lower bar, taken from the Provider's session config options by `category`: `model` becomes the Model chip and `thought_level` the Effort chip. `mode` is not a chip: its one home is the `mode-pill` in the `prompt-card` context bar. `model_config` and every other select or boolean option live only in the full `session-config-panel` behind the Provider pill. Each category has exactly one home; a control is never rendered twice"
     absent: "a Provider that declares no option for a category renders no chip for it — never a disabled empty chip"
     label: "reads the current value; the option name is shown only when the value is ambiguous on its own (`Effort · High`, not bare `High`)"
     timing: "a change is allowed while a turn is running and applies from the next turn; the popover states this in a one-line consequence caption (Interaction Patterns P11)"
@@ -831,9 +891,11 @@ components:
     stepDone: "a completed step collapses to a muted check and its title; only the in-progress step keeps full weight (Interaction Patterns P1)"
   diff-viewer:
     backgroundColor: "{semantic.surface-sunken}"
-    border: "1px solid {semantic.hairline}"
+    border: "1px solid {semantic.hairline-on-sunken}"
+    textColor: "{semantic.text-on-sunken}"
     rounded: "{rounded.md}"
     typography: "{typography.mono-code}"
+    syntax: "syntax colours follow the active theme and are never a fixed dark palette on a light well. Each token carries a colour for both themes and the stylesheet picks one, so a theme swap repaints without re-highlighting (the hot-swap budget in `theming.hotSwap`). Every token clears 4.5:1 against `{semantic.surface-sunken}` of its own theme, by construction: a palette colour that misses is moved along its own hue until it clears (`packages/diff/src/highlight/shiki.ts`). No bundled light theme clears it on the slate well, which is why the light palette is derived rather than picked"
     stat: "{typography.mono-micro}. `+N` and `−N` are two colours, never one: `+N` in {semantic.diff-added}, `−N` in {semantic.diff-removed}. Rendered in the file header beside the path and in the {components.thread-inspector} rollup band. A single-coloured stat makes the reader parse the sign to tell the sides apart; the {components.diff-summary-pill} already splits them and is the precedent"
     statAdded: "{semantic.diff-added}"
     statRemoved: "{semantic.diff-removed}"
@@ -842,8 +904,8 @@ components:
     addedWordFill: "{semantic.diff-added} at 32%"
     removedWordFill: "{semantic.diff-removed} at 32%"
     gutterMark: "`+` / `−` glyph in solid {semantic.diff-added} / {semantic.diff-removed}; present on every changed line so colour is never the sole carrier"
-    lineNumber: "{typography.mono-micro} in {semantic.text-muted}"
-    hunkHeader: "{semantic.surface-hover} fill, {typography.mono-micro}, {semantic.text-muted}"
+    lineNumber: "{typography.mono-micro} in {semantic.text-on-sunken-muted}"
+    hunkHeader: "{semantic.wash-on-sunken} fill, {typography.mono-micro}, {semantic.text-on-sunken-muted}"
     collapsedContext: "one hunk-header-style row reading `N unmodified lines`, expandable in place; unchanged context never competes with the edit"
   usage-bar:
     size: 16px
@@ -873,10 +935,10 @@ components:
     rounded: "{rounded.xs}"
     padding: 2px 6px
   sync-grid:
-    deprecated: "Removed in `d0-rc6`. The Servers × Providers attachment matrix is superseded by the per-Provider `provider-tab` + `config-file-row` + `code-editor-well` editor on Settings / MCP (docs/pages-views-spec.md §5.4). Attachment is still a real runtime fact (docs/architecture.md §11.2); it is shown in the editor's footer note rather than as a matrix"
+    deprecated: "Deprecated in `d0-rc6` and still rendered by Settings / MCP until the `provider-tab` editor chunk lands and removes it; no new surface references it. The Servers × Providers attachment matrix is superseded by the per-Provider `provider-tab` + `config-file-row` + `code-editor-well` editor on Settings / MCP (docs/pages-views-spec.md §5.4). Attachment is still a real runtime fact (docs/architecture.md §11.2); it is shown in the editor's footer note rather than as a matrix"
     legacyAlias: mcp-attachment-grid
   sync-grid-cell:
-    deprecated: "Removed with `sync-grid` (`d0-rc6`). A cell's five attachment states now surface only as the footer's prose summary; the exhaustive `AttachmentState` mapping (`mcp.attachments`) is unchanged in the engine"
+    deprecated: "Deprecated with `sync-grid` (`d0-rc6`) and removed with it. A cell's five attachment states now surface only as the footer's prose summary; the exhaustive `AttachmentState` mapping (`mcp.attachments`) is unchanged in the engine"
     legacyAlias: mcp-attachment-cell
   provider-row:
     backgroundColor: "transparent"
@@ -1053,11 +1115,11 @@ components:
     thumbSize: 14px
     thumbColor: "{semantic.primary}"
     rounded: "{rounded.full}"
-    trackInactive: "{semantic.hairline-strong}"
+    trackInactive: "{semantic.border-control}"
     trackActive: "{semantic.accent-toggle-active}"
   stepper-input:
     backgroundColor: "{semantic.surface-panel}"
-    border: "1px solid {semantic.hairline}"
+    border: "1px solid {semantic.border-control}"
     rounded: "{rounded.sm}"
     typography: "{typography.mono-code}"
     buttonSize: 24px
@@ -1120,11 +1182,11 @@ Two-tier contract: `primitives` (raw palette) → `semantic` interface (`surface
 All rows are `{semantic.*}` → `var(--tethys-*)`, resolved per active theme. Hex below shows Default Dark / Default Light.
 
 ### Surfaces
-The shell is **chrome raised over a deep stage**: titlebar, rail and action bar sit above the canvas, the sessions column and inspector sit between, and the stage is the deepest plane. Every pair of surfaces that abut must clear a perceptual gap (CIE L*), enforced by `packages/ui/src/theme/elevation.test.ts`. Depth is tone alone, so the ramp is wide on purpose.
+The shell is **chrome raised over a deep stage**: titlebar and rail sit above the canvas, the inspector sits between, and the stage is the deepest plane; the Sessions drawer and the prompt card are Level 3 surfaces raised over it. Every pair of surfaces that abut must clear a perceptual gap (CIE L*), enforced by `packages/ui/src/theme/elevation.test.ts`. Depth is tone alone, so the ramp is wide on purpose.
 
 - **Canvas Base** (`{semantic.canvas}` — dark `#0b0b0d` / light `#f4f4f5`): The stage. Deepest plane; default background for empty states and canvas containers.
-- **Surface Rail** (`{semantic.surface-rail}` — dark `#161619` / light `#ffffff`): Titlebar, activity rail, action bar. Raised chrome, >= 3 L* above the canvas.
-- **Surface Panel** (`{semantic.surface-panel}` — dark `#111114` / light `#f9f9fa`): Sessions column and inspector, between chrome and stage.
+- **Surface Rail** (`{semantic.surface-rail}` — dark `#161619` / light `#ffffff`): Titlebar and activity rail. Raised chrome, >= 3 L* above the canvas.
+- **Surface Panel** (`{semantic.surface-panel}` — dark `#111114` / light `#f9f9fa`): Inspector and the Sessions drawer's list, between chrome and stage.
 - **Surface Card** (`{semantic.surface-card}` — dark `#131316` / light `#ffffff`): Workspace card body in the catalog view.
 - **Surface Card Hover** (`{semantic.surface-card-hover}` — dark `#17171a` / light `#f4f4f5`): Raised card state on pointer interaction.
 - **Surface Elevated** (`{semantic.surface-elevated}` — dark `#1b1b1e` / light `#ffffff`): Active tabs, drawers, prompt containers, active segmented buttons.
@@ -1135,14 +1197,21 @@ The shell is **chrome raised over a deep stage**: titlebar, rail and action bar 
 
 ### Dividers & Accents
 - **Hairline** (`{semantic.hairline}` — dark `rgba(255,255,255,0.08)` / light `rgba(0,0,0,0.08)`): 1px borders surrounding cards, tab borders, panel dividers, popover frames, and provider row separators.
-- **Hairline Strong** (`{semantic.hairline-strong}` — dark `#27272a` / light `#d4d4d8`): Input strokes, toggle inactive tracks, and the border of every Level 3 and Level 4 surface (drawers, prompt card, popovers, palette, modals).
-- **Hairline Structural** (`{semantic.hairline-structural}` — dark `rgba(255,255,255,0.13)` / light `rgba(0,0,0,0.12)`): Shell region dividers only — titlebar bottom, rail right, sessions/inspector edges, action bar top, splitters. Heavier than Hairline so the shell skeleton outweighs component borders such as keycaps.
+- **Hairline Strong** (`{semantic.hairline-strong}` — dark `#3f3f46` / light `#c2c2ca`): The border of every Level 3 and Level 4 surface (drawers, prompt card, popovers, palette, modals). Structure only: it has to be seen (1.4:1 or more on overlay and elevated), and it no longer draws control edges. That is `{semantic.border-control}`.
+- **Hairline Structural** (`{semantic.hairline-structural}` — dark `rgba(255,255,255,0.13)` / light `rgba(0,0,0,0.12)`): Shell region dividers only — titlebar bottom, rail right, inspector left edge, splitters. Heavier than Hairline so the shell skeleton outweighs component borders such as keycaps.
 - **Edge Highlight** (`{semantic.edge-highlight}` — dark `rgba(255,255,255,0.055)` / light `rgba(255,255,255,0.9)`): The lit top 1px of a Level 2+ surface, drawn as `inset 0 1px 0`. It is a border treatment, not a shadow: it does not cast, blur, or extend beyond the element.
 - **Accent Agent Active** (`{semantic.accent-agent-active}` — dark `#56cde3` / light `#007991`): Agent-active indicator signaling live ACP streaming, active process execution, or an active agent session (`status-active-session` alias).
 - **Accent Focus** (`{semantic.accent-focus}` — `#3b82f6` both): Keyboard focus boundaries and toggle active track (`accent-toggle-active` alias).
 - **Health States**: `{semantic.status-danger}` (dark `#ff8a84` / light `#cd3437`, CLI missing), `{semantic.status-warning}` (dark `#ecc15a` / light `#9e6000`, disabled/unauthenticated/awaiting), `{semantic.status-success}` (dark `#5bcc80` / light `#00803a`, healthy handshake). Reserved strictly for provider/agent health; never for decorative chrome. Marker/text tier — see *State colour* below.
-- **Diff Lines** (`{semantic.diff-added}` / `{semantic.diff-removed}` — dark `#5bcc80` / `#fe6c66`, light `#046c4e` / `#b91c1c`): Added and removed lines in `diff-viewer` only. They are deliberately not the health tokens, so the rule above still holds. Each theme carries its own pair because the tokens are read against `{semantic.surface-sunken}`, which is dark in dark and slate in light: the bright dark-well values only reach 2.0:1 on the slate well, so light deepens them to `green-700` / `red-700` (5.1:1 each). Colour is never the only carrier: every changed line also has a `+` / `−` glyph in the gutter.
+- **Diff Lines** (`{semantic.diff-added}` / `{semantic.diff-removed}` — dark `#5bcc80` / `#ff8a84`, light `#046c4e` / `#b91c1c`): Added and removed lines in `diff-viewer` only. They are deliberately not the health tokens, so the rule above still holds. Each theme carries its own pair because the tokens are read against `{semantic.surface-sunken}`, which is dark in dark and slate in light: the bright dark-well values only reach 2.0:1 on the slate well, so light deepens them to `green-700` / `red-700` (5.1:1 each). Colour is never the only carrier: every changed line also has a `+` / `−` glyph in the gutter.
 - **Overlay Scrim** (`{semantic.overlay-scrim}` — dark `rgba(0,0,0,0.50)` / light `rgba(0,0,0,0.30)`): Dismiss layer behind modal popovers and narrow-window drawers. No blur.
+
+### Muted text, control edges and inactive states
+
+- **Text Muted** (`{semantic.text-muted}` — dark `#8e8e98` / light `#63636c`): Placeholders, telemetry, timestamps, secondary counts. It is read as text, so it clears 4.5:1 on every surface of its theme, `{semantic.surface-sunken}` included (`contrast.test.ts`). The shared `#71717a` it replaces measured 3.3-4.2:1 in dark and 3.8:1 on the light well; that value survives only in `accent-agent-idle` and `border-control`, which are shapes, not text.
+- **Border Control** (`{semantic.border-control}` — `#71717a` both): The stroke of an input, textarea, toggle track, radio and checkbox. At 3:1 or more on every boundary surface (WCAG 1.4.11) because it is the only cue that a control is a control. Validation failure still swaps in `{semantic.status-danger}`.
+- **On-sunken family** (`{semantic.text-on-sunken}`, `{semantic.text-on-sunken-secondary}`, `{semantic.text-on-sunken-muted}`, `{semantic.hairline-on-sunken}`, `{semantic.wash-on-sunken}`): text, divider and wash for anything drawn on `{semantic.surface-sunken}` — terminal, code block, diff viewer. In both default themes they equal the ordinary text and hairline tokens of that theme's well; they exist so a custom theme can keep a dark well on a light base without the text flipping with the theme. Content on a well reads these, never `text-*`.
+- **Inactive states** (`{semantic.status-interrupted}` dark `#a1a1aa` / light `#52525b`, `{semantic.status-suspended}` `#52525b` / `#a1a1aa`, `{semantic.status-archived}` `#3f3f46` / `#c8c8cf`): the dot of a session that is stopped and not running. Quiet by design and ordered interrupted > suspended > archived, each with its own floor on `surface-panel` and `surface-card` rather than one shared ratio: 3:1, 2:1, 1.5:1. A dot below 3:1 is acceptable only because P2 puts the reason in words in the same row (`state-badge`, or `provider-row` subtext); a bare dot for these states is a bug. They never breathe.
 
 ### State colour
 
@@ -1151,7 +1220,7 @@ Every state colour is drawn from one family (`primitives.signal-*`), and it is u
 - **Marker/text tier** — `{semantic.accent-agent-active}`, `{semantic.status-success}`, `{semantic.status-warning}`, `{semantic.status-danger}`, `{semantic.diff-added}`, `{semantic.diff-removed}`. Used for a `status-dot`, a 1–2px rule, a label, a gutter mark, a `+N` / `−N` stat. Each pair clears **4.5:1 as text** on every surface of its theme (enforced by `packages/ui/src/theme/contrast.test.ts`), which is why Default Light's tones are deep: a "friendlier" light amber at `#d97706` measured 2.9:1 and failed. Lightness in light mode has to come from area, not from the hue.
 - **Surface tier** — `{semantic.status-success-soft}`, `{semantic.status-warning-soft}`, `{semantic.status-danger-soft}`. A 10–14% wash of the same hue, for the background of a card, row or rule that is *in* that state. Background only: never text, never a border on its own, and it carries no contrast requirement because nothing is read on top of it that is not already readable on `{semantic.surface-card}`. Where a *border* needs the soft treatment rather than a fill, it is the `border-warning-soft` utility at 45% — a 10% fill is invisible as a 1px line.
 
-**State colour never paints a full perimeter around a content surface** — a card, a panel, or a row that holds content or a decision. It paints the marker, the label, a 2px left rule, or a ≤14% wash (`{components.permission-request-card.pendingTreatment}`). A saturated outline is the loudest way to report a state and the most ink for the least information: at a glance it says *something is wrong here* without saying what, and on a column of rows it is pure visual debt. A **compact control** is the exception: on a ≤28px chip, pill or badge (and on an input or button that is itself in the error or `destructive` state) the border *is* the control's shape and stays — `session-item-chip.pendingBorder`, `input` on validation failure, `button` `destructive`, `stop-control.graceElapsed`.
+**State colour never paints a full perimeter around a content surface** — a card, a panel, or a row that holds content or a decision. It paints the marker, the label, a 2px left rule, or a ≤14% wash (`{components.permission-request-card.pendingTreatment}`). The wash is painted over the surface's own tone, never in place of it (`wash-warning`, an image layer): on an opaque surface such as a card, a session row or a popover, a translucent background would let whatever is behind show through and change the surface's tone. A surface that already sits directly on the canvas (`permission-request-card`, `turn-notice`) is unaffected, since over the canvas the two are the same. A saturated outline is the loudest way to report a state and the most ink for the least information: at a glance it says *something is wrong here* without saying what, and on a column of rows it is pure visual debt. A **compact control** is the exception: on a ≤28px chip, pill or badge (and on an input or button that is itself in the error or `destructive` state) the border *is* the control's shape and stays — `session-item-chip.pendingBorder`, `input` on validation failure, `button` `destructive`, `stop-control.graceElapsed`.
 
 ## Typography
 
@@ -1193,19 +1262,18 @@ The interface relies exclusively on **Geist Sans** for UI hierarchy, **Geist Mon
 Four resizable regions (`UI-01`). Widths and breakpoints are the `layout:` tokens; what each region contains is in `docs/pages-views-spec.md` §1 and §4.
 
 ```
-┌────┬──────────────┬──────────────────────┬───────────────────┐
-│Rail│ Workspaces   │ Sessions             │ Stage + Inspector │
-│48px│ 264px → 48px │ 280px                │ flex              │
-│    │              │                      │ ActionBar 56px    │
-│    │              │                      │ Composer docked   │
-└────┴──────────────┴──────────────────────┴───────────────────┘
+┌────┬───────────────────────────────┬───────────────────┐
+│Rail│ Stage (flex, min 560px)       │ Inspector 360px   │
+│48px│   Prompt card docked, 820px   │ (40px when        │
+│    │                               │  collapsed)       │
+└────┴───────────────────────────────┴───────────────────┘
+   Sessions: an on-demand overlay drawer, 280px, from the titlebar toggle
 ```
 
-* **Rail** `{spacing.rail}`: `nav-rail`, `20px` icons on `36px` targets. **Hub** `{layout.shell-left}`, collapsing to `{layout.shell-left-collapsed}`.
-* **Sessions** `{layout.shell-threads}`: collapses to an icon strip below `{layout.breakpoints.sessions-icon}`.
-* **Stage**: flex, never narrower than `{layout.stage-min}` without the Inspector switching to overlay mode; text holds to `{layout.stage-measure}`. The Stage itself has no overlay mode.
-* **Inspector** `{layout.shell-inspector}`: collapses to an overlay drawer below `{layout.breakpoints.inspector-overlay}`. **Overlay mode is the Inspector's, and only the Inspector's:** it renders at `{stacking.drawer}` (Level 3) over the Stage with a `{semantic.overlay-scrim}` at `{stacking.drawer-scrim}`, is opened from the action bar diff-summary pill or the tab strip, and dismisses on `Esc` or scrim click. **Open limitation (`d0-rc5`):** the threshold is the fixed `inspector-overlay` breakpoint, but the Stage reaches `{layout.stage-min}` only at `48 + 264 + 280 + 360 + 560 = 1512px` with every region expanded. Between `1100px` and `1512px` a docked Inspector leaves the Stage under its minimum, and at `1280px` it leaves 328px. The fix is a collapse ladder (Workspaces hub, then Sessions, then Inspector, each triggered by the Stage falling below `stage-min`), which changes an accepted breakpoint and is not decided here.
-* **Action Bar** `{layout.shell-actionbar}`, with the composer docked centered at `{layout.prompt-width}` and a floating `{layout.popover-selector}` variant inside the peek and queue drawers.
+* **Rail** `{spacing.rail}`: `nav-rail`, `20px` icons on `36px` targets. There is no docked Hub column: Workspaces is a view rendered on the Stage.
+* **Sessions** `{layout.shell-threads}`: not a docked region. `sessions-column` renders inside an overlay drawer at `{stacking.drawer}` (Level 3) over the Stage with a `{semantic.overlay-scrim}` at `{stacking.drawer-scrim}`, opened from the titlebar Sessions toggle, dismissed by `Esc`, a scrim click or choosing a session, with focus trapped inside and restored to the toggle.
+* **Stage**: flex, never narrower than `{layout.stage-min}`; text holds to `{layout.stage-measure}`. The Stage itself has no overlay mode. The `prompt-card` docks at its foot, centered, at `min({layout.prompt-width}, 100% - 96px)`, with a floating `{layout.popover-selector}` variant inside the peek and queue drawers.
+* **Inspector** `{layout.shell-inspector}`: docked at `{layout.breakpoints.inspector-overlay}` and wider, and an overlay drawer below it. **Overlay mode is the Inspector's, and only the Inspector's:** it renders at `{stacking.drawer}` (Level 3) over the Stage with a `{semantic.overlay-scrim}` at `{stacking.drawer-scrim}`, is opened from the `diff-summary-pill` in the prompt card's context bar or from the tab strip, and dismisses on `Esc` or scrim click. Docked, it collapses to a 40px rail that keeps the session's `status-dot`. **The Stage invariant:** the docked layout needs `48 + 560 + 360 = 968px`, which is below the 1100px threshold, so whenever the Inspector is docked the Stage holds `{layout.stage-min}` with 132px to spare. `d0-rc5` left this open because a docked Sessions column and a Hub column also claimed width; with neither, no collapse ladder is needed. The arithmetic is enforced in `apps/desktop/src/shell/shell-layout.test.ts`.
 * **Splitters** are `shell-splitter`; **palette** is `command-palette`, Level 4.
 
 ## Elevation & Depth
@@ -1247,7 +1315,7 @@ Every interactive component implements these 7 states + loading/empty with ident
 | `loading` | skeleton pulse `{semantic.surface-hover}`↔`{semantic.surface-active}` `{motion.pulse}` + `16px` Geist spinner in `{semantic.text-muted}` |
 | `empty` | `24px` hero Geist icon in `{semantic.text-muted}` + `body-sm` muted copy + primary action button |
 
-Apply to: pill, popover cells, cards, chips/rows, session rows, provider rows, provider tabs, toggle, stepper, splitter, palette rows, tab items, topology nodes, message/plan/tool/tool-run-group/subagent/notice/permission/elicitation/diff/skill-row/command-row/mcp-server-form/profile/process/onboarding/trust-dialog/login-dialog/keybinding, composer config chips, attachment chips and activity-ledger rows below. Destructive appears on: discard hunk, delete thread/workspace, revoke trust, a Provider option whose kind rejects, the `SIGKILL` end of the cancellation ladder, rollback destructive confirm, delete command.
+Apply to: pill, popover cells, cards, chips/rows, session rows, provider rows, provider tabs, toggle, stepper, splitter, palette rows, tab items, message/plan/tool/tool-run-group/subagent/notice/permission/elicitation/diff/skill-row/command-row/mcp-server-form/profile/process/onboarding/trust-dialog/login-dialog/keybinding, composer config chips, attachment chips and activity-ledger rows below. Destructive appears on: discard hunk, delete thread/workspace, revoke trust, a Provider option whose kind rejects, the `SIGKILL` end of the cancellation ladder, rollback destructive confirm, delete command.
 
 ### State Precedence
 
@@ -1307,7 +1375,7 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 
 * **axe-core gates (`M1.6`)**: every surface passes contrast (theming rules), `aria` roles for custom controls (pill `combobox`, popover `listbox/option`, drawer/dialog `dialog`, tabs `tablist/tab`, switch `switch`, stepper `spinbutton`, splitter `separator`, permission-mode radios `radiogroup`, plan steps `list` with `aria-current` on the in-progress step, `usage-bar` `img` with an `aria-label` reading the usage figure, workspace cards, the MCP config editor `textbox` and its `tree` toggle, the command body editor's `Markdown | Preview` toggle, the `skill-row` / `command-row` `listbox` / `skill-detail` / `command-editor` `region`, and the `thread-inspector` `region` with its rollup `list` and its collapse `button` carrying `aria-expanded`), visible focus on all pointer targets, hit targets per Iconography.
 * **Transcript semantics**: the stage is a `role="log"` region whose live announcements are **off** while streaming — a chunk is never announced. A separate polite announcer speaks only: turn complete, a new permission or elicitation request, and `turn-notice` of severity warning or above (assertive for `error` and `connection-lost`). The streaming message sets `aria-busy` until its turn ends. `tool-run-group`, `thought-block`, `subagent-card` and `tool-accordion` are `button`s with `aria-expanded`; `message-actions` is a `toolbar`; `activity-ledger` is a `list` of expandable rows; `jump-to-latest` announces itself once when it appears, not on each count change.
-* **Focus trap + restore**: drawers, palette, `workspace-trust-dialog`, `login-dialog`, terminal sheet and `provider-popover` trap `Tab` while open and restore to invoker on `Esc`/close. Unstack order is derived from `stacking`, topmost first: popover → palette → sheet → dialog → drawer. Toasts and tooltips take no focus and are not in the order. A trap never opens over another trap: a `provider-popover` request that arrives while a dialog or sheet is open waits in the Provider's pending list. Inline `permission-request-card` and `elicitation-card` do **not** trap focus — they live in the stage flow and are reachable by roving tabindex, so a pending request never blocks reading the transcript.
+* **Focus trap + restore**: drawers, palette, `workspace-trust-dialog`, `login-dialog`, terminal sheet and `provider-popover` trap `Tab` while open and restore to invoker on `Esc`/close. It is one behaviour (`useFocusTrap`), not one copy per surface: each trap registers at its `stacking` tier and only the topmost answers a key, so a dialog opened over a drawer wraps and closes on its own and returns focus into the drawer. A surface that traps focus never opens over a lower trap and waits instead (`provider-popover.focus`); it asks the same registry. Unstack order is derived from `stacking`, topmost first: popover → palette → sheet → dialog → drawer. Toasts and tooltips take no focus and are not in the order. A trap never opens over another trap: a `provider-popover` request that arrives while a dialog or sheet is open waits in the Provider's pending list. Inline `permission-request-card` and `elicitation-card` do **not** trap focus — they live in the stage flow and are reachable by roving tabindex, so a pending request never blocks reading the transcript.
 * **Roving tabindex**: one `tabindex=0` per column/list/tab-strip; arrows move, `Home/End` jump. The stage's entries are one such list: `↑` / `↓` move between entries, `Enter` / `Space` toggle the focused group, block or card, and `End` scrolls to the tail and re-pins it.
 * **Config editor** (`code-editor-well` on Settings / MCP): the editable form is one `aria-multiline` text region and is the only tab stop; `↑` `↓` `←` `→` `Home` / `End` are the text area's own caret movement and are never intercepted. The tree toggle is a `tree` with its own roving `tabindex` (`↑` / `↓` move, `→` expands, `←` collapses, `Enter` selects). `Tab` leaves the well for the next control; `Ctrl/Cmd+S` is the one shortcut that commits a save, never the keystroke itself mutating the file.
 * **Global shortcuts**:
@@ -1318,7 +1386,9 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 | `Ctrl/Cmd+1..9` | Focus tab N (1 = Workspaces hub) |
 | `Ctrl/Cmd+T` | New Thread tab |
 | `Ctrl/Cmd+W` | Close focused tab (guard dirty state) |
+| `Delete` | On a focused tab: close it (never the pinned Workspaces tab). The tab's close button is a pointer affordance hidden from the accessibility tree, since a `tablist` may own only tabs |
 | `Ctrl/Cmd+I` | Toggle the docked Inspector (collapse to the rail / expand) |
+| `Ctrl/Cmd+B` | Toggle the Sessions drawer (the same control as the titlebar toggle) |
 | `Ctrl/Cmd+,` | Open Settings |
 | `Enter/Space` | Open/confirm focused control |
 | `Esc` | Unstack, derived from `stacking`: close popover → palette → sheet → dialog → drawer |
@@ -1329,7 +1399,7 @@ All P0 actions reachable by keyboard; layout stable at 60fps under synthetic 8-s
 
 * **Font stack**: `Geist Sans` for all structural UI labels (titles, pills, buttons, segmented items, provider names). `Geist Mono` for branch names, `session-item` labels, diff stats (`+42 −12`), hotkeys, telemetry, stepper numbers, and status subtext. `Geist Icons` for all glyphs. Never swap.
 * **Backgrounds**: `{semantic.canvas}` global, `{semantic.surface-rail}` chrome, `{semantic.surface-elevated}`/`{semantic.surface-overlay}` for prompt/popover/drawer/palette/sheets, `{semantic.surface-card}` cards, `{semantic.surface-nested}` accordion, `{semantic.surface-sunken}` terminal/diff wells. No other fills.
-* **Dividers**: strictly `1px solid`. `{semantic.hairline-structural}` for shell region edges and splitters; `{semantic.hairline}` for component borders and row separators; `{semantic.hairline-strong}` for input strokes, toggle tracks, and Level 3-4 surface borders. No shadows for depth — tonal steps, hairlines and the `{semantic.edge-highlight}` lit edge only.
+* **Dividers**: strictly `1px solid`. `{semantic.hairline-structural}` for shell region edges and splitters; `{semantic.hairline}` for component borders and row separators; `{semantic.border-control}` for input strokes, toggle tracks and other control edges; `{semantic.hairline-strong}` for Level 3-4 surface borders. No shadows for depth — tonal steps, hairlines and the `{semantic.edge-highlight}` lit edge only.
 * **Accents**: general chrome entirely monochromatic. Color accents restricted to `{semantic.accent-agent-active}`/`{semantic.status-active-session}` streaming/running, `{semantic.status-success}` healthy/idle-ready, `{semantic.status-warning}` / `{semantic.status-danger}` health warnings, `{semantic.accent-focus}` focus + toggle-active. Effort labels, chips, and badges never use accent color except a state marker: the `status-dot`, the `state-badge`, and a state left rule.
 * **Density**: settings rows `12px 16px`; accordion sections `12px` gaps; drawer rows `36px`; chips `20px`. `SYN-11` schema forms must reuse `schema-field-group` spacing so static MVP inputs and generated V1 forms share rhythm.
 

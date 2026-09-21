@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 import {
   applyTheme,
   DEFAULT_DARK_TOKENS,
@@ -14,53 +15,79 @@ import {
   validateThemeManifest,
 } from "./tokens/manifest";
 
-// List of all 35 semantic tokens defined in DESIGN.md `semantic:` block
-const DESIGN_SEMANTIC_NAMES: SemanticTokenKey[] = [
-  "canvas",
-  "surface-rail",
-  "surface-panel",
-  "surface-elevated",
-  "surface-card",
-  "surface-card-hover",
-  "surface-nested",
-  "surface-overlay",
-  "surface-sunken",
-  "surface-hover",
-  "surface-active",
-  "overlay-scrim",
-  "hairline",
-  "hairline-strong",
-  "hairline-structural",
-  "edge-highlight",
-  "grid-dot",
-  "text-primary",
-  "text-secondary",
-  "text-muted",
-  "text-inverse",
-  "primary",
-  "on-primary",
-  "accent-focus",
-  "accent-toggle-active",
-  "accent-agent-active",
-  "accent-agent-idle",
-  "status-active-session",
-  "status-success",
-  "status-warning",
-  "status-danger",
-  "status-success-soft",
-  "status-warning-soft",
-  "status-danger-soft",
-  "diff-added",
-  "diff-removed",
-];
+interface DesignContract {
+  primitives: Record<string, string>;
+  themes: Record<string, Record<string, string>>;
+  semantic: Record<string, { var: string; role: string }>;
+}
+
+// DESIGN.md is the contract, so the expected names, CSS variables and default
+// theme values are read from its YAML front matter instead of being copied
+// here, where they could drift without a red test.
+function readDesignContract(): DesignContract {
+  const source = readFileSync(
+    resolve(__dirname, "../../../DESIGN.md"),
+    "utf-8",
+  );
+  const front = source.split(/^---\s*$/m)[1];
+  return parse(front) as DesignContract;
+}
+
+// A theme value is a literal or a `{primitives.name}` reference.
+function resolveDesignValue(value: string, contract: DesignContract): string {
+  const ref = value.match(/^\{primitives\.([\w-]+)\}$/);
+  if (!ref) return value;
+  const primitive = contract.primitives[ref[1]];
+  if (primitive === undefined) {
+    throw new Error(`DESIGN.md references unknown primitive ${ref[1]}`);
+  }
+  return primitive;
+}
+
+// 0.50 and 0.5 are the same alpha; only compare values, not formatting.
+const normalizeColor = (v: string) =>
+  v
+    .replace(/\s+/g, "")
+    .toLowerCase()
+    .replace(/(\.\d*?)0+(?=[,)])/g, "$1")
+    .replace(/\.(?=[,)])/g, "");
 
 describe("Semantic Tokens Parity (U1 / D1)", () => {
+  const contract = readDesignContract();
+  const designNames = Object.keys(contract.semantic);
+
   it("manifest contains every DESIGN.md semantic token name", () => {
-    expect(new Set(SEMANTIC_TOKEN_KEYS)).toEqual(
-      new Set(DESIGN_SEMANTIC_NAMES),
-    );
-    expect(SEMANTIC_TOKEN_KEYS.length).toBe(DESIGN_SEMANTIC_NAMES.length);
+    expect(new Set<string>(SEMANTIC_TOKEN_KEYS)).toEqual(new Set(designNames));
+    expect(SEMANTIC_TOKEN_KEYS.length).toBe(designNames.length);
   });
+
+  it("every semantic token maps to the CSS variable DESIGN.md names", () => {
+    for (const name of designNames) {
+      expect(
+        SEMANTIC_TOKEN_TO_CSS_VAR[name as SemanticTokenKey],
+        `CSS var for ${name}`,
+      ).toBe(contract.semantic[name].var);
+    }
+  });
+
+  for (const [themeId, tokens] of [
+    ["default-dark", DEFAULT_DARK_TOKENS],
+    ["default-light", DEFAULT_LIGHT_TOKENS],
+  ] as const) {
+    it(`${themeId} values equal the DESIGN.md theme after primitives resolve`, () => {
+      const theme = contract.themes[themeId];
+      expect(Object.keys(theme).sort(), `${themeId} keys`).toEqual(
+        [...designNames].sort(),
+      );
+      for (const name of designNames) {
+        const expected = resolveDesignValue(theme[name], contract);
+        expect(
+          normalizeColor(tokens[name as SemanticTokenKey]),
+          `${themeId} ${name}`,
+        ).toBe(normalizeColor(expected));
+      }
+    });
+  }
 
   it("manifest key set matches CSS vars defined in tokens.css for :root and [data-theme='light']", () => {
     const cssPath = resolve(__dirname, "tokens/tokens.css");
@@ -108,6 +135,23 @@ describe("Semantic Tokens Parity (U1 / D1)", () => {
       expect(res.data.id).toBe("acme-sand");
       expect(res.data.vars.canvas).toBe("#0c0a09");
     }
+  });
+
+  it("validateThemeManifest accepts a dark well on a light base via the on-sunken family", () => {
+    const res = validateThemeManifest({
+      id: "paper-with-terminal",
+      name: "Paper With Terminal",
+      base: "default-light",
+      vars: {
+        "surface-sunken": "#0b0b0d",
+        "text-on-sunken": "#f4f4f5",
+        "text-on-sunken-secondary": "#bfbfc9",
+        "text-on-sunken-muted": "#8e8e98",
+        "hairline-on-sunken": "rgba(255, 255, 255, 0.10)",
+        "wash-on-sunken": "rgba(255, 255, 255, 0.05)",
+      },
+    });
+    expect(res.success).toBe(true);
   });
 
   it("validateThemeManifest rejects unknown semantic keys", () => {
@@ -200,7 +244,7 @@ describe("Diff tokens and stacking (M1.6c U7 / U11)", () => {
   it("diff tokens deepen in the light theme so they read on the slate well", () => {
     expect(DEFAULT_DARK_TOKENS["diff-added"]).toBe("#5bcc80");
     expect(DEFAULT_LIGHT_TOKENS["diff-added"]).toBe("#046c4e");
-    expect(DEFAULT_DARK_TOKENS["diff-removed"]).toBe("#fe6c66");
+    expect(DEFAULT_DARK_TOKENS["diff-removed"]).toBe("#ff8a84");
     expect(DEFAULT_LIGHT_TOKENS["diff-removed"]).toBe("#b91c1c");
   });
 
@@ -238,6 +282,27 @@ describe("Diff tokens and stacking (M1.6c U7 / U11)", () => {
       expect(STACKING_SCALE[order[i]]).toBeGreaterThan(
         STACKING_SCALE[order[i - 1]],
       );
+    }
+  });
+
+  it("no longer defines the layout variables of regions that do not exist", () => {
+    // The 56px action bar was retired into the prompt card; there is no Hub
+    // column and no docked Sessions strip (DESIGN.md Shell Structure).
+    const css = readFileSync(resolve(__dirname, "tokens/tokens.css"), "utf-8");
+    for (const retired of [
+      "--layout-shell-actionbar",
+      "--layout-shell-left",
+      "--layout-shell-left-collapsed",
+    ]) {
+      expect(css, retired).not.toContain(`${retired}:`);
+    }
+    // What the shell still lays out with.
+    for (const kept of [
+      "--layout-shell-threads",
+      "--layout-shell-inspector",
+      "--layout-prompt-width",
+    ]) {
+      expect(css, kept).toContain(`${kept}:`);
     }
   });
 
