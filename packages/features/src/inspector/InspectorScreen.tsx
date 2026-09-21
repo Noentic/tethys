@@ -2,16 +2,17 @@ import type { WorkspaceCapabilityFixture } from "@tethys/state";
 import {
   getOrCreateSessionStore,
   type SessionEntry,
-  type SessionState,
   SessionStreamManager,
   type ToolCallEntry,
 } from "@tethys/state";
-import { cn, getAllInspectorSlots } from "@tethys/ui";
+import { cn } from "@tethys/ui";
 import { useEffect, useRef } from "react";
 import {
+  canDockComposer,
   type InspectorClient,
   InspectorClientProvider,
 } from "../client-context";
+import { DockedPromptCard } from "../composer/docked-prompt-card";
 import { enqueueProviderExtension } from "../providers/pending-extensions";
 import { latestAnnouncement, TranscriptAnnouncer } from "./announcer";
 import { registerInspectorRenderers } from "./register";
@@ -24,41 +25,11 @@ import { useTailPin } from "./use-tail-pin";
 
 registerInspectorRenderers();
 
-function InspectorSlots({
-  state,
-  sessionId,
-}: {
-  state: SessionState;
-  sessionId: string;
-}) {
-  const plan = state.liveEntries.find((entry) => entry.kind === "plan") as
-    | { steps?: unknown }
-    | undefined;
-  const slots = getAllInspectorSlots();
-  if (slots.length === 0) {
-    return (
-      <p className="p-md text-body-sm text-(--tethys-text-muted)">
-        No inspector slots registered
-      </p>
-    );
-  }
-  return (
-    <>
-      {slots.map(([id, Slot]) => (
-        <Slot
-          key={id}
-          sessionId={sessionId}
-          data={id === "plan" ? plan?.steps : state.entries}
-        />
-      ))}
-    </>
-  );
-}
-
 /**
  * The active-thread surface (M1.7/M1.8). A thin mount for the route (D13): it
  * resolves the session store, subscribes to `events.subscribe` through the
- * client, and composes the transcript stage with the registered Inspector slots.
+ * client, and renders the transcript stage. The Inspector is a shell region
+ * (`apps/desktop/src/shell/InspectorPane.tsx`), so this renders none of its own.
  */
 export function InspectorScreen({
   sessionId,
@@ -128,10 +99,20 @@ export function InspectorScreen({
     <InspectorClientProvider client={client} threadId={sessionId}>
       <div
         data-testid="inspector-screen"
-        className={cn("flex min-h-0 flex-1 gap-md p-md", className)}
+        className={cn("flex min-h-0 flex-1 flex-col gap-md p-md", className)}
       >
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
+          {/* The stage is a `log` region with live announcements off: a chunk is
+              never announced. The polite announcer below speaks the few things
+              worth interrupting for (DESIGN.md Transcript semantics). */}
+          <div
+            ref={scrollRef}
+            role="log"
+            aria-label="Transcript"
+            aria-live="off"
+            aria-busy={state.status === "running"}
+            className="min-h-0 flex-1 overflow-auto"
+          >
             <TranscriptStage
               entries={state.entries}
               capabilities={capabilities}
@@ -155,12 +136,15 @@ export function InspectorScreen({
             announcement={latestAnnouncement(state.entries)}
           />
         </div>
-        <aside
-          data-testid="inspector-pane"
-          className="w-72 shrink-0 overflow-auto border-l border-(--tethys-hairline)"
-        >
-          <InspectorSlots state={state} sessionId={sessionId} />
-        </aside>
+        {canDockComposer(client) && (
+          <div className="shrink-0">
+            <DockedPromptCard
+              sessionId={sessionId}
+              client={client}
+              noGit={capabilities.vcs.kind === "none"}
+            />
+          </div>
+        )}
       </div>
     </InspectorClientProvider>
   );

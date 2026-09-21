@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { DiffFile, DiffFileDetail, DiffSummary } from "@tethys/bindings";
 import {
   clearRegistriesForTesting,
-  getAllActionBarSlots,
+  getAllComposerContextSlots,
   getAllInspectorSlots,
 } from "@tethys/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -236,6 +236,8 @@ describe("ReviewPanel (M1.9 U7)", () => {
   it("registers the review slot through the inspector registry", () => {
     registerReviewSlots();
     expect(getAllInspectorSlots().map(([id]) => id)).toContain("review");
-    expect(getAllActionBarSlots().map(([id]) => id)).toContain("diff-summary");
+    expect(getAllComposerContextSlots().map(([id]) => id)).toContain(
+      "diff-summary",
+    );
   });
 });

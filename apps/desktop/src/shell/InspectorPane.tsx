@@ -61,8 +61,8 @@ export function InspectorPane({
     <aside
       aria-label="Thread Inspector"
       data-testid="inspector-pane-shell"
-      className={`flex h-full flex-col overflow-y-auto border-l border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) select-none ${
-        isOverlay ? "w-(--layout-shell-inspector) shrink-0" : "w-full"
+      className={`flex h-full w-full flex-col overflow-y-auto bg-(--tethys-surface-panel) select-none ${
+        isOverlay ? "" : "border-l border-(--tethys-hairline-structural)"
       } ${className ?? ""}`}
     >
       <div className="flex h-10 shrink-0 items-center justify-between gap-sm border-b border-(--tethys-hairline) px-lg">

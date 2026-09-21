@@ -2,11 +2,11 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
   clearRegistriesForTesting,
-  getAllActionBarSlots,
+  getAllComposerContextSlots,
   getApprovalDrawerBody,
   getProviderSurface,
-  registerActionBarSlot,
   registerApprovalDrawerBody,
+  registerComposerContextSlot,
   registerProviderSurface,
 } from "./registry";
 
@@ -15,24 +15,24 @@ function Pill() {
 }
 
 describe("Registry priority and provider surfaces (M1.6c U6 / U10 / U12)", () => {
-  it("sorts registered action-bar slots by priority, undeclared last", () => {
+  it("sorts registered composer context slots by priority, undeclared last", () => {
     clearRegistriesForTesting();
-    registerActionBarSlot("high", Pill, 10);
-    registerActionBarSlot("low", Pill, 5);
-    registerActionBarSlot("none", Pill);
+    registerComposerContextSlot("high", Pill, 10);
+    registerComposerContextSlot("low", Pill, 5);
+    registerComposerContextSlot("none", Pill);
 
-    expect(getAllActionBarSlots().map(([id]) => id)).toEqual([
+    expect(getAllComposerContextSlots().map(([id]) => id)).toEqual([
       "high",
       "low",
       "none",
     ]);
   });
 
-  it("keeps the two-argument action-bar call working", () => {
+  it("keeps the two-argument registration call working", () => {
     clearRegistriesForTesting();
-    registerActionBarSlot("legacy", Pill);
-    expect(getAllActionBarSlots()[0][1].component).toBe(Pill);
-    expect(getAllActionBarSlots()[0][1].priority).toBeUndefined();
+    registerComposerContextSlot("legacy", Pill);
+    expect(getAllComposerContextSlots()[0][1].component).toBe(Pill);
+    expect(getAllComposerContextSlots()[0][1].priority).toBeUndefined();
   });
 
   it("resolves a provider surface by its exact (provider, method) pair", () => {

@@ -140,6 +140,26 @@ describe("A11y automated axe-core gates (D6 / U2 / U8)", () => {
     expect(violations).toEqual([]);
   });
 
+  it("a TabStrip with closable tabs has no interactive control nested in a tab", async () => {
+    // The close button used to sit inside role="tab", which axe rejects as
+    // nested-interactive. The other TabStrip test omitted onCloseTab, so it
+    // rendered no close button and never saw this.
+    const { container } = render(
+      <TabStrip
+        activeTabId="tab-1"
+        onSelectTab={() => {}}
+        onCloseTab={() => {}}
+        tabs={[
+          { id: "workspaces", title: "Workspaces", pinned: true },
+          { id: "tab-1", title: "Session 1" },
+          { id: "tab-2", title: "Session 2" },
+        ]}
+      />,
+    );
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
+  });
+
   it("ApprovalInboxPill, Splitter, and StatusDot have valid roles and zero violations", async () => {
     const { container } = render(
       <div>

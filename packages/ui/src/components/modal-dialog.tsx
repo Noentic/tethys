@@ -1,5 +1,6 @@
 import type React from "react";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useFocusTrap } from "../lib/use-focus-trap";
 import { cn } from "../lib/utils";
 
 export interface ModalDialogProps {
@@ -24,45 +25,12 @@ export function ModalDialog({
   className,
 }: ModalDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      previouslyFocusedRef.current =
-        document.activeElement as HTMLElement | null;
-      dialogRef.current?.focus();
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          onClose();
-        } else if (e.key === "Tab" && dialogRef.current) {
-          // Focus trap
-          const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-          );
-          if (focusables.length === 0) return;
-
-          const first = focusables[0];
-          const last = focusables[focusables.length - 1];
-
-          if (e.shiftKey && document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          } else if (!e.shiftKey && document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
-      };
-
-      window.addEventListener("keydown", handleKeyDown);
-      return () => {
-        window.removeEventListener("keydown", handleKeyDown);
-        previouslyFocusedRef.current?.focus();
-      };
-    }
-  }, [open, onClose]);
+  useFocusTrap({
+    active: open,
+    containerRef: dialogRef,
+    tier: "dialog",
+    onEscape: onClose,
+  });
 
   if (!open) return null;
 

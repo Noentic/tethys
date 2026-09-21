@@ -3,13 +3,15 @@ import {
   getProviderSurface,
   Popover,
   SchemaFieldGroup,
+  StatusDot,
+  useFocusTrap,
+  useFocusTrapBelow,
 } from "@tethys/ui";
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 import {
   dequeueProviderExtension,
   enqueueProviderExtension,
   hasProviderSurface,
-  useHasOpenTrap,
   usePendingExtensions,
 } from "./pending-extensions";
 
@@ -43,57 +45,6 @@ export function queueProviderExtension(params: {
   return enqueueProviderExtension(params);
 }
 
-function useFocusTrap(
-  active: boolean,
-  containerRef: React.RefObject<HTMLElement | null>,
-  onEscape: () => void,
-) {
-  const escapeRef = useRef(onEscape);
-  escapeRef.current = onEscape;
-  useEffect(() => {
-    if (!active) {
-      return;
-    }
-    const container = containerRef.current;
-    const previous = document.activeElement as HTMLElement | null;
-    const focusables = () =>
-      Array.from(
-        container?.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      ).filter((element) => !element.hasAttribute("disabled"));
-    focusables()[0]?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        escapeRef.current();
-        return;
-      }
-      if (event.key !== "Tab") {
-        return;
-      }
-      const items = focusables();
-      if (items.length === 0) {
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      previous?.focus?.();
-    };
-  }, [active, containerRef]);
-}
-
 /**
  * The default vendor-extension surface: the Provider's title, a body through
  * `schema-field-group` spacing, and the Provider's own actions in its order.
@@ -111,10 +62,13 @@ export function ProviderExtensionSurface({
   const parsed = parseParams(params);
   const titleId = useId();
   return (
-    <div className="w-90 p-lg">
-      <h2 id={titleId} className="text-label-md text-(--tethys-text-primary)">
-        {parsed.title ?? "Provider request"}
-      </h2>
+    <div className="wash-warning w-90 rounded-sm border-l-2 border-l-(--tethys-status-warning) p-lg">
+      <div className="flex items-center gap-sm">
+        <StatusDot status="awaiting_approval" inline />
+        <h2 id={titleId} className="text-label-md text-(--tethys-text-primary)">
+          {parsed.title ?? "Provider request"}
+        </h2>
+      </div>
       <SchemaFieldGroup>
         <p className="text-body-sm text-(--tethys-text-secondary)">
           {parsed.body ?? ""}
@@ -153,7 +107,9 @@ export function ProviderPopover({
   className?: string;
 }) {
   const extensions = usePendingExtensions(providerId);
-  const trapped = useHasOpenTrap();
+  // Because it traps focus it never opens over a lower trap (a dialog, a
+  // drawer): the request waits in the Provider's pending list until it closes.
+  const trapped = useFocusTrapBelow("popover");
   const containerRef = useRef<HTMLDivElement>(null);
   const top = extensions.find((extension) =>
     hasProviderSurface(extension.provider_id, extension.method),
@@ -169,7 +125,13 @@ export function ProviderPopover({
   };
 
   const active = Boolean(top && Surface && !trapped);
-  useFocusTrap(active, containerRef, close);
+  useFocusTrap({
+    active,
+    containerRef,
+    tier: "popover",
+    onEscape: close,
+    initialFocus: "first",
+  });
 
   if (!top || !Surface || trapped) {
     return null;

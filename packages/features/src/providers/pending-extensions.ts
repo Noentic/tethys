@@ -11,7 +11,6 @@ import { useSyncExternalStore } from "react";
 
 const pending = new Map<string, ProviderExtension[]>();
 const listeners = new Set<() => void>();
-const openTraps = new Set<string>();
 
 function notify(): void {
   for (const listener of listeners) {
@@ -62,22 +61,7 @@ export function dequeueProviderExtension(
 
 export function clearPendingExtensionsForTesting(): void {
   pending.clear();
-  openTraps.clear();
   notify();
-}
-
-/** A focus trap opened (dialog, sheet, palette); the popover queues behind it. */
-export function setTrapOpen(id: string, open: boolean): void {
-  if (open) {
-    openTraps.add(id);
-  } else {
-    openTraps.delete(id);
-  }
-  notify();
-}
-
-export function hasOpenTrap(): boolean {
-  return openTraps.size > 0;
 }
 
 function subscribe(listener: () => void): () => void {
@@ -92,13 +76,5 @@ export function usePendingExtensions(providerId: string): ProviderExtension[] {
       () => pending.get(providerId),
       () => pending.get(providerId),
     ) ?? []
-  );
-}
-
-export function useHasOpenTrap(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => hasOpenTrap(),
-    () => hasOpenTrap(),
   );
 }

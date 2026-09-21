@@ -1,6 +1,7 @@
 import { Cross } from "@nebutra/icons";
 import type React from "react";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useFocusTrap } from "../lib/use-focus-trap";
 import { cn } from "../lib/utils";
 
 export interface DrawerProps {
@@ -11,6 +12,14 @@ export interface DrawerProps {
   width?: string;
   side?: "right" | "left";
   showScrim?: boolean;
+  /**
+   * The child supplies its own header and close control (the Inspector's header
+   * carries the session's state badge). The drawer still provides the scrim,
+   * the focus trap and restore, and the stacking tier.
+   */
+  bare?: boolean;
+  /** The accessible name when there is no string `title`. */
+  label?: string;
   className?: string;
 }
 
@@ -22,47 +31,17 @@ export function Drawer({
   width = "w-[380px]",
   side = "right",
   showScrim = true,
+  bare = false,
+  label,
   className,
 }: DrawerProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      previouslyFocusedRef.current =
-        document.activeElement as HTMLElement | null;
-      drawerRef.current?.focus();
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          onClose();
-        } else if (e.key === "Tab" && drawerRef.current) {
-          const focusables = drawerRef.current.querySelectorAll<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-          );
-          if (focusables.length === 0) return;
-
-          const first = focusables[0];
-          const last = focusables[focusables.length - 1];
-
-          if (e.shiftKey && document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          } else if (!e.shiftKey && document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
-      };
-
-      window.addEventListener("keydown", handleKeyDown);
-      return () => {
-        window.removeEventListener("keydown", handleKeyDown);
-        previouslyFocusedRef.current?.focus();
-      };
-    }
-  }, [open, onClose]);
+  useFocusTrap({
+    active: open,
+    containerRef: drawerRef,
+    tier: "drawer",
+    onEscape: onClose,
+  });
 
   if (!open) return null;
 
@@ -85,7 +64,7 @@ export function Drawer({
         ref={drawerRef}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === "string" ? title : "Drawer"}
+        aria-label={label ?? (typeof title === "string" ? title : "Drawer")}
         tabIndex={-1}
         className={cn(
           "pointer-events-auto flex h-full flex-col bg-(--tethys-surface-elevated) outline-none transition-transform duration-200",
@@ -96,20 +75,26 @@ export function Drawer({
           className,
         )}
       >
-        <div className="flex h-12 items-center justify-between border-b border-(--tethys-hairline) px-lg">
-          <div className="truncate text-heading-md text-(--tethys-text-primary)">
-            {title}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close drawer"
-            className="focus-ring flex h-7 w-7 items-center justify-center rounded-md text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
-          >
-            <Cross className="size-3.5" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-lg">{children}</div>
+        {bare ? (
+          <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        ) : (
+          <>
+            <div className="flex h-12 items-center justify-between border-b border-(--tethys-hairline) px-lg">
+              <div className="truncate text-heading-md text-(--tethys-text-primary)">
+                {title}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close drawer"
+                className="focus-ring flex h-7 w-7 items-center justify-center rounded-md text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
+              >
+                <Cross className="size-3.5" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-lg">{children}</div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -6,7 +6,7 @@
 //! `xterm` is unavailable, as in `jsdom`) it falls back to a `<pre>` tail.
 
 import { cn } from "@tethys/ui";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 /** The only options passed to `xterm.js`; `disableStdin` is the read-only guarantee. */
 export const terminalOptions = {
@@ -29,7 +29,7 @@ export function sunkenWellTheme(element: HTMLElement) {
   };
   return {
     background: read("--tethys-surface-sunken", "#050507"),
-    foreground: read("--tethys-text-secondary", "#bfbfc9"),
+    foreground: read("--tethys-text-on-sunken-secondary", "#bfbfc9"),
   };
 }
 
@@ -38,11 +38,34 @@ interface TerminalLike {
   dispose(): void;
 }
 
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) {
     return false;
   }
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return window.matchMedia(REDUCED_MOTION_QUERY).matches;
+}
+
+function subscribeReducedMotion(onChange: () => void): () => void {
+  if (typeof window === "undefined" || !window.matchMedia) {
+    return () => {};
+  }
+  const query = window.matchMedia(REDUCED_MOTION_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+/**
+ * Follows the OS setting live. Reading it once on mount left a terminal that
+ * kept animating (or kept its static tail) after the user changed it.
+ */
+function usePrefersReducedMotion(): boolean {
+  return useSyncExternalStore(
+    subscribeReducedMotion,
+    prefersReducedMotion,
+    () => false,
+  );
 }
 
 /** The delta to write for a growing buffer; empty when nothing was appended. */
@@ -63,7 +86,11 @@ export function TerminalView({ output, title, className }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<TerminalLike | null>(null);
   const writtenRef = useRef(0);
-  const [useFallback, setUseFallback] = useState(prefersReducedMotion());
+  const reducedMotion = usePrefersReducedMotion();
+  const [loadFailed, setLoadFailed] = useState(false);
+  // The static tail replaces the animated surface for reduced motion, and also
+  // when xterm cannot load.
+  const useFallback = reducedMotion || loadFailed;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only; output deltas are handled below
   useEffect(() => {
@@ -90,7 +117,7 @@ export function TerminalView({ output, title, className }: TerminalViewProps) {
         writtenRef.current = output.length;
       } catch {
         if (!cancelled) {
-          setUseFallback(true);
+          setLoadFailed(true);
         }
       }
     })();
@@ -127,7 +154,7 @@ export function TerminalView({ output, title, className }: TerminalViewProps) {
         role="log"
         aria-label={title ?? "Terminal output"}
         className={cn(
-          "max-h-80 overflow-auto rounded-sm bg-(--tethys-surface-sunken) p-sm font-mono text-mono-code text-(--tethys-text-secondary)",
+          "max-h-80 overflow-auto rounded-sm bg-(--tethys-surface-sunken) p-sm font-mono text-mono-code text-(--tethys-text-on-sunken-secondary)",
           className,
         )}
       >

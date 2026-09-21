@@ -6,6 +6,7 @@ import {
   createPromptQueueStore,
   loadQueue,
   type PromptQueueClient,
+  type PromptQueueStore,
   removeQueued,
   reorderQueued,
 } from "@tethys/state";
@@ -34,6 +35,12 @@ export function queuePreview(blocks: ContentBlock[]): string {
 export interface PromptQueueProps {
   client: PromptQueueClient;
   threadId: string;
+  /**
+   * The store to render. A host that also enqueues into it (the docked prompt
+   * card) passes its own so the list and the count share one source; without
+   * one the list owns a store.
+   */
+  store?: PromptQueueStore;
   /** Reopens a queued prompt in the composer for editing. */
   onEdit?: (item: QueuedPrompt) => void;
   className?: string;
@@ -46,10 +53,12 @@ export interface PromptQueueProps {
 export function PromptQueue({
   client,
   threadId,
+  store: sharedStore,
   onEdit,
   className,
 }: PromptQueueProps) {
-  const [store] = useState(() => createPromptQueueStore());
+  const [ownStore] = useState(() => createPromptQueueStore());
+  const store = sharedStore ?? ownStore;
   const state = useStoreState(store);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 

@@ -114,7 +114,10 @@ describe("Inspector composition (M1.7 U10)", () => {
     ).toHaveLength(1);
   });
 
-  it("mounts the registered plan slot with the session's plan", () => {
+  it("renders no Inspector of its own: the shell's is the only one", () => {
+    // The Inspector is a shell region. A private copy beside the transcript
+    // rendered every slot twice, and gave the plan and ledger data the shell's
+    // copy never received.
     const store = getOrCreateSessionStore("s-plan", "p", "ws");
     store.setState((state) =>
       sessionReducer(state, {
@@ -131,8 +134,8 @@ describe("Inspector composition (M1.7 U10)", () => {
     );
 
     render(<InspectorScreen sessionId="s-plan" client={noopClient} />);
-    expect(screen.getByTestId("inspector-pane").textContent).toContain(
-      "Plan · 0/1 complete",
-    );
+    expect(screen.queryByTestId("inspector-pane")).toBeNull();
+    expect(screen.queryByText(/Plan · /)).toBeNull();
+    expect(screen.queryByRole("complementary")).toBeNull();
   });
 });

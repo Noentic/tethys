@@ -1,7 +1,10 @@
 import { fireEvent } from "@testing-library/dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import type { ContentBlock, QueuedPrompt } from "@tethys/bindings";
-import { clearRegistriesForTesting, getAllActionBarSlots } from "@tethys/ui";
+import {
+  clearRegistriesForTesting,
+  getAllComposerContextSlots,
+} from "@tethys/ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PromptQueue } from "./queue";
 import { QUEUE_COUNT_PRIORITY, QueueCountSlot } from "./queue-count-slot";
@@ -76,9 +79,11 @@ describe("queue-count slot", () => {
     expect(screen.getByTestId("queue-count").textContent).toBe("3 queued");
   });
 
-  it("registers at the DESIGN action-bar priority", () => {
+  it("registers at the DESIGN context-bar priority", () => {
     registerComposerSlots();
-    const slot = getAllActionBarSlots().find(([id]) => id === "queue-count");
+    const slot = getAllComposerContextSlots().find(
+      ([id]) => id === "queue-count",
+    );
     expect(slot?.[1].priority).toBe(QUEUE_COUNT_PRIORITY);
   });
 });

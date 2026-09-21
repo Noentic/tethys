@@ -11,15 +11,15 @@ export type InspectorSlotComponent<T = unknown> = React.ComponentType<{
   className?: string;
 }>;
 
-export type ActionBarSlotComponent<T = unknown> = React.ComponentType<{
+export type ComposerContextSlotComponent<T = unknown> = React.ComponentType<{
   sessionId?: string;
   data?: T;
   className?: string;
 }>;
 
-/** A registered action-bar slot, with its DESIGN.md fold priority. */
-export interface ActionBarSlotEntry {
-  component: ActionBarSlotComponent;
+/** A registered composer context slot, with its DESIGN.md fold priority. */
+export interface ComposerContextSlotEntry {
+  component: ComposerContextSlotComponent;
   /**
    * Higher folds later. Undefined is treated as below `usage-bar` — DESIGN's
    * rule that an undeclared slot folds first.
@@ -43,7 +43,7 @@ export type ProviderSurfaceComponent = React.ComponentType<{
 
 export const entryRenderers = new Map<string, EntryRendererComponent>();
 export const inspectorSlots = new Map<string, InspectorSlotComponent>();
-export const actionBarSlots = new Map<string, ActionBarSlotEntry>();
+export const composerContextSlots = new Map<string, ComposerContextSlotEntry>();
 export const providerSurfaces = new Map<string, ProviderSurfaceComponent>();
 let approvalDrawerBody: ApprovalDrawerBodyComponent | null = null;
 
@@ -107,17 +107,19 @@ export function getAllInspectorSlots(): Array<
   return Array.from(inspectorSlots.entries());
 }
 
-export function registerActionBarSlot(
+export function registerComposerContextSlot(
   id: string,
-  component: ActionBarSlotComponent,
+  component: ComposerContextSlotComponent,
   priority?: number,
 ): void {
-  actionBarSlots.set(id, { component, priority });
+  composerContextSlots.set(id, { component, priority });
 }
 
-/** Registered action-bar slots, highest priority first. */
-export function getAllActionBarSlots(): Array<[string, ActionBarSlotEntry]> {
-  return Array.from(actionBarSlots.entries()).sort(
+/** Registered composer context slots, highest priority first. */
+export function getAllComposerContextSlots(): Array<
+  [string, ComposerContextSlotEntry]
+> {
+  return Array.from(composerContextSlots.entries()).sort(
     (a, b) =>
       (b[1].priority ?? Number.NEGATIVE_INFINITY) -
       (a[1].priority ?? Number.NEGATIVE_INFINITY),
@@ -152,7 +154,7 @@ export function getProviderSurface(
 export function clearRegistriesForTesting(): void {
   entryRenderers.clear();
   inspectorSlots.clear();
-  actionBarSlots.clear();
+  composerContextSlots.clear();
   providerSurfaces.clear();
   approvalDrawerBody = null;
 }

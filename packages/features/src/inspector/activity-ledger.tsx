@@ -2,6 +2,7 @@ import type { SessionEntry, TurnMessageEntry } from "@tethys/state";
 import { cn, StatusDot, ToggleSwitch } from "@tethys/ui";
 import { useState } from "react";
 import { countActivity, type LedgerCounts } from "./ledger-counts";
+import { useSessionState } from "./use-session-state";
 
 /** Entries after the last user message — the current turn's range. */
 function lastTurnEntries(entries: SessionEntry[]): SessionEntry[] {
@@ -80,20 +81,24 @@ function LedgerSection({
 
 /**
  * The Inspector's second index over the same history (DESIGN.md
- * `activity-ledger`), mounted through `registerInspectorSlot`. The Inspector
- * passes the session's entries as `data`.
+ * `activity-ledger`), mounted through `registerInspectorSlot`, which hands it
+ * only a `sessionId`: it reads the session's entries from that store. Explicit
+ * `data` (the entries) overrides the store, for callers that already hold them.
  */
 export function ActivityLedger({
+  sessionId,
   data,
   className,
 }: {
+  sessionId?: string;
   data?: unknown;
   className?: string;
 }) {
   const [thisTurn, setThisTurn] = useState(false);
+  const state = useSessionState(sessionId ?? "");
   const entries: SessionEntry[] = Array.isArray(data)
     ? (data as SessionEntry[])
-    : [];
+    : state.entries;
   const thisTurnEntries = lastTurnEntries(entries);
   const counts = countActivity(thisTurn ? thisTurnEntries : entries);
 

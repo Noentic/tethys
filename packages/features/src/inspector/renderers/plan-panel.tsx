@@ -1,5 +1,6 @@
-import type { PlanStep } from "@tethys/state";
+import type { PlanEntry, PlanStep } from "@tethys/state";
 import { cn } from "@tethys/ui";
+import { useSessionState } from "../use-session-state";
 
 const STATUS_LABEL: Record<PlanStep["status"], string> = {
   Pending: "Pending",
@@ -8,17 +9,26 @@ const STATUS_LABEL: Record<PlanStep["status"], string> = {
 };
 
 /**
- * The live plan panel. Mounted through `registerInspectorSlot`; the Inspector
- * passes the current plan's steps as `data`.
+ * The live plan panel. Mounted through `registerInspectorSlot`, which hands it
+ * only a `sessionId`: it reads the plan from that session's store. Explicit
+ * `data` (the steps) overrides the store, for callers that already hold them.
  */
 export function PlanPanel({
+  sessionId,
   data,
   className,
 }: {
+  sessionId?: string;
   data?: unknown;
   className?: string;
 }) {
-  const steps: PlanStep[] = Array.isArray(data) ? (data as PlanStep[]) : [];
+  const state = useSessionState(sessionId ?? "");
+  const livePlan = state.liveEntries.find(
+    (entry): entry is PlanEntry => entry.kind === "plan",
+  );
+  const steps: PlanStep[] = Array.isArray(data)
+    ? (data as PlanStep[])
+    : (livePlan?.steps ?? []);
   if (steps.length === 0) {
     return (
       <p

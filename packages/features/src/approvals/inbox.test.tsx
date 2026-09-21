@@ -8,7 +8,7 @@ import {
 } from "@tethys/state";
 import {
   clearRegistriesForTesting,
-  getAllActionBarSlots,
+  getAllComposerContextSlots,
   getApprovalDrawerBody,
 } from "@tethys/ui";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -42,7 +42,7 @@ describe("Permission-mode pill, inbox and notifications (M1.8 U11)", () => {
   });
 
   it("registers the pill under permission-mode and the drawer body", () => {
-    const ids = getAllActionBarSlots().map(([id]) => id);
+    const ids = getAllComposerContextSlots().map(([id]) => id);
     expect(ids).toContain("permission-mode");
     expect(getApprovalDrawerBody()).toBe(InboxDrawer);
     expect(PermissionModePill).toBeTruthy();

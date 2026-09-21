@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { McpView, SkillsView, SyncGrid } from "@tethys/features";
 import {
   attachmentGridFixtures,
@@ -9,6 +9,7 @@ import {
   skillInfoFixtures,
   workspaceOptionFixtures,
 } from "@tethys/state";
+import { useInspectorControl } from "@tethys/ui";
 import axe from "axe-core";
 import { describe, expect, it } from "vitest";
 import { SettingsLayout } from "./routes/settings";
@@ -90,6 +91,64 @@ describe("Automated A11y / axe clean audit on Desktop routes & shell", () => {
   it("passes axe on the /thread/:id route", async () => {
     const { container } = render(<ThreadView sessionId="s-a11y" />);
     await expectAxeClean(container);
+  });
+
+  describe("the thread inside the three-region shell", () => {
+    function setWindowWidth(width: number) {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        writable: true,
+        value: width,
+      });
+    }
+
+    function OpenInspector() {
+      const { open } = useInspectorControl();
+      return (
+        <button type="button" onClick={open}>
+          open inspector
+        </button>
+      );
+    }
+
+    it("passes axe docked, with the composer mounted and Sessions closed", async () => {
+      setWindowWidth(1440);
+      const { container } = render(
+        <AppShell activeRoute="/thread/s-shell-a11y">
+          <ThreadView sessionId="s-shell-a11y" />
+        </AppShell>,
+      );
+      await expectAxeClean(container);
+    });
+
+    it("passes axe with the Sessions drawer open", async () => {
+      setWindowWidth(1440);
+      const { container } = render(
+        <AppShell activeRoute="/thread/s-shell-a11y">
+          <ThreadView sessionId="s-shell-a11y" />
+        </AppShell>,
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: "Toggle sessions sidebar" }),
+      );
+      expect(screen.getByRole("dialog", { name: "Sessions" })).toBeDefined();
+      await expectAxeClean(container);
+    });
+
+    it("passes axe with the overlay Inspector open below 1100px", async () => {
+      setWindowWidth(900);
+      const { container } = render(
+        <AppShell activeRoute="/thread/s-shell-a11y">
+          <OpenInspector />
+          <ThreadView sessionId="s-shell-a11y" />
+        </AppShell>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "open inspector" }));
+      expect(
+        screen.getByRole("dialog", { name: "Thread Inspector" }),
+      ).toBeDefined();
+      await expectAxeClean(container);
+    });
   });
 
   it("passes axe on SettingsLayout + SettingsGeneralView", async () => {

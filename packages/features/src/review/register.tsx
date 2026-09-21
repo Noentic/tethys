@@ -1,4 +1,4 @@
-import { registerActionBarSlot, registerInspectorSlot } from "@tethys/ui";
+import { registerComposerContextSlot, registerInspectorSlot } from "@tethys/ui";
 import { DIFF_SUMMARY_PRIORITY, DiffSummaryPill } from "./diff-summary-pill";
 import { ReviewPanel } from "./review-panel";
 
@@ -9,7 +9,11 @@ import { ReviewPanel } from "./review-panel";
  */
 export function registerReviewSlots(): void {
   registerInspectorSlot("review", ReviewPanel);
-  registerActionBarSlot("diff-summary", DiffSummaryPill, DIFF_SUMMARY_PRIORITY);
+  registerComposerContextSlot(
+    "diff-summary",
+    DiffSummaryPill,
+    DIFF_SUMMARY_PRIORITY,
+  );
 }
 
 registerReviewSlots();

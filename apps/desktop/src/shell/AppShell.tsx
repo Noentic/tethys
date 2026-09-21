@@ -15,13 +15,18 @@ import {
   Separator,
   usePanelRef,
 } from "react-resizable-panels";
-import { ActionBar } from "./ActionBar";
 import { ActivityRail } from "./ActivityRail";
 import { ApprovalDrawerBody } from "./ApprovalDrawerBody";
 import { CommandPalette } from "./CommandPalette";
 import { InspectorPane } from "./InspectorPane";
 import { setupGlobalKeyboardMap } from "./keyboard";
 import { SessionsColumn } from "./SessionsColumn";
+import {
+  computeShellLayout,
+  INSPECTOR_COLLAPSED_WIDTH,
+  INSPECTOR_WIDTH,
+  STAGE_MIN_WIDTH,
+} from "./shell-layout";
 import { WindowHeader } from "./WindowHeader";
 
 // DESIGN.md shell-splitter: a 1px structural line inside a wider transparent hit
@@ -42,12 +47,6 @@ export interface AppShellProps {
   activeRoute?: string;
   onNavigate?: (route: string) => void;
   platformInset?: boolean;
-  /**
-   * Asks the backend to stop a thread (`thread.cancel`). Every press is
-   * forwarded: the backend decides what it means (start the grace window, or
-   * force-kill once it has elapsed) and reports the phase on the event stream.
-   */
-  onStopSession?: (sessionId: string) => void;
 }
 
 export function AppShell({
@@ -55,7 +54,6 @@ export function AppShell({
   activeRoute = "/thread/new",
   onNavigate,
   platformInset = false,
-  onStopSession,
 }: AppShellProps) {
   // Tabs management
   const [tabs, setTabs] = useState<TabData[]>(() => {
@@ -297,10 +295,16 @@ export function AppShell({
     toggleInspector,
   ]);
 
-  const isCompactSessions = windowWidth < 800;
-  const isOverlayInspector = windowWidth < 1100;
-  const shouldShowSessions =
-    sessionsSidebarOpen || (activeView === "thread" && !isCompactSessions);
+  // Rail | Stage | Inspector. Sessions is never docked: it is a drawer that
+  // takes no width from the Stage, so the docked layout always clears
+  // STAGE_MIN_WIDTH (shell-layout.ts).
+  const layout = computeShellLayout({
+    windowWidth,
+    hasInspector: activeView === "thread",
+    inspectorCollapsed,
+    sessionsOpen: sessionsSidebarOpen,
+  });
+  const isOverlayInspector = layout.inspector === "overlay";
 
   // Shell-provided control for slot components: overlay at narrow widths,
   // expand the collapsed docked panel above the overlay breakpoint.
@@ -318,10 +322,6 @@ export function AppShell({
   const currentSessionState = activeSessionId
     ? sessionsMap[activeSessionId]
     : undefined;
-
-  const handleStopSession = () => {
-    if (activeSessionId) onStopSession?.(activeSessionId);
-  };
 
   return (
     <InspectorControlProvider value={inspectorControl}>
@@ -358,73 +358,34 @@ export function AppShell({
             daemonHealthy={true}
           />
 
-          {/* Resizable 3-Column Region */}
+          {/* Stage + docked Inspector */}
           <Group
             id="shell-main-group"
             orientation="horizontal"
             className="flex-1 overflow-hidden"
           >
-            {/* Sessions Column (280px / Collapsible) - shown when toggled or on active thread */}
-            {shouldShowSessions && (
-              <>
-                <Panel
-                  id="shell-sessions"
-                  defaultSize={isCompactSessions ? 48 : 280}
-                  minSize={isCompactSessions ? 48 : 200}
-                  maxSize={isCompactSessions ? 48 : 400}
-                  collapsible={!isCompactSessions}
-                  className="h-full"
-                >
-                  <SessionsColumn
-                    sessions={sessions}
-                    activeSessionId={activeSessionId}
-                    collapsed={isCompactSessions}
-                    onSelectSession={(sessId) =>
-                      onNavigate?.(`/thread/${sessId}`)
-                    }
-                    onNewSession={() => onNavigate?.("/thread/new")}
-                  />
-                </Panel>
-
-                <Separator className={SHELL_SEPARATOR_CLASS} />
-              </>
-            )}
-
             {/* Center Stage Panel */}
             <Panel
               id="shell-stage"
-              minSize={560}
+              minSize={STAGE_MIN_WIDTH}
               className="flex-1 h-full flex flex-col overflow-hidden bg-(--tethys-canvas)"
             >
               <div className="flex-1 overflow-hidden flex flex-col">
                 {children}
               </div>
-
-              {/* Action Bar (56px) - only for active thread */}
-              {activeView === "thread" && (
-                <ActionBar
-                  cancellationState={
-                    currentSessionState?.cancellationState ?? "idle"
-                  }
-                  graceDeadline={currentSessionState?.graceDeadline ?? null}
-                  providerName={currentSessionState?.providerId ?? "Provider"}
-                  worktreeBranch={currentSessionState?.branchName}
-                  onStop={handleStopSession}
-                />
-              )}
             </Panel>
 
-            {/* Inspector Panel (360px) - In desktop mode */}
+            {/* Inspector Panel (360px), docked from the overlay breakpoint up */}
             {activeView === "thread" && !isOverlayInspector && (
               <>
                 <Separator className={SHELL_SEPARATOR_CLASS} />
                 <Panel
                   id="shell-inspector"
                   panelRef={inspectorPanelRef}
-                  defaultSize={360}
+                  defaultSize={INSPECTOR_WIDTH}
                   minSize={240}
                   maxSize={500}
-                  collapsedSize={40}
+                  collapsedSize={INSPECTOR_COLLAPSED_WIDTH}
                   collapsible
                   className="h-full"
                 >
@@ -438,18 +399,48 @@ export function AppShell({
               </>
             )}
           </Group>
-
-          {/* Overlay Inspector for <1100px */}
-          {activeView === "thread" &&
-            isOverlayInspector &&
-            inspectorOverlayOpen && (
-              <InspectorPane
-                sessionId={activeSessionId}
-                isOverlay={true}
-                onCloseOverlay={() => setInspectorOverlayOpen(false)}
-              />
-            )}
         </div>
+
+        {/* Overlay Inspector below the breakpoint: a drawer over the Stage that
+            takes no width from it, with scrim, focus trap and Esc. */}
+        <Drawer
+          open={isOverlayInspector && inspectorOverlayOpen}
+          onClose={() => setInspectorOverlayOpen(false)}
+          bare
+          label="Thread Inspector"
+          side="right"
+          width="w-(--layout-shell-inspector)"
+        >
+          <InspectorPane
+            sessionId={activeSessionId}
+            status={currentSessionState?.status}
+            isOverlay
+            onCloseOverlay={() => setInspectorOverlayOpen(false)}
+          />
+        </Drawer>
+
+        {/* Sessions: an on-demand drawer, never a docked region. */}
+        <Drawer
+          open={sessionsSidebarOpen}
+          onClose={() => setSessionsSidebarOpen(false)}
+          bare
+          label="Sessions"
+          side="left"
+          width="w-(--layout-shell-threads)"
+        >
+          <SessionsColumn
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelectSession={(sessId) => {
+              setSessionsSidebarOpen(false);
+              onNavigate?.(`/thread/${sessId}`);
+            }}
+            onNewSession={() => {
+              setSessionsSidebarOpen(false);
+              onNavigate?.("/thread/new");
+            }}
+          />
+        </Drawer>
 
         {/* 3. Command Palette Dialog */}
         <CommandPalette

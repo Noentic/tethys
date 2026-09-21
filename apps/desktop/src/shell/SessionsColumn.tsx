@@ -5,11 +5,9 @@ import {
 } from "@tethys/state";
 import {
   Button,
-  IconButton,
   nextRovingIndex,
   SessionGroupHeader,
   SessionListRow,
-  StatusDot,
 } from "@tethys/ui";
 import { type KeyboardEvent, useState } from "react";
 
@@ -18,7 +16,6 @@ export interface SessionsColumnProps {
   activeSessionId?: string;
   onSelectSession: (sessionId: string) => void;
   onNewSession?: () => void;
-  collapsed?: boolean;
 }
 
 export function SessionsColumn({
@@ -26,7 +23,6 @@ export function SessionsColumn({
   activeSessionId,
   onSelectSession,
   onNewSession,
-  collapsed = false,
 }: SessionsColumnProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<
     Record<string, boolean>
@@ -62,41 +58,11 @@ export function SessionsColumn({
     rows[next]?.focus();
   };
 
-  if (collapsed) {
-    // Icon strip mode (<800px)
-    return (
-      <nav
-        aria-label="Sessions"
-        className="flex h-full w-rail shrink-0 flex-col items-center gap-sm overflow-y-auto border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) py-3 select-none"
-      >
-        <IconButton
-          size="compact"
-          label="New Session"
-          onClick={onNewSession}
-          className="mb-2"
-        >
-          <Plus className="h-4 w-4" />
-        </IconButton>
-        {sessions.map((sess) => (
-          <button
-            key={sess.sessionId}
-            type="button"
-            title={`${sess.title} (${sess.status})`}
-            onClick={() => onSelectSession(sess.sessionId)}
-            className="focus-ring flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-(--tethys-surface-hover)"
-          >
-            <StatusDot status={sess.status} />
-          </button>
-        ))}
-      </nav>
-    );
-  }
-
   return (
     <nav
       aria-label="Sessions Column"
       onKeyDown={handleListKeyDown}
-      className="flex h-full w-full flex-col border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) select-none"
+      className="flex h-full w-full flex-col bg-(--tethys-surface-panel) select-none"
     >
       {(workspaceLabel || onNewSession) && (
         <div className="flex flex-col gap-md border-b border-(--tethys-hairline) p-md">

@@ -1,7 +1,7 @@
 import {
-  getAllActionBarSlots,
-  registerActionBarSlot,
+  getAllComposerContextSlots,
   registerApprovalDrawerBody,
+  registerComposerContextSlot,
 } from "@tethys/ui";
 import { InboxDrawer } from "./InboxDrawer";
 import { PermissionModePill } from "./permission-mode-pill";
@@ -16,11 +16,11 @@ import { PermissionModePill } from "./permission-mode-pill";
  * fold constant.
  */
 export function registerApprovalSlots(): void {
-  registerActionBarSlot("permission-mode", PermissionModePill, 70);
+  registerComposerContextSlot("permission-mode", PermissionModePill, 70);
   registerApprovalDrawerBody(InboxDrawer);
 }
 
 registerApprovalSlots();
 
 /** Re-exported so tests can assert the registration landed. */
-export { getAllActionBarSlots };
+export { getAllComposerContextSlots };

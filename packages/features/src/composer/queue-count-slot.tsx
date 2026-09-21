@@ -1,7 +1,7 @@
-//! Queue-count action-bar slot (M1.10 U5). Registers at DESIGN's `action-bar`
+//! Queue-count composer context slot (M1.10 U5). Registers at DESIGN's `prompt-card.contextBarFold`
 //! priority: it folds after the mode pill and before `usage-bar`.
 
-import { registerActionBarSlot } from "@tethys/ui";
+import { registerComposerContextSlot } from "@tethys/ui";
 
 export const QUEUE_COUNT_PRIORITY = 30;
 
@@ -35,5 +35,9 @@ export function QueueCountSlot({
 }
 
 export function registerQueueCountSlot(): void {
-  registerActionBarSlot("queue-count", QueueCountSlot, QUEUE_COUNT_PRIORITY);
+  registerComposerContextSlot(
+    "queue-count",
+    QueueCountSlot,
+    QUEUE_COUNT_PRIORITY,
+  );
 }

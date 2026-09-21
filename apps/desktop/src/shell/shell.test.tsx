@@ -1,18 +1,14 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import {
-  cancelPhaseFixtures,
   clearAllSessionStoresForTesting,
   createInitialSessionState,
   createSessionStore,
-  selectCancellationState,
-  sessionReducer,
 } from "@tethys/state";
 import {
   clearRegistriesForTesting,
   registerApprovalDrawerBody,
 } from "@tethys/ui";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ActionBar } from "./ActionBar";
+import { beforeEach, describe, expect, it } from "vitest";
 import { AppShell } from "./AppShell";
 
 describe("AppShell Layout & States", () => {
@@ -98,106 +94,10 @@ describe("AppShell Layout & States", () => {
   });
 });
 
-describe("ActionBar Stop Button States", () => {
-  it("renders neutral Stop button during idle and cancel_requested", () => {
-    const { rerender } = render(<ActionBar cancellationState="idle" />);
-    const stopBtn = screen.getByRole("button", { name: "Stop" });
-    expect(stopBtn.className).not.toContain("text-(--tethys-status-danger)");
-
-    rerender(<ActionBar cancellationState="cancel_requested" />);
-    const cancellingBtn = screen.getByRole("button", { name: /Cancelling/ });
-    expect(cancellingBtn.className).not.toContain(
-      "text-(--tethys-status-danger)",
-    );
-    expect(cancellingBtn.getAttribute("aria-busy")).toBe("true");
-  });
-
-  it("renders destructive styling exclusively during grace_elapsed and terminating", () => {
-    const { rerender } = render(
-      <ActionBar cancellationState="grace_elapsed" />,
-    );
-    const forceKillBtn = screen.getByRole("button", { name: /Force kill/ });
-    expect(forceKillBtn.className).toContain("text-(--tethys-status-danger)");
-
-    rerender(<ActionBar cancellationState="terminating" />);
-    const termBtn = screen.getByRole("button", {
-      name: /Terminating \(SIGKILL\)/,
-    });
-    expect(termBtn.className).toContain("text-(--tethys-status-danger)");
-  });
-
-  it("shows the isolation pill as the branch, or no git", () => {
-    const { rerender } = render(
-      <ActionBar cancellationState="idle" worktreeBranch="feat/isolation" />,
-    );
-    expect(screen.getByText("feat/isolation")).toBeDefined();
-
-    rerender(<ActionBar cancellationState="idle" noGit />);
-    expect(screen.getByText("no git")).toBeDefined();
-
-    rerender(<ActionBar cancellationState="idle" />);
-    expect(screen.queryByText("no git")).toBeNull();
-  });
-});
-
-describe("Cancel ladder and replaceable drawer body (M1.6c U4 / U10)", () => {
+describe("Replaceable approval drawer body (M1.6c U10)", () => {
   beforeEach(() => {
     clearAllSessionStoresForTesting();
     clearRegistriesForTesting();
-  });
-
-  it("forwards every press to the backend and never advances the ladder itself", () => {
-    const onStopSession = vi.fn();
-    const store = createSessionStore(
-      createInitialSessionState("thread-stop", "p-1", "ws-1", "Stop me"),
-    );
-    render(
-      <AppShell
-        activeRoute="/thread/thread-stop"
-        onStopSession={onStopSession}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
-    expect(onStopSession).toHaveBeenCalledWith("thread-stop");
-    // No phase originates from the client: it waits for the backend's event.
-    expect(selectCancellationState(store.state)).toBe("idle");
-  });
-
-  it("renders the phases the backend reports and forwards the Force kill press", () => {
-    const onStopSession = vi.fn();
-    const store = createSessionStore(
-      createInitialSessionState("thread-phase", "p-1", "ws-1", "Phases"),
-    );
-    render(
-      <AppShell
-        activeRoute="/thread/thread-phase"
-        onStopSession={onStopSession}
-      />,
-    );
-
-    act(() => {
-      store.setState((state) =>
-        sessionReducer(state, {
-          type: "CancelPhaseChanged",
-          body: cancelPhaseFixtures["cancel-requested"],
-        }),
-      );
-    });
-    const pending = screen.getByRole("button", { name: /Cancelling/ });
-    expect(pending.hasAttribute("disabled")).toBe(true);
-
-    act(() => {
-      store.setState((state) =>
-        sessionReducer(state, {
-          type: "CancelPhaseChanged",
-          body: cancelPhaseFixtures["grace-elapsed"],
-        }),
-      );
-    });
-    fireEvent.click(screen.getByRole("button", { name: /Force kill/ }));
-    expect(onStopSession).toHaveBeenCalledWith("thread-phase");
-    expect(onStopSession).toHaveBeenCalledTimes(1);
   });
 
   it("renders a registered approval drawer body instead of the default", () => {
