@@ -1,6 +1,7 @@
 :root {
   /* Default Dark (Obsidian Zinc) — chrome raised above the canvas, stage deepest.
      Every pair of surfaces that touch in the UI clears its L* gap (elevation.test.ts). */
+  color-scheme: dark;
   --tethys-canvas: #0b0b0d;
   --tethys-surface-rail: #161619;
   --tethys-surface-panel: #111114;
@@ -98,6 +99,7 @@
 [data-theme="light"] {
   /* Default Light (Clean Zinc/Slate) — canvas and panel step down so the
      white surfaces actually rise above them. */
+  color-scheme: light;
   --tethys-canvas: #f4f4f5;
   --tethys-surface-rail: #ffffff;
   --tethys-surface-panel: #f9f9fa;

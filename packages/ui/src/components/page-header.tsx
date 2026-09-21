@@ -4,6 +4,8 @@ import { cn } from "../lib/utils";
 export interface PageHeaderProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   title: React.ReactNode;
+  /** Path above the title, e.g. `Settings / Providers`. */
+  breadcrumb?: React.ReactNode;
   description?: React.ReactNode;
   actions?: React.ReactNode;
 }
@@ -12,6 +14,7 @@ export interface PageHeaderProps
 // optional trailing action cluster. Every route header goes through this.
 export function PageHeader({
   title,
+  breadcrumb,
   description,
   actions,
   className,
@@ -23,6 +26,11 @@ export function PageHeader({
       {...props}
     >
       <div className="flex min-w-0 flex-col gap-1">
+        {breadcrumb && (
+          <span className="text-label-sm text-(--tethys-text-muted)">
+            {breadcrumb}
+          </span>
+        )}
         <h1 className="text-heading-lg text-(--tethys-text-primary)">
           {title}
         </h1>

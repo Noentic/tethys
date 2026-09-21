@@ -16,6 +16,7 @@ function fakeClient(scan: ImportScan = importScanFixture) {
     projection_rollback: vi.fn(),
     import_scan: vi.fn().mockResolvedValue(scan),
     import_apply: apply,
+    registry_set: vi.fn(),
   };
   return { mcp, apply, client: { mcp } as unknown as McpSyncClient };
 }

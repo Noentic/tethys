@@ -4,6 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import { ComposerEditor } from "./editor";
 import type { EditorHandle } from "./types";
 
+// jsdom has no layout engine. After an insertion ProseMirror scrolls the
+// selection into view, which asks for client rects it never gets from jsdom.
+Object.assign(Range.prototype, {
+  getClientRects: () => [] as unknown as DOMRectList,
+  getBoundingClientRect: () => new DOMRect(),
+});
+Object.assign(Element.prototype, {
+  getClientRects: () => [] as unknown as DOMRectList,
+});
+
 function setup() {
   const ref = createRef<EditorHandle>();
   render(<ComposerEditor ref={ref} />);
@@ -60,6 +70,21 @@ describe("ComposerEditor chips", () => {
       token: "/agent:deploy",
     });
     expect(ref.current?.serializeToPrompt()).toBe("/agent:deploy");
+  });
+
+  it("leaves a gap after the chip so the next text does not touch it", () => {
+    const ref = setup();
+    insert(ref, {
+      kind: "path",
+      name: "main.py",
+      token: "@main.py",
+      path: "main.py",
+    });
+    const surface = document.querySelector(".ProseMirror");
+    // The gap is a real trailing text node, so the caret lands past the chip…
+    expect(surface?.textContent?.endsWith(" ")).toBe(true);
+    // …while the prompt the agent receives stays trimmed.
+    expect(ref.current?.serializeToPrompt()).toBe("@main.py");
   });
 
   it("reports emptiness and clears", () => {

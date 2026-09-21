@@ -60,7 +60,7 @@ function clientFor(profile: AgentProfileView): ProvidersClient {
 
 async function openLogin(client: ProvidersClient) {
   render(<ProvidersView client={client} />);
-  await screen.findByTestId("provider-row");
+  await screen.findAllByTestId("provider-row");
   fireEvent.click(screen.getByRole("button", { name: /Toggle details/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Sign in" }));
 }
@@ -155,7 +155,7 @@ describe("login-close re-check per authMethods shape (M1.12 U9)", () => {
       auth_methods: [],
     });
     render(<ProvidersView client={client} />);
-    await screen.findByTestId("provider-row");
+    await screen.findAllByTestId("provider-row");
     fireEvent.click(screen.getByRole("button", { name: /Toggle details/ }));
     await screen.findByLabelText("Executable");
     expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();

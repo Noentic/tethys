@@ -3,7 +3,12 @@
 
 import type { AgentCommand } from "@tethys/bindings";
 import { createClient, type TethysClient } from "@tethys/client";
-import type { ProviderConnection, TrustedWorkspace } from "@tethys/state";
+import {
+  type ProviderConnection,
+  type TrustedWorkspace,
+  useProvidersQuery,
+  useTrustedWorkspaces,
+} from "@tethys/state";
 import { PromptCard } from "./prompt-card";
 import { type Navigate, startSession } from "./start-session";
 
@@ -14,6 +19,8 @@ export interface ThreadNewScreenProps {
   providers?: ProviderConnection[];
   workspaces?: TrustedWorkspace[];
   initialWorkspace?: TrustedWorkspace | null;
+  /** `/thread/new?workspace=<id>` — resolved against the trusted list. */
+  initialWorkspaceId?: string;
   agentCommands?: AgentCommand[];
   navigate: Navigate;
   className?: string;
@@ -24,10 +31,20 @@ export function ThreadNewScreen({
   providers,
   workspaces,
   initialWorkspace = null,
+  initialWorkspaceId,
   agentCommands = [],
   navigate,
   className,
 }: ThreadNewScreenProps) {
+  useProvidersQuery(client);
+  const trusted = useTrustedWorkspaces(workspaces);
+  const preselected =
+    initialWorkspace ??
+    (initialWorkspaceId !== undefined
+      ? (trusted.find((workspace) => workspace.id === initialWorkspaceId) ??
+        null)
+      : null);
+
   return (
     <div
       className={
@@ -41,8 +58,8 @@ export function ThreadNewScreen({
       <PromptCard
         client={client}
         providers={providers}
-        workspaces={workspaces}
-        initialWorkspace={initialWorkspace}
+        workspaces={trusted}
+        initialWorkspace={preselected}
         agentCommands={agentCommands}
         onStart={(input) => startSession(client, input, navigate)}
       />

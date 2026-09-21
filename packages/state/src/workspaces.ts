@@ -16,13 +16,11 @@ import type {
   ThreadState,
   Vcs,
   WorkspaceCapabilities,
+  WorkspaceListItem,
   WorkspaceTrustState,
 } from "@tethys/bindings";
 import { threadStateToStatusKey } from "./thread-state";
-import {
-  type WorkspaceCapabilityFixture,
-  workspaceCapabilityFixtures,
-} from "./workspace-capabilities";
+import { workspaceCapabilityFixtures } from "./workspace-capabilities";
 
 /** One session as the catalog's chip/row renders it. */
 export interface CatalogSession {
@@ -93,18 +91,24 @@ export const catalogWorkspaceFixtures: CatalogWorkspace[] = [
   },
 ];
 
-/** Trust-filtered workspaces (fixture default; real source `workspace.list`). */
-export function useWorkspaceList(
-  workspaces: CatalogWorkspace[] = catalogWorkspaceFixtures,
-): CatalogWorkspace[] {
-  return workspaces;
-}
-
-/** Resolved capabilities (fixture default; real source `workspace.capabilities`). */
-export function useWorkspaceCapabilities(
-  fixture: WorkspaceCapabilityFixture = "git-remote",
-): WorkspaceCapabilities {
-  return workspaceCapabilityFixtures[fixture];
+/** Maps the wire card to the catalog view model (the `workspace.list` seam). */
+export function mapListItem(item: WorkspaceListItem): CatalogWorkspace {
+  return {
+    id: item.id,
+    name: item.name,
+    path: item.path,
+    capabilities: item.capabilities,
+    trust: item.trust,
+    permissionMode: "supervised",
+    sessions: item.sessions.map((session) => ({
+      id: session.id,
+      providerId: "unknown",
+      branchName: session.title,
+      status: session.state,
+      turnCount: 0,
+      diffStat: null,
+    })),
+  };
 }
 
 /** The status key `StatusDot` / `getSessionStateInfo` switch on. */
@@ -224,10 +228,20 @@ export const initialCatalogViewState: CatalogViewState = {
   peekTab: "sessions",
 };
 
+/** Sessions that are running or waiting on the user, for the card's meta row. */
+export function activeSessionCount(workspace: CatalogWorkspace): number {
+  return workspace.sessions.filter(
+    (session) =>
+      sessionStatusKey(session.status) === "running" ||
+      sessionStatusKey(session.status) === "awaiting_approval",
+  ).length;
+}
+
 /** Filter + sort the catalog from one view state (pure; the view calls it). */
 export function selectCatalog(
   workspaces: CatalogWorkspace[],
   view: CatalogViewState,
+  favorites: string[] = [],
 ): CatalogWorkspace[] {
   const query = view.search.trim().toLowerCase();
   const filtered = workspaces.filter((workspace) => {
@@ -240,10 +254,16 @@ export function selectCatalog(
       workspace.path.toLowerCase().includes(query)
     );
   });
-  return filtered.sort((a, b) => {
+  const sorted = filtered.sort((a, b) => {
     if (view.sort === "name") return a.name.localeCompare(b.name);
     if (view.sort === "sessions") return b.sessions.length - a.sessions.length;
     return 0;
+  });
+  if (favorites.length === 0) return sorted;
+  return sorted.sort((a, b) => {
+    const rank = (workspace: CatalogWorkspace) =>
+      favorites.includes(workspace.id) ? 0 : 1;
+    return rank(a) - rank(b);
   });
 }
 

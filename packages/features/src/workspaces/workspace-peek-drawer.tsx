@@ -1,9 +1,17 @@
-//! `workspace-peek-drawer` (DESIGN.md; spec §2). Modeless (the catalog stays
-//! interactive) but focus-trapping via the shared `Drawer`. Two DESIGN tabs:
-//! Sessions (grouped by Provider) and Approvals. Worktree A owns the approval
-//! card and responder; this renders its inbox entries through a fixture-backed
-//! hook (overview D12) and never owns the approval logic.
+//! `workspace-peek-drawer` (DESIGN.md; pen `Workspace Peek Drawer` r8PCup).
+//! Modeless (the catalog stays interactive) but focus-trapping via the shared
+//! `Drawer`. Two tabs: Sessions (grouped by Provider) and Approvals. Worktree A
+//! owns the approval card; this renders its inbox entries and never owns the
+//! approval logic.
 
+import {
+  Cross,
+  FolderClosed,
+  GitBranch,
+  LogoGithub,
+  LogoGitlab,
+  Plus,
+} from "@nebutra/icons";
 import type {
   CatalogPeekTab,
   CatalogSession,
@@ -11,7 +19,7 @@ import type {
 } from "@tethys/state";
 import { Button, Drawer, StatusDot, UnderlineTabs } from "@tethys/ui";
 import { useEffect, useState } from "react";
-import { SessionItemRow } from "./session-item-row";
+import { isKnownProvider, SessionItemRow } from "./session-item-row";
 
 export interface ApprovalEntry {
   id: string;
@@ -44,11 +52,22 @@ function groupByProvider(
 ): Array<[string, CatalogSession[]]> {
   const groups = new Map<string, CatalogSession[]>();
   for (const session of sessions) {
-    const list = groups.get(session.providerId) ?? [];
+    const key = isKnownProvider(session.providerId)
+      ? session.providerId
+      : "Sessions";
+    const list = groups.get(key) ?? [];
     list.push(session);
-    groups.set(session.providerId, list);
+    groups.set(key, list);
   }
   return [...groups.entries()];
+}
+
+function sourceIcon(workspace: CatalogWorkspace) {
+  const vcs = workspace.capabilities.vcs;
+  if (vcs.kind === "none") return FolderClosed;
+  if (vcs.kind === "git-remote" && vcs.host === "github") return LogoGithub;
+  if (vcs.kind === "git-remote" && vcs.host === "gitlab") return LogoGitlab;
+  return GitBranch;
 }
 
 export function WorkspacePeekDrawer({
@@ -72,8 +91,7 @@ export function WorkspacePeekDrawer({
   const entries = approvals.filter(
     (entry) => entry.workspaceId === workspace.id,
   );
-  const hasGit = workspace.capabilities.vcs.kind !== "none";
-  const hasRestore = workspace.capabilities.restore;
+  const SourceIcon = sourceIcon(workspace);
   const capReached =
     workspace.capabilities.max_concurrent_sessions === 1 &&
     workspace.sessions.length >= 1;
@@ -82,76 +100,76 @@ export function WorkspacePeekDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      title={workspace.name}
+      bare
+      label={workspace.name}
       side="right"
       width="w-(--layout-drawer-peek)"
       showScrim={false}
     >
-      <div className="flex h-full flex-col gap-lg">
-        <div className="flex flex-col gap-1.5 border-b border-(--tethys-hairline) pb-lg">
-          <span className="text-heading-md text-(--tethys-text-primary)">
+      <div className="flex h-full flex-col">
+        {/* Header: name, source glyph, close. */}
+        <div className="flex w-full items-center gap-lg p-lg">
+          <span className="min-w-0 flex-1 truncate text-heading-md text-(--tethys-text-primary)">
             {workspace.name}
           </span>
-          <span className="font-mono text-mono-code text-(--tethys-text-secondary)">
-            {workspace.path}
+          <span
+            title={workspace.path}
+            className="flex h-[18px] shrink-0 items-center gap-0.5 rounded-xs bg-(--tethys-surface-hover) px-1.5 text-(--tethys-text-muted)"
+          >
+            <SourceIcon className="size-3" aria-hidden="true" />
           </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close workspace details"
+            className="focus-ring flex size-4 shrink-0 items-center justify-center text-(--tethys-text-secondary) hover:text-(--tethys-text-primary)"
+          >
+            <Cross className="size-4" aria-hidden="true" />
+          </button>
         </div>
 
         <UnderlineTabs<CatalogPeekTab>
           label="Workspace details"
           value={tab}
           onChange={setTab}
-          className="border-b border-(--tethys-hairline)"
+          className="border-b border-(--tethys-hairline) px-lg"
           tabs={[
-            {
-              value: "sessions",
-              label: `Sessions (${workspace.sessions.length})`,
-            },
-            {
-              value: "approvals",
-              label: "Approvals",
-              adornment:
-                entries.length > 0 ? (
-                  <StatusDot status="awaiting_approval" inline />
-                ) : undefined,
-            },
+            { value: "sessions", label: "Sessions" },
+            { value: "approvals", label: "Approvals" },
           ]}
         />
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {tab === "sessions" ? (
             workspace.sessions.length === 0 ? (
               <p className="py-2xl text-center text-body-sm text-(--tethys-text-muted)">
                 No active sessions running in this workspace.
               </p>
             ) : (
-              <div className="flex flex-col gap-lg">
-                {groupByProvider(workspace.sessions).map(
-                  ([providerId, sessions]) => (
-                    <div key={providerId} className="flex flex-col gap-sm">
-                      <span className="text-label-sm uppercase text-(--tethys-text-muted)">
-                        {providerId}
-                      </span>
-                      {sessions.map((session) => (
-                        <SessionItemRow
-                          key={session.id}
-                          session={session}
-                          hasGit={hasGit}
-                          hasRestore={hasRestore}
-                          onOpen={() => onOpenThread?.(session.id)}
-                        />
-                      ))}
+              groupByProvider(workspace.sessions).map(
+                ([provider, sessions]) => (
+                  <div key={provider} className="flex flex-col">
+                    <div className="flex h-7 items-center gap-1.5 px-3 text-label-md text-(--tethys-text-muted)">
+                      <span aria-hidden="true">▾</span>
+                      <span>{provider}</span>
                     </div>
-                  ),
-                )}
-              </div>
+                    {sessions.map((session) => (
+                      <SessionItemRow
+                        key={session.id}
+                        session={session}
+                        onOpen={() => onOpenThread?.(session.id)}
+                      />
+                    ))}
+                  </div>
+                ),
+              )
             )
           ) : entries.length === 0 ? (
             <p className="py-2xl text-center text-body-sm text-(--tethys-text-muted)">
               No pending approvals for this workspace.
             </p>
           ) : (
-            <div className="flex flex-col gap-md">
+            <div className="flex flex-col gap-md p-1.5">
               {entries.map((entry) => (
                 <div
                   key={entry.id}
@@ -171,7 +189,8 @@ export function WorkspacePeekDrawer({
           )}
         </div>
 
-        <div className="border-t border-(--tethys-hairline) pt-lg">
+        {/* Footer: the one place a new thread starts from a card. */}
+        <div className="border-t border-(--tethys-hairline) p-lg">
           <Button
             variant="secondary"
             disabled={capReached}
@@ -181,8 +200,10 @@ export function WorkspacePeekDrawer({
                 ? "This folder allows one session at a time"
                 : undefined
             }
+            className="gap-1.5"
           >
-            + New Thread
+            <Plus className="size-4" />
+            <span>New thread</span>
           </Button>
         </div>
       </div>

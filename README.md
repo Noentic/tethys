@@ -26,7 +26,7 @@ Git is a feature, not a requirement. A plain folder is a first-class workspace, 
 
 - **Parallel Worktrees, Zero Collisions**: In a git workspace, write-capable threads execute in dedicated git worktrees by default, preventing agents from dirtying your primary checkout or conflicting with one another.
 - **Turn-by-Turn Checkpoints and Instant Rollback**: In a git workspace, temporary-index snapshots capture worktree state before and after every turn in under 150 ms, providing safe undo without polluting git commit history.
-- **Protocol-First Agent Integration**: Connects via the standard [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) (v1 and v2) with adapters for leading developer agents (Claude Code, OpenCode and Kiro first; Codex and others as rolling additions).
+- **Protocol-First Agent Integration**: Connects via the standard [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) with Claude Code, Codex, and OpenCode as the first verified Providers; registry-listed ACP agents use the generic integration path and custom extensions use provider-owned adapters.
 - **The Credential Principle**: Vendor subscriptions and credentials are never read, stored, proxied, or reissued. Agents authenticate using their own official login flows and platform keyrings.
 - **Unified MCP and Skill Synchronization**: Configure MCP servers and `.agents/skills` centrally. Tethys projects configuration into vendor configs (JSON/TOML) with lossless two-way formatting preservation.
 - **Process Group Containment**: Agents run in isolated process groups (`setpgid` on Unix, Job Objects on Windows) governed by an escalating cancellation ladder (`SIGINT` -> grace period -> `SIGTERM` -> `SIGKILL`) to eliminate orphaned background tasks.

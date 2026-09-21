@@ -9,8 +9,12 @@ import {
   type CatalogViewState,
   type CatalogWorkspace,
   initialCatalogViewState,
+  mapListItem,
+  queryClient,
+  queryKeys,
   selectCatalog,
-  useWorkspaceList,
+  useWorkspaceFavorites,
+  useWorkspaceRows,
   workspaceNeedsAttention,
 } from "@tethys/state";
 import {
@@ -19,10 +23,11 @@ import {
   EmptyState,
   IconButton,
   Input,
+  KeycapPill,
   SegmentedControl,
   Select,
 } from "@tethys/ui";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { WorkspaceCard } from "./workspace-card";
 import { WorkspacePeekDrawer } from "./workspace-peek-drawer";
 import { WorkspaceTrustDialog } from "./workspace-trust-dialog";
@@ -71,25 +76,6 @@ const ListIcon = () => (
 );
 
 /** Maps the wire card to the catalog view model (D12 real-source seam). */
-export function mapListItem(item: WorkspaceListItem): CatalogWorkspace {
-  return {
-    id: item.id,
-    name: item.name,
-    path: item.path,
-    capabilities: item.capabilities,
-    trust: item.trust,
-    permissionMode: "supervised",
-    sessions: item.sessions.map((session) => ({
-      id: session.id,
-      providerId: "unknown",
-      branchName: session.title,
-      status: session.state,
-      turnCount: 0,
-      diffStat: null,
-    })),
-  };
-}
-
 export interface WorkspacesViewProps {
   workspaces?: CatalogWorkspace[];
   client?: WorkspaceCatalogClient;
@@ -107,17 +93,51 @@ export function WorkspacesView({
   inspectPath,
   onNavigate,
 }: WorkspacesViewProps) {
-  const fixtures = useWorkspaceList(workspaces);
-  const [items, setItems] = useState<CatalogWorkspace[]>(fixtures);
+  const rows = useWorkspaceRows(client, workspaces === undefined);
+  const [pendingAdds, setPendingAdds] = useState<CatalogWorkspace[]>([]);
+  const items = useMemo(() => {
+    const added = new Set(pendingAdds.map((workspace) => workspace.id));
+    return [
+      ...pendingAdds,
+      ...(workspaces ?? rows).filter((workspace) => !added.has(workspace.id)),
+    ];
+  }, [pendingAdds, rows, workspaces]);
   const [view, setView] = useState<CatalogViewState>(initialCatalogViewState);
   const [peekOpen, setPeekOpen] = useState(false);
   const [trustOpen, setTrustOpen] = useState(false);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const [pendingVcs, setPendingVcs] = useState<Vcs | null>(null);
 
-  const visible = useMemo(() => selectCatalog(items, view), [items, view]);
+  const favorites = useWorkspaceFavorites();
+  const visible = useMemo(
+    () => selectCatalog(items, view, favorites),
+    [items, view, favorites],
+  );
   const attentionCount = items.filter(workspaceNeedsAttention).length;
   const selected = items.find((item) => item.id === view.selectedId) ?? null;
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // The search field's `/` keycap is a real shortcut (pen `Top bar / Search`).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      searchRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const patch = (next: Partial<CatalogViewState>) =>
     setView((prev) => ({ ...prev, ...next }));
@@ -137,93 +157,94 @@ export function WorkspacesView({
   const startAdd = async () => {
     const path = pickFolder ? await pickFolder() : null;
     if (!path) return;
+    let vcs: Vcs | null = null;
+    try {
+      vcs = inspectPath ? await inspectPath(path) : null;
+    } catch {
+      // A failed probe still opens the dialog with the no-VCS copy.
+      vcs = null;
+    }
     setPendingPath(path);
-    setPendingVcs(inspectPath ? await inspectPath(path) : null);
+    setPendingVcs(vcs);
     setTrustOpen(true);
   };
 
   const confirmAdd = async (request: TrustGrant) => {
     const item = await client.workspace.add(request);
     const mapped = mapListItem(item);
-    setItems((prev) => [...prev.filter((w) => w.id !== mapped.id), mapped]);
+    setPendingAdds((prev) => [
+      mapped,
+      ...prev.filter((workspace) => workspace.id !== mapped.id),
+    ]);
     setTrustOpen(false);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
   };
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-(--tethys-canvas)">
+      {/* Pen `ObHEA / D23gzb`: one 32px top bar, no second band. */}
       <section
         aria-label="Workspaces toolbar"
-        className="flex h-16 shrink-0 items-center justify-between gap-lg border-b border-(--tethys-hairline) px-2xl"
+        className="flex h-8 shrink-0 items-center gap-md px-2xl pt-2xl"
       >
-        <div className="flex items-center gap-lg">
-          <h1 className="text-heading-lg text-(--tethys-text-primary)">
-            Workspaces
-          </h1>
+        <h1 className="shrink-0 text-heading-lg text-(--tethys-text-primary)">
+          Workspaces
+        </h1>
+        <span
+          className="shrink-0"
+          title="Remote workspaces arrive with the SSH host, after Wave 2.5"
+        >
           <SegmentedControl
-            value={view.needsAttentionOnly ? "attention" : "all"}
-            onChange={(value) =>
-              patch({ needsAttentionOnly: value === "attention" })
-            }
+            value="local"
+            onChange={() => {}}
             options={[
-              { value: "all", label: "All" },
-              { value: "attention", label: "Attention" },
+              { value: "local", label: "Local" },
+              { value: "remote", label: "Remote", disabled: true },
             ]}
           />
-        </div>
+        </span>
+        <div className="flex-1" />
 
-        <div className="flex items-center gap-md">
-          <div className="w-64">
-            <Input
-              type="text"
-              aria-label="Search workspaces"
-              placeholder="Search workspaces..."
-              value={view.search}
-              onChange={(event) => patch({ search: event.target.value })}
-              leadingIcon={<SearchIcon />}
-            />
-          </div>
-
-          <ApprovalInboxPill
-            count={attentionCount}
-            selected={view.needsAttentionOnly}
-            onClick={() =>
-              patch({ needsAttentionOnly: !view.needsAttentionOnly })
-            }
+        <div className="w-[220px] shrink-0">
+          <Input
+            ref={searchRef}
+            type="text"
+            aria-label="Search workspaces"
+            placeholder="Search"
+            value={view.search}
+            onChange={(event) => patch({ search: event.target.value })}
+            leadingIcon={<SearchIcon />}
+            trailingIcon={<KeycapPill>/</KeycapPill>}
           />
-
-          <Button variant="primary" onClick={() => void startAdd()}>
-            <PlusIcon />
-            <span>New Workspace</span>
-          </Button>
-        </div>
-      </section>
-
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-(--tethys-hairline) px-2xl text-label-md font-normal text-(--tethys-text-muted)">
-        <div className="flex items-center gap-lg">
-          <span className="text-label-md text-(--tethys-text-secondary)">
-            {visible.length} Workspaces
-          </span>
-          <div className="flex items-center gap-sm">
-            <span>Sort</span>
-            <Select
-              aria-label="Sort workspaces"
-              value={view.sort}
-              onChange={(event) =>
-                patch({ sort: event.target.value as CatalogViewState["sort"] })
-              }
-              className="h-7 text-label-md"
-            >
-              <option value="recent">Recent Activity</option>
-              <option value="name">Alphabetical</option>
-              <option value="sessions">Active Sessions</option>
-            </Select>
-          </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <ApprovalInboxPill
+          count={attentionCount}
+          label="Needs attention"
+          selected={view.needsAttentionOnly}
+          onClick={() =>
+            patch({ needsAttentionOnly: !view.needsAttentionOnly })
+          }
+        />
+
+        <Select
+          aria-label="Sort workspaces"
+          value={view.sort}
+          onChange={(event) =>
+            patch({ sort: event.target.value as CatalogViewState["sort"] })
+          }
+          className="h-7 shrink-0 text-label-md"
+        >
+          <option value="recent">Recent activity</option>
+          <option value="name">Alphabetical</option>
+          <option value="sessions">Active sessions</option>
+        </Select>
+
+        <div className="flex shrink-0 items-center gap-0.5">
           <IconButton
-            size="compact"
+            size="default"
             label="Grid view"
+            aria-pressed={view.viewMode === "grid"}
             onClick={() => patch({ viewMode: "grid" })}
             className={
               view.viewMode === "grid"
@@ -234,8 +255,9 @@ export function WorkspacesView({
             <GridIcon />
           </IconButton>
           <IconButton
-            size="compact"
+            size="default"
             label="List view"
+            aria-pressed={view.viewMode === "list"}
             onClick={() => patch({ viewMode: "list" })}
             className={
               view.viewMode === "list"
@@ -246,11 +268,20 @@ export function WorkspacesView({
             <ListIcon />
           </IconButton>
         </div>
-      </div>
+
+        <Button
+          variant="primary"
+          className="shrink-0"
+          onClick={() => void startAdd()}
+        >
+          <PlusIcon />
+          <span>Add workspace</span>
+        </Button>
+      </section>
 
       <main
         aria-label="Workspace Catalog"
-        className="flex-1 overflow-y-auto p-2xl"
+        className="flex-1 overflow-y-auto px-2xl pt-5 pb-2xl"
       >
         <h2 className="sr-only">Workspace List</h2>
         {visible.length === 0 ? (
@@ -275,7 +306,7 @@ export function WorkspacesView({
           <div
             className={
               view.viewMode === "grid"
-                ? "grid grid-cols-1 gap-lg md:grid-cols-2 lg:grid-cols-3"
+                ? "grid grid-cols-1 gap-lg sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                 : "flex max-w-4xl flex-col gap-md"
             }
           >
@@ -285,7 +316,6 @@ export function WorkspacesView({
                 workspace={workspace}
                 selected={workspace.id === view.selectedId && peekOpen}
                 onOpen={() => openWorkspace(workspace)}
-                onNewThread={() => onNavigate?.("/thread/new")}
                 onOpenThread={(sessionId) =>
                   onNavigate?.(`/thread/${sessionId}`)
                 }
@@ -304,7 +334,11 @@ export function WorkspacesView({
           patch({ selectedId: null });
         }}
         onOpenThread={(sessionId) => onNavigate?.(`/thread/${sessionId}`)}
-        onNewThread={() => onNavigate?.("/thread/new")}
+        onNewThread={() =>
+          onNavigate?.(
+            selected ? `/thread/new?workspace=${selected.id}` : "/thread/new",
+          )
+        }
       />
 
       <WorkspaceTrustDialog

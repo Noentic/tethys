@@ -1,5 +1,12 @@
 import { useStore } from "@tanstack/react-store";
-import { sessionsRegistryStore } from "@tethys/state";
+import {
+  isTurnComplete,
+  pendingApprovalNotification,
+  sendOsNotification,
+  shouldNotify,
+  turnCompletionNotification,
+} from "@tethys/features";
+import { sessionsRegistryStore, useThreadsQuery } from "@tethys/state";
 import {
   Drawer,
   getApprovalDrawerBody,
@@ -7,7 +14,7 @@ import {
   InspectorControlProvider,
 } from "@tethys/ui";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Group,
   Panel,
@@ -20,6 +27,7 @@ import { ApprovalDrawerBody } from "./ApprovalDrawerBody";
 import { CommandPalette } from "./CommandPalette";
 import { InspectorPane } from "./InspectorPane";
 import { setupGlobalKeyboardMap } from "./keyboard";
+import { notificationsEnabled } from "./notification-preference";
 import { SessionsColumn } from "./SessionsColumn";
 import {
   computeShellLayout,
@@ -27,6 +35,11 @@ import {
   INSPECTOR_WIDTH,
   STAGE_MIN_WIDTH,
 } from "./shell-layout";
+import {
+  getThemePreference,
+  resolveScheme,
+  setColorScheme,
+} from "./theme-preference";
 import { WindowHeader } from "./WindowHeader";
 
 // DESIGN.md shell-splitter: a 1px structural line inside a wider transparent hit
@@ -120,6 +133,7 @@ export function AppShell({
   const [isWindowFocused, setIsWindowFocused] = useState<boolean>(true);
 
   // Sessions store integration
+  useThreadsQuery();
   const sessionsMap = useStore(sessionsRegistryStore, (s) => s.sessions);
   const sessions = useMemo(() => Object.values(sessionsMap), [sessionsMap]);
 
@@ -136,6 +150,36 @@ export function AppShell({
 
   // Replaceable default: a registered drawer body supersedes the placeholder.
   const DrawerBody = getApprovalDrawerBody() ?? ApprovalDrawerBody;
+
+  // OS notifications: approval growth while blurred, and a turn settling. Both
+  // respect the Settings toggles; the plugin import is lazy and Tauri-only.
+  const previousApprovals = useRef(approvalCount);
+  const previousStatuses = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const enabled = notificationsEnabled();
+    const approvalsBefore = previousApprovals.current;
+    if (
+      enabled &&
+      shouldNotify(approvalsBefore, approvalCount, isWindowFocused)
+    ) {
+      const notification = pendingApprovalNotification(
+        approvalCount - approvalsBefore,
+        approvalCount,
+      );
+      if (notification) void sendOsNotification(notification);
+    }
+    previousApprovals.current = approvalCount;
+
+    const next: Record<string, string> = {};
+    for (const session of sessions) {
+      const before = previousStatuses.current[session.sessionId];
+      if (enabled && isTurnComplete(before, session.status)) {
+        void sendOsNotification(turnCompletionNotification(session.title));
+      }
+      next[session.sessionId] = session.status;
+    }
+    previousStatuses.current = next;
+  }, [approvalCount, sessions, isWindowFocused]);
 
   // Track window resize and blur/focus
   useEffect(() => {
@@ -451,12 +495,8 @@ export function AppShell({
             else if (cmd === "go-workspaces") onNavigate?.("/workspaces");
             else if (cmd === "open-settings") onNavigate?.("/settings/general");
             else if (cmd === "toggle-theme") {
-              const html = document.documentElement;
-              const current = html.getAttribute("data-theme");
-              html.setAttribute(
-                "data-theme",
-                current === "light" ? "dark" : "light",
-              );
+              const resolved = resolveScheme(getThemePreference().scheme);
+              setColorScheme(resolved === "light" ? "dark" : "light");
             }
           }}
         />

@@ -1,6 +1,5 @@
 export * from "./session-item-chip";
 export * from "./session-item-row";
-export * from "./session-topology-canvas";
 export * from "./workspace-card";
 export * from "./workspace-peek-drawer";
 export * from "./workspace-trust-dialog";

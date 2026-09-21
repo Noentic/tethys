@@ -7,7 +7,8 @@
 import type { AgentProfileView } from "@tethys/bindings";
 
 /** A `status-dot` status string for a profile row. */
-export function providerDotStatus(profile: AgentProfileView): string {
+export function providerDotStatus(profile: AgentProfileView | null): string {
+  if (!profile) return "idle";
   if (!profile.enabled) return "disabled";
   switch (profile.health) {
     case "healthy":
@@ -23,8 +24,12 @@ export function providerDotStatus(profile: AgentProfileView): string {
   }
 }
 
-/** The row's mono status subtext — the reason in words. */
-export function providerStatusText(profile: AgentProfileView): string {
+/**
+ * The row's mono subtext. A provider the catalog knows but the machine does not
+ * have yet reads as a next step, not a fault (pen `ze7h5`).
+ */
+export function providerSubtext(profile: AgentProfileView | null): string {
+  if (!profile) return "Not detected — install the CLI to connect";
   if (!profile.enabled) return "Disabled in Tethys settings";
   switch (profile.health) {
     case "healthy": {
@@ -36,10 +41,7 @@ export function providerStatusText(profile: AgentProfileView): string {
     case "auth-required":
       return profile.detail ?? "Auth required — sign in to continue";
     case "not-found":
-      return (
-        profile.detail ??
-        `Not found — ${profile.launch_spec.program} is not installed or not on PATH`
-      );
+      return `Not detected — install the CLI to connect`;
     case "error":
       return profile.detail ?? "Error — the last health check failed";
     default:

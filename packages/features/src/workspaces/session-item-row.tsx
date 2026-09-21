@@ -1,82 +1,52 @@
-//! `session-item-row` (DESIGN.md; spec §2). The full-density drawer row. Where
-//! a workspace has no git (or no restore) the diff badge and rollback are
-//! hidden and the row shows `no git · no revert` instead.
+//! `session-item-row` (DESIGN.md; pen `Session Item Row` SPn6u): the 36px
+//! drawer row — status dot, provider glyph, branch, turn tag, diff stat.
+//! Values the wire did not report are omitted (P9), so the turn tag and diff
+//! appear only once a session carries them.
 
-import {
-  type CatalogSession,
-  isAwaiting,
-  sessionStatusKey,
-} from "@tethys/state";
-import { Button, cn, getSessionStateInfo, StatusDot } from "@tethys/ui";
+import { type CatalogSession, sessionStatusKey } from "@tethys/state";
+import { StatusDot } from "@tethys/ui";
 import { ProviderGlyph } from "./session-item-chip";
 
 export interface SessionItemRowProps {
   session: CatalogSession;
-  hasGit?: boolean;
-  hasRestore?: boolean;
   onOpen?: () => void;
 }
 
-export function SessionItemRow({
-  session,
-  hasGit = true,
-  hasRestore = true,
-  onOpen,
-}: SessionItemRowProps) {
+/** The wire's placeholder id while a session's provider is unknown. */
+export function isKnownProvider(providerId: string): boolean {
+  return providerId !== "" && providerId !== "unknown";
+}
+
+export function SessionItemRow({ session, onOpen }: SessionItemRowProps) {
   const stateKey = sessionStatusKey(session.status);
-  const stateInfo = getSessionStateInfo(stateKey);
-  const showDiff = hasGit && hasRestore && session.diffStat !== null;
 
   return (
-    <div
+    <button
+      type="button"
       data-testid="session-item-row"
-      className={cn(
-        "flex flex-col gap-sm rounded-md border bg-(--tethys-surface-nested) p-md",
-        isAwaiting(session.status)
-          ? "wash-warning border-(--tethys-hairline) border-l-2 border-l-(--tethys-status-warning)"
-          : "border-(--tethys-hairline)",
-      )}
+      data-status={stateKey}
+      onClick={onOpen}
+      aria-label={`${session.branchName} (${stateKey.replace("_", " ")})`}
+      className="focus-ring flex h-9 w-full items-center gap-2 rounded-sm px-3 text-left transition-colors hover:bg-(--tethys-surface-hover)"
     >
-      <div className="flex items-center justify-between gap-sm">
-        <div className="flex min-w-0 items-center gap-sm">
-          <ProviderGlyph providerId={session.providerId} />
-          <span className="truncate font-mono text-mono-code text-(--tethys-text-primary)">
-            {session.branchName}
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5 text-label-sm text-(--tethys-text-muted)">
-          <StatusDot status={stateKey} />
-          {stateInfo.needsWords && <span>{stateInfo.label}</span>}
-          <span>{session.providerId}</span>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between text-body-sm text-(--tethys-text-secondary)">
-        <span>Turn T{session.turnCount}</span>
-        {showDiff ? (
-          <span className="font-mono text-mono-code">
-            <span className="text-diff-added">+{session.diffStat?.added}</span>{" "}
-            <span className="text-diff-removed">
-              −{session.diffStat?.removed}
-            </span>
-          </span>
-        ) : (
-          <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
-            no git · no revert
-          </span>
-        )}
-      </div>
-
-      <div className="flex justify-end gap-sm">
-        {showDiff && (
-          <Button size="sm" variant="secondary" disabled>
-            Rollback
-          </Button>
-        )}
-        <Button size="sm" variant="secondary" onClick={onOpen}>
-          Open Session →
-        </Button>
-      </div>
-    </div>
+      <StatusDot status={stateKey} />
+      {isKnownProvider(session.providerId) && (
+        <ProviderGlyph providerId={session.providerId} />
+      )}
+      <span className="min-w-0 flex-1 truncate font-mono text-mono-micro text-(--tethys-text-secondary)">
+        {session.branchName}
+      </span>
+      {session.turnCount > 0 && (
+        <span className="shrink-0 font-mono text-mono-micro text-(--tethys-text-muted)">
+          T{session.turnCount}
+        </span>
+      )}
+      {session.diffStat && (
+        <span className="flex shrink-0 items-center gap-0.5 font-mono text-mono-micro">
+          <span className="text-diff-added">+{session.diffStat.added}</span>
+          <span className="text-diff-removed">−{session.diffStat.removed}</span>
+        </span>
+      )}
+    </button>
   );
 }

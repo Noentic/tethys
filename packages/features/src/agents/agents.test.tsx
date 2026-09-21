@@ -3,6 +3,7 @@ import type { AgentProfileView } from "@tethys/bindings";
 import { describe, expect, it, vi } from "vitest";
 import { CapabilitiesPanel } from "./capabilities-panel";
 import { LaunchSpecEditor } from "./launch-spec-editor";
+import { PROVIDER_CATALOG } from "./provider-catalog";
 import { ProviderRow } from "./provider-row";
 import { StderrViewer } from "./stderr-viewer";
 
@@ -45,6 +46,7 @@ function row(overrides: Partial<AgentProfileView> = {}, sessionState?: string) {
   const onToggleEnabled = vi.fn();
   render(
     <ProviderRow
+      entry={PROVIDER_CATALOG[0]}
       profile={profile(overrides)}
       expanded={false}
       sessionState={sessionState}
@@ -56,14 +58,15 @@ function row(overrides: Partial<AgentProfileView> = {}, sessionState?: string) {
 }
 
 describe("provider-row (M1.12 U8)", () => {
-  it("renders the shared status dot and the health badge for a healthy row", () => {
+  it("renders the shared status dot, the mono subtext and the latency tag", () => {
     row();
     expect(
       screen.getByTestId("provider-row-dot").getAttribute("aria-label"),
     ).toBe("Healthy");
-    expect(screen.getByTestId("health-badge").textContent).toContain(
-      "Checked 1m ago",
-    );
+    expect(
+      screen.getByText("Healthy — ACP handshake verified (v1.0.0)"),
+    ).toBeTruthy();
+    expect(screen.getByTestId("provider-latency").textContent).toBe("12ms");
   });
 
   it("renders auth_required as a filled disc, not a ring (P2 shape rule)", () => {
@@ -77,6 +80,7 @@ describe("provider-row (M1.12 U8)", () => {
   it("enabled-but-unreachable is a fault; switched off is a choice (P3)", () => {
     const { rerender } = render(
       <ProviderRow
+        entry={PROVIDER_CATALOG[0]}
         profile={profile({
           health: "not-found",
           detail: "Not found — npx is not installed or not on PATH",
@@ -86,7 +90,9 @@ describe("provider-row (M1.12 U8)", () => {
         onToggleEnabled={vi.fn()}
       />,
     );
-    expect(screen.getByText(/Not found/)).toBeTruthy();
+    expect(
+      screen.getByText("Not detected — install the CLI to connect"),
+    ).toBeTruthy();
     expect(
       screen
         .getByRole("switch", { name: /Enable Claude Code/ })
@@ -95,6 +101,7 @@ describe("provider-row (M1.12 U8)", () => {
 
     rerender(
       <ProviderRow
+        entry={PROVIDER_CATALOG[0]}
         profile={profile({ enabled: false })}
         expanded={false}
         onToggleExpanded={vi.fn()}
@@ -124,6 +131,17 @@ describe("provider-row (M1.12 U8)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Toggle details/ }));
     expect(onToggleExpanded).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders an integration-soon provider inert: chip, no toggle, no chevron", () => {
+    const kiro = PROVIDER_CATALOG.find((entry) => entry.id === "kiro");
+    if (!kiro) throw new Error("the catalog no longer carries kiro");
+    render(<ProviderRow entry={kiro} profile={null} />);
+    expect(screen.getByTestId("provider-soon").textContent).toBe("Soon");
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Toggle details/ })).toBeNull();
+    expect(screen.getByText(/Integration soon/)).toBeTruthy();
+    expect(screen.queryByTestId("provider-row-dot")).toBeNull();
   });
 });
 

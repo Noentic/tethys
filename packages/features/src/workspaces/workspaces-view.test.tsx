@@ -96,7 +96,7 @@ describe("workspaces-view", () => {
         client={emptyClient()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Waiting on you/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Needs attention/ }));
     expect(screen.getByRole("button", { name: "tethys" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "notes" })).toBeNull();
     expect(screen.queryByRole("button", { name: "scratch" })).toBeNull();
@@ -122,7 +122,7 @@ describe("workspaces-view", () => {
     fireEvent.click(screen.getByRole("button", { name: "scratch" }));
     expect(
       screen
-        .getByRole("button", { name: "+ New Thread" })
+        .getByRole("button", { name: "New thread" })
         .hasAttribute("disabled"),
     ).toBe(true);
   });
@@ -148,7 +148,7 @@ describe("workspaces-view", () => {
         inspectPath={async () => ({ kind: "git-local" })}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /New Workspace/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Add workspace/ }));
     await waitFor(() => {
       expect(screen.getByTestId("trust-copy-local-git")).toBeTruthy();
     });
@@ -164,5 +164,40 @@ describe("workspaces-view", () => {
       });
       expect(screen.getByRole("button", { name: "new" })).toBeTruthy();
     });
+  });
+
+  it("opens the trust dialog with the no-VCS copy when the probe rejects", async () => {
+    render(
+      <WorkspacesView
+        workspaces={[]}
+        client={emptyClient()}
+        pickFolder={async () => "/tmp/unknown"}
+        inspectPath={async () => {
+          throw new Error("probe failed");
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Add workspace/ }));
+    await waitFor(() => {
+      expect(screen.getByTestId("trust-copy-none")).toBeTruthy();
+    });
+  });
+
+  it("does nothing when the folder picker is cancelled", async () => {
+    const add = vi.fn();
+    render(
+      <WorkspacesView
+        workspaces={[]}
+        client={{
+          workspace: { list: async () => [], add, remove: async () => {} },
+        }}
+        pickFolder={async () => null}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Add workspace/ }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("trust-copy-none")).toBeNull();
+    });
+    expect(add).not.toHaveBeenCalled();
   });
 });

@@ -1,20 +1,46 @@
-import { ArrowLeft, MagnifyingGlass, TerminalWindow } from "@nebutra/icons";
-import { Input, KeycapPill } from "@tethys/ui";
+import {
+  ArrowLeft,
+  BookOpen,
+  Command as CommandIcon,
+  Puzzle,
+  Servers,
+  SettingsGear,
+} from "@nebutra/icons";
 import type React from "react";
-import { useState } from "react";
 
 export interface SettingsNavItem {
   id: string;
   label: string;
   path: string;
+  Icon: React.ElementType;
 }
 
 export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
-  { id: "general", label: "General", path: "/settings/general" },
-  { id: "providers", label: "Providers", path: "/settings/providers" },
-  { id: "skills", label: "Skills & Commands", path: "/settings/skills" },
-  { id: "mcp", label: "MCP Servers", path: "/settings/mcp" },
-  { id: "keybindings", label: "Keybindings", path: "/settings/keybindings" },
+  {
+    id: "general",
+    label: "General",
+    path: "/settings/general",
+    Icon: SettingsGear,
+  },
+  {
+    id: "providers",
+    label: "Providers",
+    path: "/settings/providers",
+    Icon: Puzzle,
+  },
+  {
+    id: "skills",
+    label: "Skills & Commands",
+    path: "/settings/skills",
+    Icon: BookOpen,
+  },
+  { id: "mcp", label: "MCP Servers", path: "/settings/mcp", Icon: Servers },
+  {
+    id: "keybindings",
+    label: "Keybindings",
+    path: "/settings/keybindings",
+    Icon: CommandIcon,
+  },
 ];
 
 export interface SettingsLayoutProps {
@@ -28,82 +54,65 @@ export function SettingsLayout({
   onNavigateSection,
   children,
 }: SettingsLayoutProps) {
-  const [navSearch, setNavSearch] = useState<string>("");
-
   const currentItem =
     SETTINGS_NAV_ITEMS.find((item) => item.id === activeSection) ??
     SETTINGS_NAV_ITEMS[0];
 
-  const filteredNavItems = SETTINGS_NAV_ITEMS.filter((item) =>
-    item.label.toLowerCase().includes(navSearch.toLowerCase()),
-  );
-
   return (
     <div className="flex h-full w-full overflow-hidden bg-(--tethys-canvas)">
-      {/* Left Navigation (240px, Matching Image 4 & Image 6) */}
+      {/* Pen `HL2ay` Settings nav: Title + the five items, no search field. */}
       <nav
         aria-label="Settings Navigation"
-        className="flex h-full w-60 shrink-0 flex-col justify-between border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) p-md select-none"
+        className="flex h-full w-60 shrink-0 flex-col justify-between border-r border-(--tethys-hairline-structural) bg-(--tethys-surface-panel) p-lg select-none"
       >
         <div className="flex flex-col gap-md">
-          {/* App title / Brand header (Matching Image 4) */}
-          <div className="flex items-center gap-sm px-2 py-1.5">
-            <div className="flex size-6 items-center justify-center rounded-sm bg-(--tethys-primary) text-(--tethys-on-primary)">
-              <TerminalWindow className="size-3.5" />
-            </div>
-            <span className="text-heading-md text-(--tethys-text-primary)">
-              Tethys
-            </span>
-          </div>
+          <span className="px-0 text-heading-lg text-(--tethys-text-primary)">
+            Settings
+          </span>
 
-          {/* Search box inside settings sidebar (Matching Image 4) */}
-          <Input
-            type="text"
-            aria-label="Search settings"
-            placeholder="Search"
-            value={navSearch}
-            onChange={(e) => setNavSearch(e.target.value)}
-            leadingIcon={<MagnifyingGlass className="size-3.5" />}
-            trailingIcon={<KeycapPill>/</KeycapPill>}
-          />
-
-          {/* Nav Categories */}
           <div className="flex flex-col gap-0.5">
-            {filteredNavItems.map((item) => {
+            {SETTINGS_NAV_ITEMS.map((item) => {
               const isSelected = item.id === activeSection;
               return (
                 <button
                   key={item.id}
                   type="button"
+                  aria-current={isSelected ? "page" : undefined}
                   onClick={() => onNavigateSection?.(item.path)}
-                  className={`focus-ring-inset flex h-8 items-center rounded-sm px-3 text-left text-body-sm transition-colors ${
+                  className={`focus-ring-inset relative flex h-8 items-center gap-sm rounded-sm px-3 text-left text-body-sm transition-colors ${
                     isSelected
                       ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
                       : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
                   }`}
                 >
-                  {item.label}
+                  {isSelected && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-r-xs bg-(--tethys-accent-focus)"
+                    />
+                  )}
+                  <item.Icon
+                    className={`size-4 shrink-0 ${
+                      isSelected
+                        ? "text-(--tethys-text-primary)"
+                        : "text-(--tethys-text-muted)"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">{item.label}</span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Bottom Section (Matching Image 4) */}
         <div className="flex flex-col gap-1 border-t border-(--tethys-hairline) pt-sm">
-          <button
-            type="button"
-            className="focus-ring-inset flex h-8 items-center gap-sm rounded-sm px-3 text-left text-body-sm text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
-          >
-            <span className="truncate">Sign in to Tethys Sync</span>
-          </button>
-
           <button
             type="button"
             onClick={() => onNavigateSection?.("/thread/new")}
             className="focus-ring-inset flex h-8 items-center gap-sm rounded-sm px-3 text-left text-body-sm text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
           >
-            <ArrowLeft className="size-3.5" />
+            <ArrowLeft className="size-4" />
             <span>Back</span>
           </button>
         </div>
@@ -111,10 +120,9 @@ export function SettingsLayout({
 
       {/* Main Settings Content Area */}
       <div className="flex flex-1 flex-col overflow-y-auto">
-        {/* Child Slot */}
         <main
           aria-label={`${currentItem.label} Settings`}
-          className="max-w-4xl flex-1 p-2xl"
+          className="w-full max-w-[1120px] flex-1 p-2xl"
         >
           {children}
         </main>

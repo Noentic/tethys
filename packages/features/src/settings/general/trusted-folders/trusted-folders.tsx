@@ -1,20 +1,20 @@
-//! Trusted Folders section (spec §5.1; M1.16 U10). Extracted from
-//! `settings.general.tsx`; renders `trusted-folder-row`s from the trust store
-//! and revokes via `workspace.remove`. Revoking removes the card from the hub
-//! (the trust-filtered `workspace.list` no longer returns it).
+//! Trusted Folders section (spec §5.1; M1.16 U10; pen `HL2ay` Trusted list).
+//! Renders a `trusted-folder-row` per trusted workspace from the live
+//! `workspace.list` and revokes via `workspace.remove`. Revoking removes the
+//! card from the hub (the trust-filtered list no longer returns it).
 
-import type { PermissionMode, Vcs } from "@tethys/bindings";
-import { createClient } from "@tethys/client";
-import { PERMISSION_MODE_LABELS } from "@tethys/state";
+import { Trash } from "@nebutra/icons";
+import { queryClient, queryKeys, useWorkspaceRows } from "@tethys/state";
 import { Button, WorkspaceSourceBadge } from "@tethys/ui";
 import { useState } from "react";
 
 export interface TrustedFolderEntry {
   id: string;
   path: string;
-  vcs: Vcs;
-  permissionMode: PermissionMode;
-  trustedAt: string;
+  vcs:
+    | { kind: "none" }
+    | { kind: "git-local" }
+    | { kind: "git-remote"; host: "github" | "gitlab" | "other" };
 }
 
 export const trustedFolderFixtures: TrustedFolderEntry[] = [
@@ -22,8 +22,6 @@ export const trustedFolderFixtures: TrustedFolderEntry[] = [
     id: "tethys",
     path: "~/Code/tethys",
     vcs: { kind: "git-remote", host: "github" },
-    permissionMode: "supervised",
-    trustedAt: "2026-09-17",
   },
 ];
 
@@ -33,65 +31,68 @@ export interface TrustedFoldersClient {
   };
 }
 
-const defaultClient = createClient();
-
 export interface TrustedFoldersProps {
+  /** Test override; the live `workspace.list` is the default source. */
   folders?: TrustedFolderEntry[];
   client?: TrustedFoldersClient;
   onRevoked?: (workspaceId: string) => void;
 }
 
 export function TrustedFolders({
-  folders = trustedFolderFixtures,
-  client = defaultClient,
+  folders,
+  client,
   onRevoked,
 }: TrustedFoldersProps) {
-  const [items, setItems] = useState<TrustedFolderEntry[]>(folders);
+  const rows = useWorkspaceRows(undefined, folders === undefined);
+  const [revoked, setRevoked] = useState<string[]>([]);
+
+  const source: TrustedFolderEntry[] =
+    folders ??
+    rows.map((row) => ({
+      id: row.id,
+      path: row.path,
+      vcs: row.capabilities.vcs,
+    }));
+  const items = source.filter((folder) => !revoked.includes(folder.id));
 
   const revoke = async (workspaceId: string) => {
-    await client.workspace.remove(workspaceId);
-    setItems((prev) => prev.filter((folder) => folder.id !== workspaceId));
+    await client?.workspace.remove(workspaceId);
+    setRevoked((prev) => [...prev, workspaceId]);
     onRevoked?.(workspaceId);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
   };
 
   if (items.length === 0) {
     return (
-      <div className="px-lg py-xl text-center text-body-sm text-(--tethys-text-muted)">
+      <div className="py-xl text-center text-body-sm text-(--tethys-text-muted)">
         No trusted folders.
       </div>
     );
   }
 
   return (
-    <>
+    <div className="flex flex-col">
       {items.map((folder) => (
         <div
           key={folder.id}
           data-testid="trusted-folder-row"
-          className="flex items-center justify-between gap-xl px-lg py-md"
+          className="flex h-14 items-center gap-md border-b border-(--tethys-hairline) px-md last:border-b-0"
         >
-          <div className="flex min-w-0 flex-col gap-1">
-            <div className="flex items-center gap-sm">
-              <span className="truncate font-mono text-mono-code text-(--tethys-text-primary)">
-                {folder.path}
-              </span>
-              <WorkspaceSourceBadge vcs={folder.vcs} />
-            </div>
-            <span className="text-label-md font-normal text-(--tethys-text-muted)">
-              Policy: {PERMISSION_MODE_LABELS[folder.permissionMode]} · Trusted{" "}
-              {folder.trustedAt}
-            </span>
-          </div>
-
+          <span className="min-w-0 flex-1 truncate text-body-sm text-(--tethys-text-primary)">
+            {folder.path}
+          </span>
+          <WorkspaceSourceBadge vcs={folder.vcs} />
           <Button
             size="sm"
             variant="destructive"
             onClick={() => void revoke(folder.id)}
+            className="gap-1.5"
           >
-            Revoke Trust
+            <Trash className="size-4" />
+            <span>Revoke</span>
           </Button>
         </div>
       ))}
-    </>
+    </div>
   );
 }

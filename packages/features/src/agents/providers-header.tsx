@@ -1,50 +1,10 @@
-//! Providers page header: telemetry label, `↻ Manual Health Check` and the
-//! `+ Add Custom ACP Server` action, plus the interval stepper (spec §5.2).
+//! Providers page header (pen `z23yYi / Page header`): breadcrumb + title,
+//! telemetry, `Add Custom ACP Server`, re-check, and the interval stepper.
 
-import { Button, IconButton, PageHeader, StepperInput } from "@tethys/ui";
-
-export interface ProvidersHeaderProps {
-  onManualCheck: () => void;
-  onAddCustom: () => void;
-  /** e.g. `Checked 1m ago` / `Checking…`. */
-  telemetryLabel: string;
-  className?: string;
-}
+import { RefreshClockwise } from "@nebutra/icons";
+import { Button, IconButton, StepperInput } from "@tethys/ui";
 
 export const MAX_HEALTH_INTERVAL_SECONDS = 3600;
-
-export function ProvidersHeader({
-  onManualCheck,
-  onAddCustom,
-  telemetryLabel,
-  className,
-}: ProvidersHeaderProps): React.ReactElement {
-  return (
-    <PageHeader
-      className={className}
-      title="Providers"
-      actions={
-        <>
-          <span className="text-label-md font-normal text-(--tethys-text-muted)">
-            {telemetryLabel}
-          </span>
-          <Button variant="secondary" size="sm" onClick={onAddCustom}>
-            <span aria-hidden>+</span>
-            <span>Add Custom ACP Server</span>
-          </Button>
-          <IconButton
-            size="compact"
-            label="Manual Health Check"
-            onClick={onManualCheck}
-            className="text-(--tethys-text-muted)"
-          >
-            <span aria-hidden>↻</span>
-          </IconButton>
-        </>
-      }
-    />
-  );
-}
 
 export interface HealthIntervalControlProps {
   intervalSeconds: number;
@@ -58,12 +18,8 @@ export function HealthIntervalControl({
   onIntervalChange,
   className,
 }: HealthIntervalControlProps): React.ReactElement {
-  const manualOnly = intervalSeconds === 0;
   return (
-    <div
-      data-testid="health-interval"
-      className={`flex items-center gap-sm ${className ?? ""}`}
-    >
+    <div className={className} data-testid="health-interval">
       <StepperInput
         value={intervalSeconds}
         min={0}
@@ -77,9 +33,61 @@ export function HealthIntervalControl({
           )
         }
       />
-      <span className="text-label-md font-normal text-(--tethys-text-muted)">
-        {manualOnly ? "Manual only" : "seconds"}
+    </div>
+  );
+}
+
+export interface ProvidersHeaderProps {
+  onManualCheck: () => void;
+  onAddCustom: () => void;
+  /** e.g. `Checked 1m ago` / `Checking…`. */
+  telemetryLabel: string;
+  intervalSeconds: number;
+  onIntervalChange: (seconds: number) => void;
+  className?: string;
+}
+
+export function ProvidersHeader({
+  onManualCheck,
+  onAddCustom,
+  telemetryLabel,
+  intervalSeconds,
+  onIntervalChange,
+  className,
+}: ProvidersHeaderProps): React.ReactElement {
+  return (
+    <div
+      className={`flex items-center gap-md ${className ?? ""}`}
+      data-testid="providers-header"
+    >
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-label-sm text-(--tethys-text-muted)">
+          Settings / Providers
+        </span>
+        <h1 className="text-heading-lg text-(--tethys-text-primary)">
+          Providers
+        </h1>
+      </div>
+
+      <span className="shrink-0 font-mono text-mono-micro text-(--tethys-text-muted)">
+        {telemetryLabel}
       </span>
+      <Button variant="secondary" onClick={onAddCustom} className="shrink-0">
+        Add Custom ACP Server
+      </Button>
+      <IconButton
+        size="default"
+        label="Manual health check"
+        onClick={onManualCheck}
+        className="shrink-0 text-(--tethys-text-secondary)"
+      >
+        <RefreshClockwise className="size-4" aria-hidden="true" />
+      </IconButton>
+      <HealthIntervalControl
+        intervalSeconds={intervalSeconds}
+        onIntervalChange={onIntervalChange}
+        className="shrink-0"
+      />
     </div>
   );
 }

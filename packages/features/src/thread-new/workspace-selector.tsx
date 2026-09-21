@@ -8,8 +8,9 @@ import { type TrustedWorkspace, useTrustedWorkspaces } from "@tethys/state";
 import { Listbox, Popover, Tooltip, WorkspaceSourceBadge } from "@tethys/ui";
 import { useRef, useState } from "react";
 
+// Pen `XrH5y / Git context pill`: 22px, surface-card, md radius, hairline.
 const PILL_CLASS =
-  "focus-ring flex h-7 items-center gap-1.5 rounded-sm px-2 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+  "focus-ring flex h-[22px] items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 
 export interface WorkspaceSelectorProps {
   workspaces?: TrustedWorkspace[];
@@ -51,6 +52,11 @@ export function WorkspaceSelector({
       }}
       className={PILL_CLASS}
     >
+      <WorkspaceSourceBadge
+        vcs={selected?.vcs ?? { kind: "none" }}
+        glyphOnly
+        className="pointer-events-none"
+      />
       <span
         className={
           selected
@@ -58,14 +64,8 @@ export function WorkspaceSelector({
             : "text-(--tethys-text-muted)"
         }
       >
-        {selected?.name ?? "Select a workspace"}
+        {selected?.name ?? "Choose a folder"}
       </span>
-      {selected && (
-        <WorkspaceSourceBadge
-          vcs={selected.vcs}
-          className="pointer-events-none"
-        />
-      )}
       <span aria-hidden="true" className="text-(--tethys-text-muted)">
         {"\u25be"}
       </span>

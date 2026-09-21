@@ -21,8 +21,9 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { optionValues, SessionConfigPanel } from "./session-config-panel";
 
+// Pen `XrH5y / Provider model pill`: 22px, surface-card, md radius, hairline.
 const PILL_CLASS =
-  "focus-ring flex h-7 items-center gap-1.5 rounded-sm px-2 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+  "focus-ring flex h-[22px] items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 
 const SECTION_LABEL_CLASS =
   "px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider";

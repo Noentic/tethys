@@ -2,7 +2,7 @@ import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import "@tethys/ui/tailwind.css";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   createRootRoute,
   createRoute,
@@ -15,6 +15,7 @@ import {
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
+import { queryClient } from "@tethys/state";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { SettingsLayout } from "./routes/settings";
@@ -65,6 +66,12 @@ const workspacesRoute = createRoute({
 const threadNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/thread/new",
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { workspace?: string } => ({
+    workspace:
+      typeof search.workspace === "string" ? search.workspace : undefined,
+  }),
   component: ThreadNewView,
 });
 
@@ -173,8 +180,6 @@ declare module "@tanstack/react-router" {
     router: typeof router;
   }
 }
-
-const queryClient = new QueryClient();
 
 const rootElement = document.getElementById("root");
 if (rootElement !== null) {

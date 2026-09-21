@@ -35,6 +35,21 @@ export function shouldNotify(
   return !windowFocused && nextCount > previousCount;
 }
 
+/** True when a session moved out of `running` into a settled state. */
+export function isTurnComplete(
+  previous: string | undefined,
+  next: string,
+): boolean {
+  return previous === "running" && (next === "idle" || next === "error");
+}
+
+/** One notification for a finished turn; the body names the thread. */
+export function turnCompletionNotification(
+  title: string,
+): PendingApprovalNotification {
+  return { title: "Turn complete", body: `${title} finished its turn.` };
+}
+
 export async function sendOsNotification(
   notification: PendingApprovalNotification,
 ): Promise<void> {

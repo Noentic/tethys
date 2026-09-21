@@ -16,8 +16,6 @@ describe("trusted-folders", () => {
             id: "tethys",
             path: "~/Code/tethys",
             vcs: { kind: "git-remote", host: "github" },
-            permissionMode: "supervised",
-            trustedAt: "2026-09-17",
           },
         ]}
       />,
@@ -36,13 +34,11 @@ describe("trusted-folders", () => {
             id: "tethys",
             path: "~/Code/tethys",
             vcs: { kind: "git-local" },
-            permissionMode: "supervised",
-            trustedAt: "2026-09-17",
           },
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Revoke Trust" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
     await waitFor(() => {
       expect(remove).toHaveBeenCalledWith("tethys");
       expect(screen.queryByTestId("trusted-folder-row")).toBeNull();

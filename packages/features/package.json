@@ -25,6 +25,7 @@
     "vitest": "^5.0.1"
   },
   "dependencies": {
+    "@nebutra/icons": "^2.0.0",
     "@tanstack/react-table": "^9.2.4",
     "@tauri-apps/plugin-notification": "^2.4.0",
     "@tethys/bindings": "workspace:*",

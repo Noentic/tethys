@@ -1,23 +1,21 @@
-//! `provider-row` (DESIGN.md): one Provider line reading the M1.12 store.
-//!
-//! Toggle and dot are independent axes (DESIGN.md P3): a row switched on with a
-//! red dot is a fault; a row switched off is dimmed and worded as a choice. A
-//! live session overrides the dot to its session state (sky = streaming).
+//! `provider-row` (DESIGN.md; pen `Provider Row` ze7h5). One provider line:
+//! glyph, status dot, name + protocol/soon chip, mono subtext, latency tag,
+//! chevron and toggle. The row's model is `{ entry, profile | null }` because a
+//! `soon` or undetected provider has no profile at all.
 
+import { ChevronDown } from "@nebutra/icons";
 import type { AgentProfileView } from "@tethys/bindings";
 import { IconButton, ProtocolPill, StatusDot, ToggleSwitch } from "@tethys/ui";
 import type { ReactNode } from "react";
-import {
-  healthBadgeText,
-  providerDotStatus,
-  providerStatusText,
-} from "./provider-status";
+import type { ProviderCatalogEntry } from "./provider-catalog";
+import { providerDotStatus, providerSubtext } from "./provider-status";
 
 export interface ProviderRowProps {
-  profile: AgentProfileView;
-  expanded: boolean;
-  onToggleExpanded: () => void;
-  onToggleEnabled: (enabled: boolean) => void;
+  entry: ProviderCatalogEntry;
+  profile: AgentProfileView | null;
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
+  onToggleEnabled?: (enabled: boolean) => void;
   /** A live session state (e.g. `running`) overrides the health dot. */
   sessionState?: string | null;
   children?: ReactNode;
@@ -25,74 +23,107 @@ export interface ProviderRowProps {
 }
 
 export function ProviderRow({
+  entry,
   profile,
-  expanded,
+  expanded = false,
   onToggleExpanded,
   onToggleEnabled,
   sessionState,
   children,
   className,
 }: ProviderRowProps): React.ReactElement {
-  const badge = healthBadgeText(profile);
-  const dotStatus = sessionState ?? providerDotStatus(profile);
+  const soon = entry.support === "soon";
+  const dotStatus = soon
+    ? "disabled"
+    : (sessionState ?? providerDotStatus(profile));
+  const subtext = soon
+    ? "Integration soon — ships in a later milestone"
+    : providerSubtext(profile);
+  const latency =
+    !soon && profile?.latency_ms != null ? `${profile.latency_ms}ms` : null;
 
   return (
     <div
       data-testid="provider-row"
-      data-enabled={profile.enabled}
-      data-health={profile.health}
+      data-provider={entry.id}
+      data-enabled={profile?.enabled ?? false}
+      data-health={soon ? "soon" : (profile?.health ?? "pending")}
+      data-support={entry.support}
       className={`border-b border-(--tethys-hairline) last:border-b-0 ${
-        profile.enabled ? "" : "opacity-60"
+        profile && !profile.enabled ? "opacity-60" : ""
       } ${className ?? ""}`}
     >
-      <div className="flex items-center justify-between gap-lg px-4 py-3">
-        <div className="flex min-w-0 items-center gap-md">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <img
+          src={entry.icon}
+          alt=""
+          aria-hidden="true"
+          className="size-6 shrink-0 rounded-xs"
+        />
+        {!soon && (
           <StatusDot status={dotStatus} data-testid="provider-row-dot" />
-          <div className="flex min-w-0 flex-col">
-            <div className="flex items-center gap-sm">
-              <span className="text-heading-md text-(--tethys-text-primary)">
-                {profile.name}
-              </span>
-              {profile.protocol && (
-                <ProtocolPill>
-                  {profile.protocol === "V2" ? "ACP v2" : "ACP v1"}
-                </ProtocolPill>
-              )}
-              {badge && (
-                <span
-                  data-testid="health-badge"
-                  className="rounded-xs bg-(--tethys-surface-hover) px-1.5 py-0.5 font-mono text-mono-micro text-(--tethys-text-muted)"
-                >
-                  {badge}
-                </span>
-              )}
-            </div>
-            <span className="truncate font-mono text-mono-micro text-(--tethys-text-muted)">
-              {providerStatusText(profile)}
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-body-sm text-(--tethys-text-primary)">
+              {entry.name}
             </span>
+            {!soon && profile?.protocol && (
+              <ProtocolPill>
+                {profile.protocol === "V2" ? "ACP v2" : "ACP v1"}
+              </ProtocolPill>
+            )}
+            {soon && (
+              <span
+                data-testid="provider-soon"
+                className="rounded-xs bg-(--tethys-surface-hover) px-2 py-0.5 font-mono text-mono-micro text-(--tethys-text-muted)"
+              >
+                Soon
+              </span>
+            )}
           </div>
+          <span className="truncate font-mono text-mono-micro text-(--tethys-text-muted)">
+            {subtext}
+          </span>
         </div>
 
-        <div className="flex shrink-0 items-center gap-md">
-          <IconButton
-            size="compact"
-            label={`Toggle details for ${profile.name}`}
-            aria-expanded={expanded}
-            onClick={onToggleExpanded}
-            className="text-(--tethys-text-muted)"
+        {latency && (
+          <span
+            data-testid="provider-latency"
+            className="shrink-0 rounded-xs bg-(--tethys-surface-hover) px-1.5 py-0.5 font-mono text-mono-micro text-(--tethys-text-secondary)"
           >
-            {expanded ? <span aria-hidden>▴</span> : <span aria-hidden>▾</span>}
-          </IconButton>
-          <ToggleSwitch
-            id={`provider-${profile.id}`}
-            label={`Enable ${profile.name}`}
-            checked={profile.enabled}
-            onCheckedChange={onToggleEnabled}
-          />
-        </div>
+            {latency}
+          </span>
+        )}
+
+        {!soon && profile && (
+          <>
+            <IconButton
+              size="compact"
+              label={`Toggle details for ${entry.name}`}
+              aria-expanded={expanded}
+              onClick={onToggleExpanded}
+              className="text-(--tethys-text-muted)"
+            >
+              <ChevronDown
+                className={`size-4 transition-transform duration-150 ${
+                  expanded ? "rotate-180" : ""
+                }`}
+                aria-hidden="true"
+              />
+            </IconButton>
+            <ToggleSwitch
+              id={`provider-${entry.id}`}
+              label={`Enable ${entry.name}`}
+              checked={profile.enabled}
+              onCheckedChange={(enabled) => onToggleEnabled?.(enabled)}
+            />
+          </>
+        )}
       </div>
 
-      {expanded && <div className="px-4 pb-4">{children}</div>}
+      {expanded && children && <div className="px-4 pb-4">{children}</div>}
     </div>
   );
 }

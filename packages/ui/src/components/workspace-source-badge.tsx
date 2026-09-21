@@ -22,6 +22,8 @@ export interface WorkspaceSourceBadgeProps {
   vcs: WorkspaceVcs;
   /** Appends the secondary `Remote` tag for an SSH/container host. */
   remote?: boolean;
+  /** Icon-only form for a pill that carries the label itself. */
+  glyphOnly?: boolean;
   className?: string;
 }
 
@@ -54,9 +56,20 @@ function present(vcs: WorkspaceVcs): SourcePresentation {
 export function WorkspaceSourceBadge({
   vcs,
   remote = false,
+  glyphOnly = false,
   className,
 }: WorkspaceSourceBadgeProps) {
   const { label, Icon } = present(vcs);
+
+  if (glyphOnly) {
+    return (
+      <Icon
+        role="img"
+        aria-label={label}
+        className={cn("size-3 shrink-0 text-(--tethys-text-muted)", className)}
+      />
+    );
+  }
 
   return (
     <Badge

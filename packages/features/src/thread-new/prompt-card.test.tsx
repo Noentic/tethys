@@ -35,7 +35,7 @@ describe("PromptCard", () => {
     expect(submitButton().hasAttribute("disabled")).toBe(true);
   });
 
-  it("disables the editor and names the fix with no selectable provider", () => {
+  it("names the provider fix without locking the composer", () => {
     render(
       <PromptCard
         client={client()}
@@ -47,7 +47,7 @@ describe("PromptCard", () => {
     );
     expect(submitButton().hasAttribute("disabled")).toBe(true);
     const editor = document.querySelector(".ProseMirror");
-    expect(editor?.getAttribute("contenteditable")).toBe("false");
+    expect(editor?.getAttribute("contenteditable")).toBe("true");
     expect(editor?.getAttribute("data-placeholder")).toBe(
       "Connect a provider in Settings to send a message",
     );
@@ -55,6 +55,25 @@ describe("PromptCard", () => {
     expect(screen.getByRole("combobox").textContent).toContain(
       "No provider available",
     );
+  });
+
+  it("names the workspace fix first while the folder is unresolved", () => {
+    render(
+      <PromptCard
+        client={client()}
+        providers={providerConnectionFixtures}
+        workspaces={trustedWorkspaceFixtures}
+        onStart={vi.fn()}
+      />,
+    );
+    const editor = document.querySelector(".ProseMirror");
+    expect(editor?.getAttribute("data-placeholder")).toBe(
+      "Choose a folder to start a thread",
+    );
+    expect(
+      screen.getByRole("button", { name: "Workspace" }).textContent,
+    ).toContain("Choose a folder");
+    expect(submitButton().hasAttribute("disabled")).toBe(true);
   });
 
   it("submits exactly once when the send button is clicked", () => {

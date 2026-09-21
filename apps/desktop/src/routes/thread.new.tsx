@@ -1,5 +1,7 @@
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { ThreadNewScreen } from "@tethys/features";
+
+const routeApi = getRouteApi("/thread/new");
 
 /**
  * Thin route mount (D13): `/thread/new` renders the `@tethys/features`
@@ -9,5 +11,11 @@ import { ThreadNewScreen } from "@tethys/features";
  */
 export function ThreadNewView() {
   const navigate = useNavigate();
-  return <ThreadNewScreen navigate={(to) => navigate({ to })} />;
+  const { workspace } = routeApi.useSearch();
+  return (
+    <ThreadNewScreen
+      navigate={(to) => navigate({ to })}
+      initialWorkspaceId={workspace}
+    />
+  );
 }

@@ -4,6 +4,7 @@
 //! health poller, registry install/pin/update, login surfaces and the M1.13
 //! activity table. `settings.providers.tsx` is left a thin mount (D13).
 
+import { RefreshClockwise } from "@nebutra/icons";
 import type {
   AgentProfileView,
   AgentRegistryEntryView,
@@ -21,7 +22,7 @@ import {
   sessionsRegistryStore,
   useProviders,
 } from "@tethys/state";
-import { Card } from "@tethys/ui";
+import { IconButton } from "@tethys/ui";
 import {
   useCallback,
   useEffect,
@@ -34,13 +35,37 @@ import { ActivityTable } from "../monitor";
 import { LoginSurface } from "./login-surface";
 import { ProfileCard } from "./profile-card";
 import { ProviderAccordion } from "./provider-accordion";
+import {
+  catalogEntryForProfile,
+  PROVIDER_CATALOG,
+  type ProviderCatalogEntry,
+} from "./provider-catalog";
 import { ProviderRow } from "./provider-row";
-import { HealthIntervalControl, ProvidersHeader } from "./providers-header";
+import { ProviderSetupGuide } from "./provider-setup-guide";
+import { ProvidersHeader } from "./providers-header";
 import type { ProvidersClient } from "./types";
 
 const defaultClient = createClient();
 // Mirrors `tethys_core::health::DEFAULT_INTERVAL_SECS`, armed at start-up.
 const DEFAULT_INTERVAL_SECONDS = 300;
+
+/** `A, B and C` — the detection line's list. */
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** A row for a profile the catalog does not own (a custom ACP server). */
+function entryForProfile(profile: AgentProfileView): ProviderCatalogEntry {
+  return {
+    id: profile.id,
+    name: profile.name,
+    icon: "",
+    support: "ready",
+    aliases: [],
+    setup: [],
+  };
+}
 
 export interface ProvidersViewProps {
   client?: ProvidersClient;
@@ -251,6 +276,50 @@ export function ProvidersView({
     (profile) => (samplesById[profile.id] ?? []).length > 0,
   );
 
+  const matchedProfiles = new Map<string, AgentProfileView>();
+  const matchedProfileIds = new Set<string>();
+  for (const profile of profiles) {
+    const entry = catalogEntryForProfile(PROVIDER_CATALOG, profile);
+    if (entry === null) continue;
+    if (!matchedProfiles.has(entry.id)) matchedProfiles.set(entry.id, profile);
+    matchedProfileIds.add(profile.id);
+  }
+
+  // Catalog first, in product order; a profile the catalog does not own (a
+  // custom ACP server) renders after them with its own name.
+  const catalogRows = PROVIDER_CATALOG.map((entry) => ({
+    entry,
+    profile:
+      entry.support === "soon" ? null : (matchedProfiles.get(entry.id) ?? null),
+  }));
+  const extraRows = profiles
+    .filter((profile) => !matchedProfileIds.has(profile.id))
+    .map((profile) => ({ entry: entryForProfile(profile), profile }));
+  const rows = [...catalogRows, ...extraRows];
+
+  const isDetected = (row: {
+    entry: ProviderCatalogEntry;
+    profile: AgentProfileView | null;
+  }) => row.profile?.enabled === true && row.profile.health !== "not-found";
+  const detected = catalogRows.filter(isDetected).length;
+  const ready = catalogRows.filter((row) => row.entry.support === "ready");
+  const detectedNames = ready.filter(isDetected).map((row) => row.entry.name);
+  const setupNames = ready
+    .filter((row) => !isDetected(row))
+    .map((row) => row.entry.name);
+  const soonNames = catalogRows
+    .filter((row) => row.entry.support === "soon")
+    .map((row) => row.entry.name);
+  const detectionDetail = [
+    detectedNames.length > 0 ? `${joinNames(detectedNames)} ready` : null,
+    setupNames.length > 0 ? `${joinNames(setupNames)} need setup` : null,
+    soonNames.length > 0
+      ? `${joinNames(soonNames)} arrive in a later milestone`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(". ");
+
   return (
     <div
       className={`flex flex-col gap-2xl ${className ?? ""}`}
@@ -260,50 +329,88 @@ export function ProvidersView({
         onManualCheck={() => void manualCheck()}
         onAddCustom={() => void addCustom()}
         telemetryLabel={telemetryLabel}
+        intervalSeconds={intervalSeconds}
+        onIntervalChange={(seconds) => void changeInterval(seconds)}
       />
 
-      <Card className="flex items-center justify-between gap-xl px-lg py-md">
-        <div className="flex max-w-128 flex-col gap-1">
-          <span className="text-body-sm text-(--tethys-text-primary)">
-            Health check interval
-          </span>
-          <p className="text-label-md font-normal text-(--tethys-text-muted)">
-            Periodically poll configured ACP provider executables, versions,
-            auth status, and model metadata. Set to 0 to poll manually.
-          </p>
-        </div>
-        <HealthIntervalControl
-          intervalSeconds={intervalSeconds}
-          onIntervalChange={(seconds) => void changeInterval(seconds)}
-        />
-      </Card>
-
-      <div className="flex flex-col">
-        {profiles.map((profile) => (
-          <ProviderRow
-            key={profile.id}
-            profile={profile}
-            expanded={expandedId === profile.id}
-            onToggleExpanded={() =>
-              setExpandedId((current) =>
-                current === profile.id ? null : profile.id,
-              )
-            }
-            onToggleEnabled={(enabled) => void toggleEnabled(profile, enabled)}
+      <div className="flex flex-col gap-2">
+        <div
+          data-testid="providers-detection"
+          className="flex items-center gap-3 rounded-md bg-(--tethys-surface-panel) px-4 py-3"
+        >
+          <div className="flex shrink-0 items-center gap-1">
+            {PROVIDER_CATALOG.map((entry) => (
+              <img
+                key={entry.id}
+                src={entry.icon}
+                alt=""
+                aria-hidden="true"
+                className="size-4"
+              />
+            ))}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-body-sm text-(--tethys-text-primary)">
+              {detected} of {PROVIDER_CATALOG.length} providers detected
+            </span>
+            <span className="truncate text-label-sm text-(--tethys-text-muted)">
+              {detectionDetail}
+            </span>
+          </div>
+          <IconButton
+            size="compact"
+            label="Re-check providers"
+            onClick={() => void manualCheck()}
+            className="shrink-0 text-(--tethys-text-secondary)"
           >
-            <ProviderAccordion
+            <RefreshClockwise className="size-4" aria-hidden="true" />
+          </IconButton>
+        </div>
+
+        {rows.map(({ entry, profile }) => (
+          <div key={entry.id} className="flex flex-col">
+            <ProviderRow
+              entry={entry}
               profile={profile}
-              stderr={stderrById[profile.id] ?? ""}
-              onSaveLaunchSpec={(spec, protocol) =>
-                void saveLaunchSpec(profile, spec, protocol)
+              expanded={expandedId === entry.id}
+              onToggleExpanded={() =>
+                setExpandedId((current) =>
+                  current === entry.id ? null : entry.id,
+                )
               }
-              onLogin={() => setLoginProfile(profile)}
-              onRestart={() =>
-                void client.agent.connectionsRestart(profile.id).then(refresh)
+              onToggleEnabled={
+                profile
+                  ? (enabled) => void toggleEnabled(profile, enabled)
+                  : undefined
               }
-              onViewStderr={() => void viewStderr(profile)}
-            />
-          </ProviderRow>
+            >
+              {profile && (
+                <ProviderAccordion
+                  profile={profile}
+                  stderr={stderrById[profile.id] ?? ""}
+                  onSaveLaunchSpec={(spec, protocol) =>
+                    void saveLaunchSpec(profile, spec, protocol)
+                  }
+                  onLogin={() => setLoginProfile(profile)}
+                  onRestart={() =>
+                    void client.agent
+                      .connectionsRestart(profile.id)
+                      .then(refresh)
+                  }
+                  onViewStderr={() => void viewStderr(profile)}
+                />
+              )}
+            </ProviderRow>
+            {entry.support === "ready" && profile?.health !== "healthy" && (
+              <ProviderSetupGuide
+                entry={entry}
+                statusLabel="Not detected"
+                onRecheck={() =>
+                  void client.agent.recheck(profile?.id).then(refresh)
+                }
+              />
+            )}
+          </div>
         ))}
       </div>
 

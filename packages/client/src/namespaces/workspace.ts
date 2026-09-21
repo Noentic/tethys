@@ -2,6 +2,7 @@
 
 import type {
   TrustGrant,
+  Vcs,
   WorkspaceCapabilities,
   WorkspaceListItem,
   WorkspaceTrustState,
@@ -16,6 +17,8 @@ export function workspaceNamespace(call: Call) {
       call<WorkspaceListItem>("workspace_add", { request }),
     remove: (workspaceId: string) =>
       call<void>("workspace_remove", { workspaceId }),
+    /** Read-only VCS kind of a folder the user picked. */
+    probe: (path: string) => call<Vcs>("workspace_probe", { path }),
     settingsGet: () => call<void>("workspace_settings_get"),
     settings_get: () => call<void>("workspace_settings_get"),
     settingsSet: () => call<void>("workspace_settings_set"),

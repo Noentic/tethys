@@ -30,7 +30,12 @@ function profile(overrides: Partial<AgentProfileView> = {}): AgentProfileView {
     name: "Claude Code",
     class: "registry",
     enabled: true,
-    launch_spec: { program: "npx", args: [], cwd: null, env: [] },
+    launch_spec: {
+      program: "npx",
+      args: ["-y", "@agentclientprotocol/claude-agent-acp@1.2.0"],
+      cwd: null,
+      env: [],
+    },
     registry_ref: { id: "claude-acp", version: "1.2.0" },
     projection_target: null,
     preferred_protocol: "V1",
@@ -145,9 +150,9 @@ describe("providers view wiring (M1.12 U10)", () => {
   it("pressing ↻ re-checks every enabled Provider", async () => {
     const client = fakeClient();
     render(<ProvidersView client={client} />);
-    await screen.findByTestId("provider-row");
+    await screen.findAllByTestId("provider-row");
     fireEvent.click(
-      screen.getByRole("button", { name: "Manual Health Check" }),
+      screen.getByRole("button", { name: "Manual health check" }),
     );
     await waitFor(() => expect(client.agent.recheck).toHaveBeenCalled());
   });
@@ -155,7 +160,7 @@ describe("providers view wiring (M1.12 U10)", () => {
   it("re-checks every Provider when the network comes back", async () => {
     const client = fakeClient();
     render(<ProvidersView client={client} />);
-    await screen.findByTestId("provider-row");
+    await screen.findAllByTestId("provider-row");
     expect(client.agent.recheck).not.toHaveBeenCalled();
     window.dispatchEvent(new Event("online"));
     await waitFor(() => expect(client.agent.recheck).toHaveBeenCalledWith());
@@ -164,7 +169,7 @@ describe("providers view wiring (M1.12 U10)", () => {
   it("setting interval 0 calls healthIntervalSet(0)", async () => {
     const client = fakeClient();
     render(<ProvidersView client={client} />);
-    await screen.findByTestId("provider-row");
+    await screen.findAllByTestId("provider-row");
     // 300s default, step 30 -> ten decrements to 0.
     for (let i = 0; i < 10; i += 1) {
       fireEvent.click(screen.getAllByRole("button", { name: "Decrement" })[0]);
@@ -177,7 +182,7 @@ describe("providers view wiring (M1.12 U10)", () => {
   it("editing the executable path saves through profilesUpdate (recheck trigger)", async () => {
     const client = fakeClient();
     render(<ProvidersView client={client} />);
-    await screen.findByTestId("provider-row");
+    await screen.findAllByTestId("provider-row");
     fireEvent.click(screen.getByRole("button", { name: /Toggle details/ }));
     const executable = await screen.findByLabelText("Executable");
     fireEvent.change(executable, { target: { value: "/opt/claude" } });

@@ -13,7 +13,12 @@ import {
 } from "@tethys/ui";
 import { beforeEach, describe, expect, it } from "vitest";
 import { InboxDrawer } from "./InboxDrawer";
-import { pendingApprovalNotification, shouldNotify } from "./notifications";
+import {
+  isTurnComplete,
+  pendingApprovalNotification,
+  shouldNotify,
+  turnCompletionNotification,
+} from "./notifications";
 import { PermissionModePill } from "./permission-mode-pill";
 import { registerApprovalSlots } from "./register-slots";
 
@@ -80,5 +85,16 @@ describe("Permission-mode pill, inbox and notifications (M1.8 U11)", () => {
     expect(pendingApprovalNotification(0, 1)).toBeNull();
     expect(pendingApprovalNotification(1, 1)?.title).toBe("Approval needed");
     expect(pendingApprovalNotification(2, 2)?.title).toBe("2 approvals needed");
+  });
+
+  it("fires a completion only when a running session settles", () => {
+    expect(isTurnComplete("running", "idle")).toBe(true);
+    expect(isTurnComplete("running", "error")).toBe(true);
+    expect(isTurnComplete("running", "awaiting_approval")).toBe(false);
+    expect(isTurnComplete("idle", "idle")).toBe(false);
+    expect(isTurnComplete(undefined, "idle")).toBe(false);
+    expect(turnCompletionNotification("Fix the header").body).toBe(
+      "Fix the header finished its turn.",
+    );
   });
 });

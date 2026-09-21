@@ -1,25 +1,34 @@
-//! Settings / Skills page (spec §5.3; SYN-06, SYN-07). `Yours` is the real
-//! library from `skills.list`; `Discover` is an honest empty state (no MVP
-//! remote catalog). Trust is content-bound and persisted; the YOLO exclusion is
-//! displayed, not enforced here.
+//! Settings / Skills & Commands (pen `aKhyM` skills, `VEtJR` commands, `SFcXO`
+//! aside). One page, two kinds: a Skill library from `skills.list` (SYN-06,
+//! SYN-07) and the Tethys commands from `commands.list`. Trust is content-bound
+//! and persisted; the YOLO exclusion is displayed, not enforced here.
+//!
+//! The pen's kind switch is Skills | Commands and its scope switch is what a new
+//! addition is created under, so the list keeps both scopes visible, grouped.
 
 import type {
+  CommandScope,
   SkillInfo,
   SkillUpdateCheck,
   SkillUpdatePlan,
 } from "@tethys/bindings";
 import { createClient } from "@tethys/client";
-import { type SkillsClient, useMcpWorkspaceScope } from "@tethys/state";
 import {
-  Badge,
+  type CommandsClient,
+  type SkillsClient,
+  useMcpWorkspaceScope,
+} from "@tethys/state";
+import {
   Button,
   EmptyState,
+  Input,
   ModalDialog,
   PageHeader,
   SegmentedControl,
-  UnderlineTabs,
 } from "@tethys/ui";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CommandsPane } from "./commands-pane";
+import { SkillDetail } from "./skill-detail";
 import { SkillImportWizard } from "./skill-import-wizard";
 import { SkillRow } from "./skill-row";
 
@@ -29,24 +38,37 @@ const skillKey = (skill: SkillInfo) => `${skill.scope}:${skill.name}`;
 
 export interface SkillsViewProps {
   client?: SkillsClient;
+  /** Commands half of the page; defaults to the real client. */
+  commandsClient?: CommandsClient;
   workspaceId?: string;
+  /** Workspace name for the group labels; falls back to the scope store. */
+  workspaceName?: string;
   className?: string;
 }
 
+type Kind = "skills" | "commands";
+
 export function SkillsView({
   client = defaultClient,
+  commandsClient,
   workspaceId: workspaceIdProp,
+  workspaceName: workspaceNameProp,
   className,
 }: SkillsViewProps) {
   const scope = useMcpWorkspaceScope();
   const workspaceId = workspaceIdProp ?? scope.workspaceId;
-  const [category, setCategory] = useState<"skills" | "connectors" | "plugins">(
-    "skills",
-  );
-  const [segment, setSegment] = useState<"yours" | "discover">("yours");
+  const workspaceName =
+    workspaceNameProp ??
+    scope.workspaces.find((workspace) => workspace.id === workspaceId)?.name;
+
+  const [kind, setKind] = useState<Kind>("skills");
+  const [addScope, setAddScope] = useState<CommandScope>("workspace");
+  const [search, setSearch] = useState("");
+  const [addSignal, setAddSignal] = useState(0);
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const [checks, setChecks] = useState<Record<string, SkillUpdateCheck>>({});
   const [plans, setPlans] = useState<Record<string, SkillUpdatePlan>>({});
   const [previewKey, setPreviewKey] = useState<string | null>(null);
@@ -60,8 +82,8 @@ export function SkillsView({
   }, [client, workspaceId]);
 
   useEffect(() => {
-    if (segment === "yours") void load();
-  }, [load, segment]);
+    void load();
+  }, [load]);
 
   const replace = (updated: SkillInfo) => {
     setSkills((prev) =>
@@ -139,46 +161,82 @@ export function SkillsView({
       setPreviewKey(null);
     });
 
+  const query = search.trim().toLowerCase();
+  const visibleSkills = useMemo(
+    () =>
+      skills.filter(
+        (skill) =>
+          query === "" ||
+          skill.name.toLowerCase().includes(query) ||
+          (skill.source.repo ?? skill.source.origin)
+            .toLowerCase()
+            .includes(query),
+      ),
+    [skills, query],
+  );
+  const groups = [
+    { scope: "global" as const, label: "Global" },
+    {
+      scope: "workspace" as const,
+      label: `Workspace${workspaceName ? ` · ${workspaceName}` : ""}`,
+    },
+  ];
+
+  const selectedSkill =
+    skills.find((skill) => skillKey(skill) === selected) ?? null;
   const previewSkill = skills.find((skill) => skillKey(skill) === previewKey);
   const previewPlan = previewKey ? plans[previewKey] : undefined;
 
   return (
     <div className={className ?? "flex flex-col gap-xl"}>
       <PageHeader
-        title="Skills & Commands"
-        actions={
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setImportOpen(true)}
-          >
-            Add
-          </Button>
-        }
+        breadcrumb="Settings / Skills & Commands"
+        title="Skills & commands"
       />
 
-      <div className="flex items-center justify-between gap-lg border-b border-(--tethys-hairline) pb-md">
-        <div className="flex items-center gap-xl">
-          <UnderlineTabs
-            label="Catalog"
-            value={category}
-            onChange={setCategory}
-            tabs={[
-              { value: "skills", label: "Skills" },
-              { value: "connectors", label: "Connectors" },
-              { value: "plugins", label: "Plugins" },
-            ]}
-          />
-          <SegmentedControl
-            size="sm"
-            value={segment}
-            onChange={setSegment}
-            options={[
-              { value: "yours", label: "Yours" },
-              { value: "discover", label: "Discover" },
-            ]}
+      <div className="flex h-8 items-center gap-md">
+        <SegmentedControl
+          size="sm"
+          value={kind}
+          onChange={setKind}
+          options={[
+            { value: "skills", label: "Skills" },
+            { value: "commands", label: "Commands" },
+          ]}
+        />
+        <SegmentedControl
+          size="sm"
+          value={addScope}
+          onChange={setAddScope}
+          options={[
+            { value: "global", label: "Global" },
+            { value: "workspace", label: "Workspace" },
+          ]}
+        />
+        <div className="w-[260px] shrink-0">
+          <Input
+            type="text"
+            aria-label="Search skills"
+            placeholder={
+              kind === "skills" ? "Search skills" : "Search commands"
+            }
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            leadingIcon={<SearchGlyph />}
           />
         </div>
+        <Button
+          size="sm"
+          variant="primary"
+          className="ml-auto"
+          onClick={() =>
+            kind === "skills"
+              ? setImportOpen(true)
+              : setAddSignal((count) => count + 1)
+          }
+        >
+          Add
+        </Button>
       </div>
 
       {error && (
@@ -187,45 +245,91 @@ export function SkillsView({
         </p>
       )}
 
-      {segment === "discover" ? (
-        <EmptyState
-          title="No remote catalog in this release"
-          description="Discover fetches a hosted catalog; it arrives in a later release."
-        />
-      ) : skills.length === 0 ? (
-        <EmptyState
-          title="No skills yet"
-          description="Import a folder, a .skill archive, or a pinned GitHub repo."
-          action={
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setImportOpen(true)}
-            >
-              Add skill
-            </Button>
-          }
-        />
+      {kind === "commands" ? (
+        <div className="h-[802px]">
+          <CommandsPane
+            {...(commandsClient ? { client: commandsClient } : {})}
+            workspaceId={workspaceId}
+            workspaceName={workspaceName}
+            addScope={addScope}
+            addSignal={addSignal}
+            search={search}
+          />
+        </div>
       ) : (
-        <div className="flex flex-col rounded-md border border-(--tethys-hairline)">
-          {skills.map((skill) => (
-            <SkillRow
-              key={skillKey(skill)}
-              skill={skill}
-              updateCheck={checks[skillKey(skill)] ?? null}
-              onToggleEnabled={(enabled) => void toggleEnabled(skill, enabled)}
-              onToggleTrust={() => void toggleTrust(skill)}
-              onCheckUpdates={() => void checkUpdates(skill)}
-              onPreviewUpdate={() => void previewUpdate(skill)}
-              onApplyUpdate={() => void applyUpdate(skill)}
+        <div className="flex h-[802px] gap-2xl">
+          <div
+            data-testid="skill-list"
+            className="flex w-[704px] shrink-0 flex-col overflow-auto"
+          >
+            {skills.length === 0 ? (
+              <EmptyState
+                title="No skills yet"
+                description="Import a folder, a .skill archive, or a pinned GitHub repo."
+                action={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setImportOpen(true)}
+                  >
+                    Add skill
+                  </Button>
+                }
+              />
+            ) : visibleSkills.length === 0 ? (
+              <p className="px-3 py-3 text-body-sm text-(--tethys-text-muted)">
+                No skills match that search.
+              </p>
+            ) : (
+              groups.map((group) => {
+                const rows = visibleSkills.filter(
+                  (skill) => skill.scope === group.scope,
+                );
+                if (rows.length === 0) return null;
+                return (
+                  <div key={group.scope}>
+                    <div
+                      data-testid={`skill-group-${group.scope}`}
+                      className="flex h-[26px] items-center px-3 text-label-sm text-(--tethys-text-muted)"
+                    >
+                      {group.label}
+                    </div>
+                    {rows.map((skill) => (
+                      <SkillRow
+                        key={skillKey(skill)}
+                        skill={skill}
+                        selected={selected === skillKey(skill)}
+                        onSelect={() => setSelected(skillKey(skill))}
+                      />
+                    ))}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="w-[360px] shrink-0">
+            <SkillDetail
+              skill={selectedSkill}
+              updateCheck={
+                selectedSkill ? (checks[skillKey(selectedSkill)] ?? null) : null
+              }
+              onToggleEnabled={(enabled) =>
+                selectedSkill && void toggleEnabled(selectedSkill, enabled)
+              }
+              onToggleTrust={() =>
+                selectedSkill && void toggleTrust(selectedSkill)
+              }
+              onCheckUpdates={() =>
+                selectedSkill && void checkUpdates(selectedSkill)
+              }
+              onPreviewUpdate={() =>
+                selectedSkill && void previewUpdate(selectedSkill)
+              }
             />
-          ))}
+          </div>
         </div>
       )}
-
-      <p className="text-label-sm text-(--tethys-text-muted)">
-        Untrusted script skills are excluded from YOLO threads.
-      </p>
 
       <ModalDialog
         open={previewSkill !== undefined && previewPlan !== undefined}
@@ -256,9 +360,12 @@ export function SkillsView({
           <div className="flex flex-col gap-md">
             <div className="flex flex-wrap gap-1">
               {previewPlan.changed_files.map((file) => (
-                <Badge key={file} variant="muted" size="sm">
+                <span
+                  key={file}
+                  className="rounded-xs bg-(--tethys-surface-hover) px-1.5 py-0.5 font-mono text-mono-micro text-(--tethys-text-muted)"
+                >
                   {file}
-                </Badge>
+                </span>
               ))}
             </div>
             <pre
@@ -285,6 +392,12 @@ export function SkillsView({
     </div>
   );
 }
+
+const SearchGlyph = () => (
+  <span aria-hidden="true" className="text-(--tethys-text-muted)">
+    ⌕
+  </span>
+);
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

@@ -2,6 +2,7 @@
 
 use tethys_schema::catalog::{TrustGrant, WorkspaceListItem, WorkspaceTrustState};
 use tethys_schema::sync::WorkspaceId;
+use tethys_schema::workspace::Vcs;
 use tethys_schema::WorkspaceCapabilities;
 
 use crate::ApiError;
@@ -28,6 +29,15 @@ pub trait WorkspaceApi: Send + Sync {
         _workspace_id: WorkspaceId,
     ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
         async { Err(ApiError::Unimplemented("workspace.remove")) }
+    }
+
+    /// Read-only VCS inspection of a picked folder, for the trust dialog's
+    /// copy. No side effects: it never adds or trusts anything.
+    fn workspace_probe(
+        &self,
+        _path: String,
+    ) -> impl std::future::Future<Output = Result<Vcs, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("workspace.probe")) }
     }
 
     fn workspace_settings_get(

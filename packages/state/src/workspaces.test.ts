@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeSessionCount,
   type CatalogSession,
   type CatalogViewState,
+  catalogWorkspaceFixtures,
   chipFields,
   chipSlots,
   fitCountForWidth,
@@ -9,8 +11,6 @@ import {
   orderSessionsForChips,
   selectCatalog,
   sessionStatusKey,
-  useWorkspaceCapabilities,
-  useWorkspaceList,
   workspaceNeedsAttention,
 } from "./workspaces";
 
@@ -91,21 +91,18 @@ describe("chip field drop", () => {
   });
 });
 
-describe("fixture defaults", () => {
-  it("returns the canonical catalog and capabilities with no real client", () => {
-    const list = useWorkspaceList();
-    expect(list.length).toBeGreaterThan(0);
-    expect(list[0].capabilities.vcs.kind).toBe("git-remote");
-    expect(useWorkspaceCapabilities("no-git")).toMatchObject({
-      restore: false,
-      max_concurrent_sessions: 1,
-    });
+describe("fixture rows", () => {
+  it("keeps the canonical catalog as test doubles, not a live default", () => {
+    expect(catalogWorkspaceFixtures.length).toBeGreaterThan(0);
+    expect(catalogWorkspaceFixtures[0].capabilities.vcs.kind).toBe(
+      "git-remote",
+    );
   });
 });
 
 describe("catalog selection", () => {
   it("filters to needs-attention cards and sorts", () => {
-    const list = useWorkspaceList();
+    const list = catalogWorkspaceFixtures;
     const attention = selectCatalog(list, {
       ...initialCatalogViewState,
       needsAttentionOnly: true,
@@ -118,5 +115,20 @@ describe("catalog selection", () => {
       sort: "name",
     });
     expect(byName.map((w) => w.name)).toEqual(["notes", "scratch", "tethys"]);
+  });
+
+  it("keeps favorites first inside the active sort", () => {
+    const sorted = selectCatalog(
+      catalogWorkspaceFixtures,
+      { ...initialCatalogViewState, sort: "name" },
+      ["scratch"],
+    );
+    expect(sorted.map((w) => w.name)).toEqual(["scratch", "notes", "tethys"]);
+  });
+
+  it("counts the active sessions the card's meta row reports", () => {
+    const tethys = catalogWorkspaceFixtures[0];
+    expect(activeSessionCount(tethys)).toBe(2);
+    expect(activeSessionCount(catalogWorkspaceFixtures[1])).toBe(0);
   });
 });

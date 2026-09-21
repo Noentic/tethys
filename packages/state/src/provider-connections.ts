@@ -11,7 +11,7 @@ import type {
   AgentProfileView,
   ConfigOption,
 } from "@tethys/bindings";
-import { providersStore, selectAllProviders } from "./providers";
+import { providersStore, selectAllProviders, useProviders } from "./providers";
 
 export type ProviderConnectionStatus =
   | "healthy"
@@ -166,15 +166,14 @@ export function selectProviderConnections(): ProviderConnection[] {
 
 /**
  * Connected Providers and their status. Pass `providers` to override in a
- * test; otherwise the M1.12 store is the source, with fixtures as the fallback
- * while it is still empty.
+ * test; otherwise the store (fed by `useProvidersQuery`) is the source.
  */
 export function useProviderConnections(
   providers?: ProviderConnection[],
 ): ProviderConnection[] {
+  const state = useProviders();
   if (providers) return providers;
-  const live = selectProviderConnections();
-  return live.length > 0 ? live : providerConnectionFixtures;
+  return selectAllProviders(state).map(toProviderConnection);
 }
 
 /** A Provider is selectable only when healthy. */

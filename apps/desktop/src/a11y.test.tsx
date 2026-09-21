@@ -1,5 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { McpView, SkillsView, SyncGrid } from "@tethys/features";
+import {
+  McpView,
+  SkillsView,
+  SyncGrid,
+  ThreadNewScreen,
+  WorkspacesView as WorkspacesScreen,
+} from "@tethys/features";
 import {
   attachmentGridFixtures,
   type McpSyncClient,
@@ -15,8 +21,6 @@ import { describe, expect, it } from "vitest";
 import { SettingsLayout } from "./routes/settings";
 import { SettingsGeneralView } from "./routes/settings.general";
 import { ThreadView } from "./routes/thread.$id";
-import { ThreadNewView } from "./routes/thread.new";
-import { WorkspacesView } from "./routes/workspaces";
 import { AppShell } from "./shell/AppShell";
 import { CommandPalette } from "./shell/CommandPalette";
 
@@ -46,6 +50,7 @@ const mcpClient: McpSyncClient = {
     projection_verify: async () => "drifted",
     import_scan: async () => ({ candidates: [], failures: [] }),
     import_apply: async () => [],
+    registry_set: async () => undefined,
   },
 };
 
@@ -77,14 +82,14 @@ describe("Automated A11y / axe clean audit on Desktop routes & shell", () => {
   it("passes axe on AppShell + WorkspacesView", async () => {
     const { container } = render(
       <AppShell activeRoute="/workspaces">
-        <WorkspacesView />
+        <WorkspacesScreen />
       </AppShell>,
     );
     await expectAxeClean(container);
   });
 
   it("passes axe on ThreadNewView", async () => {
-    const { container } = render(<ThreadNewView />);
+    const { container } = render(<ThreadNewScreen navigate={() => {}} />);
     await expectAxeClean(container);
   });
 

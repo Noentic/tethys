@@ -29,7 +29,7 @@ export function EmptyState({
           {icon}
         </div>
       )}
-      <h3 className="text-heading-md text-(--tethys-text-primary)">{title}</h3>
+      <h2 className="text-heading-md text-(--tethys-text-primary)">{title}</h2>
       {description && (
         <p className="mt-1 max-w-96 text-body-sm text-(--tethys-text-muted)">
           {description}

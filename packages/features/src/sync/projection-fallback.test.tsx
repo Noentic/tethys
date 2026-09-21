@@ -44,6 +44,7 @@ function fakeClient(overrides: Partial<McpSyncClient["mcp"]> = {}) {
     projection_rollback: vi.fn().mockResolvedValue(undefined),
     import_scan: vi.fn(),
     import_apply: vi.fn(),
+    registry_set: vi.fn(),
     ...overrides,
   };
   return { mcp, client: { mcp } as unknown as McpSyncClient };

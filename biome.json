@@ -7,7 +7,13 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["apps/**/*", "packages/**/*", "!**/dist/**", "!**/src/generated/**"]
+    "includes": [
+      "apps/**/*",
+      "packages/**/*",
+      "!**/dist/**",
+      "!**/src/generated/**",
+      "!packages/features/src/agents/provider-icons/**"
+    ]
   },
   "formatter": {
     "enabled": true,

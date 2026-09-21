@@ -10,11 +10,15 @@ import type {
   AttachmentCell,
   AttachmentGrid,
   AttachmentState,
+  CommandInfo,
+  CommandScope,
+  CommandSource,
   EntryState,
   ImportCandidate,
   ImportScan,
   ProjectionPlan,
   ProviderColumn,
+  RegistryEntry,
   RegistryEntryView,
   RegistryValue,
   Scope,
@@ -28,7 +32,8 @@ import type {
   VerifyStatus,
   WorkspaceId,
 } from "@tethys/bindings";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useWorkspaceOptions } from "./queries";
 
 /**
  * The narrow slice of the typed client the MCP surface uses. `TethysClient`
@@ -65,6 +70,39 @@ export interface McpSyncClient {
       candidates: ImportCandidate[],
       scope: Scope,
     ): Promise<string[]>;
+    /** Add or replace one server definition in a scope (the Add-server form). */
+    registry_set(
+      name: string,
+      entry: RegistryEntry,
+      scope: Scope,
+      workspaceId?: string,
+    ): Promise<void>;
+  };
+}
+
+/** The narrow slice of the typed client the Commands surface uses. */
+export interface CommandsClient {
+  commands: {
+    list(
+      workspaceId?: string,
+      includeShadowed?: boolean,
+    ): Promise<CommandInfo[]>;
+    read(
+      scope: CommandScope,
+      name: string,
+      workspaceId?: string,
+    ): Promise<CommandSource>;
+    write(
+      scope: CommandScope,
+      name: string,
+      body: string,
+      workspaceId?: string,
+    ): Promise<CommandInfo>;
+    delete(
+      scope: CommandScope,
+      name: string,
+      workspaceId?: string,
+    ): Promise<null>;
   };
 }
 
@@ -437,7 +475,7 @@ export const skillInfoFixtures: SkillInfo[] = [
 
 // --- Workspace scope ------------------------------------------------------
 
-/** Minimal workspace option until worktree F's typed `workspace.list` lands. */
+/** Minimal workspace option the MCP/Skills scope pickers render. */
 export interface WorkspaceOption {
   id: WorkspaceId;
   name: string;
@@ -455,16 +493,28 @@ export interface McpWorkspaceScope {
 }
 
 /**
- * D12 fixture-backed scope hook. The real source is worktree F's trust-filtered
- * `workspace.list` (still `call<void>()`); the hook's shape does not change.
+ * Scope picker over the trust-filtered `workspace.list`. Pass `workspaces` to
+ * override in a test; the hook shape does not change with the source.
  */
 export function useMcpWorkspaceScope(
-  workspaces: WorkspaceOption[] = workspaceOptionFixtures,
+  workspaces?: WorkspaceOption[],
 ): McpWorkspaceScope {
-  const [workspaceId, setWorkspaceId] = useState<WorkspaceId>(
-    workspaces[0]?.id ?? "",
+  const live = useWorkspaceOptions(undefined, workspaces === undefined);
+  const options = useMemo(
+    () =>
+      workspaces ??
+      live.map((workspace) => ({ id: workspace.id, name: workspace.name })),
+    [workspaces, live],
   );
-  return { workspaceId, workspaces, selectWorkspace: setWorkspaceId };
+  const [workspaceId, setWorkspaceId] = useState<WorkspaceId>(
+    options[0]?.id ?? "",
+  );
+  useEffect(() => {
+    if (workspaceId === "" && options[0] !== undefined) {
+      setWorkspaceId(options[0].id);
+    }
+  }, [workspaceId, options]);
+  return { workspaceId, workspaces: options, selectWorkspace: setWorkspaceId };
 }
 
 /** Renders a `keychain:…` ref for a secret; never a value. */

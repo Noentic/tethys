@@ -43,6 +43,17 @@ export function chipToAttrs(chip: EditorChip): ChipAttrs {
 }
 
 /**
+ * The chip plus a trailing space, so the caret lands where typing continues
+ * instead of hard against the chip.
+ */
+export function chipInsertion(chip: EditorChip) {
+  return [
+    { type: CHIP_NODE, attrs: chipToAttrs(chip) },
+    { type: "text", text: " " },
+  ];
+}
+
+/**
  * `composer-chip` (DESIGN.md) — an inline atom node. Serializes to `token`
  * only: a `/` command expands via the backend, `$`/`@` emit their plaintext
  * reference, `/agent:name` passes through unchanged. Never carries a body.

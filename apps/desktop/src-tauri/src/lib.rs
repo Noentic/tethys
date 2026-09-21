@@ -20,6 +20,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(core)
+        // Wave 2 plugins the webview already calls: OS notifications (M1.8) and
+        // the native folder picker the workspace trust flow opens (M1.16).
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         // `invoke_handler!` stays a flat list because `tauri::generate_handler!`
         // parses a comma-separated list of command paths and rejects
         // macro-expanded input (tauri-macros `command::handler::Handler`). It is
@@ -34,6 +38,7 @@ pub fn run() {
             workspace_list,
             workspace_add,
             workspace_remove,
+            workspace_probe,
             workspace_settings_get,
             workspace_settings_set,
             workspace_status,

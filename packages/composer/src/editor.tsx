@@ -10,7 +10,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { CHIP_NODE, ComposerChip, chipToAttrs } from "./chips";
+import { CHIP_NODE, ComposerChip, chipInsertion } from "./chips";
 import { DocumentNode, ParagraphNode, TextNode } from "./nodes";
 import type {
   ComposerItem,
@@ -67,10 +67,7 @@ function suggestionExtension(
               .chain()
               .focus()
               .deleteRange(range)
-              .insertContent({
-                type: CHIP_NODE,
-                attrs: chipToAttrs(props.chip),
-              })
+              .insertContent(chipInsertion(props.chip))
               .run();
           },
           render: () => ({
@@ -124,9 +121,10 @@ export function serializePrompt(doc: {
         line += child.textContent ?? "";
       }
     });
-    blocks.push(line);
+    // The insertion gap after a chip is for the caret, not for the prompt.
+    blocks.push(line.trimEnd());
   });
-  return blocks.join("\n");
+  return blocks.join("\n").trimEnd();
 }
 
 interface SerializeNode {
@@ -226,11 +224,7 @@ export const ComposerEditor = React.forwardRef<
 
   const insertChip = useCallback(
     (chip: EditorChip) => {
-      editor
-        ?.chain()
-        .focus()
-        .insertContent({ type: CHIP_NODE, attrs: chipToAttrs(chip) })
-        .run();
+      editor?.chain().focus().insertContent(chipInsertion(chip)).run();
     },
     [editor],
   );

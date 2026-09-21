@@ -1,72 +1,41 @@
-import { TrustedFolders } from "@tethys/features";
-import { Card, PageHeader, Select, ToggleSwitch } from "@tethys/ui";
+import { ToolCallDensityRow, TrustedFolders } from "@tethys/features";
+import { PageHeader, Select, ToggleSwitch } from "@tethys/ui";
 import type React from "react";
-import { useState } from "react";
+import {
+  setNotificationsEnabled,
+  useNotificationPreference,
+} from "../shell/notification-preference";
+import {
+  CODE_FONTS,
+  setCodeFont,
+  setColorScheme,
+  setUiFont,
+  UI_FONTS,
+  useResolvedTheme,
+  useThemePreference,
+} from "../shell/theme-preference";
 
-// Picker label -> CSS font stack. The first entry of each list is the shipped
-// default and is applied by removing the override rather than restating it.
-const UI_FONTS: Record<string, string> = {
-  "Geist Sans": "",
-  "System Sans":
-    'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-  Inter: '"Inter", ui-sans-serif, system-ui, sans-serif',
-};
-const CODE_FONTS: Record<string, string> = {
-  "Geist Mono": "",
-  "JetBrains Mono": '"JetBrains Mono", ui-monospace, monospace',
-  "Fira Code": '"Fira Code", ui-monospace, monospace',
-};
-
-function applyFontStack(cssVar: "--font-sans" | "--font-mono", stack: string) {
-  const root = document.documentElement;
-  if (stack) root.style.setProperty(cssVar, stack);
-  else root.style.removeProperty(cssVar);
-}
-
-function SettingsSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-lg">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-heading-md text-(--tethys-text-primary)">
-          {title}
-        </h2>
-        {description && (
-          <p className="text-body-sm text-(--tethys-text-muted)">
-            {description}
-          </p>
-        )}
-      </div>
-      <Card className="divide-y divide-(--tethys-hairline)">{children}</Card>
-    </section>
-  );
-}
-
+/** One pen `HL2ay` form row: label (+ help) at the reading width, control right. */
 function SettingRow({
-  title,
-  description,
+  label,
+  help,
   children,
 }: {
-  title: string;
-  description: string;
+  label: string;
+  help?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-xl px-lg py-md">
+    <div className="flex items-center justify-between gap-xl py-3.5">
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-body-sm text-(--tethys-text-primary)">
-          {title}
+          {label}
         </span>
-        <span className="text-label-md font-normal text-(--tethys-text-muted)">
-          {description}
-        </span>
+        {help && (
+          <span className="max-w-[476px] text-label-sm font-normal text-(--tethys-text-muted)">
+            {help}
+          </span>
+        )}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -74,60 +43,53 @@ function SettingRow({
 }
 
 export function SettingsGeneralView() {
-  const [colorScheme, setColorScheme] = useState<string>("Dark");
-  const [theme, setTheme] = useState<string>("Tethys Dark");
-  const [uiFont, setUiFont] = useState<string>("Geist Sans");
-  const [codeFont, setCodeFont] = useState<string>("Geist Mono");
-  const [terminalFont, setTerminalFont] = useState<string>("Geist Mono");
-  const [approvalAlerts, setApprovalAlerts] = useState<boolean>(true);
-  const [completionAlerts, setCompletionAlerts] = useState<boolean>(true);
+  const preference = useThemePreference();
+  const resolved = useResolvedTheme();
+  const notifications = useNotificationPreference();
 
   return (
     <div className="flex flex-col gap-2xl">
-      <PageHeader title="General" />
+      <PageHeader breadcrumb="Settings / General" title="General" />
 
-      <SettingsSection title="Appearance & Typography">
-        <SettingRow
-          title="Color scheme"
-          description="Choose whether Tethys follows the system, light, or dark palette."
-        >
+      <div className="flex max-w-[720px] flex-col divide-y divide-(--tethys-hairline)">
+        <SettingRow label="Color scheme">
           <Select
             aria-label="Color scheme"
-            value={colorScheme}
-            onChange={(e) => setColorScheme(e.target.value)}
+            className="w-[220px]"
+            value={preference.scheme}
+            onChange={(event) =>
+              setColorScheme(event.target.value as "system" | "dark" | "light")
+            }
           >
-            <option value="System">System</option>
-            <option value="Dark">Dark</option>
-            <option value="Light">Light</option>
+            <option value="system">System</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
           </Select>
         </SettingRow>
 
         <SettingRow
-          title="Theme"
-          description="Design token manifest hot-swapped across UI surfaces."
+          label="Theme"
+          help="The shipped pair; the manifest hot-swaps with no reload."
         >
           <Select
             aria-label="Theme"
-            value={theme}
-            onChange={(e) => setTheme(e.target.value)}
+            className="w-[220px]"
+            value={resolved}
+            onChange={(event) =>
+              setColorScheme(event.target.value as "dark" | "light")
+            }
           >
-            <option value="Tethys Dark">Tethys Dark (Default)</option>
-            <option value="Tethys Light">Tethys Light</option>
-            <option value="Midnight Charcoal">Midnight Charcoal</option>
+            <option value="dark">Default Dark</option>
+            <option value="light">Default Light</option>
           </Select>
         </SettingRow>
 
-        <SettingRow
-          title="UI Font"
-          description="Interface typeface for headers, labels, and dialogs."
-        >
+        <SettingRow label="UI font">
           <Select
-            aria-label="UI Font"
-            value={uiFont}
-            onChange={(e) => {
-              setUiFont(e.target.value);
-              applyFontStack("--font-sans", UI_FONTS[e.target.value] ?? "");
-            }}
+            aria-label="UI font"
+            className="w-[220px]"
+            value={preference.uiFont}
+            onChange={(event) => setUiFont(event.target.value)}
           >
             {Object.keys(UI_FONTS).map((name) => (
               <option key={name} value={name}>
@@ -137,17 +99,12 @@ export function SettingsGeneralView() {
           </Select>
         </SettingRow>
 
-        <SettingRow
-          title="Code Font"
-          description="Monospace font used in git diff views, logs, and tool cards."
-        >
+        <SettingRow label="Code font">
           <Select
-            aria-label="Code Font"
-            value={codeFont}
-            onChange={(e) => {
-              setCodeFont(e.target.value);
-              applyFontStack("--font-mono", CODE_FONTS[e.target.value] ?? "");
-            }}
+            aria-label="Code font"
+            className="w-[220px]"
+            value={preference.codeFont}
+            onChange={(event) => setCodeFont(event.target.value)}
           >
             {Object.keys(CODE_FONTS).map((name) => (
               <option key={name} value={name}>
@@ -158,56 +115,31 @@ export function SettingsGeneralView() {
         </SettingRow>
 
         <SettingRow
-          title="Terminal Font"
-          description="Monospace font used in isolated PTY sessions and commands."
-        >
-          {/* No terminal surface exists yet, so there is nothing to apply this to. */}
-          <Select
-            aria-label="Terminal Font"
-            value={terminalFont}
-            disabled
-            onChange={(e) => setTerminalFont(e.target.value)}
-          >
-            <option value="Geist Mono">Geist Mono</option>
-            <option value="JetBrainsMono Nerd Font">
-              JetBrainsMono Nerd Font
-            </option>
-          </Select>
-        </SettingRow>
-      </SettingsSection>
-
-      <SettingsSection title="System Notifications">
-        <SettingRow
-          title="Tool Approvals Required"
-          description="Notify when a background agent turn requests permission to execute tools or edit files."
+          label="System notifications"
+          help="Desktop alerts for approvals and agent completion."
         >
           <ToggleSwitch
-            id="approval-notification-switch"
-            label="Tool Approvals Required"
-            checked={approvalAlerts}
-            onCheckedChange={setApprovalAlerts}
+            id="notification-switch"
+            label="System notifications"
+            checked={notifications.enabled}
+            onCheckedChange={setNotificationsEnabled}
           />
         </SettingRow>
 
         <SettingRow
-          title="Turn Completion"
-          description="Notify when an agent completes its turn or plan steps."
+          label="Tool call density"
+          help="Summary groups consecutive calls. Full shows every call. A failed call or one awaiting permission is open under either."
         >
-          <ToggleSwitch
-            id="completion-notification-switch"
-            label="Turn Completion"
-            checked={completionAlerts}
-            onCheckedChange={setCompletionAlerts}
-          />
+          <ToolCallDensityRow />
         </SettingRow>
-      </SettingsSection>
+      </div>
 
-      <SettingsSection
-        title="Trusted Folders"
-        description="Directories granted execution trust via workspace-trust-dialog. Revoking removes the workspace and stops running agent threads."
-      >
+      <section className="flex max-w-[720px] flex-col gap-3">
+        <h2 className="text-heading-md text-(--tethys-text-primary)">
+          Trusted folders
+        </h2>
         <TrustedFolders />
-      </SettingsSection>
+      </section>
     </div>
   );
 }

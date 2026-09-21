@@ -54,7 +54,8 @@ describe("SkillsView (M1.11 U7)", () => {
 
   it("persists trust and reads it back", async () => {
     const { client, skills } = fakeClient();
-    render(<SkillsView client={client} workspaceId="w1" />);
+    const view = render(<SkillsView client={client} workspaceId="w1" />);
+    fireEvent.click(await screen.findByTestId("skill-row-audit-code"));
     const trustSwitch = await screen.findByRole("switch", {
       name: "Trust audit-code",
     });
@@ -74,9 +75,10 @@ describe("SkillsView (M1.11 U7)", () => {
           .getAttribute("aria-checked"),
       ).toBe("true"),
     );
-    // Re-reading the list keeps the persisted flag on.
-    fireEvent.click(screen.getByRole("radio", { name: "Discover" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Yours" }));
+    // A fresh read of the list keeps the persisted flag on.
+    view.unmount();
+    render(<SkillsView client={client} workspaceId="w1" />);
+    fireEvent.click(await screen.findByTestId("skill-row-audit-code"));
     await waitFor(() =>
       expect(
         screen
@@ -89,10 +91,41 @@ describe("SkillsView (M1.11 U7)", () => {
   it("shows no trust control for a non-script skill", async () => {
     const { client } = fakeClient();
     render(<SkillsView client={client} workspaceId="w1" />);
-    await screen.findByTestId("skill-row-find-docs");
+    fireEvent.click(await screen.findByTestId("skill-row-find-docs"));
     expect(
       screen.queryByRole("switch", { name: "Trust find-docs" }),
     ).toBeNull();
+    expect(
+      screen.getByRole("switch", { name: "Enable find-docs" }),
+    ).toBeTruthy();
+  });
+
+  it("groups skills by scope and filters them with the search field", async () => {
+    const { client } = fakeClient([
+      ...skillInfoFixtures,
+      {
+        ...skillInfoFixtures[0],
+        name: "commit-style",
+        scope: "global",
+      },
+    ]);
+    render(<SkillsView client={client} workspaceId="w1" />);
+    await screen.findByTestId("skill-row-commit-style");
+    expect(screen.getByTestId("skill-group-global").textContent).toBe("Global");
+    expect(screen.getByTestId("skill-group-workspace").textContent).toContain(
+      "Workspace",
+    );
+
+    fireEvent.change(screen.getByLabelText("Search skills"), {
+      target: { value: "commit" },
+    });
+    expect(screen.getByTestId("skill-row-commit-style")).toBeTruthy();
+    expect(screen.queryByTestId("skill-row-find-docs")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Search skills"), {
+      target: { value: "nothing-matches" },
+    });
+    expect(screen.getByText("No skills match that search.")).toBeTruthy();
   });
 
   it("clears trust when an update is applied", async () => {
@@ -121,12 +154,9 @@ describe("SkillsView (M1.11 U7)", () => {
       }),
     });
     render(<SkillsView client={client} workspaceId="w1" />);
+    fireEvent.click(await screen.findByTestId("skill-row-audit-code"));
     fireEvent.click(
-      (
-        await screen.findAllByRole("button", {
-          name: "Check for updates",
-        })
-      )[1],
+      await screen.findByRole("button", { name: "Check for updates" }),
     );
     const preview = await screen.findByRole("button", { name: "Preview" });
     fireEvent.click(preview);
@@ -182,12 +212,60 @@ describe("SkillsView (M1.11 U7)", () => {
     expect(await within(dialog).findByRole("alert")).toBeTruthy();
   });
 
-  it("shows an honest Discover empty state without refetching", async () => {
-    const { client, skills } = fakeClient();
-    render(<SkillsView client={client} workspaceId="w1" />);
-    await screen.findByTestId("skill-row-find-docs");
-    fireEvent.click(screen.getByRole("radio", { name: "Discover" }));
-    expect(screen.getByText("No remote catalog in this release")).toBeTruthy();
-    expect(skills.list).toHaveBeenCalledTimes(1);
+  it("switches to the commands kind and reads a command into the editor", async () => {
+    const { client } = fakeClient();
+    const write = vi.fn().mockResolvedValue({
+      name: "review",
+      scope: "workspace",
+      path: ".tethys/commands/review.md",
+      description: "Review the current diff",
+      shadowed: false,
+    });
+    const commands = {
+      list: vi.fn().mockResolvedValue([
+        {
+          name: "review",
+          scope: "workspace",
+          path: ".tethys/commands/review.md",
+          description: "Review the current diff",
+          shadowed: false,
+        },
+      ]),
+      read: vi.fn().mockResolvedValue({
+        name: "review",
+        scope: "workspace",
+        path: ".tethys/commands/review.md",
+        body: "Review {{args}} against the plan.",
+      }),
+      write,
+      delete: vi.fn(),
+    };
+    render(
+      <SkillsView
+        client={client}
+        workspaceId="w1"
+        commandsClient={{ commands } as never}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("radio", { name: "Commands" }));
+    fireEvent.click(await screen.findByTestId("command-row-review"));
+    await waitFor(() =>
+      expect(commands.read).toHaveBeenCalledWith("workspace", "review", "w1"),
+    );
+    expect(
+      (screen.getByLabelText("Command body") as HTMLTextAreaElement).value,
+    ).toBe("Review {{args}} against the plan.");
+    fireEvent.change(screen.getByLabelText("Command body"), {
+      target: { value: "Review hard." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(write).toHaveBeenCalledWith(
+        "workspace",
+        "review",
+        "Review hard.",
+        "w1",
+      ),
+    );
   });
 });

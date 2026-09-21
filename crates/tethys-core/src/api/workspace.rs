@@ -151,6 +151,18 @@ impl WorkspaceApi for Core {
         Ok(())
     }
 
+    async fn workspace_probe(&self, path: String) -> Result<Vcs, ApiError> {
+        let probe = PathBuf::from(&path);
+        if !probe.is_dir() {
+            return Err(ApiError::InvalidConfig(format!(
+                "not a directory: {path}"
+            )));
+        }
+        tokio::task::spawn_blocking(move || capability::vcs_for_root(&probe))
+            .await
+            .map_err(|error| ApiError::Internal(format!("capability task failed: {error}")))
+    }
+
     async fn workspace_status(
         &self,
         workspace_id: WorkspaceId,

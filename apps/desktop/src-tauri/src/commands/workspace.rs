@@ -44,6 +44,16 @@ pub async fn workspace_remove(
         .map_err(|e| e.to_string())
 }
 
+/// `workspace.probe` — read-only VCS kind of a folder the user picked.
+#[tauri::command]
+#[specta::specta]
+pub async fn workspace_probe(
+    state: State<'_, CoreState>,
+    path: String,
+) -> Result<tethys_schema::workspace::Vcs, String> {
+    state.workspace_probe(path).await.map_err(|e| e.to_string())
+}
+
 /// `workspace.status` — trusted / untrusted / changed.
 #[tauri::command]
 #[specta::specta]
