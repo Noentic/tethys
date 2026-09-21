@@ -95,8 +95,23 @@ export function AppShell({
   const [approvalDrawerOpen, setApprovalDrawerOpen] = useState<boolean>(false);
   const [inspectorOverlayOpen, setInspectorOverlayOpen] =
     useState<boolean>(false);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState<boolean>(false);
   const inspectorPanelRef =
     usePanelRef() as React.RefObject<PanelImperativeHandle | null>;
+
+  const toggleInspector = useCallback(() => {
+    const panel = inspectorPanelRef.current;
+    if (!panel) {
+      return;
+    }
+    if (panel.isCollapsed()) {
+      panel.expand();
+      setInspectorCollapsed(false);
+    } else {
+      panel.collapse();
+      setInspectorCollapsed(true);
+    }
+  }, [inspectorPanelRef]);
   const [sessionsSidebarOpen, setSessionsSidebarOpen] =
     useState<boolean>(false);
 
@@ -255,6 +270,7 @@ export function AppShell({
     return setupGlobalKeyboardMap({
       onTogglePalette: () => setPaletteOpen((prev) => !prev),
       onToggleSidebar: () => setSessionsSidebarOpen((prev) => !prev),
+      onToggleInspector: toggleInspector,
       onFocusTab: (tabIndex: number) => {
         if (tabIndex >= 0 && tabIndex < tabs.length) {
           handleSelectTab(tabs[tabIndex].id);
@@ -272,7 +288,14 @@ export function AppShell({
         onNavigate?.("/settings/general");
       },
     });
-  }, [tabs, activeTabId, onNavigate, handleSelectTab, handleCloseTab]);
+  }, [
+    tabs,
+    activeTabId,
+    onNavigate,
+    handleSelectTab,
+    handleCloseTab,
+    toggleInspector,
+  ]);
 
   const isCompactSessions = windowWidth < 800;
   const isOverlayInspector = windowWidth < 1100;
@@ -287,6 +310,7 @@ export function AppShell({
         setInspectorOverlayOpen(true);
       } else {
         inspectorPanelRef.current?.expand();
+        setInspectorCollapsed(false);
       }
     },
   };
@@ -400,10 +424,16 @@ export function AppShell({
                   defaultSize={360}
                   minSize={240}
                   maxSize={500}
+                  collapsedSize={40}
                   collapsible
                   className="h-full"
                 >
-                  <InspectorPane sessionId={activeSessionId} />
+                  <InspectorPane
+                    sessionId={activeSessionId}
+                    status={currentSessionState?.status}
+                    collapsed={inspectorCollapsed}
+                    onToggleCollapse={toggleInspector}
+                  />
                 </Panel>
               </>
             )}

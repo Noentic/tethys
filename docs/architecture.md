@@ -190,7 +190,7 @@ Versions are indicative; pin exact versions in `Cargo.toml` and verify at setup.
 | **TanStack Virtual** | Turn timeline, thread lists, diff lines, `@` results |
 | **TanStack Pacer** | Throttling stream flushes to animation frames; debouncing search and watchers (verify API) |
 | **TanStack Form** | Agent profile editor, MCP server editor, agent native-settings forms (SYN‑11, schema-driven), settings |
-| **TanStack Table** | MCP/skill sync matrix, activity panel, audit log |
+| **TanStack Table** | MCP config editor, skill lists, activity panel, audit log |
 | **TanStack Devtools** | Router and Query inspection in dev builds |
 
 TanStack DB is a candidate for client‑side collections once stable; not required for MVP (AD‑11).
@@ -403,7 +403,7 @@ It is off by default and injected like any other server.
 
 | Sigil | Resolution |
 |---|---|
-| `/` Tethys | `~/.tethys/commands/<name>.md` or `<workspace>/.tethys/commands/<name>.md`, expanded by the Tethys composer; nested `$`/`@` resolved in the same pass as plaintext references |
+| `/` Tethys | `~/.tethys/commands/<name>.md` or `<workspace>/.tethys/commands/<name>.md`, expanded by the Tethys composer; nested `$`/`@` resolved in the same pass as plaintext references. Authored in Settings / Skills & Commands via `commands.write` / `commands.read` / `commands.delete` (CMP-07); the filename is the name, so a rename is create-then-delete |
 | `/` agent | From `available_commands_update`; command `input` is a tagged union in v2 (unknown types fall back to plain text) |
 | `$` skill | Plaintext instruction naming the skill and pointing at its `SKILL.md` (description included when present); the skill body is never inlined, for any agent. The reference is shown on the message |
 | `@` path | FFF index per worktree → plaintext `@<relative-path>` token in the prompt; `name`, `is_dir`, MIME, and size are carried as UI metadata only, never the file contents; optional line range echoed in text (P1) |
@@ -476,7 +476,8 @@ What each surface reads and writes. Surface behaviour is specified in [pages-vie
 | `usage-bar` | Session token usage as reported by the Provider (`MON‑03`; hidden when unreported) | — |
 | Diff / review | `git.diff.summary/file`, `checkpoint.*`, gated on `workspace.capabilities` | `git.stage/unstage/discard/commit` |
 | Composer `/ $ @` | `commands.list`, `search.files`, skill strategy | `commands.expand`, `thread.queue.*` |
-| MCP attachment / skills | `mcp.registry/effective` (per Workspace), Provider `mcpCapabilities`, `skills.list` | attach via `mcpServers` on `thread.create`; `mcp.projection.plan/apply/rollback` on the fallback path only; `skills.trust/enable` |
+| MCP config editor / skills | `mcp.registry/effective` (per Workspace), Provider `mcpCapabilities` + `projection_target`, `mcp.projection.*`, `skills.list` (global + workspace scope) | `mcp.projection.plan/apply/rollback` for the per-Provider file editor (§11.6); attach via `mcpServers` on `thread.create`; `skills.trust/enable`, `skills.import/update.*` |
+| Commands editor (Skills & Commands) | `commands.list(includeShadowed = true)`, `commands.read` (per scope) | `commands.write` (create/update one `.md`), `commands.delete` (`CMP‑07`) |
 | Profiles / monitor | `agent.profiles/registry/connections.*`, `agent.process_sample` (one process tree per Provider, polled every 2 s) | `agent.registry.install/update`, `connections.restart` (the Provider whose table was pressed), `agent.login` |
 | Terminal / onboarding | `terminal.list/attach`, `workspace.list` | `terminal.write/resize`, `workspace.add` |
 | Provider rows | `agent.profiles.*`, `agent.connections.list`, `mcp.health` (`SYN‑09`) | toggle → profile enable (a switched-off Provider is skipped by every health sweep); stepper → `agent.health_interval_set` (armed at 300 s on start-up, `0` = manual only); `↻` → `agent.recheck`; exec/protocol/env → launch spec |
@@ -622,11 +623,11 @@ Attaching servers to `session/new` is the primary path (SYN‑02): it changes no
    - A connection with no negotiated capabilities is an error (`CapabilitiesNotNegotiated`), never an empty set.
 3. **Resolve secrets** at spawn time and pass them only to that session.
 
-`mcp.attachments(workspace_id)` returns the Servers × Providers grid the MCP page renders. Each cell is `Attached` (will be passed on the next `session/new`), `UnsupportedTransport { needs }`, `FileProjection { target, state }`, `Excluded` (the server's `providers` list omits this Provider) or `NotNegotiated` (never shown as attached). `FileProjection` appears only for a Provider that negotiated no transport at all and has a `projection_target`; a Provider that accepts stdio but not http is `UnsupportedTransport`.
+`mcp.attachments(workspace_id)` returns the Servers × Providers attachment grid the engine uses to decide what each Provider receives at `session/new`. Settings / MCP no longer renders it as a matrix (`d0-rc6`, §11.6); the per-Provider editor reads it to flag a configured server the Provider cannot accept. Each cell is `Attached` (will be passed on the next `session/new`), `UnsupportedTransport { needs }`, `FileProjection { target, state }`, `Excluded` (the server's `providers` list omits this Provider) or `NotNegotiated` (never shown as attached). `FileProjection` appears only for a Provider that negotiated no transport at all and has a `projection_target`; a Provider that accepts stdio but not http is `UnsupportedTransport`.
 
 ### 11.3 Config projection
 
-Projection is the **compatibility path**, not the primary one: it serves Class C terminal-hosted agents (AGT‑03, which have no `session/new` to attach to) and any Provider that cannot accept `mcpServers`, and it is the foundation the native-settings forms (SYN‑11) reuse. A Provider maps to a projection target through `AgentCompat.projection_target`.
+Projection is the **compatibility path at runtime**, not the primary one: it serves Class C terminal-hosted agents (AGT‑03, which have no `session/new` to attach to) and any Provider that cannot accept `mcpServers`, and it is the foundation the native-settings forms (SYN‑11) reuse. It is also the write path behind Settings / MCP's per-Provider editor (§11.6) — "compatibility" describes the attach mechanism, not the editing surface. A Provider maps to a projection target through `AgentCompat.projection_target`.
 
 Each target implements `Projector` (`target`, `detect`, `read`, `plan → ProjectionPlan`, `apply`, `verify`, plus `schema` for SYN‑11 targets).
 
@@ -650,7 +651,7 @@ All paths **verify**; skill folders marked `.agents/skills/` are read natively b
 
 ### 11.4 Skills
 
-- **Storage:** Agent Skills layout under `~/.agents/skills/<name>/` and `<workspace>/.agents/skills/<name>/`; this home is the single source of truth and is never moved — updates swap the skill directory atomically in place.
+- **Storage:** Agent Skills layout under `~/.agents/skills/<name>/` and `<workspace>/.agents/skills/<name>/`; this home is the single source of truth and is never moved — updates swap the skill directory atomically in place. **This scope is the only classification the UI carries:** Settings / Skills filters by global vs workspace, never by a category (`SkillInfo` has no category field); provenance (folder / archive / git-hub / lockfile) is shown as data, not a filter axis (`pages-views-spec.md` §5.3).
 - **Imports:**
   - `.skill` files are validated and extracted to staging.
   - GitHub imports download the archive of the resolved commit, pinned by SHA.
@@ -667,6 +668,15 @@ Initial full-file targets — and the first agents to reach full support: OpenCo
 - **Flow:** `agent.config.schema(target)` → frontend renders a `TanStack Form` from the JSON Schema; advanced sections (hooks, steering, plugins, etc.) show a link to the official docs/schema alongside the fields. Submit → `agent.config.validate` → `plan` (preview diff) → `apply` with backup/rollback. A raw text tab is always available and round-trips unknown keys losslessly.
 - **Drift handling:** detected agent version outside the schema's range → banner warning, apply still allowed; schema validation failure → inline errors, apply blocked except as explicit raw apply (logged in audit). Unknown keys are never dropped by form applies.
 - **Secrets:** same rule as §11.3 — `${VAR}`/keychain refs only; no plain-text secret writes.
+
+### 11.6 MCP configuration UI (Settings / MCP)
+
+Settings / MCP is a per-Provider visualizer over the Provider's own config file — the projection targets in §11.3 — scoped Global or Workspace. It reads and writes the same files the projectors already own, through the same `Projector` seam (`detect`, `read`, `plan`, `apply`, `verify`) and safety path (preview diff, timestamped backup, format-preserving edit, ownership and staleness check), so the editor adds no second write path. The canonical registry (§11.1) stays the source for session injection (§11.2); the editor is how a user configures one specific vendor tool.
+
+- **Providers:** Claude Code, OpenCode, Codex CLI, Antigravity CLI, Gemini CLI, Cursor, Kiro CLI. `pages-views-spec.md` §5.4 carries the per-Provider field table; Codex's target is TOML, so the editor renders a TOML variant of the same well.
+- **Schema:** each Provider's fields are the ones its own file accepts (`serverUrl` for Antigravity, `url` / `httpUrl` for Gemini, `type: local | remote` for OpenCode, `[mcp_servers.<name>]` for Codex), taken from the community schema bundle (§11.5) where one exists rather than a universal shape.
+- **Read-only targets:** `~/.claude.json` is import-only (§11.3); the editor marks it read-only.
+- **Runtime fact:** `mcp.attachments(workspace_id)` (§11.2) still reports what a Provider will actually receive at `session/new`; where it reports `UnsupportedTransport`, the editor shows a `provider-capability-notice` rather than the retired matrix.
 
 ---
 
@@ -737,7 +747,7 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 | `search` | `files` |
 | `mcp` | `registry.*`, `effective`, `attachments`, `projection.plan/apply/verify/rollback`, `import.*`, `health` |
 | `skills` | `list`, `import`, `update.*`, `trust`, `enable` |
-| `commands` | `list`, `expand` |
+| `commands` | `list` (with `include_shadowed`: `false` for the composer's shadowing lookup, `true` for the Settings editor), `expand`, `read`, `write`, `delete` (`CMP‑07`) |
 | `terminal` | `list`, `attach`, `write`, `resize` |
 
 **Addressing.** Every method above that touches the filesystem (`mcp.*`, `skills.*`, `search.files`, `commands.*`, `git.worktree.create`) takes a `workspace_id` or `thread_id` and never a path (principle 8). Core resolves the root, and an unknown id is `NotFound`.
@@ -795,6 +805,7 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 | AD‑13 | SQLite access | **`rusqlite` + `tokio-rusqlite`** · `sqlx` | **Decided** (Spike S0.8) |
 | AD‑14 | Agent settings schema source | Community-contributed, following the native schema, version-pinned with warning/error on drift (**decided**) · Tethys-authored only · upstream-official | V1 |
 | AD‑15 | Where git/forge availability is decided | **One resolved capability set (`workspace.capabilities`, §10.6), read by every gate** · each surface checks VCS status itself | **Decided** in M1.6b — needed before the MVP review and catalog chunks; V1 adds the `isolation` and `forge_cli` inputs |
+| AD‑16 | MCP configuration UI | **Per-Provider native file editor (JSON / JSONC / TOML), scoped Global or Workspace** · servers × Providers matrix · list-first | **Decided** (`d0-rc6`) — supersedes the `sync-grid` matrix; reuses the §11.3 `Projector` seam (§11.6) and keeps §11.2 session injection as the runtime path |
 
 ---
 

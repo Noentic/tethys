@@ -32,7 +32,7 @@ export function SessionItemRow({
       className={cn(
         "flex flex-col gap-sm rounded-md border bg-(--tethys-surface-nested) p-md",
         isAwaiting(session.status)
-          ? "border-warning-soft tint-warning"
+          ? "border-warning-soft bg-(--tethys-status-warning-soft)"
           : "border-(--tethys-hairline)",
       )}
     >
@@ -53,7 +53,10 @@ export function SessionItemRow({
         <span>Turn T{session.turnCount}</span>
         {showDiff ? (
           <span className="font-mono text-mono-code">
-            +{session.diffStat?.added} −{session.diffStat?.removed}
+            <span className="text-diff-added">+{session.diffStat?.added}</span>{" "}
+            <span className="text-diff-removed">
+              −{session.diffStat?.removed}
+            </span>
           </span>
         ) : (
           <span className="font-mono text-mono-micro text-(--tethys-text-muted)">

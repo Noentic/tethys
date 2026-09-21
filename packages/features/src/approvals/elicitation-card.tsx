@@ -133,7 +133,7 @@ export function ElicitationCard({
       data-pending="true"
       aria-label={`Elicitation: ${request.title}`}
       className={cn(
-        "rounded-md border border-(--tethys-status-warning) bg-(--tethys-surface-card) p-md",
+        "rounded-md border border-(--tethys-hairline) border-l-2 border-l-(--tethys-status-warning) bg-(--tethys-status-warning-soft) p-md",
         className,
       )}
       onKeyDown={(event) => {

@@ -79,7 +79,7 @@ export function PermissionRequestCard({
       data-pending="true"
       aria-label={`Permission requested: ${request.title}`}
       className={cn(
-        "rounded-md border border-(--tethys-status-warning) bg-(--tethys-surface-card) p-md",
+        "rounded-md border border-(--tethys-hairline) border-l-2 border-l-(--tethys-status-warning) bg-(--tethys-status-warning-soft) p-md",
         className,
       )}
     >

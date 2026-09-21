@@ -43,7 +43,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           variant === "ghost" &&
             "bg-transparent text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
           variant === "destructive" &&
-            "border border-(--tethys-status-danger) text-(--tethys-status-danger) hover:tint-danger",
+            "border border-(--tethys-status-danger) text-(--tethys-status-danger) hover:bg-(--tethys-status-danger-soft)",
           isDisabled && "pointer-events-none opacity-40 active:scale-100",
           className,
         )}

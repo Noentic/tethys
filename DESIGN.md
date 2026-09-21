@@ -1,6 +1,11 @@
 ---
-version: d0-rc5
+version: d0-rc10
 changelog:
+  d0-rc10: "Accepted 21 Sep 2026. New Thread cold start. The canvas gains an explicit nothing-selected state, derived rather than invented: P6 already required a disabled control to name its fix, and §3 already required submit to stay disabled while the workspace pill was unresolved. What is new is the order — with several preconditions missing the composer names only the first, workspace → provider, so the empty state gives one instruction rather than three. `workspace-selector-pill` gains an `unresolved` state (source badge dropped, label `Choose a folder` — an instruction, not a status) and the prompt card drops its attachment-and-guide cluster when its input is disabled, because `/ for commands` is a lie against a dead textarea. Revisits M1.10's New Thread canvas. Also retires `motion.skeleton` (`d0-rc4`): it was documented at 1200ms and shipped as a `--motion-skeleton` variable, but no component ever read it — the skeleton has always run the 2000ms `motion.pulse`, which is now the single loading-loop token. Closing the gap this way rather than retiming the shipped animation keeps d0-rc9's calmer direction (breathe 2400ms > pulse 2000ms) and changes no rendered pixel."
+  d0-rc9: "Accepted 21 Sep 2026. State colour and motion. State colour is split into two tiers: a saturated `status-*` tone for markers, labels and rules, and a new low-chroma `status-warning-soft` / `status-danger-soft` surface tier for cards, rows and rules. The pen's rebalanced signal palette is ratified into the contract (it had drifted: `DESIGN.md` still shipped `#f59e0b` / `#ef4444` / `#10b981` / `#38bdf8`, whose Default Light values failed AA as text at 2.9 / 4.4 / 3.4 / 3.7), with `status-warning` and `status-danger` softened one further notch in dark. `motion.breathe` replaces the 50%-opacity pulse for liveness: `running` and `awaiting` breathe at 2400ms / 3200ms on a new `status-dot` halo, and stopped, errored, interrupted, suspended, archived and idle states are deliberately static. State colour no longer paints a full perimeter: `permission-request-card` / `elicitation-card` / `provider-popover` trade `pendingBorder` for a `pendingTreatment` (hairline + soft tint + 2px left rule + breathing dot), matching `turn-notice.warningRule`. New `state-badge` and `thread-inspector` components; `diff-viewer` gains a two-colour stat."
+  d0-rc8: "Accepted 21 Sep 2026. Light-mode wells. `surface-sunken` is no longer dark in Default Light: the terminal, code and diff wells recess with `slate-200` instead of obsidian, so light mode has no black blocks. `diff-added` / `diff-removed` gain a deeper light pair (`green-700` / `red-700`) because the bright dark-well values lose contrast on a slate well; the dark pair is unchanged. xterm's own canvas reads the well tokens, so a terminal follows the theme instead of painting black."
+  d0-rc7: "Accepted 21 Sep 2026. Commands management joins Skills on Settings / Skills & Commands. New `command-row`, `args-tag` and `command-editor`; `code-editor-well` gains a `Markdown` mode (Markdown | Preview) for the command body; `provenance-badge` gains command values (`user`, `imported`). Commands are classified by scope only, exactly like skills; agent-advertised `/agent:*` commands stay composer-only and never appear in Settings (docs/pages-views-spec.md §5.3, CMP-07)."
+  d0-rc6: "Accepted 21 Sep 2026. Skills and MCP settings revamp. Skills classify by scope (`scope-badge`: Global / Workspace), never category; `category-pill` becomes `provenance-badge`; new `skill-detail` two-pane viewer and `skill-upload-dialog` / `file-dropzone`. MCP leaves the servers x Providers matrix: `sync-grid` / `sync-grid-cell` deprecated, replaced by the per-Provider `provider-tab` strip + `config-file-row` + `code-editor-well` (JSON / JSONC / TOML) + `mcp-server-form` (docs/pages-views-spec.md §5.4)."
   d0-rc5: "Accepted 20 Sep 2026. `sync-grid` (MCP matrix) with 2-D grid roving; `stacking` scale, Esc unstack order derived from it (drawers now dismiss last); Inspector overlay mode defined (1100-1512px gap left open); provider surfaces (`provider-popover`, `provider-artifact`, `provider-capability-notice`, `composer-command-group`); thread-view completion (tool-run/origin/subagent, turn notices, message actions, config chips, activity ledger; docs/pages-views-spec.md §4.1); Interaction Patterns section; streaming-transcript a11y rules."
   d0-rc4: "Accepted 20 Sep 2026. `awaiting` ring; State Precedence; reduced-motion clause and `motion.pulse`; `stop-control`, `isolation-pill`; action-bar priority and collapse order; `workspace-card-selected`; session-item-chip sizing; login-dialog countdown; `diff-added`/`diff-removed` and `diff-viewer` tokens; config panel takes the remaining popover width; terminal-sheet Level 4 chrome."
   d0-rc3: "Re-homing only: prose-only metrics moved into the YAML, page layouts and behaviour moved to docs/pages-views-spec.md, data bindings to docs/architecture.md §8.3, `worktree-*` renamed `session-*`, stale colour values removed."
@@ -33,11 +38,20 @@ primitives:
   slate-500: "#71717a"
   slate-700: "#3f3f46"
   slate-900: "#18181b"
-  sky-400: "#38bdf8"
   blue-500: "#3b82f6"
-  green-500: "#10b981"
-  amber-500: "#f59e0b"
-  red-500: "#ef4444"
+  # Signal palette: the one family every state colour is drawn from. `bright` is
+  # the dark-theme tone, `deep` the light-theme tone. Each pair clears 4.5:1 as
+  # text on every surface of its theme (DESIGN.md Colors / State colours).
+  signal-green-bright: "#5bcc80"
+  signal-green-deep: "#00803a"
+  signal-amber-bright: "#ecc15a"
+  signal-amber-deep: "#9e6000"
+  signal-red-bright: "#ff8a84"
+  signal-red-deep: "#cd3437"
+  signal-cyan-bright: "#56cde3"
+  signal-cyan-deep: "#007991"
+  green-700: "#046c4e"
+  red-700: "#b91c1c"
 
 themes:
   default-dark:
@@ -66,14 +80,17 @@ themes:
     on-primary: "{primitives.zinc-950}"
     accent-focus: "{primitives.blue-500}"
     accent-toggle-active: "{primitives.blue-500}"
-    accent-agent-active: "{primitives.sky-400}"
+    accent-agent-active: "{primitives.signal-cyan-bright}"
     accent-agent-idle: "{primitives.zinc-500}"
-    status-active-session: "{primitives.sky-400}"
-    status-success: "{primitives.green-500}"
-    status-warning: "{primitives.amber-500}"
-    status-danger: "{primitives.red-500}"
-    diff-added: "{primitives.green-500}"
-    diff-removed: "{primitives.red-500}"
+    status-active-session: "{primitives.signal-cyan-bright}"
+    status-success: "{primitives.signal-green-bright}"
+    status-warning: "{primitives.signal-amber-bright}"
+    status-danger: "{primitives.signal-red-bright}"
+    diff-added: "{primitives.signal-green-bright}"
+    diff-removed: "{primitives.signal-red-bright}"
+    status-success-soft: "rgba(91, 204, 128, 0.14)"
+    status-warning-soft: "rgba(236, 193, 90, 0.14)"
+    status-danger-soft: "rgba(255, 138, 132, 0.14)"
   default-light:
     canvas: "{primitives.slate-100}"
     surface-rail: "{primitives.slate-0}"
@@ -83,7 +100,7 @@ themes:
     surface-card-hover: "{primitives.slate-100}"
     surface-nested: "{primitives.slate-100}"
     surface-overlay: "{primitives.slate-0}"
-    surface-sunken: "{primitives.slate-900}"
+    surface-sunken: "{primitives.slate-200}"
     surface-hover: "rgba(0, 0, 0, 0.04)"
     surface-active: "rgba(0, 0, 0, 0.08)"
     overlay-scrim: "rgba(0, 0, 0, 0.30)"
@@ -100,14 +117,17 @@ themes:
     on-primary: "{primitives.slate-0}"
     accent-focus: "{primitives.blue-500}"
     accent-toggle-active: "{primitives.blue-500}"
-    accent-agent-active: "#0284c7"
+    accent-agent-active: "{primitives.signal-cyan-deep}"
     accent-agent-idle: "{primitives.slate-500}"
-    status-active-session: "#0284c7"
-    status-success: "#059669"
-    status-warning: "#d97706"
-    status-danger: "#dc2626"
-    diff-added: "{primitives.green-500}"
-    diff-removed: "{primitives.red-500}"
+    status-active-session: "{primitives.signal-cyan-deep}"
+    status-success: "{primitives.signal-green-deep}"
+    status-warning: "{primitives.signal-amber-deep}"
+    status-danger: "{primitives.signal-red-deep}"
+    diff-added: "{primitives.green-700}"
+    diff-removed: "{primitives.red-700}"
+    status-success-soft: "rgba(0, 128, 58, 0.10)"
+    status-warning-soft: "rgba(158, 96, 0, 0.10)"
+    status-danger-soft: "rgba(205, 52, 55, 0.10)"
 
 semantic:
   canvas: { var: "--tethys-canvas", role: "Global canvas background" }
@@ -118,7 +138,7 @@ semantic:
   surface-card-hover: { var: "--tethys-surface-card-hover", role: "Card hover" }
   surface-nested: { var: "--tethys-surface-nested", role: "Accordion / nested form interior" }
   surface-overlay: { var: "--tethys-surface-overlay", role: "Command palette, modal sheets" }
-  surface-sunken: { var: "--tethys-surface-sunken", role: "Terminal / code wells, always dark" }
+  surface-sunken: { var: "--tethys-surface-sunken", role: "Terminal / code / diff wells; recessed below the plane it sits on (obsidian in dark, slate in light)" }
   surface-hover: { var: "--tethys-surface-hover", role: "Hover wash" }
   surface-active: { var: "--tethys-surface-active", role: "Pressed / selected wash" }
   overlay-scrim: { var: "--tethys-overlay-scrim", role: "Dismiss scrim" }
@@ -138,9 +158,12 @@ semantic:
   accent-agent-active: { var: "--tethys-agent-active", role: "Live streaming / running" }
   accent-agent-idle: { var: "--tethys-agent-idle", role: "Idle / unreachable" }
   status-active-session: { var: "--tethys-status-session", role: "Leased session alias of agent-active" }
-  status-success: { var: "--tethys-status-success", role: "Healthy handshake" }
-  status-warning: { var: "--tethys-status-warning", role: "Disabled / unauthenticated" }
-  status-danger: { var: "--tethys-status-danger", role: "Missing binary / destructive" }
+  status-success: { var: "--tethys-status-success", role: "Healthy handshake. Marker/text tier" }
+  status-warning: { var: "--tethys-status-warning", role: "Disabled / unauthenticated / awaiting. Marker/text tier" }
+  status-danger: { var: "--tethys-status-danger", role: "Missing binary / destructive / failed. Marker/text tier" }
+  status-success-soft: { var: "--tethys-status-success-soft", role: "Healthy surface tier: the wash behind a healthy or resolved row. Background only, never text" }
+  status-warning-soft: { var: "--tethys-status-warning-soft", role: "Attention surface tier: the wash behind a pending approval or a warning row. Background only, never text, never a full perimeter" }
+  status-danger-soft: { var: "--tethys-status-danger-soft", role: "Failure surface tier: the wash behind a destructive or failed row. Background only, never text" }
   diff-added: { var: "--tethys-diff-added", role: "Added lines and `+` gutter mark in diff-viewer. Separate from status-success so a theme can restyle diffs (e.g. colour-blind-safe) without touching health colours" }
   diff-removed: { var: "--tethys-diff-removed", role: "Removed lines and `−` gutter mark in diff-viewer. Separate from status-danger for the same reason" }
 
@@ -270,10 +293,13 @@ motion:
   fast: 150ms
   base: 200ms
   easing: ease-out
-  skeleton: 1200ms
   pulse: { duration: 2000ms, easing: "cubic-bezier(0.4, 0, 0.6, 1)", opacityLow: 50% }
+  pulseScope: "the loading and skeleton loop, alternating `{semantic.surface-hover}` ↔ `{semantic.surface-active}`. `pulse` was the liveness channel until `d0-rc9`; liveness is now `breathe`, because a state that has stopped must not pulse"
+  breathe: { duration: 2400ms, easing: "cubic-bezier(0.4, 0, 0.6, 1)", opacityLow: 45% }
+  breatheAwaiting: 3200ms
   rules: "accordion/splitter fast; drawer/palette base; thumb slide fast; content fade after 100ms; no layout shift"
-  reducedMotion: "under prefers-reduced-motion: reduce, every looping animation (pulse, skeleton, spinner) is suspended to a static frame; no state may depend on motion alone (see Universal State Matrix / State Precedence)"
+  stateMotion: "`breathe` is the one animation that encodes liveness, and only `running` and `awaiting` use it: `running` at {motion.breathe.duration}, `awaiting` at {motion.breatheAwaiting} so waiting reads as slower than busy. `healthy`, `error`/`failed`, `interrupted`, `suspended`, `archived`, `idle` and `auth_required` are static — a state that has stopped must not keep pulsing, and a fact is not liveness. Motion is the third channel after hue and shape, never the only one"
+  reducedMotion: "under prefers-reduced-motion: reduce, every looping animation (breathe, pulse, spinner) is suspended to a static frame; no state may depend on motion alone (see Universal State Matrix / State Precedence)"
 
 icons:
   set: "Geist Icons"
@@ -302,16 +328,20 @@ components:
     width: "{layout.shell-inspector}"
     borderLeft: "1px solid {semantic.hairline-structural}"
     padding: "{spacing.lg}"
+    body: "{components.thread-inspector}"
+  thread-inspector:
+    backgroundColor: "{semantic.surface-panel}"
+    borderLeft: "1px solid {semantic.hairline-structural}"
+    header: "40px row: `Thread Inspector` in {typography.heading-md} / {semantic.text-primary}, a {components.state-badge} naming the live state, and a `Collapse` ghost button with a chevron. The badge is the one place the panel's state is named in words, so collapsing can never hide *that* a request is pending"
+    rollup: "a {semantic.surface-overlay} band of four metrics — files modified, diff lines, commands executed, duration. Value in {typography.mono-micro} / {semantic.text-primary}, label beneath in {typography.mono-micro} / {semantic.text-muted}. The diff-lines metric is two-coloured: `+N` in {semantic.diff-added}, `−N` in {semantic.diff-removed} ({components.diff-viewer.statAdded} / .statRemoved). A metric the session did not report is omitted, never estimated (P9)"
+    sections: "the rollup band first, then the registered Inspector slots in order: `plan-panel`, `activity-ledger`, the `diff-viewer` where the workspace has git, and `Approve & Commit`. Sections are separated by a {semantic.hairline}, not by cards — the panel is one column, not a stack of boxes"
+    collapsed: "collapses to a 40px rail on {semantic.surface-panel} with the {semantic.hairline-structural} left edge, carrying the breathing `status-dot` and an expand chevron. `aria-expanded` on the toggle, `Ctrl/Cmd+I` toggles. A pending request is never *only* reachable here: the tab strip's {components.approval-inbox-pill} and the stage's inline card both keep it answerable (State Precedence rule 5)"
+    empty: "an idle session with nothing to report renders the header (badge `Idle`) and the ledger's `No tool calls yet`; the rollup band renders nothing rather than a row of zeroes, and no plan section and no diff section appear — an absent section is not rendered as an empty box (P6, P9). The panel never disappears: it says it has nothing yet rather than looking broken"
+    motion: "the header dot and any `status-dot` inside follow {motion.stateMotion}; the panel itself never animates on open or collapse beyond the shell's own drawer transition"
+    a11y: "a `region` labelled `Thread Inspector`; the rollup is a `list`; the collapse toggle is a `button` with `aria-expanded` and `aria-controls`"
   action-bar:
-    backgroundColor: "{semantic.surface-rail}"
-    height: "{layout.shell-actionbar}"
-    borderTop: "1px solid {semantic.hairline-structural}"
-    padding: "0 {spacing.lg}"
-    gap: "{spacing.sm}"
-    contents: "provider/config pill (Provider identity and health; opens the full `model-selector-popover` and anchors `provider-popover` — the Model and Effort controls are `composer-config-chip`s in the composer, not here), mode pill (the one home of the ACP `mode` category), permission-mode pill, isolation pill (branch, or `no git`), diff-summary pill (only when a turn has a diff in a git workspace), usage-bar, queue count, Stop"
-    priority: "stop, isolation-pill, permission-mode pill, provider/config pill, diff-summary pill, mode pill, queue count, usage-bar (highest first). The diff-summary pill is a registered slot; it sits above the mode pill so it folds after it, which keeps the fold order usage-bar, queue count, mode pill intact"
-    collapseRule: "as the bar narrows toward {layout.stage-min}, elements fold in reverse priority — usage-bar first, then queue count, then mode pill — into a trailing `•••` overflow popover (Level 4). Stop and the isolation pill never fold. A folded queue count keeps a warning dot on the `•••` trigger. Slots registered through registerActionBarSlot declare a priority and fold with the same rule; an undeclared slot folds before usage-bar."
-    overflowTrigger: "20px icon button, `aria-label` names the folded items"
+    deprecated: "Re-homed into `prompt-card` for thread execution views. The 56px bottom bar is removed to reduce vertical chrome and consolidate provider, mode, isolation, diff summary, and execution controls into the unified prompt card."
+    legacyAlias: shell-actionbar
   toast:
     backgroundColor: "{semantic.surface-overlay}"
     border: "1px solid {semantic.hairline-strong}"
@@ -338,6 +368,7 @@ components:
     rounded: "{rounded.md}"
     padding: 4px 10px
     height: 28px
+    statusMarker: "inline {components.status-dot.sizeInline} telemetry dot displaying live thread lifecycle state: running (agent-active disc, breathing), awaiting (amber ring, breathing slower), error (danger disc, static), idle (transparent/omitted). A tab whose state needs words renders {components.state-badge} instead of the bare dot"
   status-dot:
     size: 8px
     sizeInline: 6px
@@ -356,9 +387,21 @@ components:
     awaitingShape: "ring — {ringWidth} stroke in {semantic.status-warning}, transparent centre, same outer size as the disc"
     ringWidth: 2px
     ringWidthInline: 1.5px
-    pulse: "`running` and `awaiting` pulse per {motion.pulse}. Pulse is decoration: state must stay legible with it suspended (prefers-reduced-motion, unfocused window), so the only permitted differentiators between `running` and `awaiting` are hue AND shape together"
-    rule: "`awaiting` (ring) is a session/turn state. Provider amber (`auth_required`, detected-but-disabled) stays a filled disc so the two amber meanings never collapse when the pulse is off. Applies identically on chips, topology nodes, session rows and the rail; `provider-row` additionally keeps its status subtext"
+    halo: "a soft ring at 20% of the state colour, built with `color-mix` from the marker's own token so it needs no extra variable, drawn in a box one step larger than the marker (`size` + 4px). The halo is what animates; the marker itself stays crisp at full opacity, so 'alive' never means 'blurry'. Rendered only for states that breathe"
+    motion: "`running` and `awaiting` breathe the halo per {motion.breathe} / {motion.breatheAwaiting}; every other state is static ({motion.stateMotion}). Motion is decoration: state must stay legible with it suspended (prefers-reduced-motion, unfocused window), so the permitted differentiators between `running` and `awaiting` are hue AND shape together, with rate a third channel that is never load-bearing"
+    rule: "`awaiting` (ring) is a session/turn state. Provider amber (`auth_required`, detected-but-disabled) stays a filled disc so the two amber meanings never collapse when the breathe is off. Applies identically on chips, topology nodes, session rows and the rail; `provider-row` additionally keeps its status subtext"
     a11y: "role=status with aria-label and title carrying the state name — unchanged; shape is for glanceable, non-hover reading"
+  state-badge:
+    backgroundColor: "{semantic.surface-hover}"
+    rounded: "{rounded.full}"
+    padding: 2px 8px
+    height: 20px
+    typography: "{typography.label-md}"
+    geometry: "{components.approval-inbox-pill} minus the count — `status-dot.sizeInline` + the state name"
+    colour: "the dot and the label take the state's own token per theme: `running` {semantic.accent-agent-active}, `awaiting` {semantic.status-warning}, `error` {semantic.status-danger}, `idle` / `interrupted` {semantic.text-muted}. Never a fixed colour, and never `text-primary` — the badge's whole job is to carry the state"
+    motion: "the dot breathes for `running` / `awaiting` and is static otherwise ({motion.stateMotion})"
+    scope: "The labelled form of `status-dot`: used by the `thread-inspector` header, the `tab-item.statusMarker` on the active tab, and the `session-list-row`. A surface that needs the state named in words renders this, not a bare dot"
+    a11y: "the state name is text, so the badge is legible with the dot ignored; the dot keeps `role=status` and its own label"
   approval-inbox-pill:
     backgroundColor: "{semantic.surface-hover}"
     textColor: "{semantic.text-secondary}"
@@ -434,26 +477,22 @@ components:
     selectedBar: "2px {semantic.accent-focus} bar on the card's left edge, inside the border and following the corner radius (Universal State Matrix `selected`)"
     appliesWhen: "the card's `workspace-peek-drawer` is open. The drawer is modeless and the catalog stays interactive, so the bar is the only marker of which card the drawer belongs to; it clears when the drawer closes. At most one card is selected at a time"
     aria: "`aria-current=true` on the card's name button while selected; the card itself is not a focus stop"
+  workspace-card-no-vcs:
+    backgroundColor: "{semantic.surface-card}"
+    border: "1px solid {semantic.hairline}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.lg}"
+    height: 220px
+    sourceGlyph: "folder icon only; excludes branch badges and VCS metadata"
+    action: "renders `git-init-upsell-chip` (`Initialize Git`) in place of git branch controls"
   workspace-source-badge:
-    backgroundColor: "{semantic.surface-hover}"
+    backgroundColor: "transparent"
     textColor: "{semantic.text-muted}"
-    typography: "{typography.label-sm}"
     iconSize: "{icons.sizes.micro}"
-    rounded: "{rounded.xs}"
-    padding: 2px 6px
+    glyphOnly: "renders icon-only source glyphs (e.g. folder, git branch) without redundant textual labels"
+    legacyAlias: workspace-source-glyph
   session-topology-canvas:
-    backgroundColor: "{semantic.canvas}"
-    dotColor: "{semantic.grid-dot}"
-    dotSpacing: 12px
-    rounded: "{rounded.md}"
-    nodeSize: 10px
-    nodeIdle: "{semantic.grid-dot}"
-    nodeRunning: "{semantic.accent-agent-active}"
-    nodeAwaiting: "{semantic.status-warning}"
-    nodeAwaitingShape: "ring (2px stroke, transparent centre) — every other node is a filled disc; same rule as status-dot, so `nodeRunning` and `nodeAwaiting` differ by shape as well as hue when the pulse is suspended"
-    nodeError: "{semantic.status-danger}"
-    edgeColor: "{semantic.hairline-strong}"
-    providerGlyphSize: "{icons.sizes.micro}"
+    deprecated: "Removed. Obsolete canvas visualization is superseded by clean workspace cards and aggregate thread inspectors."
   git-init-upsell-chip:
     backgroundColor: "{semantic.surface-hover}"
     textColor: "{semantic.text-secondary}"
@@ -472,7 +511,7 @@ components:
     maxWidth: 240px
     gap: "{spacing.sm}"
     pendingBorder: "1px solid {semantic.status-warning}"
-    statusMarker: "a `{components.status-dot.sizeInline}` marker overlaid on the provider glyph's top-right corner, adding no width. `running` = filled sky disc, `awaiting` = amber ring (see status-dot), `error` = filled danger disc, `idle` = none. Present in addition to `pendingBorder`, so an awaiting chip differs from a running one by shape, not only by hue"
+    statusMarker: "a `{components.status-dot.sizeInline}` marker overlaid on the provider glyph's top-right corner, adding no width. `running` = filled agent-active disc, `awaiting` = amber ring (see status-dot), `error` = filled danger disc, `idle` = none. Present in addition to `pendingBorder`, so an awaiting chip differs from a running one by shape, not only by hue"
     truncation: "the branch name truncates with an ellipsis and the full name is the chip's tooltip (`tooltip` component). `mono-micro` is ~6.8px per character, so a 40-character branch (`feature/JIRA-4821-fix-auth-token-refresh`, ~273px) always truncates at `maxWidth`"
     fieldDropOrder: "when the chip is narrower than its comfortable width, drop the turn count (`T8`) first, then the diff stat; the glyph, marker and branch never drop"
     legacyAlias: thread-chip
@@ -504,7 +543,23 @@ components:
     rounded: "{rounded.2xl}"
     padding: "{spacing.lg}"
     width: "{layout.prompt-width}"
-    threadLowerBar: "the docked in-thread composer's lower bar, left to right: `composer-config-chip`s (Model, Effort), `attachment-chip`s, then submit. `/thread/new` keeps `model-selector-pill` here because that is where the Provider is chosen"
+    topContextPills: "collapsible context pills pinned across the top edge: git context (`isolation-pill`), provider/model selector pill with popover trigger (`model-selector-pill`), execution mode pill (`mode-pill`), and diff summary pill (`diff-summary-pill`)"
+    composerGuide: "subtle command guide in input placeholder (`/ commands · @ files · $ skills`); pills removed from composer body"
+    threadLowerBar: "docked in-thread composer's lower bar: mention triggers, attachment chips, and single dual-state `action-icon-button` on the right"
+  composer-suggestion-popover:
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    edge: "{semantic.edge-highlight}"
+    rounded: "{rounded.md}"
+    width: 320px
+    maxHeight: 280px
+    padding: "{spacing.sm}"
+    sigils:
+      files: "@ sigil — matches files & artifacts indexed via FFF"
+      skills: "$ sigil — matches skills catalog from ~/.agents/skills/"
+      commands: "/ sigil — matches built-in Tethys and agent commands"
+    header: "Title bar indicating detected context; single clean container without tab-splitting"
+    itemRow: "Keyboard-navigable list item with icon, title, description, and match highlighting"
   workspace-selector-pill:
     backgroundColor: "transparent"
     backgroundHover: "{semantic.surface-hover}"
@@ -540,8 +595,12 @@ components:
     backgroundColor: "{semantic.surface-hover}"
     backgroundReady: "{semantic.primary}"
     iconColorReady: "{semantic.on-primary}"
+    backgroundRunning: "{semantic.surface-elevated}"
+    borderColorRunning: "{semantic.hairline-strong}"
+    iconColorRunning: "{semantic.text-primary}"
     rounded: "{rounded.full}"
     size: 32px
+    dualState: "Single action trigger in prompt card. When idle/ready, renders send arrow icon with backgroundReady; when thread is running, morphs to stop/square icon (Geist stop icon) which triggers the protocol cancellation ladder"
   composer-chip:
     backgroundColor: "{semantic.surface-hover}"
     textColor: "{semantic.text-secondary}"
@@ -580,12 +639,14 @@ components:
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.md}"
     padding: "{spacing.lg}"
-    pendingBorder: "1px solid {semantic.status-warning}"
+    pendingTreatment: "the card keeps its {semantic.hairline} border and gains an attention treatment rather than a perimeter stroke: a {semantic.status-warning-soft} wash in place of the card's own plane (the token is an alpha, so it composites over whatever the card sits on), a 2px {semantic.status-warning} left rule, and the breathing `status-dot` in the header. Same grammar as {components.turn-notice.warningRule}. A saturated perimeter is the loudest possible way to say 'a decision is waiting' and the only way it can be said on a 360px column; the tint plus the rule carry it at a fraction of the ink, and the motion carries the rest"
+    pendingHover: "hover never recolours the rule or the wash — the card is not the affordance, its buttons are"
   elicitation-card:
     backgroundColor: "{semantic.surface-card}"
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.md}"
     padding: "{spacing.lg}"
+    pendingTreatment: "{components.permission-request-card.pendingTreatment}. The two request shapes are one visual family: a user answering either one is doing the same job"
     fieldGroup: "{components.schema-field-group}"
     decision: "a property with a fixed set of options renders as a numbered decision, one line per option (the option's title; ACP's option type carries a value and a title but no description, so the card never invents a trade-off line — the property's own description is the help text above the options). Keys `1`–`9` select. A free-text `Other` is offered only where the schema permits free text (Interaction Patterns P7)"
     paging: "a request with more than one property may page one per step with an `n of m` counter and `Back`; the counter is text. A single property renders unpaged"
@@ -603,7 +664,7 @@ components:
     anchor: "the Provider's `model-selector-pill` in the action bar, so the request is visibly attributed to the Provider that raised it"
     content: "a title, a body rendered from the request's schema with `schema-field-group` spacing, and the Provider's own action set in the Provider's order — never a hardcoded approve/reject pair, the same rule as `permission-request-card`. A destructive-kind action uses the Universal State Matrix `destructive` row"
     focus: "traps `Tab` while open and restores focus to the invoker on `Esc`/close, unlike the inline cards. Because it traps focus it never opens over another trap: a request that arrives while a dialog or sheet is open waits in the Provider's pending list, the pill shows the pending count, and it opens when the topmost trap closes"
-    pendingBorder: "1px solid {semantic.status-warning}"
+    pendingTreatment: "{components.permission-request-card.pendingTreatment}"
     a11y: "role=dialog, aria-modal=false, aria-labelledby the title. The pending count on the pill is text, not colour alone"
   provider-artifact:
     backgroundColor: "{semantic.surface-card}"
@@ -654,7 +715,7 @@ components:
   composer-command-group:
     typography: "{typography.label-sm}"
     textColor: "{semantic.text-muted}"
-    scope: "Gives a presentation to the grouping the composer `/` popup already requires — Tethys commands are 'listed apart from `/agent:name` commands the Provider advertises' (docs/pages-views-spec.md §4 `composer`), which the spec states but does not draw. Commands the Provider declares through its connection's available-commands list render as a separate group under a heading naming the Provider, after the Tethys commands, so a Provider command is never mistaken for one Tethys resolves itself. The rows reuse the existing command-row treatment; only the group heading is new. Not a second popup"
+    scope: "Gives a presentation to the grouping the composer `/` popup already requires — Tethys commands are 'listed apart from `/agent:name` commands the Provider advertises' (docs/pages-views-spec.md §4 `composer`), which the spec states but does not draw. Commands the Provider declares through its connection's available-commands list render as a separate group under a heading naming the Provider, after the Tethys commands, so a Provider command is never mistaken for one Tethys resolves itself. The rows reuse the popup's existing item row (`composer-suggestion-popover.itemRow`); only the group heading is new. Not a second popup, and not the Settings `command-row`"
     clash: "a Provider command whose name collides with a Tethys command renders as `/agent:name`, existing clash rule"
     a11y: "the group is a `group` with `aria-label` naming the Provider inside the existing `listbox`"
   turn-message:
@@ -773,6 +834,9 @@ components:
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.md}"
     typography: "{typography.mono-code}"
+    stat: "{typography.mono-micro}. `+N` and `−N` are two colours, never one: `+N` in {semantic.diff-added}, `−N` in {semantic.diff-removed}. Rendered in the file header beside the path and in the {components.thread-inspector} rollup band. A single-coloured stat makes the reader parse the sign to tell the sides apart; the {components.diff-summary-pill} already splits them and is the precedent"
+    statAdded: "{semantic.diff-added}"
+    statRemoved: "{semantic.diff-removed}"
     addedFill: "{semantic.diff-added} at 16%"
     removedFill: "{semantic.diff-removed} at 16%"
     addedWordFill: "{semantic.diff-added} at 32%"
@@ -809,26 +873,11 @@ components:
     rounded: "{rounded.xs}"
     padding: 2px 6px
   sync-grid:
-    backgroundColor: "transparent"
-    border: "1px solid {semantic.hairline}"
-    rounded: "{rounded.md}"
-    scope: "The Servers × Providers attachment matrix on Settings / MCP. Rows are MCP servers, columns are Providers, and the workspace is the page's scope selector, not a third axis"
-    headerRow: "sticky at the top of the scroll region, `{semantic.surface-elevated}`, 1px `{semantic.hairline-strong}` bottom border, height 36px, Provider name in {typography.label-sm} with its `status-dot`"
-    frozenColumn: "the server-name column is frozen at 220px against the left edge, `{semantic.surface-elevated}`, 1px `{semantic.hairline-strong}` right border. Both axis labels must stay visible to read any cell"
-    columnMinWidth: 132px
-    rowHeight: 40px
-    overflow: "the grid scrolls horizontally inside its own region as Providers are added (`+ Add Custom ACP Server` makes the column count unbounded); the page itself never scrolls horizontally. Scroll padding reserves the frozen column width so a focused cell is never hidden beneath it"
-    empty:
-      noServers: "zero rows: the header row still renders; the body is one full-width empty state `No MCP servers configured` with an `Add server` action"
-      noProviders: "zero columns: the frozen server column renders alone; a full-width empty state `No connected Providers` links to Settings / Providers"
-      both: "the noProviders state; there is nothing to attach to yet"
-    a11y: "role=grid with aria-rowcount and aria-colcount; header cells `columnheader`, server cells `rowheader`, attachment cells `gridcell`. Keyboard model: Accessibility & Keyboard Map, 'Grid roving'"
+    deprecated: "Removed in `d0-rc6`. The Servers × Providers attachment matrix is superseded by the per-Provider `provider-tab` + `config-file-row` + `code-editor-well` editor on Settings / MCP (docs/pages-views-spec.md §5.4). Attachment is still a real runtime fact (docs/architecture.md §11.2); it is shown in the editor's footer note rather than as a matrix"
+    legacyAlias: mcp-attachment-grid
   sync-grid-cell:
-    backgroundColor: "transparent"
-    textColor: "{semantic.text-muted}"
-    typography: "{typography.mono-micro}"
-    rounded: "{rounded.xs}"
-    padding: 2px 6px
+    deprecated: "Removed with `sync-grid` (`d0-rc6`). A cell's five attachment states now surface only as the footer's prose summary; the exhaustive `AttachmentState` mapping (`mcp.attachments`) is unchanged in the engine"
+    legacyAlias: mcp-attachment-cell
   provider-row:
     backgroundColor: "transparent"
     borderBottom: "1px solid {semantic.hairline}"
@@ -866,16 +915,125 @@ components:
     padding: 12px 16px
   skill-row:
     backgroundColor: "transparent"
+    backgroundSelected: "{semantic.surface-active}"
+    selectedBar: "2px {semantic.accent-focus} left bar while its `skill-detail` is open (Universal State Matrix `selected`, vertical list)"
     borderBottom: "1px solid {semantic.hairline}"
     slugTypography: "{typography.mono-code}"
-    padding: 6px 12px
-    height: 36px
-  category-pill:
+    padding: 8px 12px
+    height: 44px
+    scope: "One skill in the resolved scope. Carries a `scope-badge`, provenance text (`folder | archive | git-hub | lockfile`), a script `trust` toggle where the skill ships scripts, and a `•••` menu. Name carries no category: skills are classified by scope (global / workspace) only"
+    a11y: "`option` in a `listbox`; `aria-selected` mirrors `backgroundSelected`; `Enter`/`Space` opens the `skill-detail`"
+  provenance-badge:
     backgroundColor: "{semantic.surface-hover}"
     textColor: "{semantic.text-muted}"
     typography: "{typography.label-sm}"
     rounded: "{rounded.xs}"
     padding: 2px 6px
+    scope: "Reports where a skill, server or command came from (`folder`, `archive`, `git-hub`, `lockfile` for skills; `native file`, `imported` for MCP; `user`, `imported` for commands). Never a taxonomy — a category is not provenance. Renamed from `category-pill` (`d0-rc6`), whose slot M1.11 had already filled with `source.origin` because `SkillInfo` carries no category"
+  scope-badge:
+    backgroundColor: "{semantic.surface-hover}"
+    textColor: "{semantic.text-muted}"
+    typography: "{typography.label-sm}"
+    rounded: "{rounded.xs}"
+    padding: 2px 6px
+    iconSize: "{icons.sizes.micro}"
+    global: "globe glyph + `Global`"
+    workspace: "folder glyph + the workspace's name (truncated to 20 chars with the full name as tooltip)"
+    a11y: "text, never colour alone; the accessible name is `Global scope` / `Workspace <name> scope`"
+  skill-detail:
+    backgroundColor: "{semantic.surface-panel}"
+    borderLeft: "1px solid {semantic.hairline-structural}"
+    width: "{layout.shell-inspector}"
+    padding: "{spacing.lg}"
+    scope: "The right pane of Settings / Skills, beside the `skill-row` list. Header: skill name (`{typography.heading-md}`) + `scope-badge` + `provenance-badge`. Body sections on `schema-field-group` rhythm: the frontmatter `name` / `description`, the rendered `SKILL.md` body (the markdown worker, in the stage's reading measure), the file tree (`SKILL.md`, `scripts/`, assets), and the trust + per-workspace allow-list controls. Actions `Update` / `Remove` / `Export` in the header's right cluster"
+    empty: "no selection renders the Design-system `empty` row (`24px` hero icon + `body-sm` + the `+ Add` primary action), never a blank pane"
+    a11y: "a `region` labelled by the skill name; the trust control is a `switch`; removing a skill is destructive and confirms"
+  skill-upload-dialog:
+    extends: "{components.modal-dialog}"
+    width: 520px
+    dropzone: "{components.file-dropzone}"
+    validatedRows: "one line per extracted entry: name, frontmatter status, size, and any script detected; a validation failure row reads the reason in {typography.mono-micro} / {semantic.status-danger}, and the confirm button stays disabled until the bundle is valid"
+    a11y: "traps focus; `Esc` returns to the invoking `+ Add` menu; the dropzone is a labelled `button` that also accepts a file picker"
+  command-row:
+    backgroundColor: "transparent"
+    backgroundSelected: "{semantic.surface-active}"
+    selectedBar: "2px {semantic.accent-focus} left bar while its `command-editor` is open (Universal State Matrix `selected`, vertical list)"
+    borderBottom: "1px solid {semantic.hairline}"
+    slugTypography: "{typography.mono-code}"
+    padding: 8px 12px
+    height: 44px
+    scope: "One `/` Tethys command in the resolved scope (CMP-01, CMP-07). Carries a `/` glyph, the name in {typography.mono-code}, a `scope-badge`, an `args-tag` when the body uses `{{args}}`, and a `•••` menu (`Rename`, `Duplicate`, `Delete`). No trust toggle: commands ship no scripts"
+    shadowed: "a global row a workspace command of the same name overrides renders its name and provenance in {semantic.text-muted} plus a `shadowed by workspace` note; the note is text, never colour alone"
+    a11y: "`option` in a `listbox`; `aria-selected` mirrors `backgroundSelected`; `Enter`/`Space` opens the `command-editor`"
+  args-tag:
+    backgroundColor: "{semantic.surface-hover}"
+    textColor: "{semantic.text-muted}"
+    typography: "{typography.mono-micro}"
+    rounded: "{rounded.xs}"
+    padding: 2px 6px
+    scope: "Marks a command whose body contains the `{{args}}` placeholder, so the list says at a glance whether typed text substitutes or appends. Never shown for a command without the placeholder"
+  command-editor:
+    backgroundColor: "{semantic.surface-panel}"
+    borderLeft: "1px solid {semantic.hairline-structural}"
+    width: "{layout.shell-inspector}"
+    padding: "{spacing.lg}"
+    scope: "The right pane of Settings / Skills & Commands' Commands kind, beside the `command-row` list. Header: `/name` (`{typography.heading-md}`) + `scope-badge`, with `Save` / `Delete` in the right cluster. Body on `schema-field-group` rhythm: the name field (editable on create, read-only after, because the filename is the name), the body `code-editor-well` in its `Markdown` mode with a `Markdown | Preview` toggle, and a helper line: `Use {{args}} where the typed text goes; otherwise it is appended. $skill and @path resolve to plaintext.` A shadow note (`Workspace overrides this in <name>`) renders when a workspace command shadows the global one being edited"
+    empty: "no selection renders the Design-system `empty` row (`24px` hero icon + `body-sm` + the `New command` primary action), never a blank pane"
+    a11y: "a `region` labelled by the command name; `Save` is disabled until the body is dirty; deleting is destructive and confirms"
+  file-dropzone:
+    backgroundColor: "{semantic.surface-nested}"
+    border: "1px dashed {semantic.hairline-strong}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.xl}"
+    iconSize: "{icons.sizes.hero}"
+    textColor: "{semantic.text-muted}"
+    typography: "{typography.body-sm}"
+    dragColor: "{semantic.accent-focus}"
+    scope: "Shared drop target for `skill-upload-dialog` (`.skill` file, skill folder, pinned GitHub tarball). Denied drop recolours the border to {semantic.status-danger}; a valid drop recolours it to {semantic.accent-focus}"
+  code-editor-well:
+    backgroundColor: "{semantic.surface-sunken}"
+    border: "1px solid {semantic.hairline}"
+    rounded: "{rounded.md}"
+    typography: "{typography.mono-code}"
+    lineNumberTypography: "{typography.mono-micro}"
+    lineNumberColor: "{semantic.text-muted}"
+    lineNumberFill: "{semantic.surface-hover}"
+    gutterMarkAdded: "`+` glyph in solid {semantic.diff-added} on a line the editor is inserting relative to the file on disk"
+    gutterMarkRemoved: "`−` glyph in solid {semantic.diff-removed} on a line the editor is removing"
+    errorRow: "an invalid line marks the line number in {semantic.status-danger} plus a `⚠`; the message renders in a 1px-top-bordered footer row, never as a toast"
+    scope: "The MCP config viewer/editor on Settings / MCP: the Provider's own config file rendered as a well, one line-numbered row per line, syntax-highlighted. A tree/raw toggle swaps the text for a collapsible JSON/TOML tree without changing the well's metrics. Every line stays on one logical line and scrolls horizontally; the well never soft-wraps. Editable save writes only on an explicit `Save`, and the footer states the consequence (`Applies to new sessions`). A `Markdown` mode reuses the same metrics for the `command-editor` body, with a `Markdown | Preview` toggle instead of tree/raw; Preview renders through the markdown worker and is read-only"
+    a11y: "the editable form is a labelled `textarea`-equivalent with `aria-multiline`; the tree is a `tree`; the error footer is `role=alert`"
+  config-file-row:
+    backgroundColor: "transparent"
+    borderBottom: "1px solid {semantic.hairline}"
+    pathTypography: "{typography.mono-code}"
+    pathColor: "{semantic.text-secondary}"
+    padding: 8px 16px
+    scope: "Identifies the exact file the `code-editor-well` reads and writes: resolved path (home-shortened), a `format-badge` (`JSON` / `JSONC` / `TOML`), a `scope-badge`, and the Provider's glyph. Writes `read-only` in {semantic.text-muted} for the import-only `~/.claude.json`"
+  provider-tab:
+    backgroundColor: "transparent"
+    backgroundActive: "{semantic.surface-elevated}"
+    textColor: "{semantic.text-muted}"
+    textColorActive: "{semantic.text-primary}"
+    typography: "{typography.label-md}"
+    rounded: "{rounded.sm}"
+    padding: 6px 10px
+    height: 32px
+    glyphSize: "{icons.sizes.ui}"
+    statusMarker: "a `{components.status-dot.sizeInline}` marker on the Provider glyph; `auth_required` renders amber, `not found` danger, `healthy` success"
+    a11y: "`tab` in a `tablist`; the tab strip scrolls horizontally inside its region as Providers are added, the page never does"
+  mcp-server-form:
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    edge: "{semantic.edge-highlight}"
+    rounded: "{rounded.md}"
+    width: 420px
+    padding: "{spacing.lg}"
+    fieldGroup: "{components.schema-field-group}"
+    transportControl: "{components.segmented-control} (`stdio` | `http`)"
+    scope: "Structured add/edit of one MCP server that writes an entry into the well's JSON/TOML. Fields are driven by the target Provider's own schema, never a universal shape: `stdio` gives name + command + args + env (and, per target, `cwd` / `envFile` / `type`), `http` gives name + the target's URL key (`url`, `httpUrl`, or Antigravity's `serverUrl`) + headers (and, for Codex, `bearer_token_env_var`). Secrets are entered as `keychain:` / `${VAR}` / `{env:VAR}` references only and are never echoed back"
+    validation: "a name collision or a transport the target cannot express renders inline under the offending field in {typography.mono-micro} / {semantic.status-danger}; the confirm action stays disabled"
+    a11y: "traps focus; `Esc` returns to the invoking `+ Add Server` / row; the transport segmented control is a `radiogroup`"
   keybinding-row:
     backgroundColor: "transparent"
     borderBottom: "1px solid {semantic.hairline}"
@@ -923,7 +1081,7 @@ components:
     backgroundColor: "{semantic.surface-overlay}"
     border: "1px solid {semantic.hairline-strong}"
     rounded: "{rounded.lg}"
-    well: "the xterm viewport is a `{semantic.surface-sunken}` well with a 1px `{semantic.hairline}` border and `{rounded.md}`, inset in the sheet; the sheet chrome (title bar showing the command, close) stays Level 4. This is the same Sunken layer the Elevation table already assigns to terminal wells"
+    well: "the xterm viewport is a `{semantic.surface-sunken}` well with a 1px `{semantic.hairline}` border and `{rounded.md}`, inset in the sheet; the sheet chrome (title bar showing the command, close) stays Level 4. This is the same Sunken layer the Elevation table already assigns to terminal wells. xterm paints its own canvas, so the surface reads the well's `{semantic.surface-sunken}` and `{semantic.text-secondary}` back from CSS and passes them as the terminal theme — the canvas follows the active theme instead of xterm's built-in black"
   onboarding-step:
     backgroundColor: "{semantic.surface-card}"
     border: "1px solid {semantic.hairline}"
@@ -946,7 +1104,7 @@ The visual style is **Precision Monochromatic**: stepped zinc surfaces, dot-matr
 Two-tier contract: `primitives` (raw palette) → `semantic` interface (`surface-canvas`, `surface-elevated`, `hairline`, `text-primary`, `accent-agent-active`, …) → CSS vars. Components MUST NOT reference `primitives`, `themes`, or hex.
 
 * **Default Dark (Obsidian Zinc)**: the values in `themes.default-dark`, tabulated under Colors below. Source of truth for dark contrast.
-* **Default Light (Clean Zinc/Slate)**: the values in `themes.default-light`. Accents are darkened for contrast, and the terminal well (`surface-sunken`) stays dark.
+* **Default Light (Clean Zinc/Slate)**: the values in `themes.default-light`. Accents are darkened for contrast, and the wells (`surface-sunken`) recess with slate rather than staying dark.
 * **User Custom Themes (JSON only)**: manifest `~/.tethys/themes/<id>.json` (or workspace-scoped). Schema: `{ id, name, base: "default-dark"|"default-light", vars: { <semantic>: <hex|rgba> }, meta: { author, version } }`. Missing keys inherit from `base`; unknown keys are errors; invalid file keeps current theme + toast.
 * **Hot-swap**: validate → set vars atomically on `:root` (or per-window element) → persist `theme.id` → repaint, target `<50ms`, no reload, honor `prefers-color-scheme` for initial pick.
 * **Contrast**: WCAG AA minimum `4.5:1` normal text, `3:1` large text/borders/focus. `M1.6` visual-regression harness blocks on failure for both default themes.
@@ -971,7 +1129,7 @@ The shell is **chrome raised over a deep stage**: titlebar, rail and action bar 
 - **Surface Card Hover** (`{semantic.surface-card-hover}` — dark `#17171a` / light `#f4f4f5`): Raised card state on pointer interaction.
 - **Surface Elevated** (`{semantic.surface-elevated}` — dark `#1b1b1e` / light `#ffffff`): Active tabs, drawers, prompt containers, active segmented buttons.
 - **Surface Overlay** (`{semantic.surface-overlay}` — dark `#212124` / light `#ffffff`): Popovers, command palette, modal sheets, toasts, tooltips. In dark it is strictly above Surface Elevated. Light themes cannot exceed white, so separation there is the border's job.
-- **Surface Sunken** (`{semantic.surface-sunken}` — dark `#050507` / light `#18181b`): Terminal wells, diff viewer, code wells; always dark for ANSI stability.
+- **Surface Sunken** (`{semantic.surface-sunken}` — dark `#050507` / light `#e4e4e7`): Terminal wells, diff viewer, code wells. Recessed, not "always dark": the well is the deepest plane of whatever it sits on, so it is obsidian in dark and `slate-200` in light. Light mode therefore has no black blocks — a code well reads as a recessed slate panel, not a hole. A custom theme is free to keep the well dark on a light base; the well's text, hairline and wash are their own tokens for exactly that case (see the `*-on-sunken` family in the state-colour foundations).
 - **Surface Nested** (`{semantic.surface-nested}` — dark `#0f0f12` / light `#f4f4f5`): Recessed interior: accordion bodies, thought blocks, tool accordions, cards inside drawers.
 - **Dot Matrix Grid** (`{semantic.grid-dot}` — dark `rgba(255,255,255,0.12)` / light `rgba(0,0,0,0.12)`): 1px circular grid dots spaced at 12px intervals inside workspace cards.
 
@@ -980,11 +1138,20 @@ The shell is **chrome raised over a deep stage**: titlebar, rail and action bar 
 - **Hairline Strong** (`{semantic.hairline-strong}` — dark `#27272a` / light `#d4d4d8`): Input strokes, toggle inactive tracks, and the border of every Level 3 and Level 4 surface (drawers, prompt card, popovers, palette, modals).
 - **Hairline Structural** (`{semantic.hairline-structural}` — dark `rgba(255,255,255,0.13)` / light `rgba(0,0,0,0.12)`): Shell region dividers only — titlebar bottom, rail right, sessions/inspector edges, action bar top, splitters. Heavier than Hairline so the shell skeleton outweighs component borders such as keycaps.
 - **Edge Highlight** (`{semantic.edge-highlight}` — dark `rgba(255,255,255,0.055)` / light `rgba(255,255,255,0.9)`): The lit top 1px of a Level 2+ surface, drawn as `inset 0 1px 0`. It is a border treatment, not a shadow: it does not cast, blur, or extend beyond the element.
-- **Accent Agent Active** (`{semantic.accent-agent-active}` — dark `#38bdf8` / light `#0284c7`): Electric sky indicator signaling live ACP streaming, active process execution, or an active agent session (`status-active-session` alias).
+- **Accent Agent Active** (`{semantic.accent-agent-active}` — dark `#56cde3` / light `#007991`): Agent-active indicator signaling live ACP streaming, active process execution, or an active agent session (`status-active-session` alias).
 - **Accent Focus** (`{semantic.accent-focus}` — `#3b82f6` both): Keyboard focus boundaries and toggle active track (`accent-toggle-active` alias).
-- **Health States**: `{semantic.status-danger}` (dark `#ef4444` / light `#dc2626`, CLI missing), `{semantic.status-warning}` (dark `#f59e0b` / light `#d97706`, disabled/unauthenticated), `{semantic.status-success}` (dark `#10b981` / light `#059669`, healthy handshake). Reserved strictly for provider/agent health; never for decorative chrome.
-- **Diff Lines** (`{semantic.diff-added}` / `{semantic.diff-removed}` — `#10b981` / `#ef4444` in both themes): Added and removed lines in `diff-viewer` only. They are deliberately not the health tokens, so the rule above still holds. Both themes use the same bright values because `diff-viewer` always sits on `{semantic.surface-sunken}`, which is dark in both. Colour is never the only carrier: every changed line also has a `+` / `−` glyph in the gutter.
+- **Health States**: `{semantic.status-danger}` (dark `#ff8a84` / light `#cd3437`, CLI missing), `{semantic.status-warning}` (dark `#ecc15a` / light `#9e6000`, disabled/unauthenticated/awaiting), `{semantic.status-success}` (dark `#5bcc80` / light `#00803a`, healthy handshake). Reserved strictly for provider/agent health; never for decorative chrome. Marker/text tier — see *State colour* below.
+- **Diff Lines** (`{semantic.diff-added}` / `{semantic.diff-removed}` — dark `#5bcc80` / `#fe6c66`, light `#046c4e` / `#b91c1c`): Added and removed lines in `diff-viewer` only. They are deliberately not the health tokens, so the rule above still holds. Each theme carries its own pair because the tokens are read against `{semantic.surface-sunken}`, which is dark in dark and slate in light: the bright dark-well values only reach 2.0:1 on the slate well, so light deepens them to `green-700` / `red-700` (5.1:1 each). Colour is never the only carrier: every changed line also has a `+` / `−` glyph in the gutter.
 - **Overlay Scrim** (`{semantic.overlay-scrim}` — dark `rgba(0,0,0,0.50)` / light `rgba(0,0,0,0.30)`): Dismiss layer behind modal popovers and narrow-window drawers. No blur.
+
+### State colour
+
+Every state colour is drawn from one family (`primitives.signal-*`), and it is used at exactly two intensities. Keeping the two apart is what stops the UI shouting: the saturated tone is only ever a small shape, and the large areas get the wash.
+
+- **Marker/text tier** — `{semantic.accent-agent-active}`, `{semantic.status-success}`, `{semantic.status-warning}`, `{semantic.status-danger}`, `{semantic.diff-added}`, `{semantic.diff-removed}`. Used for a `status-dot`, a 1–2px rule, a label, a gutter mark, a `+N` / `−N` stat. Each pair clears **4.5:1 as text** on every surface of its theme (enforced by `packages/ui/src/theme/contrast.test.ts`), which is why Default Light's tones are deep: a "friendlier" light amber at `#d97706` measured 2.9:1 and failed. Lightness in light mode has to come from area, not from the hue.
+- **Surface tier** — `{semantic.status-success-soft}`, `{semantic.status-warning-soft}`, `{semantic.status-danger-soft}`. A 10–14% wash of the same hue, for the background of a card, row or rule that is *in* that state. Background only: never text, never a border on its own, and it carries no contrast requirement because nothing is read on top of it that is not already readable on `{semantic.surface-card}`. Where a *border* needs the soft treatment rather than a fill, it is the `border-warning-soft` utility at 45% — a 10% fill is invisible as a 1px line.
+
+**State colour never paints a full perimeter around a content surface** — a card, a panel, or a row that holds content or a decision. It paints the marker, the label, a 2px left rule, or a ≤14% wash (`{components.permission-request-card.pendingTreatment}`). A saturated outline is the loudest way to report a state and the most ink for the least information: at a glance it says *something is wrong here* without saying what, and on a column of rows it is pure visual debt. A **compact control** is the exception: on a ≤28px chip, pill or badge (and on an input or button that is itself in the error or `destructive` state) the border *is* the control's shape and stays — `session-item-chip.pendingBorder`, `input` on validation failure, `button` `destructive`, `stop-control.graceElapsed`.
 
 ## Typography
 
@@ -1016,8 +1183,8 @@ The interface relies exclusively on **Geist Sans** for UI hierarchy, **Geist Mon
 * **macOS**: hidden native titlebar, traffic lights inset; reserve `~70px` left pad in `tab-bar` as drag region; content never underlaps controls.
 * **Windows**: native caption buttons right-aligned; reserve `140px` in `tab-bar`; Tethys tabs end before caption; hover uses `{semantic.surface-hover}`, never OS blue.
 * **Linux**: header-bar fallback with in-app minimize/maximize/close (`16px` Geist, `32px` targets).
-* **Active vs. inactive**: unfocused window dims `surface-*` to `60%` opacity treatment via `tauri-plugin-window-state`, suspends accent pulse animation, keeps hairlines at full opacity for structure. Focus returns prior accent state.
-* **Reduced motion**: `prefers-reduced-motion: reduce` suspends every looping animation — `{motion.pulse}`, the `{motion.skeleton}` shimmer and the button/loading spinner — to a static frame, exactly as an unfocused window does. Single-shot transitions (`fast`/`base`) stay. No state may rely on motion alone: `running` vs `awaiting` differ by shape (disc vs ring) as well as hue, and `Stop`'s pending phase shows its remaining grace as a static fill plus text (see `stop-control`).
+* **Active vs. inactive**: unfocused window dims `surface-*` to `60%` opacity treatment via `tauri-plugin-window-state`, suspends the accent breathe animation, keeps hairlines at full opacity for structure. Focus returns prior accent state.
+* **Reduced motion**: `prefers-reduced-motion: reduce` suspends every looping animation — `{motion.breathe}`, `{motion.pulse}` and the button/loading spinner — to a static frame, exactly as an unfocused window does. Single-shot transitions (`fast`/`base`) stay. No state may rely on motion alone: `running` vs `awaiting` differ by shape (disc vs ring) as well as hue, and `Stop`'s pending phase shows its remaining grace as a static fill plus text (see `stop-control`).
 * **IME**: composition underline `{semantic.text-secondary}`, caret `{semantic.accent-focus}`; candidate window follows textarea caret; no layout shift during composition.
 * **Clipboard / DnD**: paste plain → text; paste rich/file-drop on composer → `@`-chip conversion with `mono-micro` hint (`Pasted file → @path`); directory drop on catalog → `Add workspace` affordance; denied drop shows `status-danger` ring on target only.
 
@@ -1062,7 +1229,7 @@ No ambient shadows are permitted. Depth is achieved through tonal stepped layers
 - **`{rounded.md}` (8px)**: Tab items, segmented control frame, icon hit targets, `model-selector-popover`, `provider-accordion`.
 - **`{rounded.lg}` (12px)**: Workspace cards, `terminal-sheet`.
 - **`{rounded.2xl}` (20px)**: Central prompt orchestration card.
-- **`{rounded.full}` (9999px)**: Action buttons, agent status pulse indicators, `toggle-switch` track/thumb.
+- **`{rounded.full}` (9999px)**: Action buttons, agent status indicators and their halo, `toggle-switch` track/thumb.
 
 ## Universal State Matrix
 
@@ -1077,22 +1244,22 @@ Every interactive component implements these 7 states + loading/empty with ident
 | `selected` | bg `{semantic.surface-active}` + left `2px` `{semantic.accent-focus}` bar (lists and cards, e.g. `workspace-card-selected`) or filled pill (segmented items, `tab-item`) |
 | `disabled` | `40%` opacity, no pointer events, `aria-disabled`; skeleton text stays `{semantic.text-muted}` |
 | `destructive` | border/text `{semantic.status-danger}`; hover fill `status-danger` at `12%` + `{semantic.text-inverse}` in dark / danger text in light |
-| `loading` | skeleton pulse `{semantic.surface-hover}↔{semantic.surface-active} {motion.skeleton}` + `16px` Geist spinner in `{semantic.text-muted}` |
+| `loading` | skeleton pulse `{semantic.surface-hover}`↔`{semantic.surface-active}` `{motion.pulse}` + `16px` Geist spinner in `{semantic.text-muted}` |
 | `empty` | `24px` hero Geist icon in `{semantic.text-muted}` + `body-sm` muted copy + primary action button |
 
-Apply to: pill, popover cells, cards, chips/rows, session rows, provider rows, toggle, stepper, splitter, palette rows, tab items, topology nodes, message/plan/tool/tool-run-group/subagent/notice/permission/elicitation/diff/sync/profile/process/onboarding/trust-dialog/login-dialog/keybinding, composer config chips, attachment chips and activity-ledger rows below. Destructive appears on: discard hunk, delete thread/workspace, revoke trust, a Provider option whose kind rejects, the `SIGKILL` end of the cancellation ladder, rollback destructive confirm.
+Apply to: pill, popover cells, cards, chips/rows, session rows, provider rows, provider tabs, toggle, stepper, splitter, palette rows, tab items, topology nodes, message/plan/tool/tool-run-group/subagent/notice/permission/elicitation/diff/skill-row/command-row/mcp-server-form/profile/process/onboarding/trust-dialog/login-dialog/keybinding, composer config chips, attachment chips and activity-ledger rows below. Destructive appears on: discard hunk, delete thread/workspace, revoke trust, a Provider option whose kind rejects, the `SIGKILL` end of the cancellation ladder, rollback destructive confirm, delete command.
 
 ### State Precedence
 
 Two kinds of state can hold on one component at once, and they are different axes:
 
 * **Structural interaction states** — the nine rows above. They own the `opacity`, `pointer-events`, `outline` and `background` channels.
-* **Component semantic states** — what the component is *reporting*: `status-dot` states, `session-item-chip.pendingBorder` and its `statusMarker`, `session-topology-canvas` `nodeAwaiting`/`nodeRunning`, `plan-panel` step states, `sync-grid-cell` status. They own the border colour, the status marker (disc / ring / corner badge) and adjacent status text.
+* **Component semantic states** — what the component is *reporting*: `status-dot` states, `session-item-chip.pendingBorder` and its `statusMarker`, `tab-item.statusMarker`, `plan-panel` step states, `provider-tab.statusMarker`, `code-editor-well.errorRow`. They own the border colour, the status marker (disc / ring / corner badge) and adjacent status text.
 
 Rules, in the order to apply them:
 
 1. **Semantic states are never replaced.** A structural state may dim or outline a semantic state; it never removes or recolours it. `disabled` (`40%` opacity) leaves an amber `pendingBorder` and an `awaiting` ring visible at `40%`.
-2. **On a shared channel the higher state wins that channel only:** `disabled` › `destructive` › `focused` › `selected` › semantic › `hover` / `active/pressed`. Semantic outranks hover, so a card with a pending approval keeps its amber border while hovered.
+2. **On a shared channel the higher state wins that channel only:** `disabled` › `destructive` › `focused` › `selected` › semantic › `hover` / `active/pressed`. Semantic outranks hover, so a card with a pending approval keeps its attention treatment (the left rule and the wash) while hovered.
 3. **`selected` and `focused` coexist.** Focus owns the `outline` ring; selection keeps its left bar and fill. Both render together, never one instead of the other.
 4. **Capability gating scopes to the gated affordance**, not the whole element, unless the element's only action is gated. A no-git `session-item-chip` hides its git-only parts and stays a live button.
 5. **A semantic state that asks for the user is never made unreachable.** `awaiting` and `auth_required` must stay actionable from another surface (`approval-inbox-pill`, `provider-row`) even if the element carrying them is `disabled`.
@@ -1117,19 +1284,19 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 | P2 | **Status is a sentence, not a colour.** Every non-healthy state carries its reason in words in the same row: the dot says *that*, the words say *what* and how to fix it | `provider-row` status subtext, `health-badge`, `turn-notice`, `tool-accordion` `Failed`, `provider-capability-notice`, `working-indicator` | Observed | Existing rule for Providers; extended to the transcript |
 | P3 | **Enabled-but-unreachable is not disabled.** Toggle and health are independent axes: a row switched on with a red dot reads as a fault; a row switched off by policy is dimmed and its reason is worded as a choice | `provider-row`, `toggle-switch` | Observed | M1.12 verifies with two fixture rows |
 | P4 | **Git context rides with the composer.** Branch and diff stat sit next to the input, never in a separate tab | `isolation-pill`, diff-summary pill | Observed | Decided (option a) |
-| P5 | **Controls that change agent behaviour sit beside the input**, not two clicks away in Settings. One home per control | `composer-config-chip`, action-bar mode and permission pills | Observed | New |
-| P6 | **The empty or disabled state names the fix.** The disabled control says what is missing and where to fix it | `prompt-card`, `model-selector-pill` zero-provider, `session-config-panel`, `sync-grid` empty states, `activity-ledger`, `turn-notice` `connection-lost` | Observed | Existing; extended |
+| P5 | **Controls that change agent behaviour sit beside the input**, not two clicks away in Settings. One home per control | `composer-config-chip`, prompt-card mode and context pills | Observed | New |
+| P6 | **The empty or disabled state names the fix.** The disabled control says what is missing and where to fix it | `prompt-card`, `model-selector-pill` zero-provider, `workspace-selector-pill` unresolved, `session-config-panel`, `code-editor-well` empty state, `activity-ledger`, `turn-notice` `connection-lost` | Observed | Existing; extended |
 | P7 | **Decisions are asked, not buried in prose.** A real fork is a numbered choice with an escape hatch (`Other`) and a way to decline (`Skip`). *Adapted:* ACP's option type has a value and a title but no description, so the card renders the title and the property's help text and never invents a trade-off line | `elicitation-card`, `permission-request-card` | Observed | Extended |
 | P8 | **One primary action, pinned where the next click goes.** *Adapted:* `Approve & Commit` stays in the Inspector (decided); the pill that opens it is what is pinned | diff-summary pill, prompt submit, `turn-notice` single action | Observed | Decided |
-| P9 | **Zero reports zero honestly.** A metric that was reported as zero renders `0`; one that was not reported is hidden or says so. Never sample data, never an estimate | `usage-bar`, `activity-ledger`, `sync-grid` empty states | Observed | New wording |
+| P9 | **Zero reports zero honestly.** A metric that was reported as zero renders `0`; one that was not reported is hidden or says so. Never sample data, never an estimate | `usage-bar`, `activity-ledger`, `code-editor-well` empty state | Observed | New wording |
 | P10 | **Two indexes over one history.** The transcript answers "what happened, in order"; the ledger answers "what did this session touch, by kind". Neither replaces the other | `activity-ledger` beside the Stage; the study's Progress and Outputs blocks already map to `plan-panel` and `provider-artifact` | Observed | New |
 | P11 | **A setting states its consequence in a sentence**, under the control, not in a tooltip: `Applies from the next turn`, `Applies to new sessions` | `composer-config-chip` caption, Settings rows | Observed | New |
 | P12 | **Where before what.** The run target is chosen at the start of a session and stays visible | `workspace-selector-pill`, `isolation-pill`, hub `Local` / `Remote` | Observed | Existing |
-| P13 | **Capabilities are sourced inventory.** Skills, Providers and MCP servers show provenance (yours, project, plugin) and a status cell that is either a fact or an action, never both | `skill-row`, `provider-row`, `sync-grid-cell` | Observed | Existing; M1.11 verifies the cell rule |
+| P13 | **Capabilities are sourced inventory.** Skills, Providers, MCP servers and commands show provenance (`folder` / `archive` / `git-hub` / `lockfile` for skills; `native file` / `imported` for MCP; `user` / `imported` for commands) and a status cell that is either a fact or an action, never both | `skill-row`, `command-row`, `provider-row`, `mcp-server-form` | Observed | Existing; M1.11 verified the cell rule on the retired matrix |
 
 **Considered, not adopted** — recorded so nobody re-proposes them without new evidence:
 
-* **Tiled grid of live agents** (Cursor). Schematic only. The sessions column and `session-topology-canvas` are Tethys's answer to many concurrent sessions.
+* **Tiled grid of live agents** (Cursor). Schematic only. Workspace session cards and clean aggregate thread inspectors are Tethys's answer to concurrent sessions.
 * **One scrollback of terminal and agent blocks** (Warp). Schematic only. Terminals stay in `terminal-sheet` and a display-only tool-call well.
 * **Async task-and-review-queue as the unit of work** (Codex app). Schematic only. The approval inbox is the equivalent for the consent decision.
 * **Usage heatmap on the new-session home** (Claude Code Desktop). Observed, but it belongs to the hub, not the thread, and its data is `usage-bar`'s (M2.10). Revisit there.
@@ -1138,11 +1305,11 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 
 ## Accessibility & Keyboard Map
 
-* **axe-core gates (`M1.6`)**: every surface passes contrast (theming rules), `aria` roles for custom controls (pill `combobox`, popover `listbox/option`, drawer/dialog `dialog`, tabs `tablist/tab`, switch `switch`, stepper `spinbutton`, splitter `separator`, permission-mode radios `radiogroup`, plan steps `list` with `aria-current` on the in-progress step, `usage-bar` `img` with an `aria-label` reading the usage figure, topology canvas `img` with a text summary of node states, the MCP attachment matrix `grid` with `columnheader` / `rowheader` / `gridcell`), visible focus on all pointer targets, hit targets per Iconography.
+* **axe-core gates (`M1.6`)**: every surface passes contrast (theming rules), `aria` roles for custom controls (pill `combobox`, popover `listbox/option`, drawer/dialog `dialog`, tabs `tablist/tab`, switch `switch`, stepper `spinbutton`, splitter `separator`, permission-mode radios `radiogroup`, plan steps `list` with `aria-current` on the in-progress step, `usage-bar` `img` with an `aria-label` reading the usage figure, workspace cards, the MCP config editor `textbox` and its `tree` toggle, the command body editor's `Markdown | Preview` toggle, the `skill-row` / `command-row` `listbox` / `skill-detail` / `command-editor` `region`, and the `thread-inspector` `region` with its rollup `list` and its collapse `button` carrying `aria-expanded`), visible focus on all pointer targets, hit targets per Iconography.
 * **Transcript semantics**: the stage is a `role="log"` region whose live announcements are **off** while streaming — a chunk is never announced. A separate polite announcer speaks only: turn complete, a new permission or elicitation request, and `turn-notice` of severity warning or above (assertive for `error` and `connection-lost`). The streaming message sets `aria-busy` until its turn ends. `tool-run-group`, `thought-block`, `subagent-card` and `tool-accordion` are `button`s with `aria-expanded`; `message-actions` is a `toolbar`; `activity-ledger` is a `list` of expandable rows; `jump-to-latest` announces itself once when it appears, not on each count change.
 * **Focus trap + restore**: drawers, palette, `workspace-trust-dialog`, `login-dialog`, terminal sheet and `provider-popover` trap `Tab` while open and restore to invoker on `Esc`/close. Unstack order is derived from `stacking`, topmost first: popover → palette → sheet → dialog → drawer. Toasts and tooltips take no focus and are not in the order. A trap never opens over another trap: a `provider-popover` request that arrives while a dialog or sheet is open waits in the Provider's pending list. Inline `permission-request-card` and `elicitation-card` do **not** trap focus — they live in the stage flow and are reachable by roving tabindex, so a pending request never blocks reading the transcript.
 * **Roving tabindex**: one `tabindex=0` per column/list/tab-strip; arrows move, `Home/End` jump. The stage's entries are one such list: `↑` / `↓` move between entries, `Enter` / `Space` toggle the focused group, block or card, and `End` scrolls to the tail and re-pins it.
-* **Grid roving** (`sync-grid` only): one `tabindex=0` for the whole grid, on the last-focused cell (the first `gridcell` on entry). `←` `→` `↑` `↓` move one cell and stop at the edge without wrapping; `Home` / `End` jump to the first / last cell of the row; `Ctrl+Home` / `Ctrl+End` to the first / last cell of the grid; `PageUp` / `PageDown` move by the visible row count. The `rowheader` is reachable with `←` from the first `gridcell`. Moving focus scrolls the cell into view past the frozen column and sticky header. `Tab` leaves the grid rather than walking cells.
+* **Config editor** (`code-editor-well` on Settings / MCP): the editable form is one `aria-multiline` text region and is the only tab stop; `↑` `↓` `←` `→` `Home` / `End` are the text area's own caret movement and are never intercepted. The tree toggle is a `tree` with its own roving `tabindex` (`↑` / `↓` move, `→` expands, `←` collapses, `Enter` selects). `Tab` leaves the well for the next control; `Ctrl/Cmd+S` is the one shortcut that commits a save, never the keystroke itself mutating the file.
 * **Global shortcuts**:
 
 | Keys | Action |
@@ -1151,6 +1318,7 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 | `Ctrl/Cmd+1..9` | Focus tab N (1 = Workspaces hub) |
 | `Ctrl/Cmd+T` | New Thread tab |
 | `Ctrl/Cmd+W` | Close focused tab (guard dirty state) |
+| `Ctrl/Cmd+I` | Toggle the docked Inspector (collapse to the rail / expand) |
 | `Ctrl/Cmd+,` | Open Settings |
 | `Enter/Space` | Open/confirm focused control |
 | `Esc` | Unstack, derived from `stacking`: close popover → palette → sheet → dialog → drawer |
@@ -1162,7 +1330,7 @@ All P0 actions reachable by keyboard; layout stable at 60fps under synthetic 8-s
 * **Font stack**: `Geist Sans` for all structural UI labels (titles, pills, buttons, segmented items, provider names). `Geist Mono` for branch names, `session-item` labels, diff stats (`+42 −12`), hotkeys, telemetry, stepper numbers, and status subtext. `Geist Icons` for all glyphs. Never swap.
 * **Backgrounds**: `{semantic.canvas}` global, `{semantic.surface-rail}` chrome, `{semantic.surface-elevated}`/`{semantic.surface-overlay}` for prompt/popover/drawer/palette/sheets, `{semantic.surface-card}` cards, `{semantic.surface-nested}` accordion, `{semantic.surface-sunken}` terminal/diff wells. No other fills.
 * **Dividers**: strictly `1px solid`. `{semantic.hairline-structural}` for shell region edges and splitters; `{semantic.hairline}` for component borders and row separators; `{semantic.hairline-strong}` for input strokes, toggle tracks, and Level 3-4 surface borders. No shadows for depth — tonal steps, hairlines and the `{semantic.edge-highlight}` lit edge only.
-* **Accents**: general chrome entirely monochromatic. Color accents restricted to `{semantic.accent-agent-active}`/`{semantic.status-active-session}` streaming/running, `{semantic.status-success}` healthy/idle-ready, `{semantic.status-warning}` / `{semantic.status-danger}` health warnings, `{semantic.accent-focus}` focus + toggle-active. Effort labels, chips, and badges never use accent color except the running pulse dot.
+* **Accents**: general chrome entirely monochromatic. Color accents restricted to `{semantic.accent-agent-active}`/`{semantic.status-active-session}` streaming/running, `{semantic.status-success}` healthy/idle-ready, `{semantic.status-warning}` / `{semantic.status-danger}` health warnings, `{semantic.accent-focus}` focus + toggle-active. Effort labels, chips, and badges never use accent color except a state marker: the `status-dot`, the `state-badge`, and a state left rule.
 * **Density**: settings rows `12px 16px`; accordion sections `12px` gaps; drawer rows `36px`; chips `20px`. `SYN-11` schema forms must reuse `schema-field-group` spacing so static MVP inputs and generated V1 forms share rhythm.
 
 ## Do's and Don'ts
@@ -1178,6 +1346,7 @@ Visual and token rules. Behavioural guardrails (permissions, cancellation, MCP, 
 * Gate every theme (default + custom JSON) on WCAG AA before ship.
 * Group by kind in the ledger and by order in the transcript; never merge the two into one list (P10).
 * Put a control in exactly one place; a config category has one home.
+* Put a state on the smallest shape that carries it — the marker, the label, a 2px left rule, or a ≤14% `status-*-soft` wash — and let motion carry liveness.
 
 ### Don't
 * Don't use colorful background fills on cards; all cards must remain on `{semantic.surface-card}`.
@@ -1186,6 +1355,9 @@ Visual and token rules. Behavioural guardrails (permissions, cancellation, MCP, 
 * Don't use ambient shadows for depth; tonal steps, hairlines and `{semantic.edge-highlight}` only.
 * Don't show a status dot without its reason in words in the same row (P2).
 * Don't infer a tool call's origin (MCP server, skill, subagent) from its title in the webview; render the `origin` field or nothing.
+* Don't wrap a content surface in a state colour. A saturated perimeter around a card, panel or row is the loudest possible report and the least informative; use the marker, a 2px left rule, or a `status-*-soft` wash. A compact control (≤28px chip/pill/badge, an input on error, a `destructive` button) is the exception — there the border is the control's shape.
+* Don't animate a state that has stopped. Only `running` and `awaiting` breathe (`{motion.stateMotion}`); `error`, `interrupted`, `suspended`, `archived`, `idle` and `auth_required` are static, because motion reads as *still working*.
+* Don't put a `status-dot` on a large area at full opacity as its only state carrier; the dot is small by design and the words in the same row do the rest (P2).
 * Don't announce streamed chunks to assistive technology, and don't move the viewport while the user is reading (`jump-to-latest`).
 * Don't invent per-option descriptions or trade-off lines the protocol did not send.
 * Don't use GitHub or GitLab logos anywhere except `workspace-source-badge`, where they report where an existing folder's git remote points. A vendor logo is never an entry point, and never implies where a workspace came from.

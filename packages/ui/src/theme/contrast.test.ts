@@ -153,8 +153,10 @@ describe("WCAG Contrast Gate (D6 / U8)", () => {
   });
 
   describe("Diff tokens on surface-sunken", () => {
-    // `diff-viewer` always sits on `surface-sunken`, which is dark in both
-    // themes, so both tokens are evaluated against that well, not the canvas.
+    // `diff-viewer` always sits on `surface-sunken`, so both tokens are
+    // evaluated against that well — dark obsidian in dark, slate in light —
+    // not against the canvas. That is why the light theme needs its own,
+    // deeper pair rather than reusing the bright dark values.
     for (const [themeName, tokens] of [
       ["default-dark", DEFAULT_DARK_TOKENS],
       ["default-light", DEFAULT_LIGHT_TOKENS],
@@ -242,5 +244,83 @@ describe("WCAG Contrast Gate (D6 / U8)", () => {
       const ratio = getContrastRatio(light["status-success"], canvas, canvas);
       expect(ratio).toBeGreaterThanOrEqual(3.0);
     });
+  });
+
+  describe("State colour, two tiers (d0-rc9)", () => {
+    // Marker/text tier. These are read as labels — a `state-badge`, the word
+    // `Failed`, a `+N` stat, a 2px rule — so every pair must clear 4.5:1 on
+    // every surface of its own theme, not only on the canvas. Default Light's
+    // previous tones measured 2.9:1 (amber), 3.4:1 (green) and 3.7:1 (cyan) and
+    // failed; that is why the light tones are deep and the softening lives in
+    // the surface tier rather than in the hue.
+    const surfaces = [
+      "canvas",
+      "surface-rail",
+      "surface-panel",
+      "surface-card",
+      "surface-card-hover",
+      "surface-nested",
+      "surface-elevated",
+      "surface-overlay",
+    ] as const;
+    const markerTier = [
+      "status-success",
+      "status-warning",
+      "status-danger",
+      "accent-agent-active",
+      "diff-added",
+      "diff-removed",
+    ] as const;
+    const softTier = [
+      "status-success-soft",
+      "status-warning-soft",
+      "status-danger-soft",
+    ] as const;
+
+    for (const [themeName, tokens] of [
+      ["default-dark", DEFAULT_DARK_TOKENS],
+      ["default-light", DEFAULT_LIGHT_TOKENS],
+    ] as const) {
+      for (const key of markerTier) {
+        it(`${themeName}: ${key} reads as text on every surface (>= 4.5:1)`, () => {
+          for (const surface of surfaces) {
+            const host = tokens[surface];
+            const ratio = getContrastRatio(tokens[key], host, host);
+            expect(
+              ratio,
+              `${key} on ${surface} measured ${ratio.toFixed(2)}:1`,
+            ).toBeGreaterThanOrEqual(4.5);
+          }
+        });
+      }
+
+      it(`${themeName}: the attention left rule clears non-text contrast on a card (>= 3:1)`, () => {
+        const card = tokens["surface-card"];
+        for (const key of ["status-warning", "status-danger"] as const) {
+          const ratio = getContrastRatio(tokens[key], card, card);
+          expect(
+            ratio,
+            `${key} rule on surface-card measured ${ratio.toFixed(2)}:1`,
+          ).toBeGreaterThanOrEqual(3.0);
+        }
+      });
+
+      for (const key of softTier) {
+        it(`${themeName}: ${key} is a wash, not a second saturated colour`, () => {
+          const card = tokens["surface-card"];
+          const ratio = getContrastRatio(tokens[key], card, card);
+          // Present (> 1) but quiet (< 1.6): a tint the eye reads as "this row
+          // is in that state", not a filled block competing with the text.
+          expect(
+            ratio,
+            `${key} tint measured ${ratio.toFixed(2)}:1`,
+          ).toBeGreaterThan(1.05);
+          expect(
+            ratio,
+            `${key} tint measured ${ratio.toFixed(2)}:1`,
+          ).toBeLessThan(1.6);
+        });
+      }
+    }
   });
 });

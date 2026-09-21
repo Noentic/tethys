@@ -5,7 +5,9 @@ use std::path::Path;
 
 use tethys_api::ApiError;
 use tethys_core::composer::{
-    expand_command, list_commands, path_reference, skill_reference, SkillCandidate,
+    delete_command, expand_command, is_valid_command_name, list_commands,
+    list_commands_with_shadowed, path_reference, read_command, skill_reference, write_command,
+    SkillCandidate,
 };
 use tethys_schema::composer::{CommandScope, ReferenceKind};
 
@@ -204,4 +206,109 @@ fn skill_without_description_still_resolves() {
     assert!(text.contains("SKILL.md"));
     assert_eq!(reference.kind, ReferenceKind::Skill);
     assert_eq!(reference.name, "plain");
+}
+
+#[test]
+fn list_reports_first_body_line_as_description() {
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let global = global_dir(tmp.path());
+    write(&global.join("review.md"), "\n\nReview the staged diff.\nMore.");
+
+    let commands = list_commands(&global, None).expect("list");
+    assert_eq!(
+        commands[0].description.as_deref(),
+        Some("Review the staged diff.")
+    );
+
+    write(&global.join("empty.md"), "");
+    let commands = list_commands(&global, None).expect("list");
+    let empty = commands.iter().find(|c| c.name == "empty").expect("empty");
+    assert_eq!(empty.description, None);
+}
+
+#[test]
+fn shadowed_list_returns_both_scopes() {
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let global = global_dir(tmp.path());
+    write(&global.join("review.md"), "Review global.");
+    write(&global.join("global-only.md"), "Global only.");
+    write(&workspace_command(tmp.path(), "review"), "Review project.");
+
+    let commands =
+        list_commands_with_shadowed(&global, Some(&workspace_dir(tmp.path()))).expect("list");
+    let names: Vec<&str> = commands.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, vec!["global-only", "review", "review"]);
+
+    let review: Vec<&tethys_schema::composer::CommandInfo> = commands
+        .iter()
+        .filter(|c| c.name == "review")
+        .collect();
+    assert_eq!(review.len(), 2);
+    let global_review = review
+        .iter()
+        .find(|c| c.scope == CommandScope::Global)
+        .expect("global review");
+    let workspace_review = review
+        .iter()
+        .find(|c| c.scope == CommandScope::Workspace)
+        .expect("workspace review");
+    assert!(global_review.shadowed);
+    assert!(!workspace_review.shadowed);
+}
+
+#[test]
+fn write_read_delete_round_trip() {
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let global = global_dir(tmp.path());
+
+    let info = write_command(&global, "review", "Review {{args}}.", CommandScope::Global)
+        .expect("write");
+    assert_eq!(info.name, "review");
+    assert_eq!(info.description.as_deref(), Some("Review {{args}}."));
+    assert!(!info.shadowed);
+
+    let source = read_command(&global, "review", CommandScope::Global).expect("read");
+    assert_eq!(source.body, "Review {{args}}.");
+    assert_eq!(source.scope, CommandScope::Global);
+
+    let expanded = expand_command(&global, None, &[], "review", "the diff").expect("expand");
+    assert_eq!(expanded.text, "Review the diff.");
+
+    delete_command(&global, "review", CommandScope::Global).expect("delete");
+    assert!(matches!(
+        read_command(&global, "review", CommandScope::Global),
+        Err(ApiError::NotFound(_))
+    ));
+}
+
+#[test]
+fn write_rejects_unsafe_or_uppercase_names() {
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let global = global_dir(tmp.path());
+
+    for name in ["", "../escape", "a/b", "Upper", "with.dot", "with space"] {
+        assert!(
+            matches!(
+                write_command(&global, name, "body", CommandScope::Global),
+                Err(ApiError::InvalidConfig(_))
+            ),
+            "expected InvalidConfig for {name:?}"
+        );
+    }
+    assert!(is_valid_command_name("review-2_x"));
+    assert!(!is_valid_command_name("Review"));
+}
+
+#[test]
+fn delete_touches_only_the_named_file() {
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let global = global_dir(tmp.path());
+    write_command(&global, "review", "Review.", CommandScope::Global).expect("write review");
+    write_command(&global, "deploy", "Deploy.", CommandScope::Global).expect("write deploy");
+
+    delete_command(&global, "review", CommandScope::Global).expect("delete");
+
+    let commands = list_commands(&global, None).expect("list");
+    let names: Vec<&str> = commands.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, vec!["deploy"]);
 }

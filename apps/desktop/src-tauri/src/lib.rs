@@ -132,6 +132,9 @@ pub fn run() {
             // commands
             commands_list,
             commands_expand,
+            commands_read,
+            commands_write,
+            commands_delete,
             // terminal
             terminal_list,
             terminal_attach,

@@ -23,6 +23,7 @@ export * from "./components/session-group-header";
 export * from "./components/session-list-row";
 export * from "./components/skeleton";
 export * from "./components/splitter";
+export * from "./components/state-badge";
 export * from "./components/status-dot";
 export * from "./components/stepper";
 export * from "./components/stop-control";

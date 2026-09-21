@@ -14,7 +14,7 @@ import {
   validateThemeManifest,
 } from "./tokens/manifest";
 
-// List of all 33 semantic tokens defined in DESIGN.md `semantic:` block
+// List of all 35 semantic tokens defined in DESIGN.md `semantic:` block
 const DESIGN_SEMANTIC_NAMES: SemanticTokenKey[] = [
   "canvas",
   "surface-rail",
@@ -47,6 +47,9 @@ const DESIGN_SEMANTIC_NAMES: SemanticTokenKey[] = [
   "status-success",
   "status-warning",
   "status-danger",
+  "status-success-soft",
+  "status-warning-soft",
+  "status-danger-soft",
   "diff-added",
   "diff-removed",
 ];
@@ -194,11 +197,11 @@ describe("Diff tokens and stacking (M1.6c U7 / U11)", () => {
     }
   });
 
-  it("both diff tokens carry the same bright value in both default themes", () => {
-    expect(DEFAULT_DARK_TOKENS["diff-added"]).toBe("#10b981");
-    expect(DEFAULT_LIGHT_TOKENS["diff-added"]).toBe("#10b981");
-    expect(DEFAULT_DARK_TOKENS["diff-removed"]).toBe("#ef4444");
-    expect(DEFAULT_LIGHT_TOKENS["diff-removed"]).toBe("#ef4444");
+  it("diff tokens deepen in the light theme so they read on the slate well", () => {
+    expect(DEFAULT_DARK_TOKENS["diff-added"]).toBe("#5bcc80");
+    expect(DEFAULT_LIGHT_TOKENS["diff-added"]).toBe("#046c4e");
+    expect(DEFAULT_DARK_TOKENS["diff-removed"]).toBe("#fe6c66");
+    expect(DEFAULT_LIGHT_TOKENS["diff-removed"]).toBe("#b91c1c");
   });
 
   it("stacking scale equals the DESIGN.md stacking block, key for key", () => {

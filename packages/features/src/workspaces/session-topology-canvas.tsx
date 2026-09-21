@@ -5,7 +5,7 @@
 
 import type { Vcs } from "@tethys/bindings";
 import { type CatalogSession, sessionStatusKey } from "@tethys/state";
-import { cn, getSessionStateInfo } from "@tethys/ui";
+import { cn, getSessionStateInfo, statusMotionClass } from "@tethys/ui";
 
 export interface SessionTopologyCanvasProps {
   sessions: CatalogSession[];
@@ -86,7 +86,7 @@ function TopologyNode({ node }: { node: Node }) {
         fill={ring ? "transparent" : info.colorVar}
         stroke={ring ? info.colorVar : "none"}
         strokeWidth={ring ? 2 : 0}
-        className={info.pulse ? "motion-safe:animate-pulse" : undefined}
+        className={statusMotionClass(info.motion)}
       />
       <title>{`${node.label}: ${info.label}`}</title>
     </g>

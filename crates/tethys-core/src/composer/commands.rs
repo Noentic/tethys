@@ -10,10 +10,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use tethys_api::ApiError;
-use tethys_schema::composer::{CommandInfo, CommandScope, ComposerReference, ExpandedCommand};
+use tethys_schema::composer::{
+    CommandInfo, CommandScope, CommandSource, ComposerReference, ExpandedCommand,
+};
+use tethys_sync::atomic::write_atomic;
 
 use crate::composer::paths::path_reference;
 use crate::composer::skills::{skill_reference, SkillCandidate};
+
+/// Longest stored command description before truncation.
+const DESCRIPTION_MAX: usize = 120;
 
 /// `~/.tethys/commands` (global scope).
 pub fn global_commands_dir(home: &Path) -> PathBuf {
@@ -44,6 +50,98 @@ pub fn list_commands(
         }
     }
     Ok(by_name.into_values().collect())
+}
+
+/// Lists commands from both scopes without shadowing, marking the losing
+/// global entry with `shadowed = true` (CMP-07 Settings editor).
+pub fn list_commands_with_shadowed(
+    global_dir: &Path,
+    workspace_root: Option<&Path>,
+) -> Result<Vec<CommandInfo>, ApiError> {
+    let mut commands = discover(global_dir, CommandScope::Global);
+    let mut workspace = match workspace_root {
+        Some(root) => discover(&workspace_commands_dir(root), CommandScope::Workspace),
+        None => Vec::new(),
+    };
+    let workspace_names: Vec<&str> = workspace.iter().map(|c| c.name.as_str()).collect();
+    for command in &mut commands {
+        if workspace_names.contains(&command.name.as_str()) {
+            command.shadowed = true;
+        }
+    }
+    commands.append(&mut workspace);
+    commands.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(commands)
+}
+
+/// Reads one command body from `dir` (CMP-07).
+pub fn read_command(
+    dir: &Path,
+    name: &str,
+    scope: CommandScope,
+) -> Result<CommandSource, ApiError> {
+    let path = command_file(dir, name)?;
+    let body = fs::read_to_string(&path)
+        .map_err(|_| ApiError::NotFound(format!("command not found: {name}")))?;
+    Ok(CommandSource {
+        name: name.to_string(),
+        scope,
+        path: path.display().to_string(),
+        body,
+    })
+}
+
+/// Creates or updates one command file (CMP-07), returning its info.
+pub fn write_command(
+    dir: &Path,
+    name: &str,
+    body: &str,
+    scope: CommandScope,
+) -> Result<CommandInfo, ApiError> {
+    if !is_valid_command_name(name) {
+        return Err(ApiError::InvalidConfig(format!(
+            "invalid command name {name:?}: use lowercase letters, digits, '-' and '_'"
+        )));
+    }
+    let path = command_file(dir, name)?;
+    write_atomic(&path, body)
+        .map_err(|error| ApiError::Internal(format!("write command {}: {error}", path.display())))?;
+    Ok(CommandInfo {
+        name: name.to_string(),
+        scope,
+        path: path.display().to_string(),
+        description: read_description(&path),
+        shadowed: false,
+    })
+}
+
+/// Deletes one command file; a missing file is `NotFound` (CMP-07).
+pub fn delete_command(dir: &Path, name: &str, _scope: CommandScope) -> Result<(), ApiError> {
+    let path = command_file(dir, name)?;
+    fs::remove_file(&path)
+        .map_err(|_| ApiError::NotFound(format!("command not found: {name}")))
+}
+
+/// Authoring rule for new names (CMP-07): lowercase letters, digits, `-`, `_`.
+pub fn is_valid_command_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+}
+
+/// Resolves a command path, rejecting separators and traversal.
+fn command_file(dir: &Path, name: &str) -> Result<PathBuf, ApiError> {
+    let safe = !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if !safe {
+        return Err(ApiError::InvalidConfig(format!(
+            "invalid command name: {name:?}"
+        )));
+    }
+    Ok(dir.join(format!("{name}.md")))
 }
 
 /// Expands one command body with `args_text` and nested `$`/`@` references.
@@ -80,12 +178,26 @@ fn discover(dir: &Path, scope: CommandScope) -> Vec<CommandInfo> {
             }
             let name = path.file_stem()?.to_str()?.to_string();
             Some(CommandInfo {
+                description: read_description(&path),
                 name,
                 scope,
                 path: path.display().to_string(),
+                shadowed: false,
             })
         })
         .collect()
+}
+
+/// First non-empty body line, truncated on a char boundary.
+fn read_description(path: &Path) -> Option<String> {
+    let body = fs::read_to_string(path).ok()?;
+    let line = body.lines().map(str::trim).find(|line| !line.is_empty())?;
+    if line.chars().count() <= DESCRIPTION_MAX {
+        return Some(line.to_string());
+    }
+    let mut truncated: String = line.chars().take(DESCRIPTION_MAX).collect();
+    truncated.push('…');
+    Some(truncated)
 }
 
 /// PD-3: `{{args}}` substitutes in place; otherwise args are appended.

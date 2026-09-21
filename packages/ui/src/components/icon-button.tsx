@@ -40,7 +40,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
           variant === "secondary" &&
             "edge-lit border border-(--tethys-hairline-strong) bg-(--tethys-surface-elevated) text-(--tethys-text-primary) hover:bg-(--tethys-surface-card-hover)",
           variant === "destructive" &&
-            "text-(--tethys-status-danger) hover:tint-danger",
+            "text-(--tethys-status-danger) hover:bg-(--tethys-status-danger-soft)",
           disabled && "pointer-events-none opacity-40 active:scale-100",
           className,
         )}

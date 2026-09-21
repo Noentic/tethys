@@ -1,8 +1,22 @@
 import { render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { nextTerminalDelta, TerminalView, terminalOptions } from "./index";
+import {
+  nextTerminalDelta,
+  sunkenWellTheme,
+  TerminalView,
+  terminalOptions,
+} from "./index";
 
 describe("@tethys/terminal read-only surface (M1.7 U7)", () => {
+  it("themes the xterm canvas from the well tokens, not xterm's black", () => {
+    const element = document.createElement("div");
+    element.style.setProperty("--tethys-surface-sunken", "#e4e4e7");
+    expect(sunkenWellTheme(element)).toEqual({
+      background: "#e4e4e7",
+      foreground: "#bfbfc9",
+    });
+  });
+
   it("wires xterm with stdin disabled and exposes no input affordance", () => {
     expect(terminalOptions.disableStdin).toBe(true);
     const { container, queryByRole } = render(

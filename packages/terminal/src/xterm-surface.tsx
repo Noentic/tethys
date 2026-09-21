@@ -17,6 +17,22 @@ export const terminalOptions = {
   scrollback: 10_000,
 } as const;
 
+/**
+ * xterm paints its own canvas, so it cannot inherit the well's background. Read
+ * the well tokens back from CSS so the canvas follows the active theme instead
+ * of xterm's built-in black.
+ */
+export function sunkenWellTheme(element: HTMLElement) {
+  const read = (name: string, fallback: string) => {
+    const value = getComputedStyle(element).getPropertyValue(name).trim();
+    return value === "" ? fallback : value;
+  };
+  return {
+    background: read("--tethys-surface-sunken", "#050507"),
+    foreground: read("--tethys-text-secondary", "#bfbfc9"),
+  };
+}
+
 interface TerminalLike {
   write(data: string): void;
   dispose(): void;
@@ -61,9 +77,10 @@ export function TerminalView({ output, title, className }: TerminalViewProps) {
         if (cancelled || !containerRef.current) {
           return;
         }
-        const terminal = new Terminal(
-          terminalOptions,
-        ) as unknown as TerminalLike;
+        const terminal = new Terminal({
+          ...terminalOptions,
+          theme: sunkenWellTheme(containerRef.current),
+        }) as unknown as TerminalLike;
         (terminal as unknown as { open(el: HTMLElement): void }).open(
           containerRef.current,
         );

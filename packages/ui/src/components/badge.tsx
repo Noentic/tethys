@@ -25,11 +25,11 @@ export function Badge({
         variant === "muted" &&
           "border-(--tethys-hairline) bg-(--tethys-surface-hover) text-(--tethys-text-muted)",
         variant === "warning" &&
-          "border-(--tethys-status-warning) tint-warning text-(--tethys-status-warning)",
+          "border-(--tethys-status-warning) bg-(--tethys-status-warning-soft) text-(--tethys-status-warning)",
         variant === "success" &&
-          "border-(--tethys-status-success) tint-success text-(--tethys-status-success)",
+          "border-(--tethys-status-success) bg-(--tethys-status-success-soft) text-(--tethys-status-success)",
         variant === "danger" &&
-          "border-(--tethys-status-danger) tint-danger text-(--tethys-status-danger)",
+          "border-(--tethys-status-danger) bg-(--tethys-status-danger-soft) text-(--tethys-status-danger)",
         variant === "outline" &&
           "border-(--tethys-hairline-strong) bg-transparent text-(--tethys-text-secondary)",
         className,

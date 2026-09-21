@@ -137,7 +137,7 @@ Git is a feature, not enforcement. Any folder — git-initialized or not — can
 |---|---|---|
 | SYN‑01 | One MCP registry at global and workspace scope (the workspace file is committable), with optional per‑Provider scoping; secrets stored in the OS keychain, never in the file | P0 |
 | SYN‑02 | ACP threads receive the effective MCP servers at session start, with no files changed. The set is read from the workspace root (not the thread's worktree) and filtered by the Provider's negotiated transports. This is the primary path for ACP Classes A and B | P0 |
-| SYN‑03 | Project MCP config into Claude Code, Codex, and OpenCode's own config files as the compatibility path — for Class C terminal-hosted agents and any Provider that cannot accept `mcpServers` at session creation — with a preview diff, backups, rollback, and conflict detection; Tethys only edits entries it created (verify paths) | P0 |
+| SYN‑03 | Project MCP config into Claude Code, Codex, and OpenCode's own config files — the compatibility path for Class C terminal-hosted agents and any Provider that cannot accept `mcpServers` at session creation, and the same file the Settings / MCP per-Provider editor reads and writes — with a preview diff, backups, rollback, and conflict detection; Tethys only edits entries it created (verify paths) | P0 |
 | SYN‑04 | Import existing MCP servers from any detected tool during onboarding | P0 |
 | SYN‑05 | Same push for Antigravity CLI, Kiro CLI, Claude Desktop, Gemini CLI, and Cursor (verify paths); Antigravity CLI and Kiro CLI land first as part of the first full‑support agents | P1 |
 | SYN‑06 | Skill library following the Agent Skills format and the `.agents/skills` convention (global and workspace); import from a folder, a `.skill` file, or a GitHub link (pinned to a commit, updates shown as a diff) | P0 |
@@ -147,13 +147,13 @@ Git is a feature, not enforcement. Any folder — git-initialized or not — can
 | SYN‑10 | Per‑thread disable of any MCP server or skill | P1 |
 | SYN‑11 | Agent native-settings forms: per-agent config UI renders the full native config file as a form from a versioned, community-contributed schema that follows the agent's official schema; form + raw fallback, with preview diff, backups, rollback, version-drift warnings/errors, and a link to the official docs/schema for advanced areas (hooks, steering, plugins, etc.) | P1 |
 
-The sync view is a grid of servers × targets, each cell showing *in sync*, *pending*, *drifted*, *conflict*, or *unsupported*. The underlying sync unit for file projection is the Target file, while the UI column header displays the Providers that consume that Target file (e.g. "Claude Code (2 profiles)"). Agent native settings (SYN‑11) live in a separate per-agent settings view, not in the sync grid.
+Settings / MCP is a per-Provider config editor, not a servers × targets grid: choose a scope (global or a workspace), choose a Provider, and read or edit the servers in that Provider's own config file (JSON, JSONC, or TOML for Codex) through a structured add/edit form over the raw document. Session injection (SYN‑02) remains the runtime attach path; the editor's footer states that a saved entry applies to new sessions and flags a transport the Provider cannot accept. Agent native settings (SYN‑11) are a separate per-agent full-file form.
 
 #### 3.4.1 Agent native settings (SYN‑11)
 
 SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native config file so users never leave Tethys for routine setup:
 
-- Initial targets — the first agents to reach full support: OpenCode, Antigravity CLI, Kiro CLI. Each target gets one form over its native json/toml config file. Claude Code and Codex full support is post-MVP; their MVP surface is MCP-only projection (SYN‑03).
+- Initial targets — the first agents to reach full support: OpenCode, Antigravity CLI, Kiro CLI. Each target gets one form over its native json/toml config file. Claude Code and Codex full support is post-MVP; their MVP surface is the MCP config editor (SYN‑03).
 - "Full" means the full file the schema knows about, bounded by the agent's official docs/schema. Advanced areas (hooks, steering, plugins, etc.) stay editable but the form links out to the official schema/docs; anything the form doesn't understand stays available via raw text fallback with no data loss.
 - Schemas are community-contributed and must follow the native schema, pinned per agent version (schema id + agent version range + source link).
 - Drift handling: unknown keys preserved on write; version mismatch shows a warning, schema validation failure shows an error and blocks apply until fixed or explicitly applied as raw.
@@ -169,6 +169,7 @@ SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native conf
 | CMP‑04 | **`@` tags.** Fast fuzzy search over files *and* folders in the thread's root (the worktree where one exists) (FFF). A tag sends a plaintext reference to the path — never its contents; the path's name, size, and MIME are shown on the message, not sent to the agent | P0 |
 | CMP‑05 | Prompts typed while an agent is working are queued, editable, and reorderable | P0 |
 | CMP‑06 | Line ranges on tags (`@src/auth.rs:40-80`) | P1 |
+| CMP‑07 | **Author commands in Settings.** Settings / Skills & Commands manages Tethys commands in the selected scope: create, edit, and delete a command's markdown body, with the `{{args}}` placeholder and nested-reference rules stated in the editor. Names are lowercase letters, digits, `-` or `_`; a workspace command that shadows a global one is called out, and agent-advertised commands stay read-only | P1 |
 
 ### 3.6 Layout and navigation
 

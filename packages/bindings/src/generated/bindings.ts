@@ -201,10 +201,25 @@ export type CommandInfo = {
 	name: string,
 	scope: CommandScope,
 	path: string,
+	/**  First non-empty body line, truncated; `None` for an empty body. */
+	description: string | null,
+	/**
+	 *  Set by `commands.list(includeShadowed = true)` when a workspace command
+	 *  of the same name wins the composer lookup (CMP-07).
+	 */
+	shadowed: boolean,
 };
 
 /**  Where a discovered Tethys command lives. */
 export type CommandScope = "global" | "workspace";
+
+/**  One command's file contents, for the Settings editor (CMP-07). */
+export type CommandSource = {
+	name: string,
+	scope: CommandScope,
+	path: string,
+	body: string,
+};
 
 /**  Result of a commit on a thread branch. */
 export type CommitResult = {

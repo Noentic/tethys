@@ -108,7 +108,7 @@ async fn assert_every_filesystem_namespace_is_not_found(core: &Core, id: &Worksp
     );
 
     // commands.list
-    let res = core.commands_list(Some(id.clone())).await;
+    let res = core.commands_list(Some(id.clone()), false).await;
     assert!(
         matches!(res, Err(ApiError::NotFound(_))),
         "commands_list: expected NotFound, got {res:?}"

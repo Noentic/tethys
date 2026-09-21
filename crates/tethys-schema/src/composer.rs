@@ -36,6 +36,20 @@ pub struct CommandInfo {
     pub name: String,
     pub scope: CommandScope,
     pub path: String,
+    /// First non-empty body line, truncated; `None` for an empty body.
+    pub description: Option<String>,
+    /// Set by `commands.list(includeShadowed = true)` when a workspace command
+    /// of the same name wins the composer lookup (CMP-07).
+    pub shadowed: bool,
+}
+
+/// One command's file contents, for the Settings editor (CMP-07).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct CommandSource {
+    pub name: String,
+    pub scope: CommandScope,
+    pub path: String,
+    pub body: String,
 }
 
 /// What a resolved composer reference points at.

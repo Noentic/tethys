@@ -27,17 +27,20 @@
   --tethys-accent-focus: #3b82f6;
   --tethys-accent-toggle: #3b82f6;
   --tethys-accent-toggle-active: var(--tethys-accent-toggle);
-  --tethys-agent-active: #38bdf8;
+  --tethys-agent-active: #56cde3;
   --tethys-accent-agent-active: var(--tethys-agent-active);
   --tethys-agent-idle: #71717a;
   --tethys-accent-agent-idle: var(--tethys-agent-idle);
-  --tethys-status-session: #38bdf8;
+  --tethys-status-session: #56cde3;
   --tethys-status-active-session: var(--tethys-status-session);
-  --tethys-status-success: #10b981;
-  --tethys-status-warning: #f59e0b;
-  --tethys-status-danger: #ef4444;
-  --tethys-diff-added: #10b981;
-  --tethys-diff-removed: #ef4444;
+  --tethys-status-success: #5bcc80;
+  --tethys-status-warning: #ecc15a;
+  --tethys-status-danger: #ff8a84;
+  --tethys-status-success-soft: rgba(91, 204, 128, 0.14);
+  --tethys-status-warning-soft: rgba(236, 193, 90, 0.14);
+  --tethys-status-danger-soft: rgba(255, 138, 132, 0.14);
+  --tethys-diff-added: #5bcc80;
+  --tethys-diff-removed: #fe6c66;
 
   /* Paint order (DESIGN.md stacking). Structural, so it is not themeable. */
   --tethys-z-base: 0;
@@ -88,7 +91,6 @@
   --motion-instant: 100ms;
   --motion-fast: 150ms;
   --motion-base: 200ms;
-  --motion-skeleton: 1200ms;
 }
 
 [data-theme="light"] {
@@ -102,7 +104,7 @@
   --tethys-surface-card-hover: #f4f4f5;
   --tethys-surface-nested: #f4f4f5;
   --tethys-surface-overlay: #ffffff;
-  --tethys-surface-sunken: #18181b;
+  --tethys-surface-sunken: #e4e4e7;
   --tethys-surface-hover: rgba(0, 0, 0, 0.04);
   --tethys-surface-active: rgba(0, 0, 0, 0.08);
   --tethys-overlay-scrim: rgba(0, 0, 0, 0.3);
@@ -120,15 +122,18 @@
   --tethys-accent-focus: #3b82f6;
   --tethys-accent-toggle: #3b82f6;
   --tethys-accent-toggle-active: var(--tethys-accent-toggle);
-  --tethys-agent-active: #0284c7;
+  --tethys-agent-active: #007991;
   --tethys-accent-agent-active: var(--tethys-agent-active);
   --tethys-agent-idle: #71717a;
   --tethys-accent-agent-idle: var(--tethys-agent-idle);
-  --tethys-status-session: #0284c7;
+  --tethys-status-session: #007991;
   --tethys-status-active-session: var(--tethys-status-session);
-  --tethys-status-success: #059669;
-  --tethys-status-warning: #d97706;
-  --tethys-status-danger: #dc2626;
-  --tethys-diff-added: #10b981;
-  --tethys-diff-removed: #ef4444;
+  --tethys-status-success: #00803a;
+  --tethys-status-warning: #9e6000;
+  --tethys-status-danger: #cd3437;
+  --tethys-status-success-soft: rgba(0, 128, 58, 0.1);
+  --tethys-status-warning-soft: rgba(158, 96, 0, 0.1);
+  --tethys-status-danger-soft: rgba(205, 52, 55, 0.1);
+  --tethys-diff-added: #046c4e;
+  --tethys-diff-removed: #b91c1c;
 }

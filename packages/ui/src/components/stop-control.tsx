@@ -71,7 +71,7 @@ export function StopControl({
       className={cn(
         "focus-ring relative inline-flex h-7 shrink-0 items-center justify-center overflow-hidden rounded-sm px-3.5 text-label-md transition-colors select-none",
         isDestructive
-          ? "border border-(--tethys-status-danger) text-(--tethys-status-danger) tint-danger"
+          ? "border border-(--tethys-status-danger) text-(--tethys-status-danger) bg-(--tethys-status-danger-soft)"
           : "border border-(--tethys-hairline-strong) bg-(--tethys-surface-elevated) text-(--tethys-text-primary) hover:bg-(--tethys-surface-card-hover)",
         isNonInteractive && "cursor-default",
         className,

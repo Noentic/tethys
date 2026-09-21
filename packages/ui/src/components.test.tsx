@@ -20,6 +20,7 @@ import {
   SessionGroupHeader,
   SessionListRow,
   Splitter,
+  StateBadge,
   StatusDot,
   StepperInput,
   StopControl,
@@ -495,6 +496,34 @@ describe("StatusDot shape and Button reduced motion (M1.6c U5)", () => {
     expect(dot.style.backgroundColor).toBe("var(--tethys-agent-idle)");
   });
 
+  it("breathes only the living states, and slows the halo while awaiting (d0-rc9)", () => {
+    const { rerender } = render(<StatusDot status="running" />);
+    expect(screen.getByTestId("status-halo").className).toContain(
+      "animate-breathe",
+    );
+    expect(screen.getByTestId("status-halo").className).not.toContain(
+      "animate-breathe-awaiting",
+    );
+
+    rerender(<StatusDot status="awaiting" />);
+    expect(screen.getByTestId("status-halo").className).toContain(
+      "animate-breathe-awaiting",
+    );
+
+    // A stopped or errored agent must not keep pulsing: it reads as still working.
+    for (const stopped of ["error", "interrupted", "suspended", "archived"]) {
+      rerender(<StatusDot status={stopped} />);
+      expect(screen.queryByTestId("status-halo")).toBeNull();
+    }
+  });
+
+  it("keeps the marker crisp while the halo animates", () => {
+    render(<StatusDot status="running" />);
+    const marker = screen.getByRole("status");
+    expect(marker.className).not.toContain("animate-breathe");
+    expect(marker.style.backgroundColor).toBe("var(--tethys-agent-active)");
+  });
+
   it("suspends the Button spinner under reduced motion", () => {
     render(<Button loading>Saving</Button>);
     const spinner = document.querySelector("svg");
@@ -599,5 +628,46 @@ describe("SchemaFieldGroup and ProtocolPill (M1.6c U8)", () => {
     );
     expect(screen.getByText("ACP v2")).toBeDefined();
     expect(screen.getByText("Early Access")).toBeDefined();
+  });
+});
+
+describe("StateBadge (d0-rc9)", () => {
+  it("carries the state colour on both the marker and the label, per state", () => {
+    const { rerender } = render(<StateBadge status="awaiting_approval" />);
+    expect(screen.getByTestId("state-badge").textContent).toContain(
+      "Awaiting approval",
+    );
+    expect(screen.getByText("Awaiting approval").style.color).toBe(
+      "var(--tethys-status-warning)",
+    );
+
+    rerender(<StateBadge status="running" />);
+    expect(screen.getByText("Running").style.color).toBe(
+      "var(--tethys-agent-active)",
+    );
+
+    rerender(<StateBadge status="error" />);
+    expect(screen.getByText("Error").style.color).toBe(
+      "var(--tethys-status-danger)",
+    );
+
+    rerender(<StateBadge status="idle" />);
+    expect(screen.getByText("Idle").style.color).toBe(
+      "var(--tethys-agent-idle)",
+    );
+  });
+
+  it("names the state in words so the badge survives the dot being ignored", () => {
+    render(<StateBadge status="AwaitingApproval" />);
+    expect(screen.getByTestId("state-badge").textContent).toBe(
+      "Awaiting approval",
+    );
+  });
+
+  it("accepts a label override without changing the colour source", () => {
+    render(<StateBadge status="running" label="Streaming" />);
+    expect(screen.getByText("Streaming").style.color).toBe(
+      "var(--tethys-agent-active)",
+    );
   });
 });

@@ -59,7 +59,7 @@ export function SessionItemChip({
         className={cn(
           "focus-ring relative flex min-w-0 items-center gap-1.5 rounded-sm border px-2 py-1 text-left transition-colors hover:border-(--tethys-hairline-strong)",
           awaiting
-            ? "border-warning-soft tint-warning text-(--tethys-text-primary)"
+            ? "border-warning-soft bg-(--tethys-status-warning-soft) text-(--tethys-text-primary)"
             : "border-(--tethys-hairline) bg-(--tethys-surface-panel) text-(--tethys-text-primary)",
         )}
       >
@@ -78,9 +78,12 @@ export function SessionItemChip({
         {fields.diffStat && session.diffStat && (
           <span
             data-testid="chip-diff"
-            className="shrink-0 font-mono text-mono-micro text-(--tethys-text-muted)"
+            className="shrink-0 font-mono text-mono-micro"
           >
-            +{session.diffStat.added} −{session.diffStat.removed}
+            <span className="text-diff-added">+{session.diffStat.added}</span>{" "}
+            <span className="text-diff-removed">
+              −{session.diffStat.removed}
+            </span>
           </span>
         )}
         {fields.turn && (

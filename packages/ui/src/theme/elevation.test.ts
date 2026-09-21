@@ -109,6 +109,17 @@ const DARK_ONLY: Adjacency[] = [
   },
 ];
 
+// Light recesses by darkening, so the recessed planes are *below* their parent
+// rather than above it. Sunken is the one recess that holds in both themes.
+const LIGHT_ONLY: Adjacency[] = [
+  {
+    above: "canvas",
+    below: "surface-sunken",
+    minGap: 1.0,
+    where: "terminal well in stage (light)",
+  },
+];
+
 function gap(
   tokens: Record<SemanticTokenKey, string>,
   pair: Adjacency,
@@ -123,9 +134,14 @@ describe("Elevation ramp", () => {
       DEFAULT_DARK_TOKENS,
       [...SHELL_PLANES, ...STACKED_SURFACES, ...DARK_ONLY],
     ],
-    // Light recesses by darkening, so hover/nested/sunken steps invert and are
-    // covered by the dark checks only. The shell cascade and card-on-stage hold.
-    ["light", DEFAULT_LIGHT_TOKENS, [...SHELL_PLANES, STACKED_SURFACES[0]]],
+    // Light recesses by darkening, so hover/nested steps invert and are covered
+    // by the dark checks only. The shell cascade, card-on-stage and the sunken
+    // well (recessed in both themes) hold.
+    [
+      "light",
+      DEFAULT_LIGHT_TOKENS,
+      [...SHELL_PLANES, STACKED_SURFACES[0], ...LIGHT_ONLY],
+    ],
   ];
 
   for (const [name, tokens, pairs] of cases) {

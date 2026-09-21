@@ -2,6 +2,7 @@
 
 export {
   nextTerminalDelta,
+  sunkenWellTheme,
   TerminalView,
   type TerminalViewProps,
   terminalOptions,

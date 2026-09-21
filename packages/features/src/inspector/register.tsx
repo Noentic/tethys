@@ -2,6 +2,7 @@ import type { TurnMessageEntry } from "@tethys/state";
 import { registerEntryRenderer, registerInspectorSlot } from "@tethys/ui";
 import { ProviderArtifactRenderer } from "../providers/provider-artifact";
 import { ActivityLedger } from "./activity-ledger";
+import { InspectorSummary } from "./inspector-summary";
 import { PlanPanel } from "./renderers/plan-panel";
 import { TerminalEntryRenderer } from "./renderers/terminal-entry";
 import { ThoughtBlockRenderer } from "./renderers/thought-block";
@@ -37,6 +38,9 @@ export function registerInspectorRenderers(): void {
   registerEntryRenderer("turn_notice", TurnNoticeRenderer);
   registerEntryRenderer("provider_artifact", ProviderArtifactRenderer);
   registerEntryRenderer("plan", () => null);
+  // The rollup band is the first section: it summarises the whole session, and
+  // everything below it is the detail behind one of its numbers.
+  registerInspectorSlot("summary", InspectorSummary);
   registerInspectorSlot("plan", PlanPanel);
   registerInspectorSlot("activity-ledger", ActivityLedger);
 }

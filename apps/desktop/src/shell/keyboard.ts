@@ -5,6 +5,7 @@ export interface ShortcutHandler {
   onCloseTab?: () => void;
   onOpenSettings?: () => void;
   onToggleSidebar?: () => void;
+  onToggleInspector?: () => void;
 }
 
 export type UnstackType = "popover" | "drawer" | "palette" | "dialog";
@@ -105,6 +106,12 @@ export function setupGlobalKeyboardMap(handlers: ShortcutHandler): () => void {
       if (e.key.toLowerCase() === "b") {
         e.preventDefault();
         handlers.onToggleSidebar?.();
+        return;
+      }
+
+      if (e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        handlers.onToggleInspector?.();
         return;
       }
 

@@ -156,7 +156,7 @@ export function WorkspacePeekDrawer({
                 <div
                   key={entry.id}
                   data-testid="drawer-approval-entry"
-                  className="flex flex-col gap-sm rounded-md border border-warning-soft tint-warning p-lg"
+                  className="flex flex-col gap-sm rounded-md border border-warning-soft bg-(--tethys-status-warning-soft) p-lg"
                 >
                   <div className="flex items-center gap-sm text-label-md text-(--tethys-status-warning)">
                     <StatusDot status="awaiting_approval" inline />

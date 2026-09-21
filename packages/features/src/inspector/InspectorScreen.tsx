@@ -7,7 +7,7 @@ import {
   type ToolCallEntry,
 } from "@tethys/state";
 import { cn, getAllInspectorSlots } from "@tethys/ui";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef } from "react";
 import {
   type InspectorClient,
   InspectorClientProvider,
@@ -19,20 +19,10 @@ import { JumpToLatest } from "./renderers/jump-to-latest";
 import { WorkingIndicator } from "./renderers/working-indicator";
 import { TranscriptStage } from "./TranscriptStage";
 import { useCapabilities } from "./use-capabilities";
+import { useSessionState } from "./use-session-state";
 import { useTailPin } from "./use-tail-pin";
 
 registerInspectorRenderers();
-
-function useSessionState(sessionId: string): SessionState {
-  const store = getOrCreateSessionStore(sessionId);
-  return useSyncExternalStore(
-    (onStoreChange) => {
-      const subscription = store.subscribe(onStoreChange);
-      return () => subscription.unsubscribe();
-    },
-    () => store.state,
-  );
-}
 
 function InspectorSlots({
   state,

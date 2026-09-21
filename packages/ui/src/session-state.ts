@@ -7,10 +7,18 @@ export type SessionStatus =
   | "suspended"
   | "archived";
 
+/**
+ * Liveness channel (DESIGN.md motion.stateMotion). Only the states that are
+ * genuinely alive breathe, and `awaiting` breathes slower than `running` so
+ * waiting reads differently from busy. A state that has stopped must not keep
+ * pulsing: an errored or suspended agent that animates reads as still working.
+ */
+export type StatusMotion = "breathe" | "breatheAwaiting" | "none";
+
 export interface SessionStateInfo {
   colorVar: string;
   className: string;
-  pulse: boolean;
+  motion: StatusMotion;
   label: string;
   /**
    * Glanceable shape. Every state is a filled disc except `awaiting`, which is
@@ -18,6 +26,17 @@ export interface SessionStateInfo {
    * pulse is suspended (DESIGN.md status-dot `shape` / `rule`).
    */
   shape: "disc" | "ring";
+}
+
+/** The Tailwind class for a state's liveness, or `undefined` when static. */
+export function statusMotionClass(motion: StatusMotion): string | undefined {
+  if (motion === "breathe") {
+    return "motion-safe:animate-breathe";
+  }
+  if (motion === "breatheAwaiting") {
+    return "motion-safe:animate-breathe-awaiting";
+  }
+  return undefined;
 }
 
 export function getSessionStateInfo(status: string): SessionStateInfo {
@@ -30,8 +49,8 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
     case "running":
       return {
         colorVar: "var(--tethys-agent-active)",
-        className: "bg-(--tethys-agent-active) motion-safe:animate-pulse",
-        pulse: true,
+        className: "bg-(--tethys-agent-active)",
+        motion: "breathe",
         label: "Running",
         shape: "disc",
       };
@@ -40,8 +59,8 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
     case "requires_action":
       return {
         colorVar: "var(--tethys-status-warning)",
-        className: "motion-safe:animate-pulse",
-        pulse: true,
+        className: "",
+        motion: "breatheAwaiting",
         label: "Awaiting approval",
         shape: "ring",
       };
@@ -51,7 +70,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
       return {
         colorVar: "var(--tethys-status-success)",
         className: "bg-(--tethys-status-success)",
-        pulse: false,
+        motion: "none",
         label: "Healthy",
         shape: "disc",
       };
@@ -59,7 +78,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
       return {
         colorVar: "var(--tethys-status-warning)",
         className: "bg-(--tethys-status-warning)",
-        pulse: false,
+        motion: "none",
         label: "Authentication required",
         shape: "disc",
       };
@@ -68,7 +87,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
       return {
         colorVar: "var(--tethys-status-danger)",
         className: "bg-(--tethys-status-danger)",
-        pulse: false,
+        motion: "none",
         label: "Not found",
         shape: "disc",
       };
@@ -77,7 +96,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
       return {
         colorVar: "var(--tethys-status-danger)",
         className: "bg-(--tethys-status-danger)",
-        pulse: false,
+        motion: "none",
         label: "Error",
         shape: "disc",
       };
@@ -85,7 +104,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
       return {
         colorVar: "var(--tethys-text-muted)",
         className: "bg-(--tethys-text-muted)",
-        pulse: false,
+        motion: "none",
         label: "Interrupted",
         shape: "disc",
       };
@@ -93,7 +112,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
       return {
         colorVar: "var(--tethys-hairline-strong)",
         className: "bg-(--tethys-hairline-strong)",
-        pulse: false,
+        motion: "none",
         label: "Suspended",
         shape: "disc",
       };
@@ -101,7 +120,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
       return {
         colorVar: "var(--tethys-hairline)",
         className: "bg-(--tethys-hairline)",
-        pulse: false,
+        motion: "none",
         label: "Archived",
         shape: "disc",
       };
@@ -109,7 +128,7 @@ export function getSessionStateInfo(status: string): SessionStateInfo {
       return {
         colorVar: "var(--tethys-agent-idle)",
         className: "bg-(--tethys-agent-idle)",
-        pulse: false,
+        motion: "none",
         label: "Idle",
         shape: "disc",
       };

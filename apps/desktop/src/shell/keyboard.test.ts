@@ -118,3 +118,32 @@ describe("unstackManager (Esc unstack order)", () => {
     cleanup();
   });
 });
+
+describe("inspector toggle shortcut (d0-rc9)", () => {
+  it("triggers onToggleInspector on Ctrl+I and Cmd+I", () => {
+    const handlers = { onToggleInspector: vi.fn() };
+    const cleanup = setupGlobalKeyboardMap(handlers);
+
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "i", ctrlKey: true }),
+    );
+    expect(handlers.onToggleInspector).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "I", metaKey: true }),
+    );
+    expect(handlers.onToggleInspector).toHaveBeenCalledTimes(2);
+
+    cleanup();
+  });
+
+  it("does not fire without a modifier", () => {
+    const handlers = { onToggleInspector: vi.fn() };
+    const cleanup = setupGlobalKeyboardMap(handlers);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "i" }));
+    expect(handlers.onToggleInspector).not.toHaveBeenCalled();
+
+    cleanup();
+  });
+});

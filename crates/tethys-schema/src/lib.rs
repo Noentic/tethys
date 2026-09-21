@@ -120,6 +120,7 @@ pub fn registered_types() -> Types {
         .register::<search::SearchItem>()
         .register::<composer::CommandScope>()
         .register::<composer::CommandInfo>()
+        .register::<composer::CommandSource>()
         .register::<composer::ReferenceKind>()
         .register::<composer::ComposerReference>()
         .register::<composer::ExpandedCommand>()

@@ -54,6 +54,24 @@
   --spacing-2xl: 32px;
   --spacing-rail: 48px;
   --spacing-titlebar: 40px;
+
+  /* DESIGN.md motion.breathe / motion.breatheAwaiting. The one animation that
+     encodes liveness; only `running` and `awaiting` use it, and stopped or
+     errored states stay static (motion.stateMotion). Paired with `motion-safe:`
+     so prefers-reduced-motion suspends it to a static frame. */
+  --animate-breathe: breathe 2400ms cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-breathe-awaiting: breathe 3200ms cubic-bezier(0.4, 0, 0.6, 1)
+    infinite;
+
+  @keyframes breathe {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
 }
 
 @theme inline {
@@ -88,6 +106,9 @@
   --color-status-success: var(--tethys-status-success);
   --color-status-warning: var(--tethys-status-warning);
   --color-status-danger: var(--tethys-status-danger);
+  --color-status-success-soft: var(--tethys-status-success-soft);
+  --color-status-warning-soft: var(--tethys-status-warning-soft);
+  --color-status-danger-soft: var(--tethys-status-danger-soft);
   --color-diff-added: var(--tethys-diff-added);
   --color-diff-removed: var(--tethys-diff-removed);
 
@@ -146,14 +167,4 @@
 @utility dot-matrix {
   background-image: radial-gradient(var(--tethys-grid-dot) 1px, transparent 1px);
   background-size: 12px 12px;
-}
-
-@utility tint-warning {
-  background-color: color-mix(in oklab, var(--tethys-status-warning) 12%, transparent);
-}
-@utility tint-success {
-  background-color: color-mix(in oklab, var(--tethys-status-success) 12%, transparent);
-}
-@utility tint-danger {
-  background-color: color-mix(in oklab, var(--tethys-status-danger) 12%, transparent);
 }
