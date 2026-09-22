@@ -25,6 +25,8 @@ reqwest.workspace = true
 zip.workspace = true
 tar.workspace = true
 flate2.workspace = true
+bzip2.workspace = true
+tempfile.workspace = true
 tethys-acp = { path = "../tethys-acp" }
 tethys-schema = { path = "../tethys-schema" }
 tethys-supervisor = { path = "../tethys-supervisor" }

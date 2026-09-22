@@ -3,6 +3,8 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct LaunchSpec {
     pub profile_id: String,
+    /// Stable ACP Registry identity; profile identity remains `profile_id`.
+    pub integration_id: Option<String>,
     pub host: String,
     pub program: String,
     pub args: Vec<String>,
@@ -15,6 +17,7 @@ impl LaunchSpec {
     pub fn new(profile_id: impl Into<String>, program: impl Into<String>) -> Self {
         Self {
             profile_id: profile_id.into(),
+            integration_id: None,
             host: "local".to_string(),
             program: program.into(),
             args: Vec::new(),

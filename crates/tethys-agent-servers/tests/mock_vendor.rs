@@ -485,6 +485,86 @@ async fn a_re_registered_spec_applies_to_the_next_spawn() {
     );
 }
 
+/// A store whose client advertises the terminal-auth capability the mock needs
+/// before it will declare its `tui-auth` method.
+#[cfg(unix)]
+fn terminal_auth_store() -> Arc<ConnectionStore> {
+    let mut options = StoreOptions::new(AcpProtocol::V1, Arc::new(ApproveAll));
+    options.idle_grace = IDLE_GRACE;
+    options.cancel_grace = CANCEL_GRACE;
+    options.client_services = options.client_services.with_terminal_auth();
+    ConnectionStore::new(options)
+}
+
+#[cfg(unix)]
+async fn terminal_auth_output_delegates_to_the_stored_connection() {
+    let store = terminal_auth_store();
+    let dir = workdir("terminal-auth");
+    let key = store.register(
+        LaunchSpec::new(
+            "terminal-auth",
+            std::env::current_exe()
+                .expect("exe")
+                .to_string_lossy()
+                .into_owned(),
+        )
+        .cwd(&dir)
+        .env(MOCK_ENV, "v1")
+        .env("TETHYS_MOCK_AUTH", "terminal"),
+        AgentCompat::default(),
+    );
+    let terminal_id = store
+        .start_terminal_auth(&key, "tui-auth")
+        .await
+        .expect("terminal auth starts");
+
+    let output = store
+        .terminal_auth_output(&key, &terminal_id)
+        .expect("stored connection serves the snapshot");
+    assert!(!output.exited, "the sign-in terminal is still running");
+
+    store
+        .terminal_auth_cancel(&key, &terminal_id)
+        .expect("cancel releases the terminal");
+    assert!(
+        store.terminal_auth_output(&key, &terminal_id).is_err(),
+        "a cancelled terminal is no longer addressable"
+    );
+}
+
+#[cfg(unix)]
+async fn terminal_auth_output_for_an_unknown_id_is_typed() {
+    let store = terminal_auth_store();
+    let dir = workdir("terminal-auth-unknown");
+    let key = store.register(
+        LaunchSpec::new(
+            "terminal-auth-unknown",
+            std::env::current_exe()
+                .expect("exe")
+                .to_string_lossy()
+                .into_owned(),
+        )
+        .cwd(&dir)
+        .env(MOCK_ENV, "v1"),
+        AgentCompat::default(),
+    );
+
+    let output_error = store
+        .terminal_auth_output(&key, "missing-terminal")
+        .expect_err("unknown terminal id");
+    let write_error = store
+        .terminal_auth_write(&key, "missing-terminal", "x")
+        .expect_err("unknown terminal id");
+    assert!(
+        matches!(&output_error, StoreError::UnknownProfile(profile) if profile == "terminal-auth-unknown"),
+        "output error: {output_error}"
+    );
+    assert!(
+        matches!(&write_error, StoreError::UnknownProfile(profile) if profile == "terminal-auth-unknown"),
+        "write error: {write_error}"
+    );
+}
+
 fn main() {
     if tethys_acp::mock::run_if_requested() {
         return;
@@ -541,6 +621,18 @@ fn main() {
         run_limited(
             "v2_recovery_cancels_live_session_and_restarts_dead_connection",
             v2_recovery_cancels_live_session_and_restarts_dead_connection(),
+        )
+        .await;
+        #[cfg(unix)]
+        run_limited(
+            "terminal_auth_output_delegates_to_the_stored_connection",
+            terminal_auth_output_delegates_to_the_stored_connection(),
+        )
+        .await;
+        #[cfg(unix)]
+        run_limited(
+            "terminal_auth_output_for_an_unknown_id_is_typed",
+            terminal_auth_output_for_an_unknown_id_is_typed(),
         )
         .await;
     });

@@ -2,6 +2,7 @@
 
 pub mod connection_store;
 pub mod launch;
+pub mod provider_integration;
 mod recovery;
 pub mod registry;
 
@@ -10,3 +11,4 @@ pub use connection_store::{
     StoreOptions,
 };
 pub use launch::LaunchSpec;
+pub use provider_integration::{ProviderIntegrationDescriptor, ProviderIntegrationRegistry};

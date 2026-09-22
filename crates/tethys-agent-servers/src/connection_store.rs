@@ -6,14 +6,16 @@ use agent_client_protocol::ByteStreams;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use tethys_acp::{AcpConnectOptions, AcpConnection};
+use tethys_schema::agents::LoginTerminalOutput;
 use tethys_schema::connection::{
     AcpProtocol, AgentCompat, AgentInfo, ConnectionEntry, ConnectionKey, ConnectionState,
     NormalizedCapabilities,
 };
 use tethys_supervisor::SupervisedChild;
-use tethys_thread::{AgentConnection, ElicitationResolver, PermissionResolver};
+use tethys_thread::{AgentConnection, PermissionResolver};
 
 use crate::launch::LaunchSpec;
+use crate::provider_integration::ProviderIntegrationRegistry;
 
 /// Resolves one launch-spec environment binding at spawn time.
 ///
@@ -38,9 +40,9 @@ impl EnvResolver for LiteralEnv {
 pub struct StoreOptions {
     pub protocol: AcpProtocol,
     pub client_name: String,
-    pub permission_resolver: Arc<dyn PermissionResolver>,
-    pub elicitation_resolver: Arc<dyn ElicitationResolver>,
+    pub client_services: tethys_acp::client::AcpClientServices,
     pub env_resolver: Arc<dyn EnvResolver>,
+    pub provider_integrations: ProviderIntegrationRegistry,
     pub idle_grace: Duration,
     pub cancel_grace: Duration,
 }
@@ -50,9 +52,9 @@ impl StoreOptions {
         Self {
             protocol,
             client_name: "tethys".to_string(),
-            permission_resolver,
-            elicitation_resolver: Arc::new(tethys_acp::client::NoopElicitationResolver),
+            client_services: tethys_acp::client::AcpClientServices::new(permission_resolver),
             env_resolver: Arc::new(LiteralEnv),
+            provider_integrations: ProviderIntegrationRegistry::default(),
             idle_grace: Duration::from_secs(30),
             cancel_grace: Duration::from_secs(5),
         }
@@ -67,6 +69,8 @@ pub enum StoreError {
     Spawn(String),
     #[error("connect failed: {0}")]
     Connect(String),
+    #[error("authentication required")]
+    AuthRequired,
     #[error("recovery failed: {0}")]
     Recovery(String),
 }
@@ -133,6 +137,7 @@ struct PendingSpawn {
 pub struct ConnectionStore {
     options: StoreOptions,
     entries: Mutex<HashMap<ConnectionKey, Entry>>,
+    auth_terminals: Mutex<HashMap<(ConnectionKey, String), Arc<AcpConnection>>>,
     connect_guard: tokio::sync::Mutex<()>,
 }
 
@@ -141,6 +146,7 @@ impl ConnectionStore {
         Arc::new(Self {
             options,
             entries: Mutex::new(HashMap::new()),
+            auth_terminals: Mutex::new(HashMap::new()),
             // ponytail: one global spawn guard; per-key locks if spawn throughput ever matters.
             connect_guard: tokio::sync::Mutex::new(()),
         })
@@ -202,6 +208,96 @@ impl ConnectionStore {
             .spawn_connection(key, &pending.spec, &pending.compat)
             .await?;
         Ok(self.install(key, spawned))
+    }
+
+    pub async fn start_terminal_auth(
+        self: &Arc<Self>,
+        key: &ConnectionKey,
+        method_id: &str,
+    ) -> Result<String, StoreError> {
+        let lease = self.acquire(key).await?;
+        let spec = self
+            .lock_entries()
+            .get(key)
+            .map(|entry| entry.spec.clone())
+            .ok_or_else(|| StoreError::UnknownProfile(key.profile_id.clone()))?;
+        let mut env = Vec::with_capacity(spec.env.len());
+        for (name, value) in &spec.env {
+            let resolved = self
+                .options
+                .env_resolver
+                .resolve(name, value)
+                .map_err(StoreError::Spawn)?;
+            env.push((name.clone(), resolved));
+        }
+        let cwd = spec.cwd.clone().unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        });
+        let terminal_id = lease
+            .connection()
+            .start_terminal_auth(&key.profile_id, method_id, spec.program, cwd, env)
+            .await
+            .map_err(|error| StoreError::Connect(error.to_string()))?;
+        self.auth_terminals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(
+                (key.clone(), terminal_id.clone()),
+                Arc::clone(lease.connection()),
+            );
+        Ok(terminal_id)
+    }
+
+    pub fn terminal_auth_output(
+        &self,
+        key: &ConnectionKey,
+        terminal_id: &str,
+    ) -> Result<LoginTerminalOutput, StoreError> {
+        let connection = self.auth_terminal_connection(key, terminal_id)?;
+        connection
+            .terminal_auth_output(&key.profile_id, terminal_id)
+            .map_err(|error| StoreError::Connect(error.to_string()))
+    }
+
+    pub fn terminal_auth_write(
+        &self,
+        key: &ConnectionKey,
+        terminal_id: &str,
+        text: &str,
+    ) -> Result<(), StoreError> {
+        let connection = self.auth_terminal_connection(key, terminal_id)?;
+        connection
+            .terminal_auth_write(&key.profile_id, terminal_id, text)
+            .map_err(|error| StoreError::Connect(error.to_string()))
+    }
+
+    pub fn terminal_auth_cancel(
+        &self,
+        key: &ConnectionKey,
+        terminal_id: &str,
+    ) -> Result<(), StoreError> {
+        let connection = self
+            .auth_terminals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&(key.clone(), terminal_id.to_string()))
+            .ok_or_else(|| StoreError::UnknownProfile(key.profile_id.clone()))?;
+        connection
+            .terminal_auth_cancel(&key.profile_id, terminal_id)
+            .map_err(|error| StoreError::Connect(error.to_string()))
+    }
+
+    fn auth_terminal_connection(
+        &self,
+        key: &ConnectionKey,
+        terminal_id: &str,
+    ) -> Result<Arc<AcpConnection>, StoreError> {
+        self.auth_terminals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(key.clone(), terminal_id.to_string()))
+            .cloned()
+            .ok_or_else(|| StoreError::UnknownProfile(key.profile_id.clone()))
     }
 
     pub async fn reap_idle(&self) -> usize {
@@ -291,6 +387,7 @@ impl ConnectionStore {
                 .await
                 .map_err(|error| StoreError::Spawn(error.to_string()))?;
         }
+        self.cancel_auth_terminals(key);
         Ok(())
     }
 
@@ -312,6 +409,7 @@ impl ConnectionStore {
                 .await
                 .map_err(|error| StoreError::Spawn(error.to_string()))?;
         }
+        self.cancel_auth_terminals(key);
         Ok(())
     }
 
@@ -489,9 +587,15 @@ impl ConnectionStore {
         let options = AcpConnectOptions {
             protocol: compat.preferred_protocol.unwrap_or(self.options.protocol),
             client_name: self.options.client_name.clone(),
-            permission_resolver: Arc::clone(&self.options.permission_resolver),
-            elicitation_resolver: Arc::clone(&self.options.elicitation_resolver),
-            elicitation: true,
+            integration: spec
+                .integration_id
+                .as_deref()
+                .map(|id| self.options.provider_integrations.connection(id)),
+            services: {
+                let mut services = self.options.client_services.clone();
+                services.terminal_auth = true;
+                services
+            },
         };
         let transport = ByteStreams::new(stdin.compat_write(), stdout.compat());
         match tethys_acp::connect(options, transport).await {
@@ -503,7 +607,11 @@ impl ConnectionStore {
             Err(error) => {
                 let _ = child.force_kill_group().await;
                 self.mark_error(key, Some(pid));
-                Err(StoreError::Connect(error.to_string()))
+                if matches!(error, tethys_thread::ConnectionError::AuthRequired) {
+                    Err(StoreError::AuthRequired)
+                } else {
+                    Err(StoreError::Connect(error.to_string()))
+                }
             }
         }
     }
@@ -554,13 +662,41 @@ impl ConnectionStore {
     }
 
     fn mark_error(&self, key: &ConnectionKey, pid: Option<u32>) {
-        let mut entries = self.lock_entries();
-        if let Some(entry) = entries.get_mut(key) {
-            entry.state = Lifecycle::Error;
-            entry.connection = None;
-            if pid.is_some() {
-                entry.pid = pid;
+        {
+            let mut entries = self.lock_entries();
+            if let Some(entry) = entries.get_mut(key) {
+                entry.state = Lifecycle::Error;
+                entry.connection = None;
+                if pid.is_some() {
+                    entry.pid = pid;
+                }
             }
+        }
+        self.cancel_auth_terminals(key);
+    }
+
+    fn cancel_auth_terminals(&self, key: &ConnectionKey) {
+        let terminals: Vec<(String, Arc<AcpConnection>)> = {
+            let mut terminals = self
+                .auth_terminals
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            let terminal_ids: Vec<String> = terminals
+                .keys()
+                .filter(|(owner, _)| owner == key)
+                .map(|(_, terminal_id)| terminal_id.clone())
+                .collect();
+            terminal_ids
+                .into_iter()
+                .filter_map(|terminal_id| {
+                    terminals
+                        .remove(&(key.clone(), terminal_id.clone()))
+                        .map(|connection| (terminal_id, connection))
+                })
+                .collect()
+        };
+        for (terminal_id, connection) in terminals {
+            let _ = connection.terminal_auth_cancel(&key.profile_id, &terminal_id);
         }
     }
 
@@ -606,16 +742,26 @@ fn watch_connection(
                 continue;
             }
 
-            let mut entries = store.lock_entries();
-            if let Some(entry) = entries.get_mut(&key) {
-                let same = entry
-                    .connection
-                    .as_ref()
-                    .is_some_and(|current| Arc::ptr_eq(current, &connection));
-                if same && entry.state == Lifecycle::Connected {
-                    entry.connection = None;
-                    entry.state = Lifecycle::Error;
+            let connection_was_current = {
+                let mut entries = store.lock_entries();
+                if let Some(entry) = entries.get_mut(&key) {
+                    let same = entry
+                        .connection
+                        .as_ref()
+                        .is_some_and(|current| Arc::ptr_eq(current, &connection));
+                    if same && entry.state == Lifecycle::Connected {
+                        entry.connection = None;
+                        entry.state = Lifecycle::Error;
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
                 }
+            };
+            if connection_was_current {
+                store.cancel_auth_terminals(&key);
             }
             return;
         }

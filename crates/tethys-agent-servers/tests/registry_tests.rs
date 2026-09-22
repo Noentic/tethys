@@ -1,10 +1,8 @@
 //! ACP-Registry engine tests (M1.12 U2), wiremock-backed and sub-second.
 
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use tethys_agent_servers::registry::{
-    compliance_note, install, update_availability, Distribution, InstallOptions, Registry,
-    RegistryAgent, RegistryError,
+    compliance_note, install, select_distribution, update_availability, HttpRegistrySource,
+    InstallOptions, Registry, RegistryAgent, RegistryError, RegistrySource,
 };
 use tethys_schema::agents::UpdateAvailability;
 use wiremock::matchers::{method, path};
@@ -12,8 +10,72 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const FIXTURE: &str = include_str!("fixtures/registry.json");
 
+#[tokio::test]
+async fn registry_source_accepts_preview_metadata_and_unknown_fields() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/registry.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "version": "1.0.0",
+            "futureTopLevel": { "keptByPublisher": true },
+            "agents": [{
+                "id": "future-agent",
+                "name": "Future Agent",
+                "version": "1.0.0",
+                "futureAgentField": [1, 2, 3],
+                "distribution": {
+                    "npx": {
+                        "package": "future-agent@1.0.0",
+                        "futureDistributionField": "ignored"
+                    }
+                },
+                "preview": {
+                    "version": "1.1.0-beta.1",
+                    "distribution": {
+                        "npx": { "package": "future-agent@1.1.0-beta.1" }
+                    },
+                    "futurePreviewField": true
+                }
+            }],
+            "extensions": []
+        })))
+        .mount(&server)
+        .await;
+
+    let source = HttpRegistrySource::new(format!("{}/registry.json", server.uri()))
+        .expect("registry source");
+    let registry = source.fetch().await.expect("forward-compatible registry");
+    let agent = registry.agent("future-agent").expect("agent");
+    assert_eq!(
+        agent
+            .preview
+            .as_ref()
+            .map(|preview| preview.version.as_str()),
+        Some("1.1.0-beta.1"),
+    );
+}
+
 fn tar_gz(entries: &[(&str, &[u8])]) -> Vec<u8> {
-    let encoder = GzEncoder::new(Vec::new(), Compression::default());
+    let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    let mut builder = tar::Builder::new(encoder);
+    for (name, data) in entries {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(data.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, name, *data)
+            .expect("append");
+    }
+    builder
+        .into_inner()
+        .expect("encoder")
+        .finish()
+        .expect("finish")
+}
+
+fn tar_bz2(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let encoder = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::default());
     let mut builder = tar::Builder::new(encoder);
     for (name, data) in entries {
         let mut header = tar::Header::new_gnu();
@@ -56,11 +118,52 @@ fn binary_agent(archive: String, sha: Option<String>) -> RegistryAgent {
     .expect("agent")
 }
 
+#[test]
+fn multi_distribution_selection_is_host_and_runtime_aware() {
+    let agent: RegistryAgent = serde_json::from_value(serde_json::json!({
+        "id":"multi","name":"Multi","version":"1.0.0",
+        "distribution":{
+            "binary":{"linux-x86_64":{"archive":"https://example.test/a","cmd":"./a"}},
+            "npx":{"package":"multi@1.0.0"},
+            "uvx":{"package":"multi==1.0.0"}
+        }
+    }))
+    .expect("agent");
+
+    let binary = select_distribution(&agent.distribution, Some("linux-x86_64"), true, true)
+        .expect("binary target wins");
+    assert_eq!(binary.kind, "binary");
+
+    let npx = select_distribution(&agent.distribution, Some("windows-x86_64"), true, true)
+        .expect("runtime fallback");
+    assert_eq!(npx.kind, "npx");
+    assert!(npx
+        .reason
+        .as_deref()
+        .unwrap_or_default()
+        .contains("no target"));
+
+    let uvx = select_distribution(&agent.distribution, Some("windows-x86_64"), false, true)
+        .expect("uv fallback");
+    assert_eq!(uvx.kind, "uvx");
+    assert!(uvx
+        .reason
+        .as_deref()
+        .unwrap_or_default()
+        .contains("npx requires Node.js"));
+
+    let needs_node = select_distribution(&agent.distribution, Some("windows-x86_64"), false, false)
+        .expect("runtime prerequisite outcome");
+    assert_eq!(needs_node.kind, "npx");
+    assert!(needs_node.needs_node);
+}
+
 fn options(root: &std::path::Path) -> InstallOptions {
     InstallOptions {
         install_root: root.to_path_buf(),
         platform: Some("linux-x86_64".into()),
         node_present: Some(true),
+        uv_present: Some(true),
     }
 }
 
@@ -82,6 +185,7 @@ async fn npx_install_pins_the_package_and_reports_missing_node() {
     );
     assert_eq!(outcome.registry_ref.version, "0.79.0");
     assert!(outcome.needs_node);
+    assert_eq!(outcome.registry_ref.distribution.as_deref(), Some("npx"));
     assert!(outcome.warning.is_none());
 }
 
@@ -163,7 +267,7 @@ async fn binary_install_without_sha256_warns_but_installs() {
 }
 
 #[tokio::test]
-async fn unsupported_uvx_and_unsupported_archive_are_typed_errors() {
+async fn uvx_install_and_version_pinning_are_typed() {
     let registry = Registry::parse(FIXTURE).expect("fixture");
     let opencode = registry.agent("opencode").expect("opencode");
     let root = tempfile::tempdir().expect("tempdir");
@@ -175,29 +279,116 @@ async fn unsupported_uvx_and_unsupported_archive_are_typed_errors() {
         "distribution": { "uvx": { "package": "pkg@1.0.0" } },
     }))
     .expect("uvx agent");
-    let error = install(&uvx, None, &options(root.path()))
+    let installed = install(&uvx, None, &options(root.path()))
         .await
-        .expect_err("uvx unsupported");
-    assert!(matches!(error, RegistryError::UnsupportedDistribution(_)));
+        .expect("uvx supported");
+    assert_eq!(installed.launch_spec.program, "uvx");
+    assert_eq!(installed.launch_spec.args[0], "pkg@1.0.0");
 
-    let bz2: RegistryAgent = serde_json::from_value(serde_json::json!({
-        "id": "tar-agent",
-        "name": "Tar",
-        "version": "1.0.0",
-        "distribution": { "binary": { "linux-x86_64": {
-            "archive": "https://example.test/a.tar.bz2", "cmd": "./a"
-        } } },
-    }))
-    .expect("bz2 agent");
-    let error = install(&bz2, None, &options(root.path()))
+    let mut missing_uv = options(root.path());
+    missing_uv.uv_present = Some(false);
+    let missing = install(&uvx, None, &missing_uv)
         .await
-        .expect_err("bz2 unsupported");
-    assert!(matches!(error, RegistryError::UnsupportedDistribution(_)));
+        .expect("resolvable spec");
+    assert!(missing.needs_uvx);
 
     let error = install(opencode, Some("9.9.9"), &options(root.path()))
         .await
         .expect_err("version unavailable");
     assert!(matches!(error, RegistryError::VersionUnavailable { .. }));
+}
+
+#[tokio::test]
+async fn tar_bz2_and_raw_binary_archives_install() {
+    let server = MockServer::start().await;
+    let archive = tar_bz2(&[("./opencode", b"#!/bin/sh\nexit 0\n")]);
+    Mock::given(method("GET"))
+        .and(path("/opencode.tar.bz2"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(archive.clone()))
+        .mount(&server)
+        .await;
+    let root = tempfile::tempdir().expect("tempdir");
+    let outcome = install(
+        &binary_agent(
+            format!("{}/opencode.tar.bz2", server.uri()),
+            Some(sha256_hex(&archive)),
+        ),
+        None,
+        &options(root.path()),
+    )
+    .await
+    .expect("tar.bz2 install");
+    assert!(std::path::Path::new(&outcome.launch_spec.program).is_file());
+
+    Mock::given(method("GET"))
+        .and(path("/opencode.raw"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"raw binary".to_vec()))
+        .mount(&server)
+        .await;
+    let raw = binary_agent(format!("{}/opencode.raw", server.uri()), None);
+    let outcome = install(&raw, None, &options(root.path()))
+        .await
+        .expect("raw install");
+    assert_eq!(
+        std::fs::read(&outcome.launch_spec.program).expect("raw payload"),
+        b"raw binary"
+    );
+}
+
+#[tokio::test]
+async fn failed_update_keeps_the_previous_binary_available() {
+    let server = MockServer::start().await;
+    let valid = tar_gz(&[("./opencode", b"old binary")]);
+    Mock::given(method("GET"))
+        .and(path("/valid.tar.gz"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(valid.clone()))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/invalid.tar.gz"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"bad archive".to_vec()))
+        .mount(&server)
+        .await;
+
+    let root = tempfile::tempdir().expect("tempdir");
+    let first = install(
+        &binary_agent(
+            format!("{}/valid.tar.gz", server.uri()),
+            Some(sha256_hex(&valid)),
+        ),
+        None,
+        &options(root.path()),
+    )
+    .await
+    .expect("first install");
+    let error = install(
+        &binary_agent(
+            format!("{}/invalid.tar.gz", server.uri()),
+            Some(sha256_hex(b"bad archive")),
+        ),
+        None,
+        &options(root.path()),
+    )
+    .await
+    .expect_err("invalid archive");
+    assert!(matches!(error, RegistryError::Install(_)));
+    assert_eq!(
+        std::fs::read(first.launch_spec.program).expect("preserved install"),
+        b"old binary"
+    );
+}
+
+#[tokio::test]
+async fn binary_command_path_cannot_escape_staging_directory() {
+    let agent: RegistryAgent = serde_json::from_value(serde_json::json!({
+        "id":"bad-path","name":"Bad","version":"1.0.0",
+        "distribution":{"binary":{"linux-x86_64":{"archive":"https://example.test/payload","cmd":"../outside"}}}
+    })).expect("agent");
+    let root = tempfile::tempdir().expect("tempdir");
+    let error = install(&agent, None, &options(root.path()))
+        .await
+        .expect_err("reject path before download");
+    assert!(matches!(error, RegistryError::Install(_)));
 }
 
 #[tokio::test]
@@ -247,9 +438,7 @@ fn compliance_notes_reflect_the_matrix() {
 fn fixture_agent_ids_are_present() {
     let registry = Registry::parse(FIXTURE).expect("fixture");
     for id in ["claude-acp", "opencode", "antigravity-acp"] {
-        assert!(matches!(
-            registry.agent(id).map(|a| &a.distribution),
-            Some(Distribution::Npx(_) | Distribution::Binary(_))
-        ));
+        let distribution = &registry.agent(id).expect("entry").distribution;
+        assert!(!distribution.is_empty());
     }
 }

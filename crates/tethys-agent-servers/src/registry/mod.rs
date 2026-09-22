@@ -11,9 +11,13 @@ pub mod model;
 pub mod platform;
 
 pub use client::{HttpRegistrySource, RegistrySource, REGISTRY_URL};
-pub use install::{compliance_note, install, update_availability, InstallOptions, InstallOutcome};
+pub use install::{
+    compliance_note, install, select_distribution, update_availability, DistributionSelection,
+    InstallOptions, InstallOutcome,
+};
 pub use model::{
-    BinaryTarget, Distribution, NpxDistribution, Registry, RegistryAgent, UvxDistribution,
+    BinaryTarget, Distribution, NpxDistribution, PreviewChannel, Registry, RegistryAgent,
+    UvxDistribution,
 };
 
 /// Errors from the registry engine.
