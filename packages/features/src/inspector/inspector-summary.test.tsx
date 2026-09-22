@@ -93,7 +93,9 @@ function fakeClient(diffSummary: DiffSummary | null): ReviewClient {
 function renderBand(diffSummary: DiffSummary | null = summaryFixture) {
   return render(
     <ReviewClientProvider client={fakeClient(diffSummary)}>
-      <InspectorSummary sessionId={SESSION} />
+      {/* The review gate is exercised where it is resolved; this band's own
+          tests pin the capability so the diff stat is deterministic. */}
+      <InspectorSummary sessionId={SESSION} capabilityFixture="git-remote" />
     </ReviewClientProvider>,
   );
 }

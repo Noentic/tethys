@@ -1,12 +1,13 @@
-import type { WorkspaceCapabilityFixture } from "@tethys/state";
 import {
   getOrCreateSessionStore,
   type SessionEntry,
   SessionStreamManager,
   type ToolCallEntry,
+  useSessionCapabilities,
+  type WorkspaceCapabilityFixture,
 } from "@tethys/state";
 import { cn } from "@tethys/ui";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   canDockComposer,
   type InspectorClient,
@@ -19,7 +20,6 @@ import { registerInspectorRenderers } from "./register";
 import { JumpToLatest } from "./renderers/jump-to-latest";
 import { WorkingIndicator } from "./renderers/working-indicator";
 import { TranscriptStage } from "./TranscriptStage";
-import { useCapabilities } from "./use-capabilities";
 import { useSessionState } from "./use-session-state";
 import { useTailPin } from "./use-tail-pin";
 
@@ -34,7 +34,7 @@ registerInspectorRenderers();
 export function InspectorScreen({
   sessionId,
   client,
-  capabilityFixture = "git-remote",
+  capabilityFixture,
   className,
 }: {
   sessionId: string;
@@ -43,7 +43,8 @@ export function InspectorScreen({
   className?: string;
 }) {
   const state = useSessionState(sessionId);
-  const capabilities = useCapabilities(capabilityFixture);
+  const capabilities = useSessionCapabilities(sessionId, capabilityFixture);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const managerRef = useRef<SessionStreamManager | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { pinned, newCount, jumpToLatest } = useTailPin(
@@ -55,12 +56,11 @@ export function InspectorScreen({
     const store = getOrCreateSessionStore(sessionId);
     const manager = new SessionStreamManager(store, store.state.seq);
     managerRef.current = manager;
+    setStreamError(null);
     if (client.events) {
       try {
-        void client.events.subscribe(
-          sessionId,
-          manager.getSinceSeq(),
-          (event) => {
+        client.events
+          .subscribe(sessionId, manager.getSinceSeq(), (event) => {
             manager.pushEvent({
               sessionId,
               seq: event.seq,
@@ -69,8 +69,14 @@ export function InspectorScreen({
             if (event.event.type === "ProviderExtension") {
               enqueueProviderExtension(event.event.body);
             }
-          },
-        );
+          })
+          .catch((cause: unknown) => {
+            // A thread this process does not hold (one from a previous run)
+            // fails here; say so instead of rendering an empty transcript.
+            setStreamError(
+              cause instanceof Error ? cause.message : String(cause),
+            );
+          });
       } catch {
         // Outside Tauri (tests, browser preview) there is no channel; the
         // store still renders whatever was seeded directly.
@@ -101,6 +107,16 @@ export function InspectorScreen({
         data-testid="inspector-screen"
         className={cn("flex min-h-0 flex-1 flex-col gap-md p-md", className)}
       >
+        {streamError && (
+          <p
+            role="alert"
+            title={streamError}
+            className="shrink-0 text-body-sm text-(--tethys-status-danger)"
+          >
+            This thread could not be opened.
+          </p>
+        )}
+
         <div className="relative flex min-h-0 flex-1 flex-col">
           {/* The stage is a `log` region with live announcements off: a chunk is
               never announced. The polite announcer below speaks the few things
@@ -141,7 +157,7 @@ export function InspectorScreen({
             <DockedPromptCard
               sessionId={sessionId}
               client={client}
-              noGit={capabilities.vcs.kind === "none"}
+              noGit={capabilities?.vcs.kind === "none"}
             />
           </div>
         )}

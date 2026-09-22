@@ -4,9 +4,12 @@
 //! card from the hub (the trust-filtered list no longer returns it).
 
 import { Trash } from "@nebutra/icons";
+import { createClient } from "@tethys/client";
 import { queryClient, queryKeys, useWorkspaceRows } from "@tethys/state";
 import { Button, WorkspaceSourceBadge } from "@tethys/ui";
 import { useState } from "react";
+
+const defaultClient = createClient();
 
 export interface TrustedFolderEntry {
   id: string;
@@ -34,17 +37,19 @@ export interface TrustedFoldersClient {
 export interface TrustedFoldersProps {
   /** Test override; the live `workspace.list` is the default source. */
   folders?: TrustedFolderEntry[];
+  /** Test override; the real client is the default so Revoke always writes. */
   client?: TrustedFoldersClient;
   onRevoked?: (workspaceId: string) => void;
 }
 
 export function TrustedFolders({
   folders,
-  client,
+  client = defaultClient,
   onRevoked,
 }: TrustedFoldersProps) {
   const rows = useWorkspaceRows(undefined, folders === undefined);
   const [revoked, setRevoked] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const source: TrustedFolderEntry[] =
     folders ??
@@ -56,10 +61,15 @@ export function TrustedFolders({
   const items = source.filter((folder) => !revoked.includes(folder.id));
 
   const revoke = async (workspaceId: string) => {
-    await client?.workspace.remove(workspaceId);
-    setRevoked((prev) => [...prev, workspaceId]);
-    onRevoked?.(workspaceId);
-    void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+    try {
+      setError(null);
+      await client.workspace.remove(workspaceId);
+      setRevoked((prev) => [...prev, workspaceId]);
+      onRevoked?.(workspaceId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
   };
 
   if (items.length === 0) {
@@ -72,6 +82,14 @@ export function TrustedFolders({
 
   return (
     <div className="flex flex-col">
+      {error && (
+        <p
+          role="alert"
+          className="px-md pb-2 text-body-sm text-(--tethys-status-danger)"
+        >
+          {error}
+        </p>
+      )}
       {items.map((folder) => (
         <div
           key={folder.id}

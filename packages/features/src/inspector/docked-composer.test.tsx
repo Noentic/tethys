@@ -1,5 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import { clearAllSessionStoresForTesting } from "@tethys/state";
+import {
+  clearAllSessionStoresForTesting,
+  getOrCreateSessionStore,
+  queryClient,
+  queryKeys,
+  workspaceCapabilityFixtures,
+} from "@tethys/state";
 import { clearRegistriesForTesting } from "@tethys/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InspectorClient } from "../client-context";
@@ -37,11 +43,28 @@ describe("the docked composer in the thread view", () => {
   beforeEach(() => {
     clearAllSessionStoresForTesting();
     clearRegistriesForTesting();
+    queryClient.clear();
   });
 
   it("mounts the docked prompt card when the client can prompt", () => {
     render(<InspectorScreen sessionId="s-docked-mount" client={fullClient} />);
     expect(screen.getByTestId("docked-prompt-card")).toBeDefined();
+  });
+
+  it("says a thread it cannot open, instead of an empty transcript", async () => {
+    const client = {
+      ...baseClient,
+      events: {
+        subscribe: vi
+          .fn()
+          .mockRejectedValue(new Error("thread ghost not found")),
+      },
+    } as unknown as InspectorClient;
+    render(<InspectorScreen sessionId="ghost" client={client} />);
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "This thread could not be opened.",
+    );
   });
 
   it("mounts no composer for a client without the composer slice", () => {
@@ -56,6 +79,35 @@ describe("the docked composer in the thread view", () => {
     expect(screenRoot.lastElementChild).toBe(
       screen.getByTestId("docked-prompt-card").parentElement,
     );
+  });
+
+  // The app resolves this from `workspace.list`; the fixture is only a test
+  // override, so the live row has to drive the same reading.
+  it("reads `no git` from the live workspace row for a session", () => {
+    getOrCreateSessionStore(
+      "s-live-no-git",
+      "codex",
+      "plain-folder",
+      "Tidy up",
+    );
+    queryClient.setQueryData(queryKeys.workspaces, [
+      {
+        id: "plain-folder",
+        name: "plain-folder",
+        path: "/home/dev/plain",
+        capabilities: workspaceCapabilityFixtures["no-git"],
+        trust: "trusted",
+        sessions: [],
+      },
+    ]);
+    render(<InspectorScreen sessionId="s-live-no-git" client={fullClient} />);
+    expect(screen.getByText("no git")).toBeDefined();
+  });
+
+  it("offers no git affordance while the workspace is unresolved", () => {
+    getOrCreateSessionStore("s-unresolved", "codex", "unknown", "Tidy up");
+    render(<InspectorScreen sessionId="s-unresolved" client={fullClient} />);
+    expect(screen.queryByText("no git")).toBeNull();
   });
 
   it("reads `no git` for a workspace with no git", () => {

@@ -8,6 +8,14 @@ import {
 import type { SkillInfo } from "@tethys/bindings";
 import { type SkillsClient, skillInfoFixtures } from "@tethys/state";
 import { describe, expect, it, vi } from "vitest";
+
+const scope = { workspaceId: "", workspaces: [], selectWorkspace: () => {} };
+
+vi.mock("@tethys/state", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tethys/state")>();
+  return { ...actual, useMcpWorkspaceScope: () => scope };
+});
+
 import { SkillsView } from "./skills-view";
 
 function fakeClient(
@@ -267,5 +275,53 @@ describe("SkillsView (M1.11 U7)", () => {
         "w1",
       ),
     );
+  });
+
+  it("asks for nothing and shows the empty state until a workspace resolves", async () => {
+    scope.workspaceId = "";
+    const { client, skills } = fakeClient();
+    render(<SkillsView client={client} />);
+    expect(await screen.findByText("No workspace yet")).toBeTruthy();
+    expect(skills.list).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("clears a previous load error once the next load succeeds", async () => {
+    scope.workspaceId = "w1";
+    const list = vi.fn((workspaceId?: string) =>
+      workspaceId === "w1"
+        ? Promise.reject(new Error("workspace not found: "))
+        : Promise.resolve(skillInfoFixtures),
+    );
+    const client = { skills: { list } } as unknown as SkillsClient;
+
+    const view = render(<SkillsView client={client} />);
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "workspace not found: ",
+    );
+
+    scope.workspaceId = "w2";
+    view.rerender(<SkillsView client={client} />);
+    expect(await screen.findByTestId("skill-row-find-docs")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("lists commands without a workspace instead of sending an empty id", async () => {
+    scope.workspaceId = "";
+    const list = vi.fn().mockResolvedValue([]);
+    const commands = {
+      list,
+      read: vi.fn(),
+      write: vi.fn(),
+      delete: vi.fn(),
+    };
+    const { client } = fakeClient();
+    render(
+      <SkillsView client={client} commandsClient={{ commands } as never} />,
+    );
+
+    fireEvent.click(await screen.findByRole("radio", { name: "Commands" }));
+    await waitFor(() => expect(list).toHaveBeenCalledWith(undefined, true));
+    expect(await screen.findByText(/No commands yet/)).toBeTruthy();
   });
 });

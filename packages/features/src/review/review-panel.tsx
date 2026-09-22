@@ -38,11 +38,11 @@ export interface ReviewPanelProps {
  */
 export function ReviewPanel({
   sessionId = "",
-  capabilityFixture = "git-remote",
+  capabilityFixture,
   source,
   className,
 }: ReviewPanelProps) {
-  const gate = useWorkspaceReviewCapability(capabilityFixture);
+  const gate = useWorkspaceReviewCapability(sessionId, capabilityFixture);
   const client = useReviewClient();
   const threadId = sessionId;
   const diffSource = useMemo(

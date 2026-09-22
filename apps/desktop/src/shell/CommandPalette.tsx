@@ -12,10 +12,18 @@ const HINT_CLASS = "font-mono text-mono-micro text-(--tethys-text-muted)";
 const GROUP_CLASS =
   "px-2 py-1 text-label-sm text-(--tethys-text-muted) [&_[cmdk-group-heading]]:mb-1 [&_[cmdk-group-heading]]:px-1 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider";
 
+/** Every action a palette row may run; the shell must handle all of them. */
+export type PaletteAction =
+  | "new-thread"
+  | "go-workspaces"
+  | "open-settings"
+  | "toggle-theme"
+  | "manual-health-check";
+
 export interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
-  onSelectCommand?: (action: string) => void;
+  onSelectCommand?: (action: PaletteAction) => void;
 }
 
 export function CommandPalette({
@@ -36,7 +44,7 @@ export function CommandPalette({
 
   if (!open) return null;
 
-  const handleSelect = (action: string) => {
+  const handleSelect = (action: PaletteAction) => {
     onSelectCommand?.(action);
     onClose();
   };
@@ -70,7 +78,7 @@ export function CommandPalette({
             />
             <Command.Input
               autoFocus
-              placeholder="Type a command, file, or session..."
+              placeholder="Type a command..."
               className="w-full bg-transparent text-body-md text-(--tethys-text-primary) placeholder-(--tethys-text-muted) outline-none"
             />
             <KeycapPill>ESC</KeycapPill>
@@ -109,16 +117,6 @@ export function CommandPalette({
               >
                 <span>Toggle Light/Dark Theme</span>
                 <span className={HINT_CLASS}>Theme</span>
-              </Command.Item>
-            </Command.Group>
-
-            <Command.Group heading="Files (FFF)" className={GROUP_CLASS}>
-              <Command.Item
-                onSelect={() => handleSelect("search-files")}
-                className={ITEM_CLASS}
-              >
-                <span>Search all workspace files</span>
-                <span className={HINT_CLASS}>search.files</span>
               </Command.Item>
             </Command.Group>
 

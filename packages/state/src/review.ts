@@ -1,8 +1,7 @@
 import type { WorkspaceCapabilities } from "@tethys/bindings";
-import {
-  type WorkspaceCapabilityFixture,
-  workspaceCapabilityFixtures,
-} from "./workspace-capabilities";
+import { useMemo } from "react";
+import { useSessionCapabilities } from "./queries";
+import type { WorkspaceCapabilityFixture } from "./workspace-capabilities";
 
 /**
  * The review surface's resolved gate (M1.9 U6). One value every review gate
@@ -32,12 +31,26 @@ export function resolveReviewGate(
 }
 
 /**
- * D12 fixture-backed capability hook. The real source is worktree F's resolver
- * (`crates/tethys-core/src/workspace/capability.rs`), swapped at the Wave 2
- * checkpoint; it never re-invents the canonical fixtures.
+ * The gate for one session's workspace, read from the live
+ * `workspace.list` row (`workspace.capabilities`); a `fixture` is the test
+ * override. While the workspace is unresolved the gate hides everything and
+ * states no reason, so the surface is absent rather than claiming `no git`.
  */
 export function useWorkspaceReviewCapability(
-  fixture: WorkspaceCapabilityFixture = "git-remote",
+  sessionId: string,
+  fixture?: WorkspaceCapabilityFixture,
 ): ReviewGate {
-  return resolveReviewGate(workspaceCapabilityFixtures[fixture]);
+  const capabilities = useSessionCapabilities(sessionId, fixture);
+  return useMemo(
+    () =>
+      capabilities === null
+        ? {
+            showDiff: false,
+            showStage: false,
+            showRevert: false,
+            hiddenReason: null,
+          }
+        : resolveReviewGate(capabilities),
+    [capabilities],
+  );
 }

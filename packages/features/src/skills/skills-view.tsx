@@ -74,8 +74,15 @@ export function SkillsView({
   const [previewKey, setPreviewKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // Skills belong to a workspace; without one there is nothing to ask for and
+    // an empty id would come back as `workspace not found:`.
+    if (workspaceId === "") {
+      setSkills([]);
+      return;
+    }
     try {
       setSkills(await client.skills.list(workspaceId));
+      setError(null);
     } catch (cause) {
       setError(messageOf(cause));
     }
@@ -229,6 +236,12 @@ export function SkillsView({
           size="sm"
           variant="primary"
           className="ml-auto"
+          disabled={kind === "skills" && workspaceId === ""}
+          title={
+            kind === "skills" && workspaceId === ""
+              ? "Trust a folder before importing a skill"
+              : undefined
+          }
           onClick={() =>
             kind === "skills"
               ? setImportOpen(true)
@@ -262,7 +275,12 @@ export function SkillsView({
             data-testid="skill-list"
             className="flex w-[704px] shrink-0 flex-col overflow-auto"
           >
-            {skills.length === 0 ? (
+            {workspaceId === "" ? (
+              <EmptyState
+                title="No workspace yet"
+                description="Trust a folder and the skills it ships appear here."
+              />
+            ) : skills.length === 0 ? (
               <EmptyState
                 title="No skills yet"
                 description="Import a folder, a .skill archive, or a pinned GitHub repo."

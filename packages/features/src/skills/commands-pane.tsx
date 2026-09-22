@@ -51,7 +51,10 @@ export function CommandsPane({
 
   const load = useCallback(async () => {
     try {
-      setCommands(await client.commands.list(workspaceId, true));
+      // No workspace yet: the global library still lists; the workspace half is
+      // simply empty, so `undefined` (not `""`) is what the API wants.
+      setCommands(await client.commands.list(workspaceId || undefined, true));
+      setError(null);
     } catch (cause) {
       setError(messageOf(cause));
     }
@@ -93,7 +96,7 @@ export function CommandsPane({
       const source = await client.commands.read(
         command.scope,
         command.name,
-        workspaceId,
+        workspaceId || undefined,
       );
       setDraft({
         scope: source.scope,
@@ -114,7 +117,7 @@ export function CommandsPane({
         draft.scope,
         draft.name.trim(),
         draft.body,
-        workspaceId,
+        workspaceId || undefined,
       );
       setDraft({ ...draft, name: written.name, isNew: false });
       setSelected(keyOf(written.scope, written.name));
@@ -130,7 +133,11 @@ export function CommandsPane({
     if (!draft || draft.isNew) return;
     setBusy(true);
     try {
-      await client.commands.delete(draft.scope, draft.name, workspaceId);
+      await client.commands.delete(
+        draft.scope,
+        draft.name,
+        workspaceId || undefined,
+      );
       setDraft(null);
       setSelected(null);
       await load();
@@ -151,7 +158,12 @@ export function CommandsPane({
         data-testid="command-list"
         className="flex w-[704px] shrink-0 flex-col overflow-auto"
       >
-        {visible.length === 0 ? (
+        {commands.length === 0 ? (
+          <p className="px-3 py-3 text-body-sm text-(--tethys-text-muted)">
+            No commands yet. Add one to save it under{" "}
+            {addScope === "workspace" ? "this workspace" : "your global"} scope.
+          </p>
+        ) : visible.length === 0 ? (
           <p className="px-3 py-3 text-body-sm text-(--tethys-text-muted)">
             No commands match that search.
           </p>
@@ -292,7 +304,11 @@ export function CommandsPane({
               <Button
                 size="sm"
                 variant="primary"
-                disabled={busy || draft.name.trim() === ""}
+                disabled={
+                  busy ||
+                  draft.name.trim() === "" ||
+                  (draft.scope === "workspace" && workspaceId === "")
+                }
                 onClick={() => void save()}
               >
                 Save

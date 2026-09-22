@@ -150,6 +150,21 @@ describe("docked prompt card", () => {
     await waitFor(() => expect(editorRef.current?.isEmpty()).toBe(true));
   });
 
+  it("keeps the text and says so when the prompt is rejected", async () => {
+    const client = fakeClient();
+    client.thread.prompt.mockRejectedValue(new Error("thread t-1 not found"));
+    const { editorRef } = setup(client);
+    type(editorRef, "Keep me");
+    submitWithKeyboard();
+
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "The prompt could not be sent.",
+    );
+    // Nothing the user wrote is lost.
+    expect(editorRef.current?.serializeToPrompt()).toBe("Keep me");
+  });
+
   it("does not send twice when submit fires again before the first settles", async () => {
     // Regression for the M1.10 double-submit.
     const client = fakeClient();

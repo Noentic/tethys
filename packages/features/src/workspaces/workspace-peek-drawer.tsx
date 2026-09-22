@@ -12,39 +12,62 @@ import {
   LogoGitlab,
   Plus,
 } from "@nebutra/icons";
-import type {
-  CatalogPeekTab,
-  CatalogSession,
-  CatalogWorkspace,
+import {
+  type CatalogPeekTab,
+  type CatalogSession,
+  type CatalogWorkspace,
+  selectInboxItems,
+  sessionsRegistryStore,
 } from "@tethys/state";
 import { Button, Drawer, StatusDot, UnderlineTabs } from "@tethys/ui";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { isKnownProvider, SessionItemRow } from "./session-item-row";
 
+/** One pending request as the drawer shows it. Derived from the session store. */
 export interface ApprovalEntry {
   id: string;
   workspaceId: string;
   providerId: string;
   summary: string;
+  kind: "permission" | "elicitation";
 }
-
-export const approvalEntryFixtures: ApprovalEntry[] = [
-  {
-    id: "ap-1",
-    workspaceId: "tethys",
-    providerId: "codex",
-    summary: "Edit apps/desktop/src/routes/workspaces.tsx",
-  },
-];
 
 export interface WorkspacePeekDrawerProps {
   workspace: CatalogWorkspace | null;
   open: boolean;
   initialTab?: CatalogPeekTab;
+  /** Test override; the live session stores are the default source. */
   approvals?: ApprovalEntry[];
   onClose: () => void;
   onOpenThread?: (sessionId: string) => void;
   onNewThread?: () => void;
+}
+
+/**
+ * The real pending requests for one workspace, read from the same
+ * `selectInboxItems` projection the approval drawer and the inline cards use, so
+ * the peek drawer can never show an approval the app does not have.
+ */
+function useWorkspaceApprovals(workspaceId: string | undefined) {
+  const registry = useSyncExternalStore(
+    (onStoreChange) => {
+      const subscription = sessionsRegistryStore.subscribe(onStoreChange);
+      return () => subscription.unsubscribe();
+    },
+    () => sessionsRegistryStore.state,
+  );
+  return useMemo(() => {
+    const sessions = Object.values(registry.sessions).filter(
+      (session) => session.workspaceId === workspaceId,
+    );
+    return selectInboxItems(sessions).map((item) => ({
+      id: `${item.sessionId}-${item.reqId}`,
+      workspaceId: workspaceId ?? "",
+      providerId: registry.sessions[item.sessionId]?.providerId ?? "",
+      summary: item.description ?? item.title,
+      kind: item.kind,
+    }));
+  }, [registry, workspaceId]);
 }
 
 function groupByProvider(
@@ -74,12 +97,13 @@ export function WorkspacePeekDrawer({
   workspace,
   open,
   initialTab = "sessions",
-  approvals = approvalEntryFixtures,
+  approvals,
   onClose,
   onOpenThread,
   onNewThread,
 }: WorkspacePeekDrawerProps) {
   const [tab, setTab] = useState<CatalogPeekTab>(initialTab);
+  const liveApprovals = useWorkspaceApprovals(workspace?.id);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the peeked workspace changes
   useEffect(() => {
@@ -88,7 +112,7 @@ export function WorkspacePeekDrawer({
 
   if (!workspace) return null;
 
-  const entries = approvals.filter(
+  const entries = (approvals ?? liveApprovals).filter(
     (entry) => entry.workspaceId === workspace.id,
   );
   const SourceIcon = sourceIcon(workspace);
@@ -178,7 +202,12 @@ export function WorkspacePeekDrawer({
                 >
                   <div className="flex items-center gap-sm text-label-md text-(--tethys-status-warning)">
                     <StatusDot status="awaiting_approval" inline />
-                    <span>Permission Request · {entry.providerId}</span>
+                    <span>
+                      {entry.kind === "elicitation"
+                        ? "Question"
+                        : "Permission Request"}
+                      {entry.providerId ? ` · ${entry.providerId}` : ""}
+                    </span>
                   </div>
                   <p className="text-body-sm text-(--tethys-text-secondary)">
                     {entry.summary}

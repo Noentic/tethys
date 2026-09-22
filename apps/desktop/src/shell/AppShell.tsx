@@ -1,4 +1,5 @@
 import { useStore } from "@tanstack/react-store";
+import { createClient } from "@tethys/client";
 import {
   isTurnComplete,
   pendingApprovalNotification,
@@ -6,7 +7,12 @@ import {
   shouldNotify,
   turnCompletionNotification,
 } from "@tethys/features";
-import { sessionsRegistryStore, useThreadsQuery } from "@tethys/state";
+import {
+  queryClient,
+  queryKeys,
+  sessionsRegistryStore,
+  useThreadsQuery,
+} from "@tethys/state";
 import {
   Drawer,
   getApprovalDrawerBody,
@@ -24,7 +30,7 @@ import {
 } from "react-resizable-panels";
 import { ActivityRail } from "./ActivityRail";
 import { ApprovalDrawerBody } from "./ApprovalDrawerBody";
-import { CommandPalette } from "./CommandPalette";
+import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import { InspectorPane } from "./InspectorPane";
 import { setupGlobalKeyboardMap } from "./keyboard";
 import { notificationsEnabled } from "./notification-preference";
@@ -41,6 +47,8 @@ import {
   setColorScheme,
 } from "./theme-preference";
 import { WindowHeader } from "./WindowHeader";
+
+const client = createClient();
 
 // DESIGN.md shell-splitter: a 1px structural line inside a wider transparent hit
 // area. State only recolors — it never changes width, so hover cannot shift layout.
@@ -109,6 +117,31 @@ export function AppShell({
   const [inspectorCollapsed, setInspectorCollapsed] = useState<boolean>(false);
   const inspectorPanelRef =
     usePanelRef() as React.RefObject<PanelImperativeHandle | null>;
+
+  // One handler per palette action; the `Record` makes a row without a
+  // handler a type error rather than a dead click.
+  const runPaletteAction = useCallback(
+    (action: PaletteAction) => {
+      const actions: Record<PaletteAction, () => void> = {
+        "new-thread": () => onNavigate?.("/thread/new"),
+        "go-workspaces": () => onNavigate?.("/workspaces"),
+        "open-settings": () => onNavigate?.("/settings/general"),
+        "toggle-theme": () => {
+          const resolved = resolveScheme(getThemePreference().scheme);
+          setColorScheme(resolved === "light" ? "dark" : "light");
+        },
+        "manual-health-check": () => {
+          void client.agent
+            .recheck()
+            .then(() =>
+              queryClient.invalidateQueries({ queryKey: queryKeys.providers }),
+            );
+        },
+      };
+      actions[action]();
+    },
+    [onNavigate],
+  );
 
   const toggleInspector = useCallback(() => {
     const panel = inspectorPanelRef.current;
@@ -490,15 +523,7 @@ export function AppShell({
         <CommandPalette
           open={paletteOpen}
           onClose={() => setPaletteOpen(false)}
-          onSelectCommand={(cmd) => {
-            if (cmd === "new-thread") onNavigate?.("/thread/new");
-            else if (cmd === "go-workspaces") onNavigate?.("/workspaces");
-            else if (cmd === "open-settings") onNavigate?.("/settings/general");
-            else if (cmd === "toggle-theme") {
-              const resolved = resolveScheme(getThemePreference().scheme);
-              setColorScheme(resolved === "light" ? "dark" : "light");
-            }
-          }}
+          onSelectCommand={runPaletteAction}
         />
 
         {/* 4. Approval Queue Drawer */}

@@ -1,8 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { WorkspaceListItem } from "@tethys/bindings";
 import type { CatalogWorkspace } from "@tethys/state";
-import { workspaceCapabilityFixtures } from "@tethys/state";
-import { describe, expect, it, vi } from "vitest";
+import {
+  clearAllSessionStoresForTesting,
+  createInitialSessionState,
+  createSessionStore,
+  workspaceCapabilityFixtures,
+} from "@tethys/state";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type WorkspaceCatalogClient, WorkspacesView } from "./workspaces-view";
 
 function workspace(
@@ -63,7 +68,33 @@ function emptyClient(): WorkspaceCatalogClient {
   };
 }
 
+/** A real pending request for the `tethys` workspace, in the session store. */
+function seedPendingPermission() {
+  const initial = createInitialSessionState(
+    "s-pending",
+    "codex",
+    "tethys",
+    "Fix auth",
+  );
+  createSessionStore({
+    ...initial,
+    status: "awaiting_approval",
+    pendingPermissions: [
+      {
+        reqId: "req-1",
+        title: "Edit apps/desktop/src/routes/workspaces.tsx",
+        description: null,
+        options: [],
+      },
+    ],
+  });
+}
+
 describe("workspaces-view", () => {
+  beforeEach(() => {
+    clearAllSessionStoresForTesting();
+  });
+
   it("opens the peek drawer with only the two DESIGN tabs", () => {
     render(
       <WorkspacesView workspaces={[tethys, notes]} client={emptyClient()} />,
@@ -76,12 +107,14 @@ describe("workspaces-view", () => {
   });
 
   it("deep-links a card with pending approvals to the Approvals tab", () => {
+    seedPendingPermission();
     render(<WorkspacesView workspaces={[tethys]} client={emptyClient()} />);
     fireEvent.click(screen.getByRole("button", { name: "tethys" }));
     expect(screen.getByTestId("drawer-approval-entry")).toBeTruthy();
   });
 
   it("marks a pending approval in the drawer with a left rule, not a perimeter", () => {
+    seedPendingPermission();
     render(<WorkspacesView workspaces={[tethys]} client={emptyClient()} />);
     fireEvent.click(screen.getByRole("button", { name: "tethys" }));
     const entry = screen.getByTestId("drawer-approval-entry");

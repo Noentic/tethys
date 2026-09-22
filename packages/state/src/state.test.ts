@@ -650,6 +650,11 @@ describe("Inspector session model (M1.7 U5)", () => {
     expect(
       selectTurnActionsVisible(workspaceCapabilityFixtures["git-remote"]),
     ).toEqual({ viewDiff: true, restore: true });
+    // An unresolved workspace offers neither rather than guessing one.
+    expect(selectTurnActionsVisible(null)).toEqual({
+      viewDiff: false,
+      restore: false,
+    });
     expect(
       selectTurnActionsVisible(workspaceCapabilityFixtures["git-no-restore"]),
     ).toEqual({ viewDiff: true, restore: false });

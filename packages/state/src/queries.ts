@@ -9,17 +9,22 @@ import { QueryClient, useQuery } from "@tanstack/react-query";
 import type {
   AgentProfileView,
   ThreadSummary,
+  WorkspaceCapabilities,
   WorkspaceListItem,
 } from "@tethys/bindings";
 import { createClient } from "@tethys/client";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { ingestProviders } from "./providers";
-import { getOrCreateSessionStore } from "./stores";
+import { getOrCreateSessionStore, sessionsRegistryStore } from "./stores";
 import { threadStateToStatusKey } from "./thread-state";
 import {
   type TrustedWorkspace,
   toTrustedWorkspace,
 } from "./trusted-workspaces";
+import {
+  type WorkspaceCapabilityFixture,
+  workspaceCapabilityFixtures,
+} from "./workspace-capabilities";
 import { type CatalogWorkspace, mapListItem } from "./workspaces";
 
 /** Shared cache: `main.tsx` hands this same client to `QueryClientProvider`. */
@@ -88,6 +93,45 @@ export function useWorkspaceOptions(
   const query = useWorkspacesQuery(client, enabled);
   const rows = query.data;
   return useMemo(() => (rows ?? []).map(toTrustedWorkspace), [rows]);
+}
+
+/**
+ * The workspace a session runs in, or `""` until the thread list lands. Read
+ * from the registry so it survives a store being created before its row is
+ * known (the Inspector mounts on a bare session id).
+ */
+export function useSessionWorkspaceId(sessionId: string): string {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      const subscription = sessionsRegistryStore.subscribe(onStoreChange);
+      return () => subscription.unsubscribe();
+    },
+    () => sessionsRegistryStore.state.sessions[sessionId]?.workspaceId ?? "",
+  );
+}
+
+/**
+ * Capabilities for one workspace row. A `fixture` is the test override; the
+ * live `workspace.list` row is the real source, and an unresolved workspace is
+ * `null` so a caller omits git-only affordances rather than inventing them.
+ */
+export function useWorkspaceCapabilities(
+  workspaceId: string,
+  fixture?: WorkspaceCapabilityFixture,
+): WorkspaceCapabilities | null {
+  const rows = useWorkspaceRows(undefined, fixture === undefined);
+  return useMemo(() => {
+    if (fixture !== undefined) return workspaceCapabilityFixtures[fixture];
+    return rows.find((row) => row.id === workspaceId)?.capabilities ?? null;
+  }, [fixture, rows, workspaceId]);
+}
+
+/** Capabilities of the workspace a session runs in. */
+export function useSessionCapabilities(
+  sessionId: string,
+  fixture?: WorkspaceCapabilityFixture,
+): WorkspaceCapabilities | null {
+  return useWorkspaceCapabilities(useSessionWorkspaceId(sessionId), fixture);
 }
 
 /**

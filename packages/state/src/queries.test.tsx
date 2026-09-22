@@ -10,12 +10,19 @@ import { selectProviderConnections } from "./provider-connections";
 import { clearProvidersForTesting } from "./providers";
 import {
   queryClient,
+  queryKeys,
   useProvidersQuery,
+  useSessionCapabilities,
   useThreadsQuery,
+  useWorkspaceCapabilities,
   useWorkspaceRows,
   useWorkspacesQuery,
 } from "./queries";
-import { clearAllSessionStoresForTesting, getSessionStore } from "./stores";
+import {
+  clearAllSessionStoresForTesting,
+  getOrCreateSessionStore,
+  getSessionStore,
+} from "./stores";
 import { workspaceCapabilityFixtures } from "./workspace-capabilities";
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -144,5 +151,43 @@ describe("thread query", () => {
         title: "Fix the header",
       }),
     );
+  });
+});
+
+describe("capability queries", () => {
+  it("reads capabilities from the live workspace row", () => {
+    queryClient.setQueryData(queryKeys.workspaces, [row]);
+    const { result } = renderHook(() => useWorkspaceCapabilities("acme-web"), {
+      wrapper,
+    });
+    expect(result.current).toEqual(workspaceCapabilityFixtures["git-remote"]);
+    expect(result.current?.restore).toBe(true);
+  });
+
+  it("omits capabilities for a workspace the list does not hold", () => {
+    queryClient.setQueryData(queryKeys.workspaces, [row]);
+    const { result } = renderHook(
+      () => useWorkspaceCapabilities("somewhere-else"),
+      { wrapper },
+    );
+    expect(result.current).toBeNull();
+  });
+
+  it("prefers an explicit fixture over the live row", () => {
+    queryClient.setQueryData(queryKeys.workspaces, [row]);
+    const { result } = renderHook(
+      () => useWorkspaceCapabilities("acme-web", "no-git"),
+      { wrapper },
+    );
+    expect(result.current).toEqual(workspaceCapabilityFixtures["no-git"]);
+  });
+
+  it("resolves the workspace a session runs in", () => {
+    getOrCreateSessionStore("t1", "codex", "acme-web", "Fix auth");
+    queryClient.setQueryData(queryKeys.workspaces, [row]);
+    const { result } = renderHook(() => useSessionCapabilities("t1"), {
+      wrapper,
+    });
+    expect(result.current).toEqual(workspaceCapabilityFixtures["git-remote"]);
   });
 });

@@ -81,7 +81,7 @@ export function TranscriptStage({
   className,
 }: {
   entries: SessionEntry[];
-  capabilities: import("@tethys/bindings").WorkspaceCapabilities;
+  capabilities: import("@tethys/bindings").WorkspaceCapabilities | null;
   onViewDiff?: (entry: SessionEntry) => void;
   onRestore?: (entry: SessionEntry) => void;
   onOpenLocation?: (path: string, line: number | null) => void;

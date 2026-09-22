@@ -69,8 +69,9 @@ export interface TurnActions {
  * so a full turn renders with no empty diff section and no layout gap.
  */
 export function selectTurnActionsVisible(
-  capabilities: WorkspaceCapabilities,
+  capabilities: WorkspaceCapabilities | null,
 ): TurnActions {
+  if (capabilities === null) return { viewDiff: false, restore: false };
   const hasVcs = capabilities.vcs.kind !== "none";
   return {
     viewDiff: hasVcs,

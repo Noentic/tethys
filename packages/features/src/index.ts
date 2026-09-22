@@ -30,7 +30,6 @@ export * from "./inspector/renderers/turn-notice";
 export * from "./inspector/renderers/working-indicator";
 export * from "./inspector/TranscriptStage";
 export * from "./inspector/tool-call-density";
-export * from "./inspector/use-capabilities";
 export * from "./inspector/use-tail-pin";
 export * from "./monitor";
 export * from "./providers/capability-notice";

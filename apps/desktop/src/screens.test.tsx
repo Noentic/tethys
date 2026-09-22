@@ -13,49 +13,51 @@ import {
 import { queryClient } from "@tethys/state";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { state, threadCreate, threadPrompt, workspaceAdd } = vi.hoisted(() => {
-  const workspace = {
-    id: "acme-web",
-    name: "acme-web",
-    path: "/home/dev/acme-web",
-    capabilities: {
-      restore: true,
-      max_concurrent_sessions: null,
-      vcs: { kind: "git-remote", host: "github" },
-    },
-    trust: "trusted",
-    sessions: [{ id: "s1", title: "fix-auth", state: "Running" }],
-  };
-  const profile = {
-    id: "claude-code",
-    name: "Claude Code",
-    class: "registry",
-    enabled: true,
-    launch_spec: { program: "claude", args: [], cwd: null, env: [] },
-    registry_ref: null,
-    projection_target: null,
-    preferred_protocol: "V2",
-    health: "healthy",
-    detail: null,
-    protocol: "V2",
-    capabilities: null,
-    auth_methods: [],
-    detected_version: "1.0.0",
-    latency_ms: 12,
-    last_checked_ms: Date.now(),
-    recheck: "idle",
-  };
-  return {
-    state: {
-      workspaces: [workspace],
-      profiles: [profile],
-      threads: [] as never[],
-    },
-    threadCreate: vi.fn(async () => ({ id: "t-1" })),
-    threadPrompt: vi.fn(async () => undefined),
-    workspaceAdd: vi.fn(async () => workspace),
-  };
-});
+const { state, threadCreate, threadPrompt, workspaceAdd, recheckSpy } =
+  vi.hoisted(() => {
+    const workspace = {
+      id: "acme-web",
+      name: "acme-web",
+      path: "/home/dev/acme-web",
+      capabilities: {
+        restore: true,
+        max_concurrent_sessions: null,
+        vcs: { kind: "git-remote", host: "github" },
+      },
+      trust: "trusted",
+      sessions: [{ id: "s1", title: "fix-auth", state: "Running" }],
+    };
+    const profile = {
+      id: "claude-code",
+      name: "Claude Code",
+      class: "registry",
+      enabled: true,
+      launch_spec: { program: "claude", args: [], cwd: null, env: [] },
+      registry_ref: null,
+      projection_target: null,
+      preferred_protocol: "V2",
+      health: "healthy",
+      detail: null,
+      protocol: "V2",
+      capabilities: null,
+      auth_methods: [],
+      detected_version: "1.0.0",
+      latency_ms: 12,
+      last_checked_ms: Date.now(),
+      recheck: "idle",
+    };
+    return {
+      state: {
+        workspaces: [workspace],
+        profiles: [profile],
+        threads: [] as never[],
+      },
+      threadCreate: vi.fn(async () => ({ id: "t-1" })),
+      threadPrompt: vi.fn(async () => undefined),
+      workspaceAdd: vi.fn(async () => workspace),
+      recheckSpy: vi.fn(async () => undefined),
+    };
+  });
 
 vi.mock("@tethys/client", () => ({
   createClient: () => ({
@@ -67,7 +69,7 @@ vi.mock("@tethys/client", () => ({
     },
     agent: {
       profilesList: async () => state.profiles,
-      recheck: async () => undefined,
+      recheck: recheckSpy,
       profilesUpdate: async () => state.profiles[0],
       healthIntervalSet: async () => undefined,
       processSample: async () => [],
@@ -233,6 +235,19 @@ describe("screens", () => {
       );
       expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
       expect(screen.getAllByTestId("provider-soon")).toHaveLength(2);
+    },
+    IMPORT_TIMEOUT_MS,
+  );
+
+  it(
+    "runs the health check the palette offers, and offers no dead row",
+    async () => {
+      await renderAt("/workspaces");
+      fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+      const entry = await screen.findByText("Run Manual Health Check");
+      expect(screen.queryByText("Search all workspace files")).toBeNull();
+      fireEvent.click(entry);
+      await waitFor(() => expect(recheckSpy).toHaveBeenCalled());
     },
     IMPORT_TIMEOUT_MS,
   );

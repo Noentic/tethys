@@ -84,7 +84,7 @@ function Metric({
  */
 export function InspectorSummary({
   sessionId,
-  capabilityFixture = "git-remote",
+  capabilityFixture,
   className,
 }: {
   sessionId?: string;
@@ -92,7 +92,7 @@ export function InspectorSummary({
   className?: string;
 }) {
   const state = useSessionState(sessionId ?? "");
-  const gate = useWorkspaceReviewCapability(capabilityFixture);
+  const gate = useWorkspaceReviewCapability(sessionId ?? "", capabilityFixture);
   const source = useMemo(() => defaultDiffSource(sessionId ?? ""), [sessionId]);
   const { summary } = useDiffSummary(gate.showDiff ? source : null);
 

@@ -26,10 +26,10 @@ export interface DiffSummaryPillProps {
  */
 export function DiffSummaryPill({
   sessionId = "",
-  capabilityFixture = "git-remote",
+  capabilityFixture,
   className,
 }: DiffSummaryPillProps) {
-  const gate = useWorkspaceReviewCapability(capabilityFixture);
+  const gate = useWorkspaceReviewCapability(sessionId, capabilityFixture);
   const { open } = useInspectorControl();
   const source = useMemo(() => defaultDiffSource(sessionId), [sessionId]);
   const { summary } = useDiffSummary(gate.showDiff ? source : null);

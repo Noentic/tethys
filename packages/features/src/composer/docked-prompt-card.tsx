@@ -85,6 +85,7 @@ export function DockedPromptCard({
     () => queueStore.state.items.length,
   );
   const [hasText, setHasText] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const submitting = useRef(false);
 
   // A turn is in flight from the first chunk until its stop reason, including
@@ -152,8 +153,11 @@ export function DockedPromptCard({
       }
       editorRef.current?.clear();
       setHasText(false);
-    } catch {
-      // Leave the text in the editor so nothing the user wrote is lost.
+      setSendError(null);
+    } catch (cause) {
+      // Leave the text in the editor so nothing the user wrote is lost, and say
+      // what happened: a send that fails silently reads as a dead button.
+      setSendError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       submitting.current = false;
     }
@@ -195,6 +199,16 @@ export function DockedPromptCard({
         onChange={(text) => setHasText(text.trim().length > 0)}
         onSubmit={() => void submit()}
       />
+
+      {sendError && (
+        <p
+          role="alert"
+          title={sendError}
+          className="text-label-sm text-(--tethys-status-danger)"
+        >
+          The prompt could not be sent.
+        </p>
+      )}
 
       <div className="flex items-center justify-between gap-sm">
         <ComposerConfigChips
