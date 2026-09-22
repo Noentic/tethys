@@ -14538,6 +14538,7 @@
                           "id": "pWCgE",
                           "name": "glyph/opencode",
                           "reusable": true,
+                          "clip": true,
                           "width": 24,
                           "height": 24,
                           "fill": {
@@ -14545,7 +14546,8 @@
                             "enabled": true,
                             "url": "image-import-2.png",
                             "mode": "fit"
-                          }
+                          },
+                          "layout": "none"
                         },
                         {
                           "type": "text",
@@ -37669,10 +37671,12 @@
                       "name": "Claude Code",
                       "descendants": {
                         "rsaYM": {
-                          "id": "witgJ",
+                          "id": "ly4Dp",
                           "type": "ref",
                           "ref": "tryQ5",
-                          "name": "Glyph"
+                          "name": "Glyph",
+                          "width": 16,
+                          "height": 16
                         },
                         "P9nnr": {
                           "content": "Claude Code"
@@ -37686,10 +37690,12 @@
                       "name": "OpenCode",
                       "descendants": {
                         "Jc1mU": {
-                          "id": "U4TIX3",
+                          "id": "ydWQ2",
                           "type": "ref",
                           "ref": "ebyCu",
-                          "name": "Glyph"
+                          "name": "Glyph",
+                          "width": 16,
+                          "height": 16
                         },
                         "VMIVW": {
                           "content": "OpenCode"
@@ -37703,10 +37709,12 @@
                       "name": "Codex CLI",
                       "descendants": {
                         "rsaYM": {
-                          "id": "uWpgY",
+                          "id": "av3CB",
                           "type": "ref",
-                          "ref": "HqWil",
-                          "name": "Glyph"
+                          "ref": "oDKnM",
+                          "name": "Glyph",
+                          "width": 16,
+                          "height": 16
                         },
                         "P9nnr": {
                           "content": "Codex CLI"
@@ -37720,10 +37728,12 @@
                       "name": "Antigravity CLI",
                       "descendants": {
                         "rsaYM": {
-                          "id": "Y9kd4I",
+                          "id": "Ct7Ab",
                           "type": "ref",
                           "ref": "DqCnj",
-                          "name": "Glyph"
+                          "name": "Glyph",
+                          "width": 16,
+                          "height": 16
                         },
                         "P9nnr": {
                           "content": "Antigravity CLI"
@@ -37771,10 +37781,12 @@
                       "name": "Kiro CLI",
                       "descendants": {
                         "rsaYM": {
-                          "id": "Q7Y6Ha",
+                          "id": "Y8zCr",
                           "type": "ref",
                           "ref": "KGZC5",
-                          "name": "Glyph"
+                          "name": "Glyph",
+                          "width": 16,
+                          "height": 16
                         },
                         "P9nnr": {
                           "content": "Kiro CLI"
@@ -45370,6 +45382,10 @@
         }
       ]
     },
+    "prim-green-700": {
+      "type": "color",
+      "value": "#046c4e"
+    },
     "diff-removed": {
       "type": "color",
       "value": [
@@ -45386,6 +45402,10 @@
           }
         }
       ]
+    },
+    "prim-red-700": {
+      "type": "color",
+      "value": "#b91c1c"
     },
     "space-xs": {
       "type": "number",
@@ -45790,6 +45810,10 @@
         }
       ]
     },
+    "prim-slate-325": {
+      "type": "color",
+      "value": "#c8c8cf"
+    },
     "border-control": {
       "type": "color",
       "value": [
@@ -45875,6 +45899,10 @@
         }
       ]
     },
+    "prim-alpha-black-10": {
+      "type": "color",
+      "value": "#0000001a"
+    },
     "wash-on-sunken": {
       "type": "color",
       "value": [
@@ -45892,21 +45920,9 @@
         }
       ]
     },
-    "prim-green-700": {
-      "type": "color",
-      "value": "#046c4e"
-    },
-    "prim-red-700": {
-      "type": "color",
-      "value": "#b91c1c"
-    },
     "prim-alpha-black-5": {
       "type": "color",
       "value": "#0000000d"
-    },
-    "prim-alpha-black-10": {
-      "type": "color",
-      "value": "#0000001a"
     },
     "status-success-soft": {
       "type": "color",
@@ -45966,10 +45982,6 @@
     "motion-breathe-awaiting": {
       "type": "number",
       "value": 3200
-    },
-    "prim-slate-325": {
-      "type": "color",
-      "value": "#c8c8cf"
     }
   },
   "fileToken": "c5d90ef4-d626-4a58-ae19-2c10ea40ba67"
