@@ -149,7 +149,7 @@ describe("screens", () => {
         ).toContain("acme-web"),
       );
       expect(editor.getAttribute("data-placeholder")).toBe(
-        "Ask Claude to edit files, run bash commands, or type / for commands…",
+        "Choose a provider to start a thread",
       );
     },
     IMPORT_TIMEOUT_MS,
@@ -233,7 +233,7 @@ describe("screens", () => {
       await waitFor(() =>
         expect(screen.getByTestId("providers-detection")).toBeTruthy(),
       );
-      expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
+      expect(screen.getAllByTestId("provider-row")).toHaveLength(6);
       expect(screen.getAllByTestId("provider-soon")).toHaveLength(2);
     },
     IMPORT_TIMEOUT_MS,

@@ -15,9 +15,10 @@ import {
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
-import { queryClient } from "@tethys/state";
+import { hydrateSessionView, queryClient } from "@tethys/state";
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { client } from "./client";
 import { SettingsLayout } from "./routes/settings";
 import { SettingsGeneralView } from "./routes/settings.general";
 import { SettingsKeybindingsView } from "./routes/settings.keybindings";
@@ -75,10 +76,21 @@ const threadNewRoute = createRoute({
   component: ThreadNewView,
 });
 
-// Thread by ID
+// Thread by ID. The loader hydrates the shared session store (identity,
+// history, config, capabilities) before the Inspector's first dependent
+// render; the Inspector effect only subscribes when it is already hydrated.
 const threadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/thread/$id",
+  loader: async ({ params }) => {
+    try {
+      const view = await client.thread.get(params.id);
+      hydrateSessionView(view);
+    } catch {
+      // The Inspector's subscription effect retries and surfaces the error.
+    }
+    return null;
+  },
   component: () => {
     const params = useParams({ from: threadRoute.id });
     return <ThreadView sessionId={params.id} />;

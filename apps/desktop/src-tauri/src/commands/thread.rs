@@ -4,7 +4,10 @@ use tauri::State;
 use tethys_api::ThreadApi;
 use tethys_schema::cancel::CancelState;
 use tethys_schema::queue::QueuedPrompt;
-use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView};
+use tethys_schema::thread::{
+    ContentBlock, CreateThread, ProviderSessionPage, ThreadBootstrap, ThreadId, ThreadSessionView,
+    ThreadSummary,
+};
 
 use crate::commands::CoreState;
 
@@ -21,6 +24,34 @@ pub async fn thread_create(
         .map_err(|e| e.to_string())
 }
 
+/// `thread.prepare` — prepares the ACP session and initial config before prompting.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_prepare(
+    state: State<'_, CoreState>,
+    request: CreateThread,
+) -> Result<ThreadBootstrap, String> {
+    state
+        .thread_prepare(request)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `thread.list_provider_sessions` — one page of Provider sessions.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_list_provider_sessions(
+    state: State<'_, CoreState>,
+    profile_id: String,
+    workspace_id: String,
+    cursor: Option<String>,
+) -> Result<ProviderSessionPage, String> {
+    state
+        .thread_list_provider_sessions(profile_id, workspace_id, cursor)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// `thread.list` — see `architecture.md §12.1`.
 #[tauri::command]
 #[specta::specta]
@@ -31,7 +62,10 @@ pub async fn thread_list(state: State<'_, CoreState>) -> Result<Vec<ThreadSummar
 /// `thread.get` — see `architecture.md §12.1`.
 #[tauri::command]
 #[specta::specta]
-pub async fn thread_get(state: State<'_, CoreState>, id: ThreadId) -> Result<ThreadView, String> {
+pub async fn thread_get(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+) -> Result<ThreadSessionView, String> {
     state.thread_get(id).await.map_err(|e| e.to_string())
 }
 
@@ -128,7 +162,47 @@ pub async fn thread_resume(state: State<'_, CoreState>, id: ThreadId) -> Result<
     state.thread_resume(id).await.map_err(|e| e.to_string())
 }
 
-stub_cmd!(thread_import_sessions);
+/// Imports sessions the selected Provider exposes for a trusted workspace.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_import_sessions(
+    state: State<'_, CoreState>,
+    profile_id: String,
+    workspace_id: String,
+) -> Result<Vec<ThreadSummary>, String> {
+    state
+        .thread_import_sessions(profile_id, workspace_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// `thread.respond_extension` — resolves one pending Provider ACP request.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_respond_extension(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+    request_id: String,
+    response_json: String,
+) -> Result<(), String> {
+    state
+        .thread_respond_extension(id, request_id, response_json)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// `thread.delete_provider_session` explicitly deletes Provider-side history.
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_delete_provider_session(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+) -> Result<(), String> {
+    state
+        .thread_delete_provider_session(id)
+        .await
+        .map_err(|error| error.to_string())
+}
 stub_cmd!(thread_fork);
 
 /// `thread.archive` — see `architecture.md §12.1`.

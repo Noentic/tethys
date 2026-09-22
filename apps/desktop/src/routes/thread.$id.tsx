@@ -1,7 +1,5 @@
-import { createClient } from "@tethys/client";
 import { InspectorScreen } from "@tethys/features";
-
-const client = createClient();
+import { client } from "../client";
 
 export interface ThreadViewProps {
   sessionId: string;

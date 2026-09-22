@@ -3,7 +3,8 @@
 use tauri::State;
 use tethys_api::AgentApi;
 use tethys_schema::agents::{
-    AgentProfileView, AgentRegistryEntryView, InstallResult, ProcessSample, ProfileInput,
+    AgentLoginOutcome, AgentProfileView, AgentRegistryEntryView, InstallResult,
+    LoginTerminalOutput, ProcessSample, ProfileInput,
 };
 use tethys_schema::connection::ConnectionEntry;
 
@@ -122,9 +123,52 @@ pub async fn agent_login(
     state: State<'_, CoreState>,
     profile_id: String,
     method_id: String,
-) -> Result<(), String> {
+) -> Result<AgentLoginOutcome, String> {
     state
         .agent_login(profile_id, method_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Reads output and process status from an ACP Terminal Auth PTY.
+#[tauri::command]
+#[specta::specta]
+pub async fn agent_login_terminal_output(
+    state: State<'_, CoreState>,
+    profile_id: String,
+    terminal_id: String,
+) -> Result<LoginTerminalOutput, String> {
+    state
+        .agent_login_terminal_output(profile_id, terminal_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Writes terminal input to an ACP Terminal Auth PTY.
+#[tauri::command]
+#[specta::specta]
+pub async fn agent_login_terminal_write(
+    state: State<'_, CoreState>,
+    profile_id: String,
+    terminal_id: String,
+    text: String,
+) -> Result<(), String> {
+    state
+        .agent_login_terminal_write(profile_id, terminal_id, text)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Kills and releases an ACP Terminal Auth PTY.
+#[tauri::command]
+#[specta::specta]
+pub async fn agent_login_terminal_cancel(
+    state: State<'_, CoreState>,
+    profile_id: String,
+    terminal_id: String,
+) -> Result<(), String> {
+    state
+        .agent_login_terminal_cancel(profile_id, terminal_id)
         .await
         .map_err(|e| e.to_string())
 }
