@@ -91,7 +91,7 @@ Tethys maintains a published **vendor compliance matrix**: backend class × sign
 | AGT‑04 | Run multiple concurrent threads per workspace, across multiple workspaces (one at a time in a folder with no git, WT‑11) | P0 |
 | AGT‑05 | Resume threads after app restart or agent crash; crashed threads are marked *Interrupted* with history intact | P0 |
 | AGT‑06 | Stop a thread, or stop all threads in a workspace or host | P0 |
-| AGT‑07 | Sign‑in is always delegated to the vendor's own flow, adapting to whatever the Provider's `initialize` response declares in `authMethods` (env-var form, URL + code, or CLI passthrough in a terminal); hidden entirely when the Provider declares no `authMethods` | P0 |
+| AGT‑07 | Sign-in is always delegated to the vendor's own flow, using the exact Agent Auth or Terminal Auth methods declared by the initialized agent and selected registry distribution; declared methods and current auth state remain separate, multiple methods stay selectable, and credentials never enter Tethys state | P0 |
 | AGT‑08 | Suspend idle threads to free memory and resume them on demand | P1 |
 
 ### 3.2 Permissions
@@ -139,7 +139,7 @@ Git is a feature, not enforcement. Any folder — git-initialized or not — can
 | SYN‑02 | ACP threads receive the effective MCP servers at session start, with no files changed. The set is read from the workspace root (not the thread's worktree) and filtered by the Provider's negotiated transports. This is the primary path for ACP Classes A and B | P0 |
 | SYN‑03 | Project MCP config into Claude Code, Codex, and OpenCode's own config files — the compatibility path for Class C terminal-hosted agents and any Provider that cannot accept `mcpServers` at session creation, and the same file the Settings / MCP per-Provider editor reads and writes — with a preview diff, backups, rollback, and conflict detection; Tethys only edits entries it created (verify paths) | P0 |
 | SYN‑04 | Import existing MCP servers from any detected tool during onboarding | P0 |
-| SYN‑05 | Same push for Antigravity CLI, Kiro CLI, Claude Desktop, Gemini CLI, and Cursor (verify paths); Antigravity CLI and Kiro CLI land first as part of the first full‑support agents | P1 |
+| SYN‑05 | Same push for Antigravity CLI, Kiro CLI, Claude Desktop, Gemini CLI, and Cursor (verify paths); these follow the first full-support trio and Antigravity remains compliance-gated | P1 |
 | SYN‑06 | Skill library following the Agent Skills format and the `.agents/skills` convention (global and workspace); import from a folder, a `.skill` file, or a GitHub link (pinned to a commit, updates shown as a diff) | P0 |
 | SYN‑07 | Skills containing scripts need an explicit trust decision and are excluded from YOLO threads until trusted | P0 |
 | SYN‑08 | Make skills available in agent‑specific skill folders | P1 |
@@ -153,7 +153,7 @@ Settings / MCP is a per-Provider config editor, not a servers × targets grid: c
 
 SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native config file so users never leave Tethys for routine setup:
 
-- Initial targets — the first agents to reach full support: OpenCode, Antigravity CLI, Kiro CLI. Each target gets one form over its native json/toml config file. Claude Code and Codex full support is post-MVP; their MVP surface is the MCP config editor (SYN‑03).
+- Initial targets — the first agents to reach full support: Claude Code, Codex, OpenCode. Each target gets one form over its documented writable native JSON/JSONC/TOML config. Exact files and schemas are verified in the Provider milestone before implementation; Claude's private `~/.claude.json` state remains import-only.
 - "Full" means the full file the schema knows about, bounded by the agent's official docs/schema. Advanced areas (hooks, steering, plugins, etc.) stay editable but the form links out to the official schema/docs; anything the form doesn't understand stays available via raw text fallback with no data loss.
 - Schemas are community-contributed and must follow the native schema, pinned per agent version (schema id + agent version range + source link).
 - Drift handling: unknown keys preserved on write; version mismatch shows a warning, schema validation failure shows an error and blocks apply until fixed or explicitly applied as raw.

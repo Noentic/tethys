@@ -239,19 +239,23 @@ Zed separates external‑agent support into three layers: `agent_servers` launch
 pub trait AgentConnection: Send + Sync {
     fn info(&self) -> &AgentInfo;
     fn capabilities(&self) -> &NormalizedCapabilities;
+    async fn authenticate(&self, method_id: &str) -> Result<()>;
+    async fn logout(&self) -> Result<()>;
     async fn new_session(&self, req: NewSession) -> Result<SessionHandle>;
-    async fn resume_session(&self, req: ResumeSession) -> Result<SessionHandle>;   // v1 load/resume, v2 resume(+replay)
-    async fn list_sessions(&self, cwd: &Path) -> Result<Vec<SessionSummary>>;
+    async fn list_sessions(&self, req: ListSessions) -> Result<Page<SessionSummary>>;
+    async fn load_session(&self, req: LoadSession) -> Result<SessionHandle>;
+    async fn resume_session(&self, req: ResumeSession) -> Result<SessionHandle>;
     async fn close_session(&self, id: &SessionId) -> Result<()>;
-    async fn prompt(&self, id: &SessionId, blocks: Vec<PromptBlock>) -> Result<()>; // returns on acceptance
+    async fn delete_session(&self, id: &SessionId) -> Result<()>;
+    async fn prompt(&self, id: &SessionId, blocks: Vec<PromptBlock>) -> Result<PromptResult>;
     async fn cancel(&self, id: &SessionId) -> Result<()>;
+    async fn set_mode(&self, id: &SessionId, mode_id: &str) -> Result<()>;
     async fn set_config_option(&self, id: &SessionId, config_id: &str, value: ConfigValue) -> Result<Vec<ConfigOption>>;
-    async fn login(&self, method_id: &str) -> Result<()>;
-    fn events(&self, id: &SessionId) -> EventStream;                               // normalized TurnEvents
-    // Optional capability sub-traits, in the style of Zed's model_selector():
-    fn session_deleter(&self) -> Option<&dyn SessionDeleter> { None }
+    fn events(&self, id: &SessionId) -> EventStream; // normalized TurnEvents
 }
 ```
+
+Each method is gated by the normalized capability snapshot; unsupported calls return the typed capability error. Load and resume remain distinct. `AgentConnection::prompt` follows the wire lifecycle, while the core runs it in a managed task so `thread.prompt` can return after dispatch and publish completion through ordered events.
 
 Class C (terminal host) implements a reduced `WorkspaceOnlyConnection`, not `AgentConnection`, so the UI can never assume protocol features for it.
 
@@ -264,9 +268,9 @@ Class C (terminal host) implements a reduced `WorkspaceOnlyConnection`, not `Age
 | Reconnects replace the entry under live holders; a fresh lease token made the new entry look unused. | Leases are tied to the logical entry (profile + host), not the process instance, and survive restarts. |
 | A reported case where the panel kept a dead connection and never respawned it. | Transport close moves the entry to `Error`; the next lease request respawns with backoff. The UI always offers "Restart agent". |
 | In a downstream Zed fork, two concurrent `new_session` calls on one connection made an adapter start duplicate children. | Session lifecycle calls (`new`, `resume`, `close`) are serialized per connection (single‑flight queue). |
-| The same fork found an adapter wedged after a mid‑stream cancel and recovered by force‑closing the session and resuming from the agent's transcript. | Recovery ladder: cancel → force close → resume with replay → restart process → mark Interrupted. |
+| The same fork found an adapter wedged after a mid‑stream cancel and recovered by force‑closing the session and resuming from the agent's transcript. | Recovery ladder: cancel → force close → resume when supported, otherwise load when supported → restart process → mark Interrupted. |
 | Adapters may start MCP server processes per session; archived sessions kept them alive (Zed issue #56747). | Archive and suspend always close the session; resource sampling covers the whole process tree. |
-| Optional features are exposed as capability sub‑traits rather than one large interface. | Same pattern; the UI queries capabilities, not agent names. |
+| Optional features are exposed through negotiated capabilities rather than agent-name checks. | The normalized capability snapshot gates the one `AgentConnection` boundary and every UI action. |
 
 ### 6.3 Runtime and threading
 
@@ -307,7 +311,7 @@ ACP v2 is published as a draft. Its migration guide tells implementers to keep v
 | JSON‑RPC batches allowed on stdio | Framing layer accepts arrays; lifecycle messages are never batched by Tethys |
 | Remote transport (streamable HTTP / WebSocket) specified separately | Transport trait stays pluggable; remote agents remain Phase 3 |
 
-**Provider extensions.** A Provider may send vendor-specific JSON-RPC notifications under a `_`-prefixed method — Kiro CLI's `_kiro.dev/mcp/oauth_request`, raised when an MCP server needs authentication, is the first concrete case. These are neither `session/request_permission` nor `elicitation/create`, so they are not transcript entries. The connection preserves them as a typed `ProviderExtension { method, params }` event (an append-only `TurnEventBody` variant), and the webview resolves them through `registerProviderSurface(providerId, method, surface)`, the fourth registry beside `registerEntryRenderer`, `registerInspectorSlot` and `registerActionBarSlot`. An extension with no registered surface is preserved in the event log and rendered generically, the same rule as any open enum above. A Provider integration therefore contributes a handler without editing shared code. `TurnEventBody::Unknown { raw }` is not this: it carries unrecognised `session/update` variants as a raw string with no method to key a surface by, and `tethys-acp` currently registers no handler for vendor notifications at all.
+**Provider extensions.** A Provider may send vendor-specific JSON-RPC requests or notifications under a `_`-prefixed method. These are neither `session/request_permission` nor `elicitation/create`, so they are not transcript entries. M1.17 extends the existing append-only event to `ProviderExtension { kind, method, correlation_id?, params }`, keyed by thread and resolved in the webview through `registerProviderSurface(providerId, method, surface)`. Claimed requests keep their responder until `thread.respond_extension`; unclaimed requests receive method-not-found. Notifications without a registered surface remain in the event log and render generically. A Provider integration therefore contributes one backend registration and one UI registration without shared dispatch branches. `TurnEventBody::Unknown { raw }` remains for unrecognised `session/update` variants, which have no method to route.
 
 ### 7.3 Normalized event model
 
@@ -441,7 +445,7 @@ Interactive PTY via `portable-pty`, `cwd` = worktree. State comes from process s
 | Bulk / binary | `tauri::ipc::Response` or `tethys://blob/<hash>` | Authenticated HTTP GET, same path |
 
 Rules:
-- Clients resume streams with `since=seq`.
+- Event sequences are store-assigned and 1-based. `since=seq` is exclusive, so reconnect returns only events with `event.seq > since`; commit precedes broadcast.
 - Chunks are coalesced to ≤ 30 flushes/s per thread.
 - Messages are capped at 256 KB; anything larger becomes a blob reference.
 - Only visible or pinned threads stream full events; background threads send state changes only.
@@ -461,10 +465,10 @@ What each surface reads and writes. Surface behaviour is specified in [pages-vie
 | UI | Reads | Writes |
 |---|---|---|
 | Selector provider column | `agent.connections.list`, registry profiles (`AGT‑01/02`), negotiated `initialize` result | — |
-| `session-config-panel` | that Provider's own session-config schema (§7.2); shape varies per Provider | `thread.setConfigOption` (narrowed by policy, `PRM‑04`) |
-| Catalog cards / drawer | `workspace.list/status`, `workspace.capabilities` (§10.6), `thread.list` (Sessions grouped by Provider), `git.worktree.*`, `checkpoint.*`, diff summary | `thread.create` (explicit `cwd` + workspace `mcpServers`; own worktree by default where the capability exists, `WT‑01`), `git.init` (upsell chip), `thread.fork` (V1) |
+| `session-config-panel` | prepared `ThreadBootstrap` plus later session config/mode updates; shape varies per session | `thread.setConfigOption` (narrowed by policy, `PRM‑04`) |
+| Catalog cards / drawer | `workspace.list/status`, `workspace.capabilities` (§10.6), `thread.list` (Sessions grouped by Provider), `git.worktree.*`, `checkpoint.*`, diff summary | `thread.create` prepares `session/new` in the resolved worktree/plain root and returns `ThreadBootstrap`; `git.init` (upsell chip), `thread.fork` (V1) |
 | Workspace add / trust | trust store by resolved path + host id (mode, scope, timestamp) | `workspace.add` gated on trust grant; revoke removes the card (`TRU‑01`) |
-| Shell sessions / inspector | `events.subscribe {sinceSeq}`, `entries` materialized, `turns`, local transcript cache (independent of Provider `session/resume` support) | `thread.prompt/queue.*/cancel/resume` |
+| Shell sessions / inspector | `thread.get` plus exclusive `events.subscribe {sinceSeq}`, materialized entries/turns, durable local transcript | `thread.prompt/queue.*/cancel`, capability-gated load/resume/close/delete |
 | `plan-panel` | `session/update` plan notifications (optional per Provider) | — |
 | `tool-accordion`, `tool-run-group`, `tool-origin-tag`, `subagent-card` | `entries` tool calls: `kind`, `status`, `origin`, `parent_tool_call_id`, `locations`, content (§7.3 contract additions); the `Tool call density` preference | `permission.respond` for a child request; density preference |
 | `activity-ledger` | `entries` tool calls grouped by `kind` and `origin`; `Usage` totals when reported | — |
@@ -481,7 +485,7 @@ What each surface reads and writes. Surface behaviour is specified in [pages-vie
 | Profiles / monitor | `agent.profiles/registry/connections.*`, `agent.process_sample` (one process tree per Provider, polled every 2 s) | `agent.registry.install/update`, `connections.restart` (the Provider whose table was pressed), `agent.login` |
 | Terminal / onboarding | `terminal.list/attach`, `workspace.list` | `terminal.write/resize`, `workspace.add` |
 | Provider rows | `agent.profiles.*`, `agent.connections.list`, `mcp.health` (`SYN‑09`) | toggle → profile enable (a switched-off Provider is skipped by every health sweep); stepper → `agent.health_interval_set` (armed at 300 s on start-up, `0` = manual only); `↻` → `agent.recheck`; exec/protocol/env → launch spec |
-| Provider accordion | `agent.config.schema/get/validate` (`SYN‑11`), negotiated capabilities (`session/resume`, MCP transports, `elicitation`), declared `authMethods` | `agent.config.plan/apply/rollback`; login via `agent.login` per method (`AGT‑07`, `G7`); an env-var method stores each value with `agent.env_secret_set` |
+| Provider accordion | `agent.config.schema/get/validate` (`SYN‑11`), grouped negotiated capabilities, separate current auth state, and auth methods from initialize/selected registry distribution | `agent.config.plan/apply/rollback`; login via `agent.login` per exact method (`AGT‑07`, `G7`); negotiated logout; an env-var method stores each value with `agent.env_secret_set` |
 | General / keybindings settings | theme manifests, font list, trust store, shortcut table | theme id, font prefs, notification toggle, shortcut rebind |
 | Workspaces without git | `workspace.capabilities` (`vcs: none`, `restore: no`, `max_concurrent_sessions: 1`) | `git.init` upsell (convenience); revert/diff/stage UI hidden with a `no git · no revert` explanation when unavailable — no snapshot fallback in MVP |
 
@@ -647,7 +651,7 @@ Each target implements `Projector` (`target`, `detect`, `read`, `plan → Projec
 | Cursor | `.cursor/mcp.json` | JSON `mcpServers` | verify |
 | Kiro CLI | `.kiro/settings/mcp.json`; `.kiro/agents/*` | JSON `mcpServers` | verify (`skill://` resources) |
 
-All paths **verify**; skill folders marked `.agents/skills/` are read natively by Codex, OpenCode, and Antigravity CLI (verified 2026‑09‑18). `~/.claude.json` is Claude's private state: read‑only for import, no `${VAR}` expansion there. **First full‑support agents: OpenCode, Antigravity CLI, Kiro CLI** — their projection, skills, and native‑settings paths are verified first and land before the remaining targets. Claude Code and Codex ship MCP-only projection in MVP (SYN-03); their full support (native settings, skills materialization, terminal hosting) is post-MVP.
+All paths **verify**; skill folders marked `.agents/skills/` are read natively by Codex, OpenCode, and Antigravity CLI (verified 2026‑09‑18). `~/.claude.json` is Claude's private state: read-only for import, no `${VAR}` expansion there. **First full-support agents: Claude Code, Codex, OpenCode.** Each Provider milestone must verify its writable native settings path and schema before M2.5 builds a full-file form. Kiro is a later rolling target; Antigravity remains compliance-gated.
 
 ### 11.4 Skills
 
@@ -662,7 +666,7 @@ All paths **verify**; skill folders marked `.agents/skills/` are read natively b
 
 ### 11.5 Agent native-settings forms (SYN‑11)
 
-Initial full-file targets — and the first agents to reach full support: OpenCode, Antigravity CLI, Kiro CLI (MCP-only projection in §11.3 stays for the SYN‑03/SYN‑05 targets). Claude Code and Codex native forms are post-MVP.
+Initial full-file targets — and the first agents to reach full support: Claude Code, Codex, OpenCode. Their Provider milestones record the exact documented writable file and schema consumed here; Claude's private `~/.claude.json` state is never a write target. Other SYN-05 Providers follow as rolling targets after path, schema, and compliance verification.
 
 - **Schemas are community-contributed and must follow the native schema.** Each schema bundle records `{ schema_id, agent_version_range, source (official docs/schema URL), contributor, updated_at }` and ships with golden files under `fixtures/projectors/<target>/`.
 - **Flow:** `agent.config.schema(target)` → frontend renders a `TanStack Form` from the JSON Schema; advanced sections (hooks, steering, plugins, etc.) show a link to the official docs/schema alongside the fields. Submit → `agent.config.validate` → `plan` (preview diff) → `apply` with backup/rollback. A raw text tab is always available and round-trips unknown keys losslessly.
@@ -673,7 +677,7 @@ Initial full-file targets — and the first agents to reach full support: OpenCo
 
 Settings / MCP is a per-Provider visualizer over the Provider's own config file — the projection targets in §11.3 — scoped Global or Workspace. It reads and writes the same files the projectors already own, through the same `Projector` seam (`detect`, `read`, `plan`, `apply`, `verify`) and safety path (preview diff, timestamped backup, format-preserving edit, ownership and staleness check), so the editor adds no second write path. The canonical registry (§11.1) stays the source for session injection (§11.2); the editor is how a user configures one specific vendor tool.
 
-- **Providers:** Claude Code, OpenCode, Codex CLI, Antigravity CLI, Gemini CLI, Cursor, Kiro CLI. `pages-views-spec.md` §5.4 carries the per-Provider field table; Codex's target is TOML, so the editor renders a TOML variant of the same well.
+- **Providers:** Claude Code, Codex CLI, OpenCode, then later verified Providers. `pages-views-spec.md` §5.4 carries the per-Provider field table; Codex's target is TOML, so the editor renders a TOML variant of the same well.
 - **Schema:** each Provider's fields are the ones its own file accepts (`serverUrl` for Antigravity, `url` / `httpUrl` for Gemini, `type: local | remote` for OpenCode, `[mcp_servers.<name>]` for Codex), taken from the community schema bundle (§11.5) where one exists rather than a universal shape.
 - **Read-only targets:** `~/.claude.json` is import-only (§11.3); the editor marks it read-only.
 - **Runtime fact:** `mcp.attachments(workspace_id)` (§11.2) still reports what a Provider will actually receive at `session/new`; where it reports `UnsupportedTransport`, the editor shows a `provider-capability-notice` rather than the retired matrix.
@@ -739,9 +743,9 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 |---|---|
 | `host` | `info`, `pair`, `health` |
 | `workspace` | `list`, `add`, `remove`, `settings.*`, `status`, `capabilities` (§10.6) |
-| `agent` | `profiles.*`, `registry.list/install/update`, `connections.list/restart`, `login`, `logout`, `stderr`, `env_secret_set` (write-only: the value goes to the keychain and the profile keeps a `keychain:tethys/…` reference; there is no getter, G7), `process_sample`, `health_interval_set`, `recheck`, `config.schema/get/validate/plan/apply/rollback` (SYN‑11; `plan/apply/rollback` reuse the §11.3 safety path) |
-| `thread` | `create`, `list`, `get`, `prompt`, `queue.*`, `cancel` (emits `cancel_requested{grace_deadline}` → `grace_elapsed` → `terminating` as `CancelPhaseChanged` events on the thread's stream; a press in `grace_elapsed` is the explicit force-kill), `cancel_state` (snapshot for a late subscriber), `resume`, `importSessions`, `fork`, `archive`, `delete`, `setConfigOption`, `setPermissionMode` |
-| `events` | `subscribe {threadId, sinceSeq}`, `unsubscribe`, `inbox.subscribe` |
+| `agent` | `profiles.*`, `registry.list/install/update`, `connections.list/restart`, `login → AuthFlow`, negotiated `logout`, `stderr`, `env_secret_set` (write-only: the value goes to the keychain and the profile keeps a `keychain:tethys/…` reference; there is no getter, G7), `process_sample`, `health_interval_set`, `recheck`, `config.schema/get/validate/plan/apply/rollback` (SYN‑11; `plan/apply/rollback` reuse the §11.3 safety path) |
+| `thread` | `create → ThreadBootstrap`, `list`, `get → ThreadView`, `prompt`, `queue.*`, `cancel` (emits `cancel_requested{grace_deadline}` → `grace_elapsed` → `terminating` as `CancelPhaseChanged` events on the thread's stream; a press in `grace_elapsed` is the explicit force-kill), `cancel_state`, Provider-session `list/import/load/resume/close/delete`, local `archive/delete`, `setConfigOption`, `setPermissionMode`, `respondExtension` |
+| `events` | `subscribe {threadId, sinceSeq}` (exclusive, first event `1`), `unsubscribe`, `inbox.subscribe` |
 | `permission` | `respond`, `rules.*` |
 | `git` | `worktree.*`, `checkpoint.*`, `diff.summary`, `diff.file`, `stage`, `unstage`, `discard`, `commit`, `merge`, `push`, `pr.create` (all return `GIT_DISABLED` where the workspace has no git capability or sets `isolation: plain`, §10.6) |
 | `search` | `files` |

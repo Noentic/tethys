@@ -98,13 +98,13 @@ flowchart TB
 | [`crates/xtask`](./crates/xtask) | Workspace automation tasks (TypeScript bindings generation) |
 | [`packages/bindings`](./packages/bindings) | Auto-generated TypeScript types and IPC bindings |
 | [`packages/client`](./packages/client) | Typed frontend client wrappers for Tauri commands |
-| [`packages/state`](./packages/state) | Per-session TanStack stores, patch reducers, and rAF stream batching |
+| [`packages/state`](./packages/state) | Per-session TanStack stores, patch reducers, rAF stream batching, and the live query hooks over `@tethys/client` |
 | [`packages/ui`](./packages/ui) | Design-system tokens, component primitives, and Wave 2 registries |
 | [`packages/composer`](./packages/composer) | Composer command, skill, and path expansion |
 | [`packages/diff`](./packages/diff) | Diff virtualization and rendering |
 | [`packages/markdown`](./packages/markdown) | Incremental markdown worker |
 | [`packages/terminal`](./packages/terminal) | Terminal surface and attachment wiring |
-| [`packages/features`](./packages/features) | Scaffold for Wave 2 feature surfaces (workspaces, composer, approvals, sync) |
+| [`packages/features`](./packages/features) | Feature surfaces (workspaces, thread-new, inspector, composer, approvals, skills and commands, sync, agents) |
 | [`packages/config`](./packages/config) | Shared TypeScript configurations (published as `@tethys/config-ts`) |
 
 ---
