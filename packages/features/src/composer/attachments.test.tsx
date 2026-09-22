@@ -18,12 +18,20 @@ describe("composer attachments", () => {
         onAttach={onAttach}
       />,
     );
-    const input = screen.getByLabelText("Attach files");
+    const input = screen.getByLabelText("Select files");
     const file = new File(["x"], "shot.png", { type: "image/png" });
     fireEvent.change(input, { target: { files: [file] } });
     await waitFor(() =>
       expect(screen.getByTestId("provider-capability-notice")).toBeTruthy(),
     );
     expect(onAttach).not.toHaveBeenCalled();
+  });
+
+  it("uses the paperclip icon for the attach control", () => {
+    render(<AttachmentPicker providerName="Codex CLI" onAttach={() => {}} />);
+
+    const control = screen.getByTitle("Attach files");
+    expect(control.querySelector("svg")).toBeTruthy();
+    expect(control.textContent).toBe("");
   });
 });

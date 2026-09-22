@@ -278,6 +278,12 @@ export type ConfigOption = {
 	category?: string | null,
 	kind?: ConfigOptionKind | null,
 	value_options?: ConfigOptionValue[],
+	/**
+	 *  Provider-recommended selectable value, when supplied through an ACP
+	 *  extension negotiated by the client.
+	 */
+	recommended_value?: string | null,
+	metadata?: string | null,
 };
 
 /**  Select vs boolean config option, for the composer's category-aware chips. */
@@ -696,6 +702,7 @@ export type PermissionRequested = {
 	description: string | null,
 	subject: PermissionSubject | null,
 	options: PermOption[],
+	metadata?: string | null,
 };
 
 export type PermissionSubject = ({ Command: {
@@ -913,9 +920,21 @@ export type ServerRow = {
 	scope: Scope,
 };
 
+/**  Provider-neutral goal snapshot carried by the Claude ACP goal extension. */
+export type SessionGoal = {
+	objective: string,
+	status: string,
+	iterations: number | null,
+	last_reason: string | null,
+	created_at: string | null,
+	/**  Original extension object, retained so newer fields remain inspectable. */
+	metadata: string,
+};
+
 export type SessionInfo = {
 	title: string | null,
 	updated_at: string | null,
+	goal?: Patch<SessionGoal>,
 };
 
 /**
@@ -1085,6 +1104,7 @@ export type ToolCallPatch = {
 	origin?: ToolOrigin | null,
 	parent_tool_call_id?: string | null,
 	locations?: ToolLocation[],
+	metadata?: string | null,
 };
 
 export type ToolCallStatus = "Pending" | "Executing" | "Completed" | "Failed";

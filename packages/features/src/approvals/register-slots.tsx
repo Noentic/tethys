@@ -1,22 +1,15 @@
 import {
   getAllComposerContextSlots,
   registerApprovalDrawerBody,
-  registerComposerContextSlot,
 } from "@tethys/ui";
 import { InboxDrawer } from "./InboxDrawer";
-import { PermissionModePill } from "./permission-mode-pill";
 
 /**
- * Registers the permission-mode pill and the real inbox as the approval-drawer
- * body at feature-module scope (overview amendment 1). M1.6c's render-time
- * precedence makes them win over the shell defaults whichever module imports
- * first, so no shell file is edited.
- *
- * The pill's priority is DESIGN's `permission-mode` (70), matching the shell's
- * fold constant.
+ * Registers the real approval inbox at feature-module scope. Provider ACP mode
+ * is the only execution-mode control in the thread composer; Tethys keeps its
+ * permission policy in the workspace/session state without duplicating it here.
  */
 export function registerApprovalSlots(): void {
-  registerComposerContextSlot("permission-mode", PermissionModePill, 70);
   registerApprovalDrawerBody(InboxDrawer);
 }
 

@@ -26,20 +26,12 @@ export function PlanPanel({
   const livePlan = state.liveEntries.find(
     (entry): entry is PlanEntry => entry.kind === "plan",
   );
+  const goal = state.goal;
   const steps: PlanStep[] = Array.isArray(data)
     ? (data as PlanStep[])
     : (livePlan?.steps ?? []);
-  if (steps.length === 0) {
-    return (
-      <p
-        className={cn(
-          "px-md py-sm text-body-sm text-(--tethys-text-muted)",
-          className,
-        )}
-      >
-        No plan yet
-      </p>
-    );
+  if (steps.length === 0 && !goal) {
+    return null;
   }
   const complete = steps.filter((step) => step.status === "Completed").length;
 
@@ -47,32 +39,55 @@ export function PlanPanel({
     <section
       data-inspector-slot="plan"
       aria-label="Plan"
-      className={cn("px-md py-sm", className)}
+      className={cn(
+        "w-full rounded-sm border border-(--tethys-hairline) bg-(--tethys-surface-panel) px-3 py-2",
+        className,
+      )}
     >
-      <header className="mb-sm text-label-sm text-(--tethys-text-muted)">
-        Plan · {complete}/{steps.length} complete
-      </header>
-      <ul className="flex flex-col gap-1">
-        {steps.map((step) => (
-          <li
-            key={step.content}
-            aria-current={step.status === "InProgress" ? "step" : undefined}
-            className={cn(
-              "flex items-start gap-sm text-body-sm",
-              step.status === "Completed" &&
-                "text-(--tethys-text-muted) line-through",
-              step.status === "InProgress" &&
-                "font-medium text-(--tethys-text-primary)",
-              step.status === "Pending" && "text-(--tethys-text-secondary)",
-            )}
-          >
-            <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
-              {STATUS_LABEL[step.status]}
-            </span>
-            <span>{step.content}</span>
-          </li>
-        ))}
-      </ul>
+      {goal && (
+        <div data-testid="session-goal" className="mb-md">
+          <header className="mb-xs text-label-sm text-(--tethys-text-muted)">
+            Goal · {goal.status}
+            {goal.iterations === null ? "" : ` · ${goal.iterations} iterations`}
+          </header>
+          <p className="text-body-sm text-(--tethys-text-primary)">
+            {goal.objective}
+          </p>
+          {goal.last_reason && (
+            <p className="mt-xs text-body-sm text-(--tethys-text-muted)">
+              {goal.last_reason}
+            </p>
+          )}
+        </div>
+      )}
+      {steps.length > 0 && (
+        <>
+          <header className="mb-sm text-label-sm text-(--tethys-text-muted)">
+            Plan · {complete}/{steps.length} complete
+          </header>
+          <ul className="flex flex-col gap-1">
+            {steps.map((step) => (
+              <li
+                key={step.content}
+                aria-current={step.status === "InProgress" ? "step" : undefined}
+                className={cn(
+                  "flex items-start gap-sm text-body-sm",
+                  step.status === "Completed" &&
+                    "text-(--tethys-text-muted) line-through",
+                  step.status === "InProgress" &&
+                    "font-medium text-(--tethys-text-primary)",
+                  step.status === "Pending" && "text-(--tethys-text-secondary)",
+                )}
+              >
+                <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
+                  {STATUS_LABEL[step.status]}
+                </span>
+                <span>{step.content}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }

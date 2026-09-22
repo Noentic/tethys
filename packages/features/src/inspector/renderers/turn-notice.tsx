@@ -56,29 +56,36 @@ export function TurnNoticeRenderer({
   const spec = NOTICE[entry.noticeKind];
 
   if (entry.noticeKind === "compaction") {
+    const summary = entry.summary?.trim() || null;
     return (
       <div
         data-entry-kind="turn_notice"
         data-notice-kind="compaction"
-        className={cn(
-          "my-sm flex items-center gap-sm text-label-sm text-(--tethys-text-muted)",
-          className,
-        )}
+        className={cn("my-sm flex flex-col gap-sm", className)}
       >
-        <span className="h-px flex-1 bg-(--tethys-hairline)" />
-        <button
-          type="button"
-          aria-expanded={summaryExpanded}
-          aria-controls={summaryId}
-          onClick={() => setSummaryExpanded((value) => !value)}
-        >
-          Context compacted
-        </button>
-        <span className="h-px flex-1 bg-(--tethys-hairline)" />
-        {summaryExpanded && entry.summary && (
-          <div id={summaryId} className="sr-only">
-            {entry.summary}
-          </div>
+        <div className="flex items-center gap-sm text-label-sm text-(--tethys-text-muted)">
+          <span className="h-px flex-1 bg-(--tethys-hairline)" />
+          {summary ? (
+            <button
+              type="button"
+              aria-expanded={summaryExpanded}
+              aria-controls={summaryId}
+              onClick={() => setSummaryExpanded((value) => !value)}
+            >
+              Context compacted
+            </button>
+          ) : (
+            <span>Context compacted</span>
+          )}
+          <span className="h-px flex-1 bg-(--tethys-hairline)" />
+        </div>
+        {summaryExpanded && summary && (
+          <p
+            id={summaryId}
+            className="mx-auto max-w-[720px] text-center text-body-sm text-(--tethys-text-secondary)"
+          >
+            {summary}
+          </p>
         )}
       </div>
     );

@@ -72,6 +72,28 @@ export interface DockedPromptCardProps {
 }
 
 const TURN_IN_FLIGHT = ["running", "awaiting_approval"];
+const PROMPT_PLACEHOLDER = "Ask Anything…";
+
+function RunningSpinner() {
+  return (
+    <svg
+      className="h-4 w-4 motion-safe:animate-spin"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        stroke="currentColor"
+        strokeWidth="3"
+        opacity="0.25"
+      />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" />
+    </svg>
+  );
+}
 
 export function DockedPromptCard({
   sessionId,
@@ -186,7 +208,7 @@ export function DockedPromptCard({
     <div
       data-testid="docked-prompt-card"
       className={cn(
-        "edge-lit mx-auto flex w-[min(var(--layout-prompt-width),calc(100%-96px))] flex-col gap-md rounded-2xl border border-(--tethys-hairline-strong) bg-(--tethys-surface-elevated) p-lg transition-colors focus-within:border-(--tethys-text-muted)",
+        "edge-lit mx-auto flex w-[min(var(--layout-prompt-width),calc(100%_-_96px))] flex-col gap-md rounded-2xl border border-(--tethys-hairline-strong) bg-(--tethys-surface-elevated) p-lg transition-colors focus-within:border-(--tethys-text-muted)",
         className,
       )}
     >
@@ -206,17 +228,29 @@ export function DockedPromptCard({
 
       <PromptQueue client={client} threadId={sessionId} store={queueStore} />
 
-      <ComposerEditor
-        ref={editorRef}
-        sources={sources}
-        placeholder={
-          turnInFlight
-            ? "Queue a follow-up…  (Ctrl/Cmd+Enter)"
-            : "Ask Anything…"
-        }
-        onChange={(text) => setHasText(text.trim().length > 0)}
-        onSubmit={() => void submit()}
-      />
+      <div className="relative">
+        {!hasText && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 px-1 text-body-md text-(--tethys-text-muted)"
+          >
+            {turnInFlight
+              ? "Queue a follow-up…  (Ctrl/Cmd+Enter)"
+              : PROMPT_PLACEHOLDER}
+          </span>
+        )}
+        <ComposerEditor
+          ref={editorRef}
+          sources={sources}
+          placeholder={
+            turnInFlight
+              ? "Queue a follow-up…  (Ctrl/Cmd+Enter)"
+              : PROMPT_PLACEHOLDER
+          }
+          onChange={(text) => setHasText(text.trim().length > 0)}
+          onSubmit={() => void submit()}
+        />
+      </div>
 
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-sm" data-testid="prompt-attachments">
@@ -234,18 +268,6 @@ export function DockedPromptCard({
         </div>
       )}
 
-      <AttachmentPicker
-        providerName={state.providerId}
-        capabilities={{
-          image: state.capabilities?.prompt_image ?? false,
-          audio: state.capabilities?.prompt_audio ?? false,
-          embeddedContext: state.capabilities?.prompt_embedded_context ?? false,
-        }}
-        onAttach={(attachment) =>
-          setAttachments((current) => [...current, attachment])
-        }
-      />
-
       {sendError && (
         <p
           role="alert"
@@ -257,19 +279,41 @@ export function DockedPromptCard({
       )}
 
       <div className="flex items-center justify-between gap-sm">
-        <ComposerConfigChips
-          options={state.configOptions}
-          values={values}
-          providerName={state.providerId}
-          onSetOption={setOption}
-        />
+        <div className="flex min-w-0 items-center gap-md">
+          <AttachmentPicker
+            providerName={state.providerId}
+            capabilities={{
+              image: state.capabilities?.prompt_image ?? false,
+              audio: state.capabilities?.prompt_audio ?? false,
+              embeddedContext:
+                state.capabilities?.prompt_embedded_context ?? false,
+            }}
+            onAttach={(attachment) =>
+              setAttachments((current) => [...current, attachment])
+            }
+          />
+          <ComposerConfigChips
+            options={state.configOptions}
+            values={values}
+            providerName={state.providerId}
+            onSetOption={setOption}
+          />
+        </div>
 
-        {turnInFlight || stopping ? (
+        {stopping ? (
           <StopControl
             phase={state.cancellationState}
             graceDeadline={state.graceDeadline}
             onStop={() => void client.thread.cancel(sessionId)}
           />
+        ) : turnInFlight ? (
+          <ActionIconButton
+            label="Stop prompt"
+            ready
+            onClick={() => void client.thread.cancel(sessionId)}
+          >
+            <RunningSpinner />
+          </ActionIconButton>
         ) : (
           <ActionIconButton
             label="Send prompt"

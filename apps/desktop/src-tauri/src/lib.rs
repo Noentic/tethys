@@ -11,8 +11,25 @@ use tethys_core::{Core, CorePaths};
 
 use commands::*;
 
+/// WebKitGTK can stop submitting frame callbacks through its DMABUF renderer
+/// on Hyprland/Wayland, leaving DOM updates invisible until a resize. Keep the
+/// workaround scoped to that compositor and let an explicit environment value
+/// win for users who need the default renderer.
+#[cfg(target_os = "linux")]
+fn configure_webkit_renderer() {
+    if std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
+        && std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none()
+    {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    configure_webkit_renderer();
+
     let core: CoreState = Arc::new(
         tauri::async_runtime::block_on(Core::open(CorePaths::from_home_or_default()))
             .expect("open core"),

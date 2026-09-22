@@ -28,6 +28,7 @@ import {
   skillSource,
 } from "../composer/popups";
 import { promptContentBlocks } from "../composer/prompt-blocks";
+import { ModeSelector } from "./mode-selector";
 import { ModelSelector } from "./model-selector";
 import {
   type DraftSessionClient,
@@ -160,6 +161,7 @@ export function PromptCard({
   );
   const draftOptions = draft.bootstrap?.config_options ?? [];
   const draftId = draft.bootstrap?.thread.id ?? null;
+  const modeOption = draftOptions.find((option) => option.category === "mode");
 
   // A ready draft replaces the panel values; a new draft resets any edits made
   // against the previous Provider's options. Guarded render-time reset (React
@@ -340,6 +342,21 @@ export function PromptCard({
             draftStatus={draft.status}
             draftError={draft.error}
           />
+
+          {selectedProvider !== null &&
+            draftReady &&
+            modeOption !== undefined && (
+              <ModeSelector
+                options={draftOptions}
+                value={values[modeOption.id]}
+                onChange={(value) =>
+                  setValues((previous) => ({
+                    ...previous,
+                    [modeOption.id]: value,
+                  }))
+                }
+              />
+            )}
         </div>
 
         <div className="relative">
@@ -380,19 +397,6 @@ export function PromptCard({
           </div>
         )}
 
-        <AttachmentPicker
-          providerName={selectedProvider?.name ?? "a selected Provider"}
-          capabilities={{
-            image: selectedProvider?.imagePrompts ?? false,
-            audio: selectedProvider?.audioPrompts ?? false,
-            embeddedContext: selectedProvider?.embeddedContext ?? false,
-          }}
-          onAttach={(attachment) =>
-            setAttachments((current) => [...current, attachment])
-          }
-          disabled={disabled || !selectedProvider}
-        />
-
         {submitError !== null && (
           <p
             role="alert"
@@ -403,9 +407,23 @@ export function PromptCard({
         )}
 
         <div className="flex items-center justify-between gap-lg">
-          <span className="truncate font-mono text-mono-micro text-(--tethys-text-muted)">
-            {COMMANDS_GUIDE}
-          </span>
+          <div className="flex min-w-0 items-center gap-md">
+            <AttachmentPicker
+              providerName={selectedProvider?.name ?? "a selected Provider"}
+              capabilities={{
+                image: selectedProvider?.imagePrompts ?? false,
+                audio: selectedProvider?.audioPrompts ?? false,
+                embeddedContext: selectedProvider?.embeddedContext ?? false,
+              }}
+              onAttach={(attachment) =>
+                setAttachments((current) => [...current, attachment])
+              }
+              disabled={disabled || !selectedProvider}
+            />
+            <span className="truncate font-mono text-mono-micro text-(--tethys-text-muted)">
+              {COMMANDS_GUIDE}
+            </span>
+          </div>
 
           <div className="flex shrink-0 items-center gap-sm">
             <kbd

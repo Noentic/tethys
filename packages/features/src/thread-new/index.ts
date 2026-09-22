@@ -1,3 +1,4 @@
+export * from "./mode-selector";
 export * from "./model-selector";
 export * from "./prompt-card";
 export * from "./session-config-panel";

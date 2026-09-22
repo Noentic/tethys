@@ -61,11 +61,11 @@ export function InspectorPane({
     <aside
       aria-label="Thread Inspector"
       data-testid="inspector-pane-shell"
-      className={`flex h-full w-full flex-col overflow-y-auto bg-(--tethys-surface-panel) select-none ${
+      className={`flex h-full w-full flex-col overflow-y-auto bg-(--tethys-surface-panel) p-lg select-none ${
         isOverlay ? "" : "border-l border-(--tethys-hairline-structural)"
       } ${className ?? ""}`}
     >
-      <div className="flex h-10 shrink-0 items-center justify-between gap-sm border-b border-(--tethys-hairline) px-lg">
+      <div className="flex h-10 shrink-0 items-center justify-between gap-sm px-1">
         <div className="flex min-w-0 items-center gap-sm">
           <span className="truncate text-heading-md text-(--tethys-text-primary)">
             Thread Inspector
@@ -85,6 +85,7 @@ export function InspectorPane({
           <button
             type="button"
             aria-expanded={true}
+            aria-controls="thread-inspector-content"
             onClick={onToggleCollapse}
             className="focus-ring inline-flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 text-label-md text-(--tethys-text-muted) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-secondary)"
           >
@@ -94,16 +95,17 @@ export function InspectorPane({
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-lg p-lg">
+      <div
+        id="thread-inspector-content"
+        className="flex flex-1 flex-col gap-[14px]"
+      >
         {slots.length === 0 ? (
           <div className="py-xl text-center text-body-sm text-(--tethys-text-muted)">
             No inspector slots registered
           </div>
         ) : (
           slots.map(([id, SlotComponent]) => (
-            <div key={id} className="w-full">
-              <SlotComponent sessionId={sessionId} />
-            </div>
+            <SlotComponent key={id} sessionId={sessionId} />
           ))
         )}
       </div>

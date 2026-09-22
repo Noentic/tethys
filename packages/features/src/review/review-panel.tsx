@@ -49,7 +49,9 @@ export function ReviewPanel({
     () => source ?? defaultDiffSource(threadId),
     [source, threadId],
   );
-  const { summary } = useDiffSummary(gate.showDiff ? diffSource : null);
+  const { summary, loading } = useDiffSummary(
+    gate.showDiff ? diffSource : null,
+  );
 
   const [expandedPath, setExpandedPath] = useState<string | null>(null);
   const [detail, setDetail] = useState<DiffFileDetail | null>(null);
@@ -85,7 +87,11 @@ export function ReviewPanel({
     );
   }
 
-  const files = summary?.files ?? [];
+  if (loading || summary === null) {
+    return null;
+  }
+
+  const files = summary.files;
 
   const toggleStage = (path: string) => {
     const next = new Set(stagedPaths);
@@ -155,7 +161,7 @@ export function ReviewPanel({
     <section
       data-testid="review-panel"
       aria-label="Review"
-      className={cn("flex flex-col gap-3 p-md", className)}
+      className={cn("flex flex-col gap-3", className)}
     >
       <header className="flex items-center justify-between">
         <h2 className="text-heading-md text-(--tethys-text-primary)">Review</h2>
@@ -164,55 +170,46 @@ export function ReviewPanel({
         </span>
       </header>
 
-      {summary === null ? (
-        <p
-          data-testid="review-empty"
-          className="text-body-sm text-(--tethys-text-muted)"
-        >
-          No changes in this turn.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {files.map((file) => (
-            <div key={file.path} className="flex flex-col gap-1">
-              <FileHeader
-                file={file}
-                staged={stagedPaths.has(file.path)}
-                expanded={expandedPath === file.path}
-                onToggleStage={() => toggleStage(file.path)}
-                onToggleExpanded={() =>
-                  setExpandedPath((current) =>
-                    current === file.path ? null : file.path,
-                  )
-                }
-                onDiscardFile={() => void discardFile(file.path)}
-              />
-              {expandedPath === file.path &&
-                detail !== null &&
-                detail.path === file.path && (
-                  <>
-                    <div
-                      data-testid="hunk-actions"
-                      className="flex flex-wrap gap-1"
-                    >
-                      {detail.hunks.map((hunk, index) => (
-                        <Button
-                          key={`${file.path}:${hunk.old_start}:${hunk.new_start}`}
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => discardHunk(file.path, index)}
-                        >
-                          Discard hunk {index + 1}
-                        </Button>
-                      ))}
-                    </div>
-                    <DiffViewer detail={detail} className="max-h-80" />
-                  </>
-                )}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-col gap-2">
+        {files.map((file) => (
+          <div key={file.path} className="flex flex-col gap-1">
+            <FileHeader
+              file={file}
+              staged={stagedPaths.has(file.path)}
+              expanded={expandedPath === file.path}
+              onToggleStage={() => toggleStage(file.path)}
+              onToggleExpanded={() =>
+                setExpandedPath((current) =>
+                  current === file.path ? null : file.path,
+                )
+              }
+              onDiscardFile={() => void discardFile(file.path)}
+            />
+            {expandedPath === file.path &&
+              detail !== null &&
+              detail.path === file.path && (
+                <>
+                  <div
+                    data-testid="hunk-actions"
+                    className="flex flex-wrap gap-1"
+                  >
+                    {detail.hunks.map((hunk, index) => (
+                      <Button
+                        key={`${file.path}:${hunk.old_start}:${hunk.new_start}`}
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => discardHunk(file.path, index)}
+                      >
+                        Discard hunk {index + 1}
+                      </Button>
+                    ))}
+                  </div>
+                  <DiffViewer detail={detail} className="max-h-80" />
+                </>
+              )}
+          </div>
+        ))}
+      </div>
 
       <CommitBox onDraft={draft} onCommit={commit} />
 

@@ -31,6 +31,15 @@ export function SubagentCard({
   const hasAwaiting = childEntries.some(awaiting);
   const [expanded, setExpanded] = useState(hasAwaiting);
   const regionId = useId();
+  const dotStatus = hasAwaiting
+    ? "awaiting_approval"
+    : entry.status === "Executing"
+      ? "running"
+      : entry.status === "Completed"
+        ? "healthy"
+        : entry.status === "Failed"
+          ? "error"
+          : "idle";
 
   useEffect(() => {
     if (hasAwaiting) {
@@ -62,7 +71,7 @@ export function SubagentCard({
         }}
         className="flex w-full items-center gap-sm px-md py-sm text-left transition-colors hover:bg-(--tethys-surface-hover)"
       >
-        <StatusDot status={hasAwaiting ? "awaiting_approval" : "idle"} inline />
+        <StatusDot status={dotStatus} inline />
         <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
         <span className="truncate text-label-md text-(--tethys-text-primary)">
           {entry.title}
@@ -77,6 +86,22 @@ export function SubagentCard({
           id={regionId}
           className="ml-md border-l-2 border-(--tethys-hairline-strong) py-sm pl-lg"
         >
+          {entry.input && (
+            <p
+              data-testid="subagent-task"
+              className="mb-sm whitespace-pre-wrap text-body-sm text-(--tethys-text-muted)"
+            >
+              {entry.input}
+            </p>
+          )}
+          {entry.output && (
+            <pre
+              data-testid="subagent-transcript"
+              className="mb-sm whitespace-pre-wrap text-body-sm text-(--tethys-text-secondary)"
+            >
+              {entry.output}
+            </pre>
+          )}
           {children.map(({ entry: child, depth }) => {
             const Renderer = getEntryRenderer(child.kind);
             return (

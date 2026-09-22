@@ -250,7 +250,7 @@ The three-region control plane (Rail | Stage | Inspector, with Sessions opened o
 │    │ ┌─────────────────────────────────────────  │ Activity Ledger (Rollup)  │
 │    │ │ [git: fix-auth +42-12] [Claude Sonnet]    │ │ 12 files · 5 cmds · 3 mcp │
 │    │ │ Type / for commands · @ for files... (■)│ ├───────────────────────────┤
-│    │ └─────────────────────────────────────────┘ │ ⚙ Supervised Mode         │
+│    │ └─────────────────────────────────────────┘ │ Thread state             │
 └────┴─────────────────────────────────────────────┴───────────────────────────┘
 † git-only: rendered per §0.1. With no git the inspector ends after the tool calls,
   and the git context pill reads unversioned.
@@ -261,7 +261,7 @@ The three-region control plane (Rail | Stage | Inspector, with Sessions opened o
 - **Main Stage (Center-Flex, min 560px)**: Streamed Markdown turns, collapsible thought blocks, plan panel, inline tool-call cards, and inline permission-request cards. The Stage never shrinks below `stage-min` and has no overlay mode: the Inspector docks only at `1100px` and wider, and `48 + 560 + 360 = 968px`, so the Stage always has at least 560px. Thread and workspace switching runs through the top tab strip and the Workspaces catalog (`/workspaces`); a titlebar toggle opens the Sessions drawer (§1) to browse every session on demand.
 - **Thread Inspector & Diff Panel (`360px`, Right)**: Collapsible sidebar housing session-level rollup telemetry, active plan steps, raw payloads, and — where the workspace has git — patch inspection and checkpoint restore triggers. Operates on a **thread-wide scope** (aggregating tool runs, edited files, and cumulative diffs across all turns of the session), rather than being locked to a single turn. Collapses to an overlay drawer when the viewport drops below `1100px`.
 - **Unified Prompt Card (Docked Bottom, `{layout.prompt-width}`)**: Consolidates composer input, session context pills, and runtime actions into a single control surface, replacing the separate 56px Action Bar. Features:
-  - Top Context Bar: Collapsible pills for Git Context (`isolation-pill`: `branch`, or `no git`), Provider & Model Selector (`[Glyph] Provider · Model ∨`), Permission Mode (`Supervised` / `Auto-edit` / `YOLO`), the ACP `mode` (`mode-pill`), the queue count, and the `diff-summary-pill` (`+a −b` in `{semantic.diff-added}` and `{semantic.diff-removed}`). When the row does not fit, pills fold into a `•••` overflow, lowest priority first; the isolation pill and the stop control never fold (DESIGN.md `prompt-card.contextBarFold`).
+  - Top Context Bar: Collapsible pills for Git Context (`isolation-pill`: `branch`, or `no git`), Provider & Model Selector (`[Glyph] Provider · Model ∨`), the Provider's ACP `mode` (`mode-pill`), the queue count, and the `diff-summary-pill` (`+a −b` in `{semantic.diff-added}` and `{semantic.diff-removed}`). When the row does not fit, pills fold into a `•••` overflow, lowest priority first; the isolation pill and the stop control never fold (DESIGN.md `prompt-card.contextBarFold`).
   - Textarea: Auto-expanding composer with quiet inline guide (`Type / for commands · @ for files · $ for skills`).
   - Lower bar: attachment chips, and the Model and Effort chips (`composer-config-chip`), taken from the Provider's config options by `category`.
   - Action Button: Single state-switching trigger on the right — Send up-arrow (`ez7XI`) when idle/typing; Stop square (`mfejm`) when an agent turn is actively executing.

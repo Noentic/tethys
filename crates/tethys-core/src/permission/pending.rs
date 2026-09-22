@@ -287,6 +287,7 @@ mod tests {
                 name: "Allow".into(),
                 kind: Some("allow_once".into()),
             }],
+            metadata: None,
         }
     }
 

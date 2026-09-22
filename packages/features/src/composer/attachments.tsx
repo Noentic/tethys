@@ -3,9 +3,10 @@
 //! An image is refused at attach time for a Provider that did not declare
 //! image prompts, with the one `provider-capability-notice` treatment.
 
+import { Paperclip } from "@nebutra/icons";
 import type { ContentBlock } from "@tethys/bindings";
 import { Chip } from "@tethys/ui";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ProviderCapabilityNotice } from "../providers/capability-notice";
 
 export interface ComposerAttachment {
@@ -120,6 +121,7 @@ export function AttachmentPicker({
       ? capabilities
       : { image: imagePrompts, audio: false, embeddedContext: true };
   const [refused, setRefused] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -146,20 +148,28 @@ export function AttachmentPicker({
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="focus-ring inline-flex cursor-pointer items-center rounded-xs px-1 text-label-sm text-(--tethys-text-muted) hover:text-(--tethys-text-primary)">
-        Attach
-        <input
-          type="file"
-          multiple
-          disabled={disabled}
-          className="hidden"
-          aria-label="Attach files"
-          onChange={(event) => {
-            void handleFiles(event.target.files);
-            event.target.value = "";
-          }}
-        />
-      </label>
+      <button
+        type="button"
+        aria-label="Attach files"
+        title="Attach files"
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+        className="focus-ring inline-flex size-7 items-center justify-center rounded-md bg-(--tethys-surface-hover) text-(--tethys-text-muted) hover:text-(--tethys-text-primary) disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Paperclip className="size-3.5" aria-hidden="true" />
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        disabled={disabled}
+        className="hidden"
+        aria-label="Select files"
+        onChange={(event) => {
+          void handleFiles(event.target.files);
+          event.target.value = "";
+        }}
+      />
       {refused && (
         <ProviderCapabilityNotice
           provider={providerName}

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ConfigOption } from "@tethys/bindings";
 import { noProviderFixtures, providerConnectionFixtures } from "@tethys/state";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -40,8 +41,55 @@ describe("ModelSelector", () => {
   it("renders one schema-field-group per ConfigOption", () => {
     renderSelector();
     openPopover();
-    expect(screen.getByRole("listbox", { name: "Model" })).toBeTruthy();
-    expect(screen.getByRole("listbox", { name: "Effort" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Model" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Effort" })).toBeTruthy();
+  });
+
+  it("writes model and effort changes through their wire option ids", () => {
+    const onConfigChange = vi.fn();
+    const configOptions = (
+      providerConnectionFixtures[0]?.configSchema ?? []
+    ).map((option) =>
+      option.category === "thought_level"
+        ? { ...option, id: "effort" }
+        : option,
+    );
+    renderSelector({ onConfigChange, configOptions });
+    openPopover();
+    fireEvent.change(screen.getByRole("combobox", { name: "Model" }), {
+      target: { value: "claude-opus-x" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Effort" }), {
+      target: { value: "high" },
+    });
+    expect(onConfigChange).toHaveBeenNthCalledWith(1, "model", "claude-opus-x");
+    expect(onConfigChange).toHaveBeenNthCalledWith(2, "effort", "high");
+  });
+
+  it("keeps mode out of the model popover and shows only the model summary", () => {
+    const mode: ConfigOption = {
+      id: "mode",
+      name: "Mode",
+      description: null,
+      current_value: "manual",
+      values: ["manual", "plan"],
+      category: "mode",
+      kind: "select",
+      value_options: [
+        { id: "manual", name: "Manual", description: null },
+        { id: "plan", name: "Plan", description: null },
+      ],
+    };
+    renderSelector({
+      configOptions: [
+        mode,
+        ...(providerConnectionFixtures[0]?.configSchema ?? []),
+      ],
+    });
+    expect(screen.getByRole("combobox").textContent).toContain("Sonnet");
+    expect(screen.getByRole("combobox").textContent).not.toContain("Manual");
+    openPopover();
+    expect(screen.queryByRole("listbox", { name: "Mode" })).toBeNull();
   });
 
   it("shows the empty-state copy when the provider has no options", () => {

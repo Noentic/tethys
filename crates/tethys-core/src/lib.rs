@@ -28,7 +28,7 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tethys_agent_servers::{ConnectionStore, StoreOptions};
+use tethys_agent_servers::{ConnectionStore, ProviderIntegrationRegistry, StoreOptions};
 use tethys_api::ApiError;
 use tethys_git::GitError;
 use tethys_schema::connection::{AcpProtocol, AgentCompat};
@@ -394,6 +394,7 @@ fn policy_store_options(
         AcpProtocol::V1,
         Arc::new(PolicyResolver::new(permissions.clone())),
     );
+    options.provider_integrations = ProviderIntegrationRegistry::builtins();
     options.client_services = options
         .client_services
         .with_elicitation(Arc::new(ElicitationPolicyResolver::new(permissions)));

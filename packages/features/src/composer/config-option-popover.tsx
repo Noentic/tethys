@@ -29,10 +29,7 @@ export function ConfigOptionPopover({
       anchorRef={anchorRef}
       className="bottom-full left-0 mb-1.5"
     >
-      <div className="flex w-56 flex-col">
-        <div className="px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider">
-          {option.name}
-        </div>
+      <div className="flex w-60 flex-col">
         <div role="listbox" aria-label={option.name} className="flex flex-col">
           {optionValues(option).map((candidate) => (
             <button
@@ -44,13 +41,24 @@ export function ConfigOptionPopover({
                 onSelect(candidate.id);
                 onClose();
               }}
-              className={`focus-ring flex h-8 items-center rounded-sm px-3 text-left text-body-sm ${
+              className={`focus-ring flex min-h-8 items-center rounded-sm px-3 py-1.5 text-left text-body-sm ${
                 candidate.id === value
                   ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
                   : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)"
               }`}
             >
-              {candidate.name}
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span>
+                  {candidate.id === option.recommended_value
+                    ? `${candidate.name} (Recommended)`
+                    : candidate.name}
+                </span>
+                {candidate.description && (
+                  <span className="text-label-sm text-(--tethys-text-muted)">
+                    {candidate.description}
+                  </span>
+                )}
+              </span>
             </button>
           ))}
         </div>

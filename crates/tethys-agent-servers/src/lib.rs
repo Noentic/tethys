@@ -3,6 +3,7 @@
 pub mod connection_store;
 pub mod launch;
 pub mod provider_integration;
+pub mod providers;
 mod recovery;
 pub mod registry;
 

@@ -40,7 +40,7 @@ export function ThoughtBlockRenderer({
       {expanded && (
         <div
           id={regionId}
-          className="border-t border-(--tethys-hairline) px-md py-sm text-body-sm text-(--tethys-text-secondary)"
+          className="markdown-content border-t border-(--tethys-hairline) px-md py-sm text-body-sm text-(--tethys-text-secondary)"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized by @tethys/markdown
           dangerouslySetInnerHTML={{ __html: html }}
         />

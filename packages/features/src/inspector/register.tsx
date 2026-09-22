@@ -1,11 +1,13 @@
 import type { TurnMessageEntry } from "@tethys/state";
 import { registerEntryRenderer, registerInspectorSlot } from "@tethys/ui";
+import { registerClaudeCodeProviderUi } from "../providers/claude-code";
 import { ProviderArtifactRenderer } from "../providers/provider-artifact";
 import { ActivityLedger } from "./activity-ledger";
 import { InspectorSummary } from "./inspector-summary";
 import { PlanPanel } from "./renderers/plan-panel";
 import { TerminalEntryRenderer } from "./renderers/terminal-entry";
 import { ThoughtBlockRenderer } from "./renderers/thought-block";
+import { TimelineEventRenderer } from "./renderers/timeline-event";
 import { ToolAccordionRenderer } from "./renderers/tool-accordion";
 import { TurnMessageRenderer } from "./renderers/turn-message";
 import { TurnNoticeRenderer } from "./renderers/turn-notice";
@@ -35,8 +37,11 @@ export function registerInspectorRenderers(): void {
   registerEntryRenderer("turn_message", TurnMessageRendererEntry);
   registerEntryRenderer("tool_call", ToolAccordionRenderer);
   registerEntryRenderer("terminal", TerminalEntryRenderer);
+  registerEntryRenderer("file_write", TimelineEventRenderer);
+  registerEntryRenderer("checkpoint", TimelineEventRenderer);
   registerEntryRenderer("turn_notice", TurnNoticeRenderer);
   registerEntryRenderer("provider_artifact", ProviderArtifactRenderer);
+  registerClaudeCodeProviderUi();
   registerEntryRenderer("plan", () => null);
   // The rollup band is the first section: it summarises the whole session, and
   // everything below it is the detail behind one of its numbers.

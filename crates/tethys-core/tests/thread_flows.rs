@@ -13,7 +13,7 @@ use tethys_core::thread_session::ThreadSessions;
 use tethys_core::Core;
 use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionKey};
 use tethys_schema::thread::{
-    ContentBlock, CreateThread, Entry, ThreadId, ThreadState, TurnEventBody,
+    ContentBlock, CreateThread, Entry, Role, ThreadId, ThreadState, TurnEventBody,
 };
 
 const PROFILE_V1: &str = "mock-v1";
@@ -419,6 +419,14 @@ async fn prompt_streams_entries_and_backlog() {
 
     let view = core.thread_get(id.clone()).await.expect("get");
     assert_eq!(view.thread.state, ThreadState::Idle);
+    assert!(view.entries.iter().any(|entry| matches!(
+        entry,
+        Entry::Message {
+            role: Role::User,
+            blocks,
+            ..
+        } if blocks.iter().any(|block| matches!(block, ContentBlock::Text(text) if text == "hello"))
+    )));
     assert!(entry_text(&view.entries).contains("echo: hello"));
     assert!(view.latest_seq > 0);
 

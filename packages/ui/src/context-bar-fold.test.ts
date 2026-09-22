@@ -16,7 +16,6 @@ const item = (id: string, priority: number, present = true) => ({
 
 const FULL = [
   item("stop", CONTEXT_BAR_PRIORITY.stop),
-  item("permission-mode", CONTEXT_BAR_PRIORITY["permission-mode"]),
   item("provider/config", CONTEXT_BAR_PRIORITY["provider/config"]),
   item("diff-summary", CONTEXT_BAR_PRIORITY["diff-summary"]),
   item("mode", CONTEXT_BAR_PRIORITY.mode),
@@ -39,7 +38,6 @@ describe("context bar fold", () => {
     expect(CONTEXT_BAR_PRIORITY).toEqual({
       stop: 100,
       "isolation-pill": 90,
-      "permission-mode": 70,
       "provider/config": 60,
       "diff-summary": 50,
       mode: 40,
@@ -62,7 +60,6 @@ describe("context bar fold", () => {
       "mode",
       "diff-summary",
       "provider/config",
-      "permission-mode",
     ];
     let previous = 0;
     for (let available = 2000; available >= 0; available -= 5) {
@@ -79,7 +76,7 @@ describe("context bar fold", () => {
     const folded = foldContextBar(FULL, 0);
     expect(folded.has("isolation-pill")).toBe(false);
     expect(folded.has("stop")).toBe(false);
-    expect(folded.size).toBe(6);
+    expect(folded.size).toBe(5);
   });
 
   it("folds an undeclared slot before every declared one", () => {
@@ -125,7 +122,6 @@ describe("context bar fold", () => {
       width("isolation-pill") +
       CONTEXT_BAR_CHROME_WIDTH +
       foldableTotal([
-        "permission-mode",
         "provider/config",
         "diff-summary",
         "mode",

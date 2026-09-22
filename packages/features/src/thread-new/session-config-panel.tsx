@@ -2,12 +2,7 @@
 //! `ConfigOption`, driven by the Provider's own schema (never a fixed grid).
 
 import type { ConfigOption } from "@tethys/bindings";
-import {
-  EmptyState,
-  Listbox,
-  SchemaFieldGroup,
-  ToggleSwitch,
-} from "@tethys/ui";
+import { EmptyState, SchemaFieldGroup, Select, ToggleSwitch } from "@tethys/ui";
 
 export interface SessionConfigPanelProps {
   options: ConfigOption[];
@@ -45,23 +40,26 @@ function valueLabel(option: ConfigOption, id: string): string {
 /** The Provider's display values, with `value_options` names preferred. */
 export function optionValues(
   option: ConfigOption,
-): Array<{ id: string; name: string }> {
+): Array<{ id: string; name: string; description?: string | null }> {
   if (option.value_options && option.value_options.length > 0) {
     return option.value_options.map((value) => ({
       id: value.id,
       name: value.name,
+      description: value.description,
     }));
   }
   return option.values.map((value) => ({
     id: value,
     name: valueLabel(option, value),
+    description: undefined,
   }));
 }
 
 /**
  * Schema-driven session config. `ConfigOption` carries no explicit type, so
  * the control is derived from `kind` (when present) or the shape of `values`:
- * a boolean pair → toggle; >1 value → listbox; empty → read-only text.
+ * a boolean pair → toggle; selectable values → themed select; empty →
+ * read-only text.
  * An empty `options` list is the valid `No session options for this provider`.
  */
 export function SessionConfigPanel({
@@ -108,21 +106,21 @@ export function SessionConfigPanel({
                   }
                 />
               </div>
-            ) : optionValues(option).length > 1 ||
-              option.kind === "select" ||
-              option.values.length > 0 ? (
-              <div>
-                <Listbox
-                  label={option.name}
-                  selectedId={current}
-                  items={optionValues(option).map((value) => ({
-                    id: value.id,
-                    value: value.id,
-                    label: value.name,
-                  }))}
-                  onSelect={(item) => onChange(option.id, item.value)}
-                />
-              </div>
+            ) : optionValues(option).length > 0 ? (
+              <Select
+                aria-label={option.name}
+                value={current}
+                className="w-full"
+                onChange={(event) => onChange(option.id, event.target.value)}
+              >
+                {optionValues(option).map((value) => (
+                  <option key={value.id} value={value.id}>
+                    {value.id === option.recommended_value
+                      ? `${value.name} (Recommended)`
+                      : value.name}
+                  </option>
+                ))}
+              </Select>
             ) : (
               <span className="font-mono text-mono-code text-(--tethys-text-secondary)">
                 {valueLabel(option, current)}

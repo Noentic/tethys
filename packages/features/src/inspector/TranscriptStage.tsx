@@ -5,7 +5,7 @@ import {
 } from "@tethys/state";
 import { Button, cn, getEntryRenderer } from "@tethys/ui";
 import { ProviderCapabilityNotice } from "../providers/capability-notice";
-import { buildToolRun, type ToolRun } from "./group-runs";
+import { buildToolRun, isFileMutation, type ToolRun } from "./group-runs";
 import { indexChildren } from "./nest-children";
 import { SubagentCard } from "./renderers/subagent-card";
 import { ToolRunGroup } from "./renderers/tool-run-group";
@@ -16,14 +16,10 @@ type StageSegment =
   | { type: "run"; run: ToolRun }
   | { type: "subagent"; entry: ToolCallEntry };
 
-function isSubagentParent(
-  entry: SessionEntry,
-  childrenByParent: Map<string, SessionEntry[]>,
-): entry is ToolCallEntry {
+function isSubagentParent(entry: SessionEntry): entry is ToolCallEntry {
   return (
     entry.kind === "tool_call" &&
-    (entry as ToolCallEntry).origin?.kind === "subagent" &&
-    (childrenByParent.get(entry.id)?.length ?? 0) > 0
+    (entry as ToolCallEntry).origin?.kind === "subagent"
   );
 }
 
@@ -31,7 +27,7 @@ function segmentEntries(
   entries: SessionEntry[],
   density: "summary" | "full",
 ): StageSegment[] {
-  const { childIds, childrenByParent, orphanIds } = indexChildren(entries);
+  const { childIds, orphanIds } = indexChildren(entries);
   const segments: StageSegment[] = [];
   let buffer: ToolCallEntry[] = [];
 
@@ -48,7 +44,7 @@ function segmentEntries(
     if (childIds.has(entry.id) && !orphanIds.has(entry.id)) {
       continue;
     }
-    if (isSubagentParent(entry, childrenByParent)) {
+    if (isSubagentParent(entry)) {
       flush();
       segments.push({ type: "subagent", entry });
       continue;
@@ -69,8 +65,8 @@ function segmentEntries(
  * registry — the same seam `Stage.tsx` uses, so the `Earlier history
  * (read-only)` divider is honoured without new logic. Tool-call runs group in
  * `Summary` density and render individually in `Full`; a subagent call nests
- * its children. Per-turn `View diff` / `Restore` render only where the
- * capability set allows.
+ * its children. File actions render only for file mutations and only where
+ * the capability set allows.
  */
 export function TranscriptStage({
   entries,
@@ -93,7 +89,7 @@ export function TranscriptStage({
   const segments = segmentEntries(entries, density);
 
   const turnActions = (entry: SessionEntry) =>
-    entry.kind === "tool_call" && (actions.viewDiff || actions.restore) ? (
+    isFileMutation(entry) && (actions.viewDiff || actions.restore) ? (
       <div data-testid="turn-actions" className="mt-1 flex gap-sm pl-md">
         {actions.viewDiff && (
           <Button size="sm" variant="ghost" onClick={() => onViewDiff?.(entry)}>
@@ -111,20 +107,34 @@ export function TranscriptStage({
   return (
     <div
       data-testid="transcript-stage"
-      className={cn("flex flex-col gap-sm", className)}
+      className={cn(
+        "flex w-full flex-col items-center gap-lg px-4 pt-5",
+        className,
+      )}
     >
       {segments.map((segment) => {
         if (segment.type === "run") {
           return (
-            <div key={segment.run.id} data-entry-id={segment.run.id}>
+            <div
+              key={segment.run.id}
+              data-entry-id={segment.run.id}
+              className="w-full max-w-[720px]"
+            >
               <ToolRunGroup run={segment.run} onOpenLocation={onOpenLocation} />
-              {turnActions(segment.run.members[0])}
+              {turnActions(
+                segment.run.members.find(isFileMutation) ??
+                  segment.run.members[0],
+              )}
             </div>
           );
         }
         if (segment.type === "subagent") {
           return (
-            <div key={segment.entry.id} data-entry-id={segment.entry.id}>
+            <div
+              key={segment.entry.id}
+              data-entry-id={segment.entry.id}
+              className="w-full max-w-[720px]"
+            >
               <SubagentCard entry={segment.entry} index={childIndex} />
               {turnActions(segment.entry)}
             </div>
@@ -141,7 +151,7 @@ export function TranscriptStage({
               key={entry.id}
               role="separator"
               aria-label={(entry as { label: string }).label}
-              className="my-sm flex items-center gap-sm text-label-sm text-(--tethys-text-muted)"
+              className="w-full max-w-[720px] flex items-center gap-sm text-label-sm text-(--tethys-text-muted)"
             >
               <span className="h-px flex-1 bg-(--tethys-hairline)" />
               {(entry as { label: string }).label}
@@ -150,8 +160,19 @@ export function TranscriptStage({
           );
         }
         const Renderer = getEntryRenderer(entry.kind);
+        const isUserMessage =
+          entry.kind === "turn_message" &&
+          "role" in entry &&
+          entry.role === "User";
         return (
-          <div key={entry.id} data-entry-id={entry.id}>
+          <div
+            key={entry.id}
+            data-entry-id={entry.id}
+            className={cn(
+              "w-full max-w-[720px]",
+              isUserMessage && "flex justify-end",
+            )}
+          >
             {childIndex.orphanIds.has(entry.id) && (
               <ProviderCapabilityNotice
                 provider="This Provider"

@@ -34,6 +34,10 @@ const model = option(
   ],
   "claude-sonnet-x",
 );
+const recommendedModel: ConfigOption = {
+  ...model,
+  recommended_value: "claude-opus-x",
+};
 const effort = option(
   "thought_level",
   "thought_level",
@@ -65,6 +69,21 @@ describe("ComposerConfigChips", () => {
     );
     expect(screen.getByText("Sonnet")).toBeTruthy();
     expect(screen.queryByText("claude-sonnet-x")).toBeNull();
+  });
+
+  it("marks the Provider's recommended option", () => {
+    render(
+      <ComposerConfigChips
+        options={[recommendedModel]}
+        values={{ model: "claude-sonnet-x" }}
+        providerName="Claude Code"
+        onSetOption={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText("Sonnet"));
+    expect(
+      screen.getByRole("option", { name: /^Opus \(Recommended\)/ }),
+    ).toBeTruthy();
   });
 
   it("reverts the chip and shows the notice when the provider rejects", async () => {

@@ -10,7 +10,6 @@
 export const CONTEXT_BAR_PRIORITY = {
   stop: 100,
   "isolation-pill": 90,
-  "permission-mode": 70,
   "provider/config": 60,
   "diff-summary": 50,
   mode: 40,
@@ -24,7 +23,6 @@ export const UNDECLARED_SLOT_PRIORITY = 10;
 export const CONTEXT_BAR_ITEM_WIDTHS: Record<string, number> = {
   stop: 110,
   "isolation-pill": 120,
-  "permission-mode": 90,
   "provider/config": 170,
   "diff-summary": 110,
   mode: 80,

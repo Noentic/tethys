@@ -85,6 +85,23 @@ describe("subagent-card (M1.7 U16)", () => {
     expect(screen.getByText("depth 2")).toBeTruthy();
   });
 
+  it("shows streamed subagent text inside its card", () => {
+    const parent = call("A", {
+      origin: { kind: "subagent" },
+      input: "Inspect the session updates.",
+      output: "I found the module.",
+    });
+    render(<SubagentCard entry={parent} index={indexChildren([parent])} />);
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTestId("subagent-task").textContent).toBe(
+      "Inspect the session updates.",
+    );
+    expect(screen.getByTestId("subagent-transcript").textContent).toBe(
+      "I found the module.",
+    );
+    expect(screen.getByText("0 tool calls")).toBeTruthy();
+  });
+
   it("opens and rings the dot when a child awaits approval", () => {
     const parent = call("A", { origin: { kind: "subagent" } });
     const child = call("B", { parentToolCallId: "A", status: "Pending" });

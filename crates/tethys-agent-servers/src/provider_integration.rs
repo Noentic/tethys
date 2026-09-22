@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use serde_json::{Map, Value};
 use tethys_acp::client::{
     AcpProviderIntegration, ExtensionNotificationHandler, ExtensionRequestHandler,
+    PermissionMetadataHandler, PromptResponseHandler, SessionUpdateHandler,
 };
 
 /// A Provider's optional ACP surface. Providers supply handlers only when the
@@ -12,17 +13,22 @@ use tethys_acp::client::{
 #[derive(Clone, Default)]
 pub struct ProviderIntegrationDescriptor {
     pub initialize_meta: Map<String, Value>,
+    pub client_capabilities_meta: Map<String, Value>,
     pub extension_methods: Vec<String>,
     /// Answers claimed requests immediately; `None` responses reach the UI.
     pub handle_extension_request: Option<ExtensionRequestHandler>,
     /// Observes claimed notifications; the normalized event still emits.
     pub handle_extension_notification: Option<ExtensionNotificationHandler>,
+    pub handle_session_update: Option<SessionUpdateHandler>,
+    pub handle_permission_metadata: Option<PermissionMetadataHandler>,
+    pub handle_prompt_response: Option<PromptResponseHandler>,
 }
 
 impl std::fmt::Debug for ProviderIntegrationDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProviderIntegrationDescriptor")
             .field("initialize_meta", &self.initialize_meta)
+            .field("client_capabilities_meta", &self.client_capabilities_meta)
             .field("extension_methods", &self.extension_methods)
             .field(
                 "handle_extension_request",
@@ -31,6 +37,18 @@ impl std::fmt::Debug for ProviderIntegrationDescriptor {
             .field(
                 "handle_extension_notification",
                 &self.handle_extension_notification.is_some(),
+            )
+            .field(
+                "handle_session_update",
+                &self.handle_session_update.is_some(),
+            )
+            .field(
+                "handle_permission_metadata",
+                &self.handle_permission_metadata.is_some(),
+            )
+            .field(
+                "handle_prompt_response",
+                &self.handle_prompt_response.is_some(),
             )
             .finish()
     }
@@ -42,6 +60,16 @@ pub struct ProviderIntegrationRegistry {
 }
 
 impl ProviderIntegrationRegistry {
+    /// Production adapters for providers with implemented extension behavior.
+    pub fn builtins() -> Self {
+        let mut descriptors = HashMap::new();
+        descriptors.insert(
+            crate::providers::claude_code::REGISTRY_ID.to_string(),
+            crate::providers::claude_code::descriptor(),
+        );
+        Self { descriptors }
+    }
+
     pub fn register(
         &mut self,
         integration_id: impl Into<String>,
@@ -80,6 +108,9 @@ impl ProviderIntegrationRegistry {
             initialize_meta: descriptor
                 .map(|value| value.initialize_meta.clone())
                 .unwrap_or_default(),
+            client_capabilities_meta: descriptor
+                .map(|value| value.client_capabilities_meta.clone())
+                .unwrap_or_default(),
             extension_methods: descriptor
                 .map(|value| value.extension_methods.clone())
                 .unwrap_or_default(),
@@ -87,6 +118,12 @@ impl ProviderIntegrationRegistry {
                 .and_then(|value| value.handle_extension_request.clone()),
             extension_notification_handler: descriptor
                 .and_then(|value| value.handle_extension_notification.clone()),
+            session_update_handler: descriptor
+                .and_then(|value| value.handle_session_update.clone()),
+            permission_metadata_handler: descriptor
+                .and_then(|value| value.handle_permission_metadata.clone()),
+            prompt_response_handler: descriptor
+                .and_then(|value| value.handle_prompt_response.clone()),
         }
     }
 }
@@ -133,5 +170,23 @@ mod tests {
             ..Default::default()
         };
         assert!(registry.register("fixture", standard).is_err());
+    }
+
+    #[test]
+    fn builtin_claude_descriptor_advertises_only_supported_air_capabilities() {
+        let registry = ProviderIntegrationRegistry::builtins();
+        let descriptor = registry.get("claude-acp").expect("Claude descriptor");
+        let capabilities = &descriptor.client_capabilities_meta["jetbrains"]["air"]["capabilities"];
+        assert_eq!(
+            capabilities,
+            &serde_json::json!([
+                "nativeSubagentSessions",
+                "recommendedValue",
+                "sessionFailure"
+            ])
+        );
+        assert!(descriptor.handle_session_update.is_some());
+        assert!(descriptor.handle_permission_metadata.is_some());
+        assert!(descriptor.handle_prompt_response.is_some());
     }
 }

@@ -7,6 +7,21 @@ function rejects(kind: string | null | undefined): boolean {
   return kind?.startsWith("reject") ?? false;
 }
 
+function defaultsToNo(metadata?: string | null): boolean {
+  if (!metadata) return false;
+  try {
+    const value: unknown = JSON.parse(metadata);
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      "defaultToNo" in value &&
+      (value as { defaultToNo: unknown }).defaultToNo === true
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The inline permission card (PRM-01..04). Renders the Provider's own
  * `options` array in the Provider's order — never a hardcoded approve/reject
@@ -92,6 +107,11 @@ export function PermissionRequestCard({
       {request.description && (
         <p className="mt-1 text-body-sm text-(--tethys-text-secondary)">
           {request.description}
+        </p>
+      )}
+      {defaultsToNo(request.metadata) && (
+        <p className="mt-1 text-label-sm text-(--tethys-text-muted)">
+          Claude recommends denying this request by default.
         </p>
       )}
       <div className="mt-sm flex flex-wrap gap-sm">

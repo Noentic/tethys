@@ -338,6 +338,7 @@ async fn permission_resolver_is_dyn_and_returns_typed_decision() {
             name: "Allow".into(),
             kind: None,
         }],
+        metadata: None,
     };
 
     let decision = resolver.resolve(&SessionId::new("s1"), request).await;

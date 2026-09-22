@@ -7,8 +7,8 @@ export interface ThreadViewProps {
 
 /**
  * Thin route mount (D13): resolves the session id and renders the feature
- * `InspectorScreen`, which owns the transcript, the interaction cards, the
- * permission-mode pill and the inbox through the slot registries.
+ * `InspectorScreen`, which owns the transcript, the interaction cards and the
+ * approval inbox through the slot registries.
  */
 export function ThreadView({ sessionId }: ThreadViewProps) {
   return (

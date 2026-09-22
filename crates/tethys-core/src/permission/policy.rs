@@ -254,6 +254,7 @@ mod tests {
             description: None,
             subject,
             options,
+            metadata: None,
         }
     }
 

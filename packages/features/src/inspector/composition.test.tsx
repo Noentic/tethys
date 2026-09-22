@@ -65,6 +65,7 @@ describe("Inspector composition (M1.7 U10)", () => {
         toolCallId: "t1",
         title: "Edit file",
         status: "Completed" as const,
+        toolKind: "edit" as const,
         locations: [],
         timestamp: 1,
       },
@@ -77,6 +78,27 @@ describe("Inspector composition (M1.7 U10)", () => {
     );
     expect(screen.getByRole("button", { name: "View diff" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Restore" })).toBeTruthy();
+  });
+
+  it("does not offer file actions for non-mutating tools", () => {
+    render(
+      <TranscriptStage
+        entries={[
+          {
+            id: "t1",
+            kind: "tool_call" as const,
+            toolCallId: "t1",
+            title: "Run command",
+            status: "Completed" as const,
+            toolKind: "execute" as const,
+            locations: [],
+            timestamp: 1,
+          },
+        ]}
+        capabilities={workspaceCapabilityFixtures["git-remote"]}
+      />,
+    );
+    expect(screen.queryByTestId("turn-actions")).toBeNull();
   });
 
   it("renders exactly one Earlier history divider", () => {

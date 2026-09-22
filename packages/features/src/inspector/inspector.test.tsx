@@ -1,9 +1,16 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import type { PlanStep, ToolCallEntry, TurnMessageEntry } from "@tethys/state";
+import type {
+  CheckpointEntry,
+  FileWriteEntry,
+  PlanStep,
+  ToolCallEntry,
+  TurnMessageEntry,
+} from "@tethys/state";
 import { clearRegistriesForTesting, getEntryRenderer } from "@tethys/ui";
 import { beforeEach, describe, expect, it } from "vitest";
 import { registerInspectorRenderers } from "./register";
 import { PlanPanel } from "./renderers/plan-panel";
+import { TimelineEventRenderer } from "./renderers/timeline-event";
 import { ToolAccordionRenderer } from "./renderers/tool-accordion";
 import { TurnMessageRenderer } from "./renderers/turn-message";
 
@@ -51,6 +58,12 @@ describe("Transcript entry renderers (M1.7 U8)", () => {
     expect(getEntryRenderer("turn_message")).not.toBe(
       getEntryRenderer("definitely-unregistered-kind"),
     );
+    expect(getEntryRenderer("file_write")).not.toBe(
+      getEntryRenderer("definitely-unregistered-kind"),
+    );
+    expect(getEntryRenderer("checkpoint")).not.toBe(
+      getEntryRenderer("definitely-unregistered-kind"),
+    );
   });
 
   it("patches one tool card in place rather than appending", () => {
@@ -66,6 +79,53 @@ describe("Transcript entry renderers (M1.7 U8)", () => {
       container.querySelectorAll('[data-entry-kind="tool_call"]'),
     ).toHaveLength(1);
     expect(screen.getByText("Read file done")).toBeTruthy();
+  });
+
+  it("renders an edit payload as a visible file diff", () => {
+    render(
+      <ToolAccordionRenderer
+        entry={toolCall({
+          status: "Pending",
+          title: "Edit README.md",
+          toolKind: "edit",
+          input: JSON.stringify({
+            file_path: "README.md",
+            old_string: "old line",
+            new_string: "new line",
+          }),
+        })}
+      />,
+    );
+    const diff = screen.getByTestId("file-diff");
+    expect(diff.textContent).toContain("- old line");
+    expect(diff.textContent).toContain("+ new line");
+  });
+
+  it("renders filesystem and checkpoint ACP entries", () => {
+    const fileWrite: FileWriteEntry = {
+      id: "write-1",
+      kind: "file_write",
+      path: "src/main.ts",
+      before: null,
+      after: "export {}",
+      via: "AcpFs",
+      timestamp: 0,
+    };
+    const checkpoint: CheckpointEntry = {
+      id: "checkpoint-1",
+      kind: "checkpoint",
+      oid: "abc123",
+      checkpointKind: "TurnEnd",
+      timestamp: 0,
+    };
+    render(
+      <>
+        <TimelineEventRenderer entry={fileWrite} />
+        <TimelineEventRenderer entry={checkpoint} />
+      </>,
+    );
+    expect(screen.getByText("src/main.ts")).toBeTruthy();
+    expect(screen.getByText(/turn end/)).toBeTruthy();
   });
 
   it("marks the in-progress plan step with aria-current", () => {

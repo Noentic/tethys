@@ -84,9 +84,13 @@ fn extension_integration(
     AcpProviderIntegration {
         id: "fixture".into(),
         initialize_meta: Default::default(),
+        client_capabilities_meta: Default::default(),
         extension_methods: vec!["_fixture.dev/action".into()],
         extension_request_handler: handler,
         extension_notification_handler: None,
+        session_update_handler: None,
+        permission_metadata_handler: None,
+        prompt_response_handler: None,
     }
 }
 

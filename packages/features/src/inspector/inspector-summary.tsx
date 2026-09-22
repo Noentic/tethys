@@ -116,7 +116,7 @@ export function InspectorSummary({
       data-testid="inspector-summary"
       aria-label="Session rollup"
       className={cn(
-        "flex w-full list-none items-stretch gap-md rounded-md bg-(--tethys-surface-overlay) px-md py-sm",
+        "flex w-full list-none items-stretch justify-between gap-md rounded-md bg-(--tethys-surface-overlay) px-md py-sm",
         className,
       )}
     >

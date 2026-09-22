@@ -8,7 +8,7 @@ use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDi
 use serde::Serialize;
 use tethys_schema::thread::{
     AgentCommand, ConfigOption, ConfigOptionKind, ConfigOptionValue, ContentBlock, MessageChunk,
-    PermissionSubject, PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, Role,
+    Patch, PermissionSubject, PlanContent, PlanEntry, PlanEntryPriority, PlanEntryStatus, Role,
     SessionState, StateChanged, StopReason, ToolCallContent, ToolCallPatch, ToolCallStatus,
     ToolKind, ToolLocation, TurnEventBody,
 };
@@ -105,6 +105,8 @@ pub fn v1_update(
                     category: Some("mode".to_string()),
                     kind: Some(ConfigOptionKind::Select),
                     value_options: vec![],
+                    recommended_value: None,
+                    metadata: None,
                 }],
             }]
         }
@@ -118,6 +120,7 @@ pub fn v1_update(
                 tethys_schema::thread::SessionInfo {
                     title: maybe_string(&update.title),
                     updated_at: maybe_string(&update.updated_at),
+                    goal: Patch::Unchanged,
                 },
             )]
         }
@@ -167,6 +170,7 @@ pub(crate) fn v1_tool_patch(tool_call: &acp1::ToolCall) -> ToolCallPatch {
         origin: None,
         parent_tool_call_id: None,
         locations: tool_call.locations.iter().map(tool_location).collect(),
+        metadata: None,
     }
 }
 
@@ -184,6 +188,7 @@ pub(crate) fn v1_tool_update_patch(fields: &acp1::ToolCallUpdateFields) -> ToolC
             .as_ref()
             .map(|locations| locations.iter().map(tool_location).collect())
             .unwrap_or_default(),
+        metadata: None,
     }
 }
 
@@ -367,6 +372,8 @@ pub(crate) fn mode_option(state: &acp1::SessionModeState) -> ConfigOption {
                 description: mode.description.clone(),
             })
             .collect(),
+        recommended_value: None,
+        metadata: None,
     }
 }
 
@@ -415,6 +422,8 @@ pub(crate) fn config_option(option: &acp1::SessionConfigOption) -> ConfigOption 
         category: option.category.as_ref().map(label),
         kind: Some(kind),
         value_options,
+        recommended_value: None,
+        metadata: None,
     }
 }
 

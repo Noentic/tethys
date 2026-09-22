@@ -81,6 +81,20 @@ describe("turn endings (M1.7 U17)", () => {
     ).toBe("assertive");
   });
 
+  it("expands a compaction summary when one is provided", () => {
+    render(
+      <TurnNoticeRenderer
+        entry={notice({
+          noticeKind: "compaction",
+          message: "Context compacted.",
+          summary: "Older context was summarized.",
+        })}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Context compacted" }));
+    expect(screen.getByText("Older context was summarized.")).toBeTruthy();
+  });
+
   it("shows the working indicator with elapsed and quiet text", () => {
     render(
       <WorkingIndicator

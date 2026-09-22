@@ -276,7 +276,9 @@ describe("context bar", () => {
         />,
       );
       fireEvent.click(screen.getByRole("button", { name: /claude-code/ }));
-      fireEvent.click(screen.getByRole("option", { name: "Beta" }));
+      fireEvent.change(screen.getByRole("combobox", { name: "Temperature" }), {
+        target: { value: "b" },
+      });
       expect(onSetOption).toHaveBeenCalledWith("temperature", "b");
     });
 

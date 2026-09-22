@@ -468,7 +468,7 @@ components:
     rounded: "{rounded.xs}"
     height: 20px
     padding: 0 6px
-    label: "`Mode · <current value name>`, for example `Mode · Supervised`"
+    label: "`Mode · <current value name>`, for example `Mode · Manual`"
     scope: "The one home of the ACP `mode` category (P5): a Provider's `mode` option is never a `composer-config-chip` and never a row in the `session-config-panel`. Sits in the `prompt-card` context bar"
     absent: "a Provider that declares no `mode` option renders no pill, never a disabled one"
     popover: "a `listbox` at `{stacking.popover}` opening upward from the pill, one row per value, the current value `aria-selected`"
@@ -602,7 +602,7 @@ components:
     padding: "{spacing.lg}"
     width: "{layout.prompt-width}"
     topContextPills: "collapsible context pills pinned across the top edge: git context (`isolation-pill`), provider/model selector pill with popover trigger (`model-selector-pill`), execution mode pill (`mode-pill`), and diff summary pill (`diff-summary-pill`)"
-    contextBarFold: "the context bar shares the card's content width and folds when its pills do not fit, lowest priority first: `usage-bar` 20, `queue-count` 30, `mode-pill` 40, `diff-summary-pill` 50, the provider/config pill 60, the permission-mode pill 70. `isolation-pill` (90) never folds, and neither does the stop control in the lower bar (100). A pill a Provider surface registers with no declared priority folds before all of them"
+    contextBarFold: "the context bar shares the card's content width and folds when its pills do not fit, lowest priority first: `usage-bar` 20, `queue-count` 30, `mode-pill` 40, `diff-summary-pill` 50, and the provider/config pill 60. `isolation-pill` (90) never folds, and neither does the stop control in the lower bar (100). A pill a Provider surface registers with no declared priority folds before all of them"
     overflowTrigger: "a 20px `•••` button at the end of the context bar, `aria-haspopup=dialog`, opening a `popover` at `{stacking.popover}` that lists the folded items in the same order. When the folded set holds a non-empty `queue-count` the trigger carries the same `{semantic.status-warning}` dot the count does, so a pending queue is never hidden by narrowing the window"
     composerGuide: "subtle command guide in input placeholder (`/ commands · @ files · $ skills`); pills removed from composer body"
     threadLowerBar: "docked in-thread composer's lower bar: mention triggers, attachment chips, and single dual-state `action-icon-button` on the right"

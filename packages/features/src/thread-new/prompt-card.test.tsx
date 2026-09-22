@@ -34,6 +34,19 @@ function bootstrapFor(request: CreateThread): ThreadBootstrap {
     events: [],
     config_options: [
       {
+        id: "mode",
+        name: "Mode",
+        description: null,
+        current_value: "manual",
+        values: ["manual", "plan"],
+        category: "mode",
+        kind: "select" as const,
+        value_options: [
+          { id: "manual", name: "Manual", description: null },
+          { id: "plan", name: "Plan", description: null },
+        ],
+      },
+      {
         id: "model",
         name: "Model",
         description: null,
@@ -72,6 +85,54 @@ async function selectClaude() {
 }
 
 describe("PromptCard", () => {
+  it("does not render mode until the provider session is prepared", async () => {
+    render(
+      <PromptCard
+        client={client()}
+        session={session()}
+        providers={providerConnectionFixtures}
+        workspaces={trustedWorkspaceFixtures}
+        initialWorkspace={trustedWorkspaceFixtures[0]}
+        onStart={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("combobox", { name: "Mode, Manual" })).toBeNull();
+
+    await selectClaude();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Mode, Manual" }),
+      ).toBeTruthy(),
+    );
+  });
+
+  it("keeps the selected mode in the first-turn config", async () => {
+    const onStart = vi.fn();
+    render(
+      <PromptCard
+        client={client()}
+        session={session()}
+        providers={providerConnectionFixtures}
+        workspaces={trustedWorkspaceFixtures}
+        initialWorkspace={trustedWorkspaceFixtures[0]}
+        queuedCount={1}
+        onStart={onStart}
+      />,
+    );
+    await selectClaude();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Mode, Manual" }),
+      ).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole("combobox", { name: "Mode, Manual" }));
+    fireEvent.click(screen.getByRole("option", { name: "Plan" }));
+    fireEvent.click(submitButton());
+    expect(onStart.mock.calls[0]?.[0].changedConfig).toMatchObject({
+      mode: "plan",
+    });
+  });
+
   it("keeps submit disabled until a workspace is picked", () => {
     render(
       <PromptCard

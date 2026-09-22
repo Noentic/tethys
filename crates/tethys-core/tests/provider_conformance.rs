@@ -9,6 +9,7 @@
 //! values, credentials, and provider stderr never reach it.
 
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,6 +17,7 @@ use futures::StreamExt;
 use tethys_agent_servers::registry::HttpRegistrySource;
 use tethys_api::{AgentApi, EventsApi, ThreadApi, WorkspaceApi};
 use tethys_core::{Core, CorePaths};
+use tethys_schema::agents::{AgentProfileView, InstallResult};
 use tethys_schema::catalog::{TrustGrant, TrustScope};
 use tethys_schema::thread::{ContentBlock, CreateThread, SessionState, TurnEventBody};
 use tethys_schema::workspace::PermissionMode;
@@ -41,12 +43,75 @@ impl Disposition {
 
 /// One disposition line, sanitized: stage plus at most a short reason.
 fn report(provider_id: &str, disposition: Disposition, stage: &str, reason: &str) {
-    println!(
-        "provider-conformance: disposition={} provider={} stage={} reason={}",
-        disposition.as_str(),
+    report_record(
         provider_id,
+        disposition,
         stage,
-        sanitize(reason)
+        reason,
+        serde_json::Value::Null,
+    );
+}
+
+fn report_install_snapshot(
+    provider_id: &str,
+    disposition: Disposition,
+    stage: &str,
+    reason: &str,
+    install: &InstallResult,
+    profile: Option<&AgentProfileView>,
+) {
+    let auth_methods = profile
+        .map(|profile| {
+            profile
+                .auth_methods
+                .iter()
+                .map(|method| {
+                    serde_json::json!({
+                        "id": method.id,
+                        "name": method.name,
+                        "shape": &method.shape,
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let snapshot = serde_json::json!({
+        "registry_version": install.version,
+        "distribution": install.distribution,
+        "node_runtime_missing": install.needs_node,
+        "adapter_version": profile.and_then(|profile| profile.detected_version.as_deref()),
+        "protocol": profile.and_then(|profile| profile.protocol),
+        "health": profile.map(|profile| profile.health),
+        "auth_state": profile.map(|profile| profile.auth_state),
+        "auth_methods": auth_methods,
+        "capabilities": profile.and_then(|profile| profile.capabilities.as_ref()),
+    });
+    report_record(provider_id, disposition, stage, reason, snapshot);
+}
+
+fn report_record(
+    provider_id: &str,
+    disposition: Disposition,
+    stage: &str,
+    reason: &str,
+    snapshot: serde_json::Value,
+) {
+    let node_runtime = Command::new("node")
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string());
+    println!(
+        "provider-conformance: {}",
+        serde_json::json!({
+            "disposition": disposition.as_str(),
+            "provider": provider_id,
+            "stage": stage,
+            "node_runtime": node_runtime.unwrap_or_else(|| "missing".into()),
+            "reason": sanitize(reason),
+            "snapshot": (snapshot != serde_json::Value::Null).then_some(snapshot),
+        })
     );
 }
 
@@ -126,11 +191,13 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
         }
     };
     if let Err(error) = core.agent_recheck(Some(install.profile_id.clone())).await {
-        report(
+        report_install_snapshot(
             &provider_id,
             classify_setup(&error.to_string()),
             "initialize",
             &error.to_string(),
+            &install,
+            None,
         );
         return Ok(());
     }
@@ -140,58 +207,113 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
         .into_iter()
         .find(|profile| profile.id == install.profile_id);
     let Some(profile) = profile else {
-        report(
+        report_install_snapshot(
             &provider_id,
             Disposition::NotObserved,
             "profile",
             "installed profile was not returned",
+            &install,
+            None,
         );
         return Ok(());
     };
     if profile.health != tethys_schema::agents::ProviderHealth::Healthy {
         if profile.auth_state == tethys_schema::agents::AuthState::Required {
-            report(
+            report_install_snapshot(
                 &provider_id,
                 Disposition::SetupRequired,
                 "auth",
                 "provider authentication is required",
+                &install,
+                Some(&profile),
             );
         } else {
-            report(
+            report_install_snapshot(
                 &provider_id,
                 Disposition::NotObserved,
                 "initialize",
                 &profile
                     .detail
-                    .unwrap_or_else(|| "provider did not reach healthy state".into()),
+                    .as_deref()
+                    .unwrap_or("provider did not reach healthy state"),
+                &install,
+                Some(&profile),
             );
         }
         return Ok(());
     }
 
-    let workspace_item = core
+    let workspace_item = match core
         .workspace_add(TrustGrant {
             path: workspace.display().to_string(),
             permission_mode: PermissionMode::Supervised,
             scope: TrustScope::Folder,
             init_git: false,
         })
-        .await?;
-    let bootstrap = core
+        .await
+    {
+        Ok(workspace) => workspace,
+        Err(error) => {
+            report_install_snapshot(
+                &provider_id,
+                Disposition::NotObserved,
+                "workspace",
+                &error.to_string(),
+                &install,
+                Some(&profile),
+            );
+            return Ok(());
+        }
+    };
+    let bootstrap = match core
         .thread_prepare(CreateThread {
             workspace_id: workspace_item.id.to_string(),
-            agent_profile_id: install.profile_id,
+            agent_profile_id: install.profile_id.clone(),
             workdir: workspace.display().to_string(),
             additional_directories: Vec::new(),
         })
-        .await?;
+        .await
+    {
+        Ok(bootstrap) => bootstrap,
+        Err(error) => {
+            report_install_snapshot(
+                &provider_id,
+                classify_setup(&error.to_string()),
+                "prepare",
+                &error.to_string(),
+                &install,
+                Some(&profile),
+            );
+            return Ok(());
+        }
+    };
     let thread_id = bootstrap.thread.id.clone();
-    let mut events = core
+    let mut events = match core
         .events_subscribe(thread_id.clone(), bootstrap.latest_seq)
-        .await?;
+        .await
+    {
+        Ok(events) => events,
+        Err(error) => {
+            let reason = core
+                .thread_delete(thread_id)
+                .await
+                .err()
+                .map(|cleanup| format!("{error}; thread cleanup failed: {cleanup}"))
+                .unwrap_or_else(|| error.to_string());
+            report_install_snapshot(
+                &provider_id,
+                Disposition::NotObserved,
+                "subscribe",
+                &reason,
+                &install,
+                Some(&profile),
+            );
+            return Ok(());
+        }
+    };
     let prompt_core = Arc::clone(&core);
     let prompt_thread = thread_id.clone();
-    let prompt_task = tokio::spawn(async move {
+    let mut prompt_task = tokio::spawn(async move {
         prompt_core
             .thread_prompt(
                 prompt_thread,
@@ -203,17 +325,63 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
     let mut last_seq = bootstrap.latest_seq;
     let mut saw_message = false;
     let mut saw_idle = false;
+    let mut prompt_finished = false;
+    let mut failure = None;
+    let event_deadline = tokio::time::Instant::now() + Duration::from_secs(90);
     loop {
-        let next = tokio::time::timeout(Duration::from_secs(90), events.next()).await?;
-        let Some(event) = next else { break };
+        let next = tokio::select! {
+            result = &mut prompt_task, if !prompt_finished => {
+                prompt_finished = true;
+                match result {
+                    Ok(Ok(())) => continue,
+                    Ok(Err(error)) => {
+                        failure = Some((
+                            classify_setup(&error.to_string()),
+                            "prompt",
+                            error.to_string(),
+                        ));
+                        break;
+                    }
+                    Err(error) => {
+                        failure = Some((
+                            Disposition::NotObserved,
+                            "prompt",
+                            error.to_string(),
+                        ));
+                        break;
+                    }
+                }
+            }
+            next = tokio::time::timeout_at(event_deadline, events.next()) => next,
+        };
+        let next = match next {
+            Ok(next) => next,
+            Err(_) => {
+                failure = Some((
+                    Disposition::NotObserved,
+                    "events",
+                    "timed out waiting for turn events".to_string(),
+                ));
+                break;
+            }
+        };
+        let Some(event) = next else {
+            failure.get_or_insert_with(|| {
+                (
+                    Disposition::NotObserved,
+                    "events",
+                    "event stream ended before the turn completed".to_string(),
+                )
+            });
+            break;
+        };
         if event.seq <= last_seq {
-            report(
-                &provider_id,
+            failure = Some((
                 Disposition::NotObserved,
                 "events",
-                "event sequence did not advance",
-            );
-            return Ok(());
+                "event sequence did not advance".to_string(),
+            ));
+            break;
         }
         last_seq = event.seq;
         match event.event {
@@ -229,22 +397,82 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
             _ => {}
         }
     }
-    prompt_task.await??;
+
+    if failure.is_some() || !saw_idle {
+        if let Err(error) = core.thread_cancel(thread_id.clone()).await {
+            failure.get_or_insert_with(|| (Disposition::NotObserved, "cancel", error.to_string()));
+        }
+    }
+
+    if !prompt_finished {
+        match tokio::time::timeout(Duration::from_secs(10), &mut prompt_task).await {
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(error))) => {
+                failure.get_or_insert_with(|| {
+                    (
+                        classify_setup(&error.to_string()),
+                        "prompt",
+                        error.to_string(),
+                    )
+                });
+            }
+            Ok(Err(error)) => {
+                failure
+                    .get_or_insert_with(|| (Disposition::NotObserved, "prompt", error.to_string()));
+            }
+            Err(_) => {
+                if failure.is_none() {
+                    let _ = core.thread_cancel(thread_id.clone()).await;
+                }
+                prompt_task.abort();
+                let _ = prompt_task.await;
+                failure.get_or_insert_with(|| {
+                    (
+                        Disposition::NotObserved,
+                        "prompt",
+                        "prompt did not finish after cancellation".to_string(),
+                    )
+                });
+            }
+        }
+    }
+
     if !saw_idle {
-        report(
+        failure.get_or_insert_with(|| {
+            (
+                Disposition::NotObserved,
+                "turn",
+                "turn did not reach idle after a message".to_string(),
+            )
+        });
+    }
+    if let Err(error) = core.thread_delete(thread_id).await {
+        let delete_error = format!("thread deletion failed: {error}");
+        if let Some((_, _, reason)) = failure.as_mut() {
+            reason.push_str("; ");
+            reason.push_str(&delete_error);
+        } else {
+            failure = Some((Disposition::NotObserved, "delete", delete_error));
+        }
+    }
+    if let Some((disposition, stage, reason)) = failure {
+        report_install_snapshot(
             &provider_id,
-            Disposition::NotObserved,
-            "turn",
-            "turn did not reach idle after a message",
+            disposition,
+            stage,
+            &reason,
+            &install,
+            Some(&profile),
         );
         return Ok(());
     }
-    core.thread_delete(thread_id).await?;
-    report(
+    report_install_snapshot(
         &provider_id,
         Disposition::Exercised,
         "vertical",
         "install→prepare→prompt→idle→delete",
+        &install,
+        Some(&profile),
     );
     Ok(())
 }

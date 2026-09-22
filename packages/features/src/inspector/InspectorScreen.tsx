@@ -4,7 +4,6 @@ import {
   isSessionHydrated,
   type SessionEntry,
   subscribeSessionStream,
-  type ToolCallEntry,
   useSessionCapabilities,
   type WorkspaceCapabilityFixture,
 } from "@tethys/state";
@@ -24,7 +23,6 @@ import { ProviderPopover } from "../providers/provider-popover";
 import { latestAnnouncement, TranscriptAnnouncer } from "./announcer";
 import { registerInspectorRenderers } from "./register";
 import { JumpToLatest } from "./renderers/jump-to-latest";
-import { WorkingIndicator } from "./renderers/working-indicator";
 import { TranscriptStage } from "./TranscriptStage";
 import { useSessionState } from "./use-session-state";
 import { useTailPin } from "./use-tail-pin";
@@ -78,7 +76,10 @@ export function InspectorScreen({
         store,
         client.events,
         (event) => {
-          if (event.event.type === "ProviderExtension") {
+          if (
+            event.event.type === "ProviderExtension" &&
+            event.event.body.request_id
+          ) {
             enqueueProviderExtension(sessionId, event.event.body);
           } else if (event.event.type === "ProviderExtensionResolved") {
             dequeueProviderExtension(sessionId, event.event.body.request_id);
@@ -108,24 +109,17 @@ export function InspectorScreen({
 
   const hasPending =
     state.pendingPermissions.length > 0 || state.pendingElicitations.length > 0;
-  const lastTimestamp = state.entries[state.entries.length - 1]?.timestamp;
-  const inFlight = state.liveEntries.find(
-    (entry): entry is ToolCallEntry =>
-      entry.kind === "tool_call" &&
-      (entry as ToolCallEntry).status === "Executing",
-  );
-
   return (
     <InspectorClientProvider client={client} threadId={sessionId}>
       <div
         data-testid="inspector-screen"
         className={cn("flex min-h-0 flex-1 flex-col gap-md p-md", className)}
       >
-        {streamError && (
+        {streamError && state.entries.length === 0 && (
           <p
             role="alert"
             title={streamError}
-            className="shrink-0 text-body-sm text-(--tethys-status-danger)"
+            className="mx-auto w-full max-w-(--layout-stage-measure) shrink-0 text-body-sm text-(--tethys-status-danger)"
           >
             This thread could not be opened.
           </p>
@@ -147,15 +141,9 @@ export function InspectorScreen({
               entries={state.entries}
               capabilities={capabilities}
               onViewDiff={handleViewDiff}
+              className="pb-lg"
             />
           </div>
-          {state.status === "running" && (
-            <WorkingIndicator
-              startedAt={lastTimestamp ?? Date.now()}
-              lastEventAt={lastTimestamp ?? Date.now()}
-              inFlightTitle={inFlight?.title}
-            />
-          )}
           <JumpToLatest
             visible={!pinned}
             newCount={newCount}

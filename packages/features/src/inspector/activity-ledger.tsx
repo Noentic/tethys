@@ -105,7 +105,10 @@ export function ActivityLedger({
   return (
     <section
       aria-label="Activity"
-      className={cn("bg-(--tethys-surface-panel) px-3 py-2", className)}
+      className={cn(
+        "rounded-sm border border-(--tethys-hairline) bg-(--tethys-surface-panel) px-3 py-2",
+        className,
+      )}
     >
       <header className="mb-sm flex items-center justify-between">
         <span className="text-label-sm text-(--tethys-text-muted)">

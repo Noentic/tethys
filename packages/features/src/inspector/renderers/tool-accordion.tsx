@@ -1,6 +1,7 @@
 import type { ToolCallEntry } from "@tethys/state";
 import { Chip, cn, StatusDot } from "@tethys/ui";
 import { useId, useState } from "react";
+import { diffForTool, InlineFileDiff } from "./file-diff";
 import { ToolOriginTag } from "./tool-origin-tag";
 
 const STATUS_KEY: Record<ToolCallEntry["status"], string> = {
@@ -40,8 +41,9 @@ export function ToolAccordionRenderer({
   className?: string;
   onOpenLocation?: (path: string, line: number | null) => void;
 }) {
+  const diff = diffForTool(entry);
   const [expanded, setExpanded] = useState(
-    entry.status === "Failed" || entry.status === "Pending",
+    entry.status === "Failed" || entry.status === "Pending" || diff !== null,
   );
   const regionId = useId();
   const output = entry.output ?? "";
@@ -107,8 +109,14 @@ export function ToolAccordionRenderer({
           id={regionId}
           className="border-t border-(--tethys-hairline) px-md py-sm"
         >
+          <InlineFileDiff diff={diff} />
           {entry.input && (
-            <pre className="overflow-x-auto font-mono text-mono-code text-(--tethys-text-secondary)">
+            <pre
+              className={cn(
+                "overflow-x-auto font-mono text-mono-code text-(--tethys-text-secondary)",
+                diff && "mt-sm",
+              )}
+            >
               {entry.input}
             </pre>
           )}

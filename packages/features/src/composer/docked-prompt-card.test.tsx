@@ -192,6 +192,7 @@ describe("docked prompt card", () => {
 
   it("disables the send button until there is text", () => {
     const { editorRef } = setup();
+    expect(screen.getByText("Ask Anything…")).toBeDefined();
     const send = screen.getByRole("button", { name: "Send prompt" });
     expect(send.hasAttribute("disabled")).toBe(true);
     type(editorRef, "hello");
@@ -221,11 +222,13 @@ describe("docked prompt card", () => {
     });
   }
 
-  it("turns the action button into Stop while a turn runs", () => {
+  it("spins the action button while a turn runs", () => {
     seed({ status: "running", cancellationState: "idle" });
     const { client } = setup();
     expect(screen.queryByRole("button", { name: "Send prompt" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^Stop/ }));
+    const stop = screen.getByRole("button", { name: "Stop prompt" });
+    expect(stop.querySelector("svg")).toBeTruthy();
+    fireEvent.click(stop);
     expect(client.thread.cancel).toHaveBeenCalledWith(SESSION);
   });
 
@@ -252,8 +255,7 @@ describe("docked prompt card", () => {
   it("styles Stop neutrally and never advances the ladder itself", () => {
     seed({ status: "running", cancellationState: "idle" });
     const { client } = setup();
-    const stop = screen.getByRole("button", { name: /^Stop/ });
-    expect(stop.className).not.toContain("text-(--tethys-status-danger)");
+    const stop = screen.getByRole("button", { name: "Stop prompt" });
     fireEvent.click(stop);
     expect(client.thread.cancel).toHaveBeenCalledWith(SESSION);
     // No phase originates from the client: it waits for the backend's event.

@@ -29,22 +29,17 @@ const PILL_CLASS =
 const SECTION_LABEL_CLASS =
   "px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider";
 
-/** Short `Model · Effort`-style summary from the Provider's own schema. */
-function configSummary(
+/** The model value shown beside the Provider name in the compact pill. */
+function modelSummary(
   schema: ConfigOption[],
   values: Record<string, string>,
 ): string {
-  return schema
-    .slice(0, 2)
-    .map((option) => {
-      const current = values[option.id] ?? option.current_value;
-      return (
-        optionValues(option).find((value) => value.id === current)?.name ??
-        current
-      );
-    })
-    .filter(Boolean)
-    .join(" · ");
+  const option = schema.find((candidate) => candidate.category === "model");
+  if (!option) return "";
+  const current = values[option.id] ?? option.current_value;
+  return (
+    optionValues(option).find((value) => value.id === current)?.name ?? current
+  );
 }
 
 /** The config column's status line: Provider auth wins over draft progress. */
@@ -101,7 +96,10 @@ export function ModelSelector({
     providers.find((provider) => provider.id === selectedProviderId) ?? null;
   const label = selected?.name ?? "No provider available";
   const summary =
-    configOptions.length > 0 ? configSummary(configOptions, values) : "";
+    configOptions.length > 0 ? modelSummary(configOptions, values) : "";
+  const panelOptions = configOptions.filter(
+    (option) => option.category !== "mode",
+  );
 
   useEffect(() => {
     if (open && !anySelectable) {
@@ -136,9 +134,9 @@ export function ModelSelector({
         ref={anchorRef}
         type="button"
         role="combobox"
-        aria-haspopup="listbox"
+        aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label="Model and provider"
+        aria-label="Provider and model"
         onClick={() => setOpen((prev) => !prev)}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -165,8 +163,8 @@ export function ModelSelector({
           {label}
         </span>
         {summary && (
-          <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
-            {summary}
+          <span className="text-label-md text-(--tethys-text-muted)">
+            · {summary}
           </span>
         )}
         <span aria-hidden="true" className="text-(--tethys-text-muted)">
@@ -180,8 +178,8 @@ export function ModelSelector({
         anchorRef={anchorRef}
         className="bottom-full left-0 mb-1.5"
       >
-        <div className="flex h-[300px] w-(--layout-popover-selector) divide-x divide-(--tethys-hairline) overflow-hidden">
-          <div className="flex w-[200px] shrink-0 flex-col overflow-y-auto">
+        <div className="flex h-[250px] w-(--layout-popover-selector) divide-x divide-(--tethys-hairline) overflow-hidden">
+          <div className="flex w-[200px] shrink-0 flex-col overflow-y-auto p-2">
             <div className={SECTION_LABEL_CLASS}>Providers</div>
             {providers.length === 0 ? (
               <EmptyState
@@ -235,17 +233,12 @@ export function ModelSelector({
             )}
           </div>
 
-          <div className="flex flex-1 flex-col gap-md overflow-y-auto p-md">
+          <div className="flex min-w-0 flex-1 flex-col gap-md overflow-y-auto p-md">
             {selected ? (
               <>
-                <div className="flex flex-col gap-1 border-b border-(--tethys-hairline) pb-md">
-                  <span className="text-heading-md text-(--tethys-text-primary)">
-                    {selected.name} Configuration
-                  </span>
-                  <span className="text-label-sm text-(--tethys-text-muted)">
-                    {configColumnCopy(selected, draftStatus)}
-                  </span>
-                </div>
+                <span className="text-label-sm text-(--tethys-text-muted)">
+                  {configColumnCopy(selected, draftStatus)}
+                </span>
                 {draftError !== null && draftStatus === "error" ? (
                   <p
                     role="alert"
@@ -255,7 +248,7 @@ export function ModelSelector({
                   </p>
                 ) : (
                   <SessionConfigPanel
-                    options={configOptions}
+                    options={panelOptions}
                     values={values}
                     onChange={onConfigChange}
                     emptyCopy={

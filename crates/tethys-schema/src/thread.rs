@@ -254,6 +254,8 @@ pub struct ToolCallPatch {
     pub parent_tool_call_id: Option<String>,
     #[serde(default)]
     pub locations: Vec<ToolLocation>,
+    #[serde(default)]
+    pub metadata: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -321,6 +323,12 @@ pub struct ConfigOption {
     pub kind: Option<ConfigOptionKind>,
     #[serde(default)]
     pub value_options: Vec<ConfigOptionValue>,
+    /// Provider-recommended selectable value, when supplied through an ACP
+    /// extension negotiated by the client.
+    #[serde(default)]
+    pub recommended_value: Option<String>,
+    #[serde(default)]
+    pub metadata: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -348,6 +356,20 @@ pub struct UsageSnapshot {
 pub struct SessionInfo {
     pub title: Option<String>,
     pub updated_at: Option<String>,
+    #[serde(default)]
+    pub goal: Patch<SessionGoal>,
+}
+
+/// Provider-neutral goal snapshot carried by the Claude ACP goal extension.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct SessionGoal {
+    pub objective: String,
+    pub status: String,
+    pub iterations: Option<u32>,
+    pub last_reason: Option<String>,
+    pub created_at: Option<String>,
+    /// Original extension object, retained so newer fields remain inspectable.
+    pub metadata: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -385,6 +407,8 @@ pub struct PermissionRequested {
     pub description: Option<String>,
     pub subject: Option<PermissionSubject>,
     pub options: Vec<PermOption>,
+    #[serde(default)]
+    pub metadata: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]

@@ -19,7 +19,6 @@ import {
   shouldNotify,
   turnCompletionNotification,
 } from "./notifications";
-import { PermissionModePill } from "./permission-mode-pill";
 import { registerApprovalSlots } from "./register-slots";
 
 function seedPending(sessionId: string, title: string) {
@@ -39,18 +38,17 @@ function seedPending(sessionId: string, title: string) {
   return createSessionStore(state);
 }
 
-describe("Permission-mode pill, inbox and notifications (M1.8 U11)", () => {
+describe("approval inbox and notifications (M1.8 U11)", () => {
   beforeEach(() => {
     clearAllSessionStoresForTesting();
     clearRegistriesForTesting();
     registerApprovalSlots();
   });
 
-  it("registers the pill under permission-mode and the drawer body", () => {
+  it("registers the drawer body without a duplicate execution-mode control", () => {
     const ids = getAllComposerContextSlots().map(([id]) => id);
-    expect(ids).toContain("permission-mode");
+    expect(ids).not.toContain("permission-mode");
     expect(getApprovalDrawerBody()).toBe(InboxDrawer);
-    expect(PermissionModePill).toBeTruthy();
   });
 
   it("renders the empty inbox state", () => {

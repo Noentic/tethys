@@ -56,6 +56,7 @@ fn permission_request_parks_and_resolution_returns_to_running() {
             description: None,
             subject: None,
             options: vec![],
+            metadata: None,
         }),
         EventOrigin::Live,
     );

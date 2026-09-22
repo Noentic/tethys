@@ -177,6 +177,141 @@
   }
 }
 
+/* Markdown is injected HTML, so it cannot carry utility classes from the
+   parser. Keep the same spacing and type hierarchy as the rest of the UI. */
+.markdown-content {
+  overflow-wrap: anywhere;
+}
+
+.markdown-content p {
+  margin-block: var(--spacing-md);
+}
+
+.markdown-content > :first-child,
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+
+.markdown-content > :last-child,
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  color: var(--tethys-text-primary);
+  font-weight: 600;
+}
+
+.markdown-content h1 {
+  margin-block: var(--spacing-xl) var(--spacing-sm);
+  font-size: var(--text-heading-lg);
+  line-height: var(--text-heading-lg--line-height);
+}
+
+.markdown-content h2 {
+  margin-block: var(--spacing-xl) var(--spacing-sm);
+  font-size: var(--text-heading-md);
+  line-height: var(--text-heading-md--line-height);
+}
+
+.markdown-content h3 {
+  margin-block: var(--spacing-lg) var(--spacing-sm);
+  font-size: var(--text-body-md);
+  line-height: var(--text-body-md--line-height);
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-block: var(--spacing-md);
+  padding-inline-start: var(--spacing-xl);
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+}
+
+.markdown-content li {
+  margin-block: var(--spacing-xs);
+}
+
+.markdown-content blockquote {
+  margin-block: var(--spacing-md);
+  border-inline-start: 2px solid var(--tethys-hairline-strong);
+  padding-inline-start: var(--spacing-md);
+  color: var(--tethys-text-secondary);
+}
+
+.markdown-content a {
+  color: var(--tethys-accent-focus);
+  text-decoration: underline;
+}
+
+.markdown-content table {
+  display: block;
+  max-width: 100%;
+  margin-block: var(--spacing-md);
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--tethys-hairline);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  text-align: start;
+}
+
+.markdown-content th {
+  background: var(--tethys-surface-nested);
+  color: var(--tethys-text-primary);
+  font-weight: 500;
+}
+
+.markdown-content .code-block {
+  margin-block: var(--spacing-md);
+  overflow: hidden;
+  border: 1px solid var(--tethys-hairline);
+  border-radius: var(--radius-sm);
+  background: var(--tethys-surface-sunken);
+}
+
+.markdown-content .code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-bottom: 1px solid var(--tethys-hairline);
+  color: var(--tethys-text-muted);
+  font: var(--text-mono-micro--font-weight) var(--text-mono-micro) / var(--text-mono-micro--line-height) var(--font-mono);
+}
+
+.markdown-content .code-block-header button,
+.markdown-content .code-block > button {
+  color: var(--tethys-text-secondary);
+  text-decoration: underline;
+}
+
+.markdown-content .code-block pre {
+  max-height: 24rem;
+  margin: 0;
+  overflow: auto;
+  padding: var(--spacing-md);
+  color: var(--tethys-text-on-sunken-secondary);
+  font: var(--text-mono-code--font-weight) var(--text-mono-code) / var(--text-mono-code--line-height) var(--font-mono);
+}
+
+.markdown-content .code-block > button {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font: var(--text-label-sm--font-weight) var(--text-label-sm) / var(--text-label-sm--line-height) var(--font-sans);
+}
+
 /* The attention wash, painted as an image layer so it tints the surface it is on
    instead of replacing that surface's opaque background (a translucent
    `bg-*` would let the canvas show through a card). Pair with a 2px left rule

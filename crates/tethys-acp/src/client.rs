@@ -18,14 +18,16 @@ use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::V2ConnectionTo;
 use agent_client_protocol::{
     on_receive_notification, on_receive_request, Agent, Client, ConnectTo, ConnectionTo, Handled,
-    Responder,
+    JsonRpcNotification, Responder,
 };
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use tethys_schema::agents::{AuthMethodShape, AuthMethodView, LoginTerminalOutput};
 use tethys_schema::connection::{AcpProtocol, AgentInfo, NormalizedCapabilities};
 use tethys_schema::sync::{McpTransports, RegistryValue, SessionServer, TransportKind};
 use tethys_schema::thread::{
-    ConfigOption, ContentBlock, PermOutcome, PermissionRequested, TurnEventBody,
+    ConfigOption, ContentBlock, PermOutcome, PermissionRequested, Role, ToolCallContent,
+    TurnEventBody,
 };
 use tethys_thread::{
     AgentConnection, ConnectionError, ConnectionEvent, ElicitationResolver, EventStream,
@@ -46,6 +48,20 @@ pub type ExtensionRequestHandler =
 
 /// Provider-owned handler for one claimed extension notification.
 pub type ExtensionNotificationHandler = Arc<dyn Fn(&str, &serde_json::Value) + Send + Sync>;
+
+/// Enriches updates with Provider metadata and returns a spawned child session
+/// id so the shared client can route later child updates to the root thread.
+pub type SessionUpdateHandler =
+    Arc<dyn Fn(&serde_json::Value, &mut Vec<TurnEventBody>) -> Option<String> + Send + Sync>;
+
+/// Adds negotiated request metadata to the standard permission presentation.
+pub type PermissionMetadataHandler =
+    Arc<dyn Fn(&serde_json::Value, &mut PermissionRequested) + Send + Sync>;
+
+/// Maps metadata attached to a prompt response into additional normalized
+/// events without changing the protocol's stop reason.
+pub type PromptResponseHandler =
+    Arc<dyn Fn(&serde_json::Value) -> Vec<TurnEventBody> + Send + Sync>;
 
 /// One injected bundle of ACP client services. The advertised capability
 /// payload is derived from what is actually wired, never ahead of a handler
@@ -86,9 +102,13 @@ impl AcpClientServices {
 pub struct AcpProviderIntegration {
     pub id: String,
     pub initialize_meta: serde_json::Map<String, serde_json::Value>,
+    pub client_capabilities_meta: serde_json::Map<String, serde_json::Value>,
     pub extension_methods: Vec<String>,
     pub extension_request_handler: Option<ExtensionRequestHandler>,
     pub extension_notification_handler: Option<ExtensionNotificationHandler>,
+    pub session_update_handler: Option<SessionUpdateHandler>,
+    pub permission_metadata_handler: Option<PermissionMetadataHandler>,
+    pub prompt_response_handler: Option<PromptResponseHandler>,
 }
 
 /// Connection setup (architecture §7.1: the caller picks the version).
@@ -133,11 +153,15 @@ struct Shared {
     permission_seq: AtomicU32,
     elicitation_seq: AtomicU32,
     session_roots: Mutex<HashMap<String, Vec<PathBuf>>>,
+    subagent_roots: Mutex<HashMap<String, String>>,
     terminals: TerminalHost,
     provider_id: String,
     extension_methods: HashSet<String>,
     extension_request_handler: Option<ExtensionRequestHandler>,
     extension_notification_handler: Option<ExtensionNotificationHandler>,
+    session_update_handler: Option<SessionUpdateHandler>,
+    permission_metadata_handler: Option<PermissionMetadataHandler>,
+    prompt_response_handler: Option<PromptResponseHandler>,
     extension_seq: AtomicU32,
     pending_extensions: Mutex<HashMap<String, PendingExtension>>,
 }
@@ -145,6 +169,16 @@ struct Shared {
 struct PendingExtension {
     session_id: String,
     response: oneshot::Sender<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
+#[notification(method = "session/update")]
+#[serde(rename_all = "camelCase")]
+struct RawSessionNotification {
+    session_id: String,
+    update: serde_json::Value,
+    #[serde(default, rename = "_meta")]
+    meta: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 enum ExtensionDispatch {
@@ -168,6 +202,7 @@ impl Shared {
             permission_seq: AtomicU32::new(0),
             elicitation_seq: AtomicU32::new(0),
             session_roots: Mutex::new(HashMap::new()),
+            subagent_roots: Mutex::new(HashMap::new()),
             terminals: TerminalHost::default(),
             provider_id: options
                 .integration
@@ -187,6 +222,18 @@ impl Shared {
                 .integration
                 .as_ref()
                 .and_then(|integration| integration.extension_notification_handler.clone()),
+            session_update_handler: options
+                .integration
+                .as_ref()
+                .and_then(|integration| integration.session_update_handler.clone()),
+            permission_metadata_handler: options
+                .integration
+                .as_ref()
+                .and_then(|integration| integration.permission_metadata_handler.clone()),
+            prompt_response_handler: options
+                .integration
+                .as_ref()
+                .and_then(|integration| integration.prompt_response_handler.clone()),
             extension_seq: AtomicU32::new(0),
             pending_extensions: Mutex::new(HashMap::new()),
         }
@@ -241,16 +288,17 @@ impl Shared {
         session_id: &str,
         permission: PermissionRequested,
     ) -> PermissionDecision {
+        let session_id = self.root_session_id(session_id);
         self.emit(
-            session_id,
+            &session_id,
             TurnEventBody::PermissionRequested(permission.clone()),
         );
         let decision = self
             .resolver
-            .resolve(&SessionId::new(session_id), permission.clone())
+            .resolve(&SessionId::new(session_id.clone()), permission.clone())
             .await;
         self.emit(
-            session_id,
+            &session_id,
             TurnEventBody::PermissionResolved {
                 req_id: permission.req_id,
                 outcome: decision.outcome,
@@ -267,14 +315,17 @@ impl Shared {
         mut request: tethys_schema::elicitation::ElicitationRequest,
     ) -> Option<tethys_schema::elicitation::ElicitationResponse> {
         let resolver = self.elicitation_resolver.as_ref()?;
+        let session_id = self.root_session_id(session_id);
         request.req_id = self.next_elicitation_id();
         self.emit(
-            session_id,
+            &session_id,
             TurnEventBody::ElicitationRequested(request.clone()),
         );
-        let response = resolver.resolve(&SessionId::new(session_id), request).await;
+        let response = resolver
+            .resolve(&SessionId::new(session_id.clone()), request)
+            .await;
         self.emit(
-            session_id,
+            &session_id,
             TurnEventBody::ElicitationResolved {
                 req_id: response.req_id.clone(),
                 outcome: response.outcome,
@@ -293,6 +344,7 @@ impl Shared {
         let Some(session_id) = value.and_then(|value| extension_session_id(&value)) else {
             return;
         };
+        let session_id = self.root_session_id(&session_id);
         self.emit(
             &session_id,
             TurnEventBody::ProviderExtension(
@@ -323,7 +375,7 @@ impl Shared {
         {
             return Ok(ExtensionDispatch::Immediate(answer));
         }
-        let session_id = extension_session_id(&value).ok_or(())?;
+        let session_id = self.root_session_id(&extension_session_id(&value).ok_or(())?);
         let (request_id, response) = self.queue_extension_request(&session_id, method, params);
         Ok(ExtensionDispatch::Pending {
             session_id,
@@ -462,6 +514,7 @@ impl Shared {
             self.terminals.close_session(session_id);
         }
         self.session_roots.lock().clear();
+        self.subagent_roots.lock().clear();
         self.sessions.lock().clear();
         self.synthetic.lock().clear();
         self.replaying.lock().clear();
@@ -478,6 +531,9 @@ impl Shared {
         self.cancel_extension_requests(session_id);
         self.terminals.close_session(session_id);
         self.session_roots.lock().remove(session_id);
+        self.subagent_roots
+            .lock()
+            .retain(|child, root| child != session_id && root != session_id);
         self.sessions.lock().remove(session_id);
         self.synthetic.lock().remove(session_id);
         self.replaying.lock().remove(session_id);
@@ -492,10 +548,11 @@ impl Shared {
         if !path.is_absolute() {
             return Err("ACP filesystem paths must be absolute".to_string());
         }
+        let session_id = self.root_session_id(session_id);
         let roots = self
             .session_roots
             .lock()
-            .get(session_id)
+            .get(&session_id)
             .cloned()
             .ok_or_else(|| "session has no trusted filesystem roots".to_string())?;
         let mut canonical_roots = Vec::with_capacity(roots.len());
@@ -574,14 +631,15 @@ impl Shared {
     }
 
     async fn session_directory(&self, session_id: &str) -> Result<PathBuf, String> {
+        let session_id = self.root_session_id(session_id);
         let root = self
             .session_roots
             .lock()
-            .get(session_id)
+            .get(&session_id)
             .and_then(|roots| roots.first())
             .cloned()
             .ok_or_else(|| "session has no trusted working directory".to_string())?;
-        self.checked_path(session_id, &root, false).await
+        self.checked_path(&session_id, &root, false).await
     }
 
     /// Ensures a session's event channel exists before its first event.
@@ -621,10 +679,100 @@ impl Shared {
         receiver
     }
 
-    fn map_v1(&self, session_id: &str, update: &acp1::SessionUpdate) -> Vec<TurnEventBody> {
+    fn map_v1(
+        &self,
+        session_id: &str,
+        raw_update: &serde_json::Value,
+    ) -> (String, Vec<TurnEventBody>) {
         let mut synthetic = self.synthetic.lock();
         let ids = synthetic.entry(session_id.to_string()).or_default();
-        map::v1_update(update, ids)
+        let mut events = match serde_json::from_value::<acp1::SessionUpdate>(raw_update.clone()) {
+            Ok(update) => map::v1_update(&update, ids),
+            Err(_) => vec![TurnEventBody::Unknown {
+                raw: raw_update.to_string(),
+            }],
+        };
+        drop(synthetic);
+        let root_session_id = self.process_session_update(session_id, raw_update, &mut events);
+        (root_session_id, events)
+    }
+
+    fn process_session_update(
+        &self,
+        session_id: &str,
+        raw_update: &serde_json::Value,
+        events: &mut Vec<TurnEventBody>,
+    ) -> String {
+        let root_session_id = self.root_session_id(session_id);
+        let is_subagent_session = root_session_id != session_id;
+        let child_session_id = self
+            .session_update_handler
+            .as_ref()
+            .and_then(|handler| handler(raw_update, events));
+
+        if is_subagent_session {
+            nest_subagent_events(session_id, events);
+        }
+        if let Some(child_session_id) = child_session_id {
+            if child_session_id != session_id {
+                if is_subagent_session {
+                    for event in events.iter_mut() {
+                        if let TurnEventBody::ToolCallUpsert {
+                            tool_call_id,
+                            patch,
+                        } = event
+                        {
+                            if tool_call_id == &child_session_id
+                                && patch.parent_tool_call_id.is_none()
+                            {
+                                patch.parent_tool_call_id = Some(session_id.to_string());
+                            }
+                        }
+                    }
+                }
+                self.subagent_roots
+                    .lock()
+                    .insert(child_session_id, root_session_id.clone());
+            }
+        }
+        root_session_id
+    }
+
+    fn root_session_id(&self, session_id: &str) -> String {
+        self.subagent_roots
+            .lock()
+            .get(session_id)
+            .cloned()
+            .unwrap_or_else(|| session_id.to_string())
+    }
+
+    #[cfg(feature = "acp-v2")]
+    fn enrich_session_update(
+        &self,
+        session_id: &str,
+        update: &impl Serialize,
+        events: &mut Vec<TurnEventBody>,
+    ) -> String {
+        serde_json::to_value(update)
+            .map(|raw| self.process_session_update(session_id, &raw, events))
+            .unwrap_or_else(|_| self.root_session_id(session_id))
+    }
+
+    fn map_permission_metadata(
+        &self,
+        raw: &serde_json::Value,
+        permission: &mut PermissionRequested,
+    ) {
+        if let Some(handler) = &self.permission_metadata_handler {
+            handler(raw, permission);
+        }
+    }
+
+    fn prompt_response_events(&self, response: &impl Serialize) -> Vec<TurnEventBody> {
+        self.prompt_response_handler
+            .as_ref()
+            .and_then(|handler| serde_json::to_value(response).ok().map(|raw| handler(&raw)))
+            .unwrap_or_default()
     }
 }
 
@@ -902,6 +1050,64 @@ fn terminal_auth_v1(methods: &[acp1::AuthMethod]) -> HashMap<String, TerminalAut
         .collect()
 }
 
+fn nest_subagent_events(session_id: &str, events: &mut Vec<TurnEventBody>) {
+    let mut nested = Vec::with_capacity(events.len());
+    for event in events.drain(..) {
+        match event {
+            TurnEventBody::MessageChunk(chunk)
+                if matches!(chunk.role, Role::Agent | Role::Thought) =>
+            {
+                let text = match &chunk.block {
+                    tethys_schema::thread::ContentBlock::Text(text)
+                    | tethys_schema::thread::ContentBlock::TextWithMetadata { text, .. } => {
+                        Some(text.clone())
+                    }
+                    _ => None,
+                };
+                if let Some(text) = text {
+                    nested.push(TurnEventBody::ToolCallContentChunk {
+                        tool_call_id: session_id.to_string(),
+                        item: ToolCallContent::Text(text),
+                    });
+                } else {
+                    nested.push(TurnEventBody::MessageChunk(chunk));
+                }
+            }
+            TurnEventBody::ToolCallUpsert {
+                tool_call_id,
+                mut patch,
+            } => {
+                if tool_call_id != session_id && patch.parent_tool_call_id.is_none() {
+                    patch.parent_tool_call_id = Some(session_id.to_string());
+                }
+                nested.push(TurnEventBody::ToolCallUpsert {
+                    tool_call_id,
+                    patch,
+                });
+            }
+            other => nested.push(other),
+        }
+    }
+    *events = nested;
+}
+
+fn merge_session_update_meta(
+    update: serde_json::Value,
+    notification_meta: Option<serde_json::Map<String, serde_json::Value>>,
+) -> serde_json::Value {
+    let Some(mut notification_meta) = notification_meta else {
+        return update;
+    };
+    let Some(mut update_object) = update.as_object().cloned() else {
+        return update;
+    };
+    if let Some(serde_json::Value::Object(update_meta)) = update_object.get("_meta") {
+        notification_meta.extend(update_meta.clone());
+    }
+    update_object.insert("_meta".into(), serde_json::Value::Object(notification_meta));
+    serde_json::Value::Object(update_object)
+}
+
 fn auth_method_meta_v1(
     methods: &[acp1::AuthMethod],
 ) -> HashMap<String, serde_json::Map<String, serde_json::Value>> {
@@ -978,17 +1184,25 @@ where
         .as_ref()
         .map(|integration| integration.initialize_meta.clone())
         .filter(|meta| !meta.is_empty());
+    let client_capabilities_meta = options
+        .integration
+        .as_ref()
+        .map(|integration| integration.client_capabilities_meta.clone())
+        .filter(|meta| !meta.is_empty());
     tokio::spawn(async move {
         let result = Client
             .builder()
             .name("tethys")
             .on_receive_notification(
-                move |notification: acp1::SessionNotification, _connection: ConnectionTo<Agent>| {
+                move |notification: RawSessionNotification, _connection: ConnectionTo<Agent>| {
                     let shared = notify_shared.clone();
                     async move {
-                        let session_id = notification.session_id.to_string();
-                        for event in shared.map_v1(&session_id, &notification.update) {
-                            shared.emit(&session_id, event);
+                        let session_id = notification.session_id;
+                        let raw_update =
+                            merge_session_update_meta(notification.update, notification.meta);
+                        let (root_session_id, events) = shared.map_v1(&session_id, &raw_update);
+                        for event in events {
+                            shared.emit(&root_session_id, event);
                         }
                         Ok(())
                     }
@@ -1009,7 +1223,7 @@ where
                             .title
                             .clone()
                             .unwrap_or_else(|| request.tool_call.tool_call_id.to_string());
-                        let permission = PermissionRequested {
+                        let mut permission = PermissionRequested {
                             req_id,
                             title,
                             description: None,
@@ -1023,7 +1237,12 @@ where
                                     kind: Some(map::label(&option.kind)),
                                 })
                                 .collect(),
+                            metadata: None,
                         };
+                        shared.map_permission_metadata(
+                            &serde_json::to_value(&request).unwrap_or(serde_json::Value::Null),
+                            &mut permission,
+                        );
                         let resolve_shared = shared.clone();
                         connection.spawn(async move {
                             let decision = resolve_shared
@@ -1080,7 +1299,7 @@ where
                       _connection: ConnectionTo<Agent>| {
                     let shared = terminal_create_shared.clone();
                     async move {
-                        let session_id = request.session_id.to_string();
+                        let session_id = shared.root_session_id(&request.session_id.to_string());
                         let requested_cwd = match request.cwd {
                             Some(cwd) => cwd,
                             None => match shared.session_directory(&session_id).await {
@@ -1167,10 +1386,11 @@ where
                       _connection: ConnectionTo<Agent>| {
                     let shared = terminal_output_shared.clone();
                     async move {
-                        match shared.terminals.output(
-                            &request.session_id.to_string(),
-                            request.terminal_id.0.as_ref(),
-                        ) {
+                        let session_id = shared.root_session_id(&request.session_id.to_string());
+                        match shared
+                            .terminals
+                            .output(&session_id, request.terminal_id.0.as_ref())
+                        {
                             Ok(response) => responder.respond(response),
                             Err(error) => responder.respond_with_internal_error(error),
                         }
@@ -1184,12 +1404,10 @@ where
                       _connection: ConnectionTo<Agent>| {
                     let shared = terminal_wait_shared.clone();
                     async move {
+                        let session_id = shared.root_session_id(&request.session_id.to_string());
                         match shared
                             .terminals
-                            .wait_for_exit(
-                                &request.session_id.to_string(),
-                                request.terminal_id.0.as_ref(),
-                            )
+                            .wait_for_exit(&session_id, request.terminal_id.0.as_ref())
                             .await
                         {
                             Ok(response) => responder.respond(response),
@@ -1205,10 +1423,11 @@ where
                       _connection: ConnectionTo<Agent>| {
                     let shared = terminal_kill_shared.clone();
                     async move {
-                        match shared.terminals.kill(
-                            &request.session_id.to_string(),
-                            request.terminal_id.0.as_ref(),
-                        ) {
+                        let session_id = shared.root_session_id(&request.session_id.to_string());
+                        match shared
+                            .terminals
+                            .kill(&session_id, request.terminal_id.0.as_ref())
+                        {
                             Ok(()) => responder.respond(acp1::KillTerminalResponse::new()),
                             Err(error) => responder.respond_with_internal_error(error),
                         }
@@ -1222,7 +1441,7 @@ where
                       _connection: ConnectionTo<Agent>| {
                     let shared = terminal_release_shared.clone();
                     async move {
-                        let session_id = request.session_id.to_string();
+                        let session_id = shared.root_session_id(&request.session_id.to_string());
                         let terminal_id = request.terminal_id.to_string();
                         match shared.terminals.release(&session_id, &terminal_id) {
                             Ok(()) => {
@@ -1389,6 +1608,7 @@ where
                 .client_capabilities(v1_client_capabilities(
                     elicitation_enabled,
                     terminal_auth_enabled,
+                    client_capabilities_meta,
                 ))
                 .meta(initialize_meta),
         )
@@ -1451,6 +1671,11 @@ where
         .as_ref()
         .map(|integration| integration.initialize_meta.clone())
         .filter(|meta| !meta.is_empty());
+    let client_capabilities_meta = options
+        .integration
+        .as_ref()
+        .map(|integration| integration.client_capabilities_meta.clone())
+        .filter(|meta| !meta.is_empty());
     tokio::spawn(async move {
         let result = Client
             .v2()
@@ -1461,8 +1686,14 @@ where
                     let shared = notify_shared.clone();
                     async move {
                         let session_id = notification.session_id.to_string();
-                        for event in crate::map_v2::v2_update(&notification.update) {
-                            shared.emit(&session_id, event);
+                        let mut events = crate::map_v2::v2_update(&notification.update);
+                        let root_session_id = shared.enrich_session_update(
+                            &session_id,
+                            &notification.update,
+                            &mut events,
+                        );
+                        for event in events {
+                            shared.emit(&root_session_id, event);
                         }
                         Ok(())
                     }
@@ -1478,6 +1709,10 @@ where
                         let session_id = request.session_id.to_string();
                         let mut permission = crate::map_v2::permission_request(&request);
                         permission.req_id = shared.next_request_id();
+                        shared.map_permission_metadata(
+                            &serde_json::to_value(&request).unwrap_or(serde_json::Value::Null),
+                            &mut permission,
+                        );
                         let resolve_shared = shared.clone();
                         connection.spawn(async move {
                             let decision = resolve_shared
@@ -1634,7 +1869,10 @@ where
                 ProtocolVersion::V2,
                 acp2::Implementation::new(client_name, env!("CARGO_PKG_VERSION")),
             )
-            .capabilities(v2_client_capabilities(elicitation_enabled))
+            .capabilities(v2_client_capabilities(
+                elicitation_enabled,
+                client_capabilities_meta,
+            ))
             .meta(initialize_meta),
         )
         .block_task()
@@ -1927,6 +2165,9 @@ impl AgentConnection for AcpConnection {
                     .block_task()
                     .await
                     .map_err(map_sdk_error)?;
+                for event in self.shared.prompt_response_events(&response) {
+                    self.shared.emit(&id.0, event);
+                }
                 self.shared.emit(
                     &id.0,
                     map::state_changed(tethys_schema::thread::SessionState::Idle {
@@ -1941,11 +2182,14 @@ impl AgentConnection for AcpConnection {
                     .into_iter()
                     .map(|block| to_v2_block(block, &self.capabilities))
                     .collect::<Result<Vec<_>, _>>()?;
-                connection
+                let response = connection
                     .send_request(acp2::PromptRequest::new(id.0.clone(), blocks))
                     .block_task()
                     .await
                     .map_err(map_sdk_error)?;
+                for event in self.shared.prompt_response_events(&response) {
+                    self.shared.emit(&id.0, event);
+                }
                 Ok(())
             }
         }
@@ -2403,7 +2647,11 @@ fn capabilities_v1(
     }
 }
 
-fn v1_client_capabilities(elicitation: bool, terminal_auth: bool) -> acp1::ClientCapabilities {
+fn v1_client_capabilities(
+    elicitation: bool,
+    terminal_auth: bool,
+    meta: Option<serde_json::Map<String, serde_json::Value>>,
+) -> acp1::ClientCapabilities {
     let mut capabilities = acp1::ClientCapabilities::new()
         .fs(acp1::FileSystemCapabilities::new()
             .read_text_file(true)
@@ -2416,6 +2664,9 @@ fn v1_client_capabilities(elicitation: bool, terminal_auth: bool) -> acp1::Clien
         capabilities.elicitation = Some(
             acp1::ElicitationCapabilities::new().form(acp1::ElicitationFormCapabilities::new()),
         );
+    }
+    if let Some(meta) = meta {
+        capabilities = capabilities.meta(meta);
     }
     capabilities
 }
@@ -2455,12 +2706,18 @@ fn capabilities_v2(
 }
 
 #[cfg(feature = "acp-v2")]
-fn v2_client_capabilities(elicitation: bool) -> acp2::ClientCapabilities {
+fn v2_client_capabilities(
+    elicitation: bool,
+    meta: Option<serde_json::Map<String, serde_json::Value>>,
+) -> acp2::ClientCapabilities {
     let mut capabilities = acp2::ClientCapabilities::new();
     if elicitation {
         capabilities.elicitation = Some(
             acp2::ElicitationCapabilities::new().form(acp2::ElicitationFormCapabilities::new()),
         );
+    }
+    if let Some(meta) = meta {
+        capabilities = capabilities.meta(meta);
     }
     capabilities
 }
@@ -2746,6 +3003,116 @@ mod tests {
         };
         let mapped = v1_mcp_servers(&session_servers(), &stdio_only);
         assert_eq!(mapped.len(), 1);
+    }
+
+    #[test]
+    fn raw_session_notification_preserves_unknown_update_variants() {
+        let raw = json!({
+            "sessionId": "parent",
+            "update": {
+                "sessionUpdate": "subagent_spawned",
+                "subagentSessionId": "child",
+                "name": "Explore",
+                "task": "Inspect the module",
+                "_meta": {"claudeCode": {"parentToolUseId": "tool-1"}},
+                "capabilities": {}
+            },
+            "_meta": {"goal": {"objective": "Inspect"}}
+        });
+        let notification: RawSessionNotification =
+            serde_json::from_value(raw).expect("raw notification");
+        assert_eq!(notification.session_id, "parent");
+        assert_eq!(notification.update["sessionUpdate"], "subagent_spawned");
+        assert!(
+            serde_json::from_value::<acp1::SessionUpdate>(notification.update.clone()).is_err()
+        );
+        let merged = merge_session_update_meta(notification.update, notification.meta);
+        assert_eq!(merged["_meta"]["goal"]["objective"], "Inspect");
+        assert_eq!(merged["_meta"]["claudeCode"]["parentToolUseId"], "tool-1");
+    }
+
+    #[test]
+    fn routes_subagent_updates_into_the_root_transcript() {
+        use tethys_schema::thread::{MessageChunk, ToolCallPatch, ToolCallStatus, ToolOrigin};
+
+        struct TestPermissionResolver;
+
+        #[async_trait]
+        impl PermissionResolver for TestPermissionResolver {
+            async fn resolve(
+                &self,
+                _session: &SessionId,
+                _request: PermissionRequested,
+            ) -> PermissionDecision {
+                PermissionDecision {
+                    outcome: PermOutcome::Approved,
+                    option_id: None,
+                    decided_by: tethys_schema::thread::Decider::Policy,
+                }
+            }
+        }
+
+        let mut options = AcpConnectOptions::new(AcpProtocol::V1, Arc::new(TestPermissionResolver));
+        options.integration = Some(AcpProviderIntegration {
+            id: "fixture".into(),
+            initialize_meta: Default::default(),
+            client_capabilities_meta: Default::default(),
+            extension_methods: vec![],
+            extension_request_handler: None,
+            extension_notification_handler: None,
+            session_update_handler: Some(Arc::new(|raw, events| {
+                if raw["sessionUpdate"] == "subagent_spawned" {
+                    events.push(TurnEventBody::ToolCallUpsert {
+                        tool_call_id: "child".into(),
+                        patch: ToolCallPatch {
+                            origin: Some(ToolOrigin::Subagent),
+                            status: Some(ToolCallStatus::Executing),
+                            ..Default::default()
+                        },
+                    });
+                    Some("child".into())
+                } else {
+                    None
+                }
+            })),
+            permission_metadata_handler: None,
+            prompt_response_handler: None,
+        });
+        let shared = Shared::new(&options);
+
+        let mut spawned = Vec::new();
+        let root = shared.process_session_update(
+            "root",
+            &json!({"sessionUpdate": "subagent_spawned"}),
+            &mut spawned,
+        );
+        assert_eq!(root, "root");
+        assert_eq!(shared.root_session_id("child"), "root");
+
+        let mut child_events = vec![
+            TurnEventBody::MessageChunk(MessageChunk {
+                message_id: "m1".into(),
+                role: Role::Agent,
+                block: ContentBlock::Text("Found the module.".into()),
+            }),
+            TurnEventBody::ToolCallUpsert {
+                tool_call_id: "child-tool".into(),
+                patch: ToolCallPatch::default(),
+            },
+        ];
+        let root = shared.process_session_update("child", &json!({}), &mut child_events);
+        assert_eq!(root, "root");
+        assert!(matches!(
+            &child_events[0],
+            TurnEventBody::ToolCallContentChunk { tool_call_id, item }
+                if tool_call_id == "child" && item == &ToolCallContent::Text("Found the module.".into())
+        ));
+        assert!(matches!(
+            &child_events[1],
+            TurnEventBody::ToolCallUpsert { tool_call_id, patch }
+                if tool_call_id == "child-tool"
+                    && patch.parent_tool_call_id.as_deref() == Some("child")
+        ));
     }
 
     #[test]

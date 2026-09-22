@@ -1,5 +1,6 @@
 import type {
   AgentCommand,
+  CheckpointKind,
   ConfigOption,
   ContentBlock,
   Decider,
@@ -13,6 +14,7 @@ import type {
   PlanEntryPriority,
   PlanEntryStatus,
   Role,
+  SessionGoal,
   StopReason,
   ToolCallContent,
   ToolKind,
@@ -20,6 +22,7 @@ import type {
   ToolOrigin,
   TurnEventBody,
   UsageSnapshot,
+  WriteVia,
 } from "@tethys/bindings";
 import { cancelPhaseToState } from "./cancellation";
 
@@ -43,6 +46,7 @@ export interface PermissionRequestItem {
   title: string;
   description: string | null;
   options: PermOption[];
+  metadata?: string | null;
   resolution?: PermissionResolution;
 }
 
@@ -86,6 +90,7 @@ export interface ToolCallEntry extends BaseSessionEntry {
   locations: ToolLocation[];
   input?: string | null;
   output?: string | null;
+  metadata?: string | null;
 }
 
 export interface PermissionRequestEntry extends BaseSessionEntry {
@@ -116,6 +121,20 @@ export interface TerminalEntry extends BaseSessionEntry {
   kind: "terminal";
   terminalId: string;
   output: string;
+}
+
+export interface FileWriteEntry extends BaseSessionEntry {
+  kind: "file_write";
+  path: string;
+  before: string | null;
+  after: string;
+  via: WriteVia;
+}
+
+export interface CheckpointEntry extends BaseSessionEntry {
+  kind: "checkpoint";
+  oid: string;
+  checkpointKind: CheckpointKind;
 }
 
 export interface HistoryDividerEntry extends BaseSessionEntry {
@@ -152,6 +171,8 @@ export type SessionEntry =
   | ElicitationEntry
   | PlanEntry
   | TerminalEntry
+  | FileWriteEntry
+  | CheckpointEntry
   | HistoryDividerEntry
   | TurnNoticeEntry
   | GenericEntry;
@@ -162,6 +183,7 @@ export interface SessionState {
   workspaceId: string;
   workdir: string;
   title: string;
+  goal: SessionGoal | null;
   branchName?: string;
   status: string; // "idle" | "running" | "awaiting_approval" | "error" | "interrupted" | "suspended" | "archived"
   cancellationState: CancellationState;
@@ -246,6 +268,7 @@ export function createInitialSessionState(
     workspaceId,
     workdir,
     title,
+    goal: null,
     branchName,
     status: "idle",
     cancellationState: "idle",
@@ -513,6 +536,7 @@ export function sessionReducer(
           status: newStatus,
           input: newInput,
           output: newOutput,
+          metadata: patch.metadata ?? existing.metadata ?? null,
           toolKind: patch.kind ?? existing.toolKind ?? null,
           origin: patch.origin ?? existing.origin ?? null,
           parentToolCallId:
@@ -538,6 +562,7 @@ export function sessionReducer(
           locations: patch.locations ?? [],
           input: patch.input,
           output: patch.output,
+          metadata: patch.metadata,
           timestamp: Date.now(),
         };
         nextLive = [...state.liveEntries, newEntry];
@@ -558,6 +583,7 @@ export function sessionReducer(
         title: req.title,
         description: req.description,
         options: req.options,
+        metadata: req.metadata,
       };
 
       const permEntry: PermissionRequestEntry = {
@@ -729,6 +755,42 @@ export function sessionReducer(
       };
     }
 
+    case "FileWrite": {
+      const entry: FileWriteEntry = {
+        id: `file-write-${currentSeq}-${state.liveEntries.length}`,
+        kind: "file_write",
+        path: event.body.path,
+        before: event.body.before,
+        after: event.body.after,
+        via: event.body.via,
+        timestamp: Date.now(),
+      };
+      const nextLive = [...state.liveEntries, entry];
+      return {
+        ...state,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
+    case "Checkpoint": {
+      const entry: CheckpointEntry = {
+        id: `checkpoint-${currentSeq}-${state.liveEntries.length}`,
+        kind: "checkpoint",
+        oid: event.body.oid,
+        checkpointKind: event.body.kind,
+        timestamp: Date.now(),
+      };
+      const nextLive = [...state.liveEntries, entry];
+      return {
+        ...state,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
     case "ElicitationRequested": {
       const request = event.body;
       const item: ElicitationRequestItem = { reqId: request.req_id, request };
@@ -813,6 +875,24 @@ export function sessionReducer(
       };
     }
 
+    case "Compaction": {
+      const notice: TurnNoticeEntry = {
+        id: `turn-notice-compaction-${currentSeq}-${state.liveEntries.length}`,
+        kind: "turn_notice",
+        noticeKind: "compaction",
+        message: "Context compacted.",
+        summary: event.body.summary,
+        timestamp: Date.now(),
+      };
+      const nextLive = [...state.liveEntries, notice];
+      return {
+        ...state,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
     case "Usage": {
       return {
         ...state,
@@ -871,27 +951,53 @@ export function sessionReducer(
 
     case "SessionInfo": {
       const title = event.body.title;
+      const goal = applyPatch(
+        state.goal,
+        event.body.goal ?? { type: "Unchanged" },
+      );
       return {
         ...state,
         title: title ?? state.title,
+        goal: goal === undefined ? state.goal : goal,
         seq: currentSeq,
       };
     }
 
     case "ToolCallContentChunk": {
       const { tool_call_id, item } = event.body;
-      const existingIndex = state.liveEntries.findIndex(
-        (entry) => entry.id === tool_call_id && entry.kind === "tool_call",
-      );
-      if (existingIndex < 0) {
-        return { ...state, seq: currentSeq };
-      }
-      const nextLive = [...state.liveEntries];
-      const existing = nextLive[existingIndex] as ToolCallEntry;
       const chunk = toolContentText(item);
       if (chunk.length === 0) {
         return { ...state, seq: currentSeq };
       }
+      const existingIndex = state.liveEntries.findIndex(
+        (entry) => entry.id === tool_call_id && entry.kind === "tool_call",
+      );
+      if (existingIndex < 0) {
+        const entry: ToolCallEntry = {
+          id: tool_call_id,
+          kind: "tool_call",
+          toolCallId: tool_call_id,
+          title: "tool_call",
+          status: "Executing",
+          toolKind: null,
+          origin: null,
+          parentToolCallId: null,
+          locations: [],
+          input: null,
+          output: chunk,
+          metadata: null,
+          timestamp: Date.now(),
+        };
+        const nextLive = [...state.liveEntries, entry];
+        return {
+          ...state,
+          liveEntries: nextLive,
+          entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+          seq: currentSeq,
+        };
+      }
+      const nextLive = [...state.liveEntries];
+      const existing = nextLive[existingIndex] as ToolCallEntry;
       nextLive[existingIndex] = {
         ...existing,
         output:

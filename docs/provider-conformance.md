@@ -13,7 +13,7 @@ elicitation, terminal, and jailed filesystem callbacks → completion → delete
 through the ordinary Core API.
 
 The real-provider runner is opt in and uses the same public APIs as the desktop.
-It prints exactly one machine-readable line per run and reports one of these
+It prints one machine-readable JSON record per run and reports one of these
 dispositions for each selected registry id:
 
 - `exercised`
@@ -21,8 +21,17 @@ dispositions for each selected registry id:
 - `not-observed`
 - `setup-required` (missing binary, account, or auth)
 
+For a healthy install, the record includes the registry/package version,
+distribution, Node runtime, negotiated protocol, adapter version, declared auth
+method ids/shapes, health/auth state, and normalized capabilities. Setup
+failures still report the Node runtime separately from Provider health. The
+runner omits launcher arguments, environment values, raw ACP params, and
+provider stderr.
+
 Per-row dispositions for the stable ACP and registry contract live in
-`docs/m1.17-results.md` (§2 Coverage ledger).
+`docs/m1.17-results.md` (§2 Coverage ledger). Claude's adapter mapping, live
+smoke status, and native-settings handoff are recorded in
+`docs/claude-code-provider-results.md`.
 
 Set `TETHYS_CONFORMANCE_PROVIDER_ID` and `TETHYS_CONFORMANCE_WORKSPACE`, then
 run:

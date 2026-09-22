@@ -1,4 +1,8 @@
-import type { ContentBlock, ThreadBootstrap } from "@tethys/bindings";
+import type {
+  ContentBlock,
+  ThreadBootstrap,
+  ThreadSessionView,
+} from "@tethys/bindings";
 import {
   clearAllSessionStreamsForTesting,
   getSessionStore,
@@ -54,6 +58,43 @@ function mockClient() {
 beforeEach(() => clearAllSessionStreamsForTesting());
 
 describe("startSession", () => {
+  it("refreshes dependent options after a model switch", async () => {
+    const { client, calls } = mockClient();
+    const draft = bootstrap();
+    draft.config_options.push({
+      id: "effort",
+      name: "Effort",
+      description: null,
+      current_value: "high",
+      values: ["low", "high"],
+      category: "thought_level",
+      kind: "select",
+      value_options: [],
+    });
+    const refreshed: ThreadSessionView = {
+      ...draft,
+      config_options: draft.config_options.slice(0, 1),
+    };
+    client.thread.get = vi.fn(async () => refreshed);
+
+    await startSession(
+      client,
+      {
+        draft,
+        promptText: "Review the diff.",
+        changedConfig: {
+          model: "claude-opus-x",
+          effort: "high",
+        },
+      },
+      vi.fn(),
+    );
+
+    expect(calls).toContain("config:thread-7:model=claude-opus-x");
+    expect(calls).not.toContain("config:thread-7:effort=high");
+    expect(client.thread.get).toHaveBeenCalled();
+  });
+
   it("applies config, seeds the store, navigates, then starts the first turn", async () => {
     const { client, calls } = mockClient();
     const navigate = vi.fn((path: string) => calls.push(`navigate:${path}`));

@@ -99,6 +99,7 @@ pub fn v2_update(update: &acp2::SessionUpdate) -> Vec<TurnEventBody> {
                 tethys_schema::thread::SessionInfo {
                     title: maybe_string(&update.title),
                     updated_at: maybe_string(&update.updated_at),
+                    goal: Patch::Unchanged,
                 },
             )]
         }
@@ -153,6 +154,7 @@ fn tool_patch(update: &acp2::ToolCallUpdate) -> ToolCallPatch {
         locations: maybe_value(&update.locations)
             .map(|locations| locations.iter().map(tool_location).collect())
             .unwrap_or_default(),
+        metadata: None,
     }
 }
 
@@ -349,6 +351,8 @@ pub(crate) fn config_option(option: &acp2::SessionConfigOption) -> ConfigOption 
             .map(|category| json_string(category).trim_matches('"').to_string()),
         kind: Some(kind),
         value_options,
+        recommended_value: None,
+        metadata: None,
     }
 }
 
@@ -397,6 +401,7 @@ pub(crate) fn permission_request(
                 kind: Some(json_string(&option.kind).trim_matches('"').to_string()),
             })
             .collect(),
+        metadata: None,
     }
 }
 

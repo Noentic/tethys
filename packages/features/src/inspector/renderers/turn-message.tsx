@@ -109,15 +109,20 @@ export function TurnMessageRenderer({
       data-entry-kind="turn_message"
       data-role={entry.role}
       className={cn(
-        "group relative text-body-md text-(--tethys-text-primary)",
+        "group relative w-full text-body-md text-(--tethys-text-primary)",
         isUser &&
-          "rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-md py-sm",
+          "ml-auto max-w-[540px] rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-lg py-md",
         isThought && "text-(--tethys-text-muted)",
         className,
       )}
     >
-      <div className="relative">
-        <div className="absolute top-0 right-0">
+      <div className={cn("relative", isUser && "pr-10")}>
+        <div
+          className={cn(
+            "absolute right-sm",
+            isUser ? "top-1/2 -translate-y-1/2" : "top-0",
+          )}
+        >
           <MessageActions
             entry={entry}
             canFork={canFork}
@@ -132,6 +137,7 @@ export function TurnMessageRenderer({
         <div
           onClick={handleCodeBlockClick}
           aria-busy={entry.streaming || undefined}
+          className="markdown-content"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized by @tethys/markdown
           dangerouslySetInnerHTML={{ __html: html }}
         />

@@ -105,6 +105,27 @@ describe("inspector slots render from the session id alone", () => {
     expect(screen.getByText("Plan · 0/1 complete")).toBeDefined();
   });
 
+  it("shows a session goal in the plan surface", () => {
+    const store = getOrCreateSessionStore("s-goal", "p", "ws");
+    store.setState((state) => ({
+      ...state,
+      goal: {
+        objective: "Ship the change",
+        status: "active",
+        iterations: 3,
+        last_reason: null,
+        created_at: null,
+        metadata: "{}",
+      },
+    }));
+    const [, Plan] = getAllInspectorSlots().find(([id]) => id === "plan") ?? [];
+    if (!Plan) throw new Error("plan slot missing");
+    render(<Plan sessionId="s-goal" />);
+    expect(screen.getByTestId("session-goal").textContent).toContain(
+      "Ship the change",
+    );
+  });
+
   it("still lets a caller override with explicit data", () => {
     const [, Plan] = getAllInspectorSlots().find(([id]) => id === "plan") ?? [];
     if (!Plan) throw new Error("plan slot missing");
@@ -122,6 +143,6 @@ describe("inspector slots render from the session id alone", () => {
     const [, Plan] = getAllInspectorSlots().find(([id]) => id === "plan") ?? [];
     if (!Plan) throw new Error("plan slot missing");
     render(<Plan sessionId="a-session-that-never-planned" />);
-    expect(screen.getByText("No plan yet")).toBeDefined();
+    expect(screen.queryByRole("region", { name: "Plan" })).toBeNull();
   });
 });

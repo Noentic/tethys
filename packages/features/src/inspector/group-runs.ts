@@ -80,6 +80,21 @@ export interface ToolRun {
   inFlightTitle: string | null;
 }
 
+export function isFileMutation(entry: SessionEntry): boolean {
+  if (entry.kind === "file_write") {
+    return true;
+  }
+  if (entry.kind === "tool_call") {
+    const tool = entry as ToolCallEntry;
+    return (
+      tool.toolKind === "edit" ||
+      tool.toolKind === "delete" ||
+      tool.toolKind === "move"
+    );
+  }
+  return false;
+}
+
 function isToolCall(entry: SessionEntry): entry is ToolCallEntry {
   return entry.kind === "tool_call";
 }

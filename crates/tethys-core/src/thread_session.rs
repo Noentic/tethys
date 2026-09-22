@@ -18,8 +18,8 @@ use tethys_schema::connection::{
 use tethys_schema::store::NewEvent;
 use tethys_schema::sync::{McpTransports, WorkspaceId};
 use tethys_schema::thread::{
-    ConfigOption, ContentBlock, CreateThread, EventEnvelope, ThreadBootstrap, ThreadId,
-    ThreadSessionView, ThreadSummary, TurnEventBody,
+    ConfigOption, ContentBlock, CreateThread, EventEnvelope, MessageUpsert, Patch, Role,
+    ThreadBootstrap, ThreadId, ThreadSessionView, ThreadSummary, TurnEventBody,
 };
 use tethys_store::{EventStore, ThreadRecord};
 use tethys_sync::SecretStore;
@@ -782,6 +782,28 @@ impl ThreadSessions {
             inner.prompt_in_flight = true;
             inner.prepared = false;
         }
+        let user_message_id = {
+            let inner = handle.inner.lock();
+            format!("{}:user:{}", inner.machine.id(), inner.next_seq)
+        };
+        let event_store = self.event_store.read().clone();
+        if let Err(error) = append_event(
+            &handle,
+            event_store.clone(),
+            TurnEventBody::MessageUpsert(MessageUpsert {
+                message_id: user_message_id,
+                role: Role::User,
+                content: Patch::Set(blocks.clone()),
+            }),
+            EventOrigin::Live,
+        )
+        .await
+        {
+            let mut inner = handle.inner.lock();
+            inner.prompt_in_flight = false;
+            inner.prepared = true;
+            return Err(error);
+        }
         if let Err(error) = self.persist_thread(&handle).await {
             let mut inner = handle.inner.lock();
             inner.prompt_in_flight = false;
@@ -792,7 +814,6 @@ impl ThreadSessions {
         let permissions = self.permissions();
         let health = self.health.clone();
         let profile_id = handle.inner.lock().agent_profile_id.clone();
-        let event_store = self.event_store.read().clone();
         let thread_store = event_store.clone();
         tokio::spawn(async move {
             let result = connection.prompt(&session, blocks).await;
@@ -1468,10 +1489,20 @@ impl ThreadSessions {
     }
 }
 
-/// Merges an update into the cached option list: unknown ids append, known ids
-/// keep their labels and value sets when the agent sends a partial update (v1
-/// mode updates carry only the current id).
+/// Merges an update into the cached option list.
+///
+/// Config-option responses containing `model` are complete schemas. A model
+/// switch can remove dependent options such as Claude's `effort`; retaining
+/// those stale entries makes the next UI selection fail at the provider.
+/// Mode notifications are partial updates, so they keep the existing schema.
 fn merge_config_options(current: &mut Vec<ConfigOption>, incoming: &[ConfigOption]) {
+    let complete_schema = incoming
+        .iter()
+        .any(|option| option.id == "model" || option.category.as_deref() == Some("model"));
+    if complete_schema {
+        current.retain(|existing| incoming.iter().any(|option| option.id == existing.id));
+    }
+
     for option in incoming {
         match current.iter_mut().find(|existing| existing.id == option.id) {
             Some(existing) => {
@@ -1497,6 +1528,46 @@ fn merge_config_options(current: &mut Vec<ConfigOption>, incoming: &[ConfigOptio
             }
             None => current.push(option.clone()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn option(id: &str, category: Option<&str>) -> ConfigOption {
+        ConfigOption {
+            id: id.to_string(),
+            name: id.to_string(),
+            description: None,
+            current_value: String::new(),
+            values: Vec::new(),
+            category: category.map(str::to_string),
+            kind: None,
+            value_options: Vec::new(),
+            recommended_value: None,
+            metadata: None,
+        }
+    }
+
+    #[test]
+    fn complete_model_schema_drops_stale_dependent_options() {
+        let mut current = vec![
+            option("mode", Some("mode")),
+            option("model", Some("model")),
+            option("effort", Some("thought_level")),
+        ];
+        let incoming = vec![option("mode", Some("mode")), option("model", Some("model"))];
+
+        merge_config_options(&mut current, &incoming);
+
+        assert_eq!(
+            current
+                .iter()
+                .map(|option| option.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["mode", "model"]
+        );
     }
 }
 
