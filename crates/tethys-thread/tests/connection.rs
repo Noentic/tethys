@@ -31,9 +31,14 @@ impl FakeConnection {
             capabilities: NormalizedCapabilities {
                 load_session: true,
                 resume: true,
+                close_session: false,
+                list_sessions: false,
+                delete_session: false,
+                logout: false,
                 mcp: tethys_schema::sync::McpTransports::default(),
                 prompt_embedded_context: false,
                 elicitation: false,
+                ..Default::default()
             },
             senders: Mutex::new(HashMap::new()),
             receivers: Mutex::new(HashMap::new()),
@@ -96,8 +101,25 @@ impl AgentConnection for FakeConnection {
         })
     }
 
-    async fn list_sessions(&self, _cwd: &Path) -> Result<Vec<SessionSummary>, ConnectionError> {
-        Ok(vec![])
+    async fn list_sessions_page(
+        &self,
+        cwd: &Path,
+        cursor: Option<&str>,
+    ) -> Result<(Vec<SessionSummary>, Option<String>), ConnectionError> {
+        if cwd.ends_with("repeat") {
+            return Ok((Vec::new(), Some("same".into())));
+        }
+        let summary = |id: &str| SessionSummary {
+            id: SessionId::new(id),
+            cwd: cwd.to_path_buf(),
+            title: Some(id.to_string()),
+            updated_at: None,
+        };
+        Ok(match cursor {
+            None => (vec![summary("one"), summary("two")], Some("page-2".into())),
+            Some("page-2") => (vec![summary("three")], None),
+            Some(_) => (Vec::new(), None),
+        })
     }
 
     async fn close_session(&self, id: &SessionId) -> Result<(), ConnectionError> {
@@ -198,6 +220,27 @@ async fn sessions_stream_their_own_events_in_order() {
 }
 
 #[tokio::test]
+async fn list_sessions_drains_pages_and_rejects_repeated_cursors() {
+    let fake = FakeConnection::new();
+    let sessions = fake
+        .list_sessions(Path::new("/tmp/workspace"))
+        .await
+        .expect("pages");
+    assert_eq!(
+        sessions
+            .iter()
+            .map(|session| session.id.0.as_str())
+            .collect::<Vec<_>>(),
+        ["one", "two", "three"]
+    );
+
+    assert!(matches!(
+        fake.list_sessions(Path::new("/tmp/repeat")).await,
+        Err(ConnectionError::Protocol(message)) if message.contains("repeated cursor")
+    ));
+}
+
+#[tokio::test]
 async fn unsupported_defaults_are_typed() {
     struct Minimal;
 
@@ -244,7 +287,7 @@ async fn unsupported_defaults_are_typed() {
 
     let connection = Minimal;
     match connection.list_sessions(Path::new("/tmp")).await {
-        Err(ConnectionError::Unsupported(m)) => assert_eq!(m, "list_sessions"),
+        Err(ConnectionError::Unsupported(m)) => assert_eq!(m, "list_sessions_page"),
         other => panic!("expected Unsupported, got {other:?}"),
     }
     match connection.login("token").await {

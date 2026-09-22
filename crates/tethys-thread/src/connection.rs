@@ -70,6 +70,7 @@ pub struct SessionSummary {
     pub id: SessionId,
     pub cwd: PathBuf,
     pub title: Option<String>,
+    pub updated_at: Option<String>,
 }
 
 /// One normalized event with its provenance: live events drive state, replayed
@@ -85,6 +86,8 @@ pub type EventStream = Pin<Box<dyn Stream<Item = Result<ConnectionEvent, Connect
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectionError {
+    #[error("authentication required")]
+    AuthRequired,
     #[error("transport: {0}")]
     Transport(String),
     #[error("protocol: {0}")]
@@ -147,13 +150,43 @@ pub trait AgentConnection: Send + Sync {
     }
 
     async fn new_session(&self, request: NewSession) -> Result<SessionHandle, ConnectionError>;
+    async fn load_session(
+        &self,
+        _request: ResumeSession,
+    ) -> Result<SessionHandle, ConnectionError> {
+        Err(ConnectionError::Unsupported("load_session"))
+    }
     async fn resume_session(
         &self,
         request: ResumeSession,
     ) -> Result<SessionHandle, ConnectionError>;
 
-    async fn list_sessions(&self, _cwd: &Path) -> Result<Vec<SessionSummary>, ConnectionError> {
-        Err(ConnectionError::Unsupported("list_sessions"))
+    async fn list_sessions(&self, cwd: &Path) -> Result<Vec<SessionSummary>, ConnectionError> {
+        let mut summaries = Vec::new();
+        let mut cursor = None;
+        let mut seen = std::collections::HashSet::new();
+        loop {
+            let (page, next_cursor) = self.list_sessions_page(cwd, cursor.as_deref()).await?;
+            summaries.extend(page);
+            let Some(next_cursor) = next_cursor else {
+                return Ok(summaries);
+            };
+            if !seen.insert(next_cursor.clone()) {
+                return Err(ConnectionError::Protocol(
+                    "session/list returned a repeated cursor".into(),
+                ));
+            }
+            cursor = Some(next_cursor);
+        }
+    }
+
+    /// One `session/list` page: `next_cursor` is the exclusive continuation.
+    async fn list_sessions_page(
+        &self,
+        _cwd: &Path,
+        _cursor: Option<&str>,
+    ) -> Result<(Vec<SessionSummary>, Option<String>), ConnectionError> {
+        Err(ConnectionError::Unsupported("list_sessions_page"))
     }
 
     async fn close_session(&self, id: &SessionId) -> Result<(), ConnectionError>;
@@ -167,6 +200,16 @@ pub trait AgentConnection: Send + Sync {
 
     async fn cancel(&self, id: &SessionId) -> Result<(), ConnectionError>;
 
+    /// Completes the exact ACP extension request surfaced to the user.
+    async fn respond_extension(
+        &self,
+        _session_id: &SessionId,
+        _request_id: &str,
+        _response: serde_json::Value,
+    ) -> Result<(), ConnectionError> {
+        Err(ConnectionError::Unsupported("provider_extension"))
+    }
+
     async fn set_config_option(
         &self,
         _id: &SessionId,
@@ -176,8 +219,18 @@ pub trait AgentConnection: Send + Sync {
         Err(ConnectionError::Unsupported("set_config_option"))
     }
 
+    /// ACP v1 `session/set_mode`. Config options carry no mode; dispatch by the
+    /// normalized option's `mode` category (M1.17 AD6).
+    async fn set_mode(&self, _id: &SessionId, _mode_id: &str) -> Result<(), ConnectionError> {
+        Err(ConnectionError::Unsupported("session/set_mode"))
+    }
+
     async fn login(&self, _method_id: &str) -> Result<(), ConnectionError> {
         Err(ConnectionError::Unsupported("login"))
+    }
+
+    async fn logout(&self) -> Result<(), ConnectionError> {
+        Err(ConnectionError::Unsupported("logout"))
     }
 
     fn events(&self, id: &SessionId) -> EventStream;

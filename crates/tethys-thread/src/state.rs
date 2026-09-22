@@ -76,6 +76,11 @@ impl ThreadMachine {
         self.session_id = Some(session_id);
     }
 
+    /// Sets the Provider's known title while restoring or importing a session.
+    pub fn set_title(&mut self, title: impl Into<String>) {
+        self.title = Some(title.into());
+    }
+
     /// Applies a normalized event. Replayed events only materialize entries
     /// that do not exist yet and never drive state transitions (D12): a resume
     /// transcript describes the past, not the live thread.
