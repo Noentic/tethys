@@ -4,6 +4,9 @@ use tethys_schema::store::{NewEvent, ThreadId};
 use tethys_store::migrations::{migrate_to_latest, migrate_to_version};
 use tethys_store::EventStore;
 
+/// Mirrors the migration list in `crates/tethys-store/src/migrations.rs`.
+const LATEST_SCHEMA_VERSION: i64 = 6;
+
 fn setup_temp_store_path() -> (TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("create temp dir");
     let db_path = dir.path().join("test.db");
@@ -114,11 +117,10 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
 {
     let mut conn = rusqlite::Connection::open_in_memory()?;
 
-    // Step 1: Migrate to latest (version 5: workspaces, threads, events, entries,
-    // projections, skills_state, workspace_trust, agent_profiles)
+    // Step 1: Migrate to latest (all migration versions applied)
     migrate_to_latest(&mut conn)?;
     let v_latest: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_latest, 5);
+    assert_eq!(v_latest, LATEST_SCHEMA_VERSION);
 
     for table in ["workspace_trust", "agent_profiles"] {
         let exists: i64 = conn.query_row(
@@ -126,7 +128,7 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
             rusqlite::params![table],
             |r| r.get(0),
         )?;
-        assert_eq!(exists, 1, "{table} should exist at version 5");
+        assert_eq!(exists, 1, "{table} should exist at the latest version");
     }
 
     // Step 1a: Step down to version 4 (Wave 2 tables dropped, workspaces preserved)
@@ -224,7 +226,7 @@ fn migration_round_trip_supports_step_down_and_recovery() -> Result<(), Box<dyn 
     // Step 5: Re-apply to latest
     migrate_to_latest(&mut conn)?;
     let v_final: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_final, 5);
+    assert_eq!(v_final, LATEST_SCHEMA_VERSION);
 
     Ok(())
 }
@@ -247,7 +249,7 @@ fn store_upgrades_from_v3_preserving_rows() -> Result<(), Box<dyn std::error::Er
 
     migrate_to_latest(&mut conn)?;
     let v_latest: i64 = conn.query_row("PRAGMA user_version;", [], |r| r.get(0))?;
-    assert_eq!(v_latest, 5);
+    assert_eq!(v_latest, LATEST_SCHEMA_VERSION);
 
     let (id, root, iso): (String, String, String) = conn.query_row(
         "SELECT id, root_path, isolation FROM workspaces WHERE id = 'proj_1'",

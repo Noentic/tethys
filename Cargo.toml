@@ -17,6 +17,7 @@ futures = "0.3"
 imara-diff = "0.2"
 mime_guess = "2"
 parking_lot = "0.12"
+portable-pty = "0.9"
 process-wrap = { version = "10", features = ["tokio1"] }
 proptest = "1"
 
@@ -33,6 +34,7 @@ tokio-util = { version = "0.7", features = ["compat", "rt"] }
 tracing = "0.1"
 anyhow = "1"
 tempfile = "3"
+bzip2 = "0.4"
 
 # Wave 2 (M1.6d). Declared here so every worktree resolves one version; the
 # consuming crates reference these as `workspace = true` when their code lands.

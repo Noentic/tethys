@@ -66,6 +66,10 @@ fn attachment_grid_calculates_all_cell_states() {
             capabilities: Some(NormalizedCapabilities {
                 load_session: true,
                 resume: true,
+                close_session: false,
+                list_sessions: false,
+                delete_session: false,
+                logout: false,
                 mcp: McpTransports {
                     stdio: true,
                     http: false,
@@ -73,6 +77,7 @@ fn attachment_grid_calculates_all_cell_states() {
                 },
                 prompt_embedded_context: false,
                 elicitation: false,
+                ..Default::default()
             }),
             projection_target: None,
             projection_states: HashMap::new(),
@@ -85,6 +90,10 @@ fn attachment_grid_calculates_all_cell_states() {
             capabilities: Some(NormalizedCapabilities {
                 load_session: false,
                 resume: false,
+                close_session: false,
+                list_sessions: false,
+                delete_session: false,
+                logout: false,
                 mcp: McpTransports {
                     stdio: false,
                     http: false,
@@ -92,6 +101,7 @@ fn attachment_grid_calculates_all_cell_states() {
                 },
                 prompt_embedded_context: false,
                 elicitation: false,
+                ..Default::default()
             }),
             projection_target: Some(ProjectionTarget::ClaudeCode),
             projection_states: projection_states.clone(),
@@ -104,6 +114,10 @@ fn attachment_grid_calculates_all_cell_states() {
             capabilities: Some(NormalizedCapabilities {
                 load_session: false,
                 resume: false,
+                close_session: false,
+                list_sessions: false,
+                delete_session: false,
+                logout: false,
                 mcp: McpTransports {
                     stdio: false,
                     http: false,
@@ -111,6 +125,7 @@ fn attachment_grid_calculates_all_cell_states() {
                 },
                 prompt_embedded_context: false,
                 elicitation: false,
+                ..Default::default()
             }),
             projection_target: None,
             projection_states: HashMap::new(),
@@ -132,6 +147,10 @@ fn attachment_grid_calculates_all_cell_states() {
             capabilities: Some(NormalizedCapabilities {
                 load_session: true,
                 resume: true,
+                close_session: false,
+                list_sessions: false,
+                delete_session: false,
+                logout: false,
                 mcp: McpTransports {
                     stdio: true,
                     http: true,
@@ -139,6 +158,7 @@ fn attachment_grid_calculates_all_cell_states() {
                 },
                 prompt_embedded_context: false,
                 elicitation: false,
+                ..Default::default()
             }),
             projection_target: None,
             projection_states: HashMap::new(),

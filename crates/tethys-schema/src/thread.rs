@@ -3,6 +3,8 @@
 //! This is the wire contract above `tethys-acp`: every ACP version translates
 //! into these types, and the UI consumes them through `events.subscribe`.
 
+use crate::connection::NormalizedCapabilities;
+use crate::workspace::PermissionMode;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -102,14 +104,37 @@ pub enum Role {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub enum ContentBlock {
     Text(String),
+    /// Text with ACP annotations or `_meta` retained as opaque JSON.
+    TextWithMetadata {
+        text: String,
+        acp_metadata: String,
+    },
     ResourceLink {
         uri: String,
         name: String,
         mime_type: Option<String>,
+        #[serde(default)]
+        acp_metadata: Option<String>,
     },
     Image {
         mime_type: String,
         data: String,
+        #[serde(default)]
+        acp_metadata: Option<String>,
+    },
+    Audio {
+        mime_type: String,
+        data: String,
+        #[serde(default)]
+        acp_metadata: Option<String>,
+    },
+    Resource {
+        uri: String,
+        mime_type: Option<String>,
+        text: Option<String>,
+        blob: Option<String>,
+        #[serde(default)]
+        acp_metadata: Option<String>,
     },
     Unknown(String),
 }
@@ -461,6 +486,11 @@ pub enum TurnEventBody {
     /// emitted by M1.12's Stop backend and read by the `Stop` control. The
     /// backend owns the clock, so the payload carries the absolute deadline.
     CancelPhaseChanged(crate::cancel::CancelState),
+    /// A claimed ACP extension request was answered or cancelled.
+    ProviderExtensionResolved {
+        request_id: String,
+        cancelled: bool,
+    },
 }
 
 /// Sequenced event delivered to subscribers (`events.subscribe`).
@@ -525,12 +555,17 @@ impl Entry {
     }
 }
 
-/// Request for `thread.create`.
+/// Request for `thread.create` / `thread.prepare`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct CreateThread {
     pub workspace_id: String,
     pub agent_profile_id: String,
     pub workdir: String,
+    /// Additional trusted-root ids the session may read/write, passed to the
+    /// agent as ACP `additionalDirectories` (M1.17 R6).
+    #[serde(default)]
+    #[specta(optional)]
+    pub additional_directories: Vec<String>,
 }
 
 /// Thread row returned by `thread.create/list/get`.
@@ -545,11 +580,43 @@ pub struct ThreadSummary {
     pub session_id: Option<String>,
 }
 
-/// Thread plus its materialized entries (`thread.get`).
+/// Thread identity and ordered session snapshot (`thread.get`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
-pub struct ThreadView {
+pub struct ThreadSessionView {
     pub thread: ThreadSummary,
+    #[specta(skip)]
     pub entries: Vec<Entry>,
+    pub events: Vec<EventEnvelope>,
+    pub config_options: Vec<ConfigOption>,
+    pub capabilities: Option<NormalizedCapabilities>,
+    pub permission_mode: PermissionMode,
+    pub latest_seq: u32,
+}
+
+/// One Provider session offered for import (M1.17 R6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct ProviderSessionSummary {
+    pub id: String,
+    pub title: Option<String>,
+    pub cwd: String,
+    pub updated_at: Option<String>,
+}
+
+/// One page of Provider sessions; `next_cursor` continues exclusively.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct ProviderSessionPage {
+    pub sessions: Vec<ProviderSessionSummary>,
+    pub next_cursor: Option<String>,
+}
+
+/// Result of preparing a new ACP session before the composer is enabled.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct ThreadBootstrap {
+    pub thread: ThreadSummary,
+    pub events: Vec<EventEnvelope>,
+    pub config_options: Vec<ConfigOption>,
+    pub capabilities: Option<NormalizedCapabilities>,
+    pub permission_mode: PermissionMode,
     pub latest_seq: u32,
 }
 
@@ -639,6 +706,7 @@ mod tests {
         let ext = TurnEventBody::ProviderExtension(crate::provider_extension::ProviderExtension {
             provider_id: "kiro".into(),
             method: "_kiro.dev/mcp/oauth_request".into(),
+            request_id: None,
             params: "{}".into(),
         });
         let value = serde_json::to_value(&ext).expect("serialize");

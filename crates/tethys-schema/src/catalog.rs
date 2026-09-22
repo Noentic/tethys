@@ -62,6 +62,7 @@ pub struct WorkspaceListItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct WorkspaceSessionSummary {
     pub id: String,
+    pub agent_profile_id: String,
     pub title: String,
     pub state: ThreadState,
 }

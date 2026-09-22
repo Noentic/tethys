@@ -31,17 +31,59 @@ pub struct AgentInfo {
     pub title: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct NormalizedCapabilities {
     pub load_session: bool,
     pub resume: bool,
+    #[serde(default)]
+    pub close_session: bool,
+    #[serde(default)]
+    pub list_sessions: bool,
+    #[serde(default)]
+    pub delete_session: bool,
+    #[serde(default)]
+    pub logout: bool,
     pub mcp: McpTransports,
+    /// ACP requires every agent to accept text prompts.
+    #[serde(default = "capability_enabled")]
+    pub prompt_text: bool,
+    /// ACP requires every agent to accept resource links in prompts.
+    #[serde(default = "capability_enabled")]
+    pub prompt_resource_link: bool,
+    #[serde(default)]
+    pub prompt_image: bool,
+    #[serde(default)]
+    pub prompt_audio: bool,
     pub prompt_embedded_context: bool,
     /// Whether Tethys advertised form elicitation and may receive
     /// `elicitation/create` for this connection (M1.7). An agent that never
     /// sends elicitation requests never materializes an entry.
     #[serde(default)]
     pub elicitation: bool,
+}
+
+fn capability_enabled() -> bool {
+    true
+}
+
+impl Default for NormalizedCapabilities {
+    fn default() -> Self {
+        Self {
+            load_session: false,
+            resume: false,
+            close_session: false,
+            list_sessions: false,
+            delete_session: false,
+            logout: false,
+            mcp: McpTransports::default(),
+            prompt_text: true,
+            prompt_resource_link: true,
+            prompt_image: false,
+            prompt_audio: false,
+            prompt_embedded_context: false,
+            elicitation: false,
+        }
+    }
 }
 
 /// Per-profile ACP compatibility preferences (architecture §12).

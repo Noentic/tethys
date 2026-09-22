@@ -1,11 +1,12 @@
 //! SQLite migrations management using `rusqlite_migration`.
 //!
-//! Five migrations:
+//! Six migrations:
 //! - `0001`: Core schema (`projects`, `threads`, `events`, and indexes).
 //! - `0002`: Materialized `entries` table and index for zero-replay thread opens.
 //! - `0003`: Sync state (`projections`, `skills_state`).
 //! - `0004`: Rename `projects` to `workspaces` and `threads.project_id` to `workspace_id`.
 //! - `0005`: Pre-allocate Wave 2's `workspace_trust` and `agent_profiles` tables (DDL only).
+//! - `0006`: Persist ACP thread bootstrap metadata alongside the event log.
 
 use rusqlite::Connection;
 use rusqlite_migration::{Migrations, M};
@@ -141,6 +142,8 @@ pub fn migrations() -> Migrations<'static> {
             DROP INDEX IF EXISTS idx_workspace_trust_key;
             DROP TABLE IF EXISTS workspace_trust;",
         ),
+        M::up("ALTER TABLE threads ADD COLUMN metadata TEXT;")
+            .down("ALTER TABLE threads DROP COLUMN metadata;"),
     ])
 }
 

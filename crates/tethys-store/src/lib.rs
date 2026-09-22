@@ -28,7 +28,7 @@ use pool::ConnectionPool;
 pub use agent_profiles::AgentProfileRow;
 pub use blobs::BlobStore;
 pub use error::StoreError;
-pub use schema::WorkspaceRow;
+pub use schema::{ThreadRecord, WorkspaceRow};
 pub use sync_state::{ProjectionRow, SkillRow};
 pub use tethys_schema::store::{
     BlobHash, Entry, EntryKind, EntryPage, EntryUpsert, NewEvent, SeqRange, StoredEvent, ThreadId,
@@ -132,6 +132,44 @@ impl EventStore {
             })
             .await?;
         Ok(())
+    }
+
+    /// Saves the resumable metadata for one thread.
+    pub async fn save_thread(&self, record: ThreadRecord) -> Result<(), StoreError> {
+        self.pool
+            .writer()
+            .call(move |conn| schema::save_thread(conn, &record))
+            .await?;
+        Ok(())
+    }
+
+    /// Reads one resumable thread record.
+    pub async fn thread(&self, thread_id: &ThreadId) -> Result<Option<ThreadRecord>, StoreError> {
+        let thread_id = thread_id.clone();
+        Ok(self
+            .pool
+            .reader()
+            .call(move |conn| schema::get_thread(conn, &thread_id))
+            .await?)
+    }
+
+    /// Lists resumable thread records, including unprompted drafts.
+    pub async fn list_threads(&self) -> Result<Vec<ThreadRecord>, StoreError> {
+        Ok(self
+            .pool
+            .reader()
+            .call(move |conn| schema::list_threads(conn))
+            .await?)
+    }
+
+    /// Deletes one resumable thread and its event history.
+    pub async fn delete_thread(&self, thread_id: &ThreadId) -> Result<bool, StoreError> {
+        let thread_id = thread_id.clone();
+        Ok(self
+            .pool
+            .writer()
+            .call(move |conn| schema::delete_thread(conn, &thread_id))
+            .await?)
     }
 
     /// Appends a batch of events atomically, allocating `seq` and updating materialized `entries`.

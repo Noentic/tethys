@@ -2,7 +2,9 @@
 
 use rusqlite::{params, Connection, TransactionBehavior};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tethys_schema::connection::NormalizedCapabilities;
 use tethys_schema::store::{NewEvent, SeqRange, StoredEvent, ThreadId};
+use tethys_schema::thread::{ConfigOption, ThreadSummary};
 
 use crate::error::StoreError;
 
@@ -28,6 +30,121 @@ pub struct WorkspaceRow {
     pub id: String,
     pub root_path: String,
     pub isolation: String,
+}
+
+/// Durable metadata required to reopen a committed ACP thread.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ThreadRecord {
+    pub summary: ThreadSummary,
+    pub workdir: String,
+    /// Canonical additional trusted roots passed to ACP `additionalDirectories`.
+    pub additional_directories: Vec<String>,
+    pub config_options: Vec<ConfigOption>,
+    pub capabilities: Option<NormalizedCapabilities>,
+    pub prepared: bool,
+    pub latest_seq: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ThreadMetadata {
+    summary: ThreadSummary,
+    workdir: String,
+    #[serde(default)]
+    additional_directories: Vec<String>,
+    config_options: Vec<ConfigOption>,
+    capabilities: Option<NormalizedCapabilities>,
+    prepared: bool,
+}
+
+/// Creates or updates the metadata for a persisted thread.
+pub fn save_thread(conn: &mut Connection, record: &ThreadRecord) -> Result<(), StoreError> {
+    let metadata = serde_json::to_string(&ThreadMetadata {
+        summary: record.summary.clone(),
+        workdir: record.workdir.clone(),
+        additional_directories: record.additional_directories.clone(),
+        config_options: record.config_options.clone(),
+        capabilities: record.capabilities.clone(),
+        prepared: record.prepared,
+    })?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    tx.execute(
+        "INSERT OR IGNORE INTO threads (id, workspace_id, latest_seq) VALUES (?1, ?2, 0)",
+        params![record.summary.id.as_str(), record.summary.workspace_id],
+    )?;
+    tx.execute(
+        "UPDATE threads SET metadata = ?1 WHERE id = ?2 AND workspace_id = ?3",
+        params![
+            metadata,
+            record.summary.id.as_str(),
+            record.summary.workspace_id
+        ],
+    )?;
+    let updated = tx.changes();
+    if updated == 0 {
+        return Err(StoreError::Conflict(format!(
+            "thread {} belongs to a different workspace",
+            record.summary.id
+        )));
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+/// Reads thread metadata, including the durable event tail.
+pub fn get_thread(
+    conn: &Connection,
+    thread_id: &ThreadId,
+) -> Result<Option<ThreadRecord>, StoreError> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT metadata, latest_seq FROM threads WHERE id = ?1 AND metadata IS NOT NULL",
+    )?;
+    let mut rows = stmt.query(params![thread_id.as_str()])?;
+    let Some(row) = rows.next()? else {
+        return Ok(None);
+    };
+    let metadata: String = row.get(0)?;
+    let latest_seq: i64 = row.get(1)?;
+    Ok(Some(record_from_metadata(metadata, latest_seq)?))
+}
+
+/// Lists all thread records, including prepared drafts for startup cleanup.
+pub fn list_threads(conn: &Connection) -> Result<Vec<ThreadRecord>, StoreError> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT metadata, latest_seq FROM threads WHERE metadata IS NOT NULL ORDER BY id ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let metadata: String = row.get(0)?;
+        let latest_seq: i64 = row.get(1)?;
+        Ok((metadata, latest_seq))
+    })?;
+    let mut records = Vec::new();
+    for row in rows {
+        let (metadata, latest_seq) = row?;
+        records.push(record_from_metadata(metadata, latest_seq)?);
+    }
+    Ok(records)
+}
+
+fn record_from_metadata(metadata: String, latest_seq: i64) -> Result<ThreadRecord, StoreError> {
+    let metadata: ThreadMetadata = serde_json::from_str(&metadata)?;
+    Ok(ThreadRecord {
+        summary: metadata.summary,
+        workdir: metadata.workdir,
+        additional_directories: metadata.additional_directories,
+        config_options: metadata.config_options,
+        capabilities: metadata.capabilities,
+        prepared: metadata.prepared,
+        latest_seq: latest_seq.max(0) as u64,
+    })
+}
+
+/// Deletes one thread and cascades its events and materialized entries.
+pub fn delete_thread(conn: &Connection, thread_id: &ThreadId) -> Result<bool, StoreError> {
+    let deleted = conn.execute(
+        "DELETE FROM threads WHERE id = ?1 AND metadata IS NOT NULL",
+        params![thread_id.as_str()],
+    )?;
+    Ok(deleted > 0)
 }
 
 /// Retrieves a workspace by id if present.

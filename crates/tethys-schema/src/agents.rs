@@ -42,6 +42,32 @@ pub struct AuthMethodView {
     pub shape: AuthMethodShape,
 }
 
+/// Result of starting one declared ACP authentication method.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum AgentLoginOutcome {
+    Complete,
+    Terminal { terminal_id: String },
+}
+
+/// Current output and process state for a Terminal Auth session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct LoginTerminalOutput {
+    pub output: String,
+    pub truncated: bool,
+    pub exited: bool,
+    pub exit_code: Option<u32>,
+}
+
+/// Current authentication state, independent of available authentication methods.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthState {
+    Unknown,
+    Ready,
+    Required,
+}
+
 /// One environment binding: a literal or a `keychain:…` reference.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct EnvVarInput {
@@ -90,6 +116,9 @@ impl BackendClass {
 pub struct RegistryRef {
     pub id: String,
     pub version: String,
+    /// The distribution form resolved at install time; absent on older rows.
+    #[serde(default)]
+    pub distribution: Option<String>,
 }
 
 /// Health of a profile's executable + ACP handshake (spec §5.2).
@@ -125,6 +154,7 @@ pub struct AgentProfileView {
     pub projection_target: Option<ProjectionTarget>,
     pub preferred_protocol: Option<AcpProtocol>,
     pub health: ProviderHealth,
+    pub auth_state: AuthState,
     /// Human-readable reason for `health` (e.g. `needs Node.js`).
     pub detail: Option<String>,
     /// Protocol actually negotiated at the last handshake.
@@ -163,9 +193,20 @@ pub struct AgentRegistryEntryView {
     pub version: String,
     pub description: Option<String>,
     pub repository: Option<String>,
+    pub authors: Vec<String>,
     pub license: Option<String>,
+    pub license_url: Option<String>,
+    pub website: Option<String>,
+    pub icon: Option<String>,
+    pub preview_version: Option<String>,
     /// Distribution kinds the entry offers: `npx`, `binary`, `uvx`.
     pub distributions: Vec<String>,
+    /// The server's deterministic current-host choice, if one is available.
+    pub selected_distribution: Option<String>,
+    pub needs_node: bool,
+    pub needs_uvx: bool,
+    pub selection_reason: Option<String>,
+    pub install_block_reason: Option<String>,
     pub installed: bool,
     pub pinned_version: Option<String>,
     pub update: Option<UpdateAvailability>,
@@ -186,11 +227,15 @@ pub enum UpdateAvailability {
 pub struct InstallResult {
     pub profile_id: String,
     pub version: String,
+    pub distribution: String,
+    pub selection_reason: Option<String>,
     pub launch_spec: LaunchSpecInput,
     /// Set when an optional integrity field was absent (`sha256`).
     pub warning: Option<String>,
     /// True when an `npx` install needs Node.js that is not on PATH.
     pub needs_node: bool,
+    /// True when an `uvx` install needs uv that is not on PATH.
+    pub needs_uvx: bool,
 }
 
 /// One process in a thread's tree (architecture §7.5).
@@ -262,6 +307,7 @@ mod tests {
             projection_target: None,
             preferred_protocol: Some(AcpProtocol::V2),
             health: ProviderHealth::Unknown,
+            auth_state: AuthState::Unknown,
             detail: None,
             protocol: None,
             capabilities: None,

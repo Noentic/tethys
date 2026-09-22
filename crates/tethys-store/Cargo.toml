@@ -13,6 +13,7 @@ rusqlite_migration = "2.6"
 blake3 = "1"
 tempfile = "3"
 thiserror.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "fs"] }
 

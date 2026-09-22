@@ -1,21 +1,21 @@
 //! Vendor Provider extension wire contract (`ProviderExtension`, M1.6c U12).
 //!
-//! A `_`-prefixed ACP notification (e.g. `_kiro.dev/mcp/oauth_request`) that
-//! the connection has no typed handler for. `TurnEventBody::Unknown` carries
-//! only a raw string with no method, so nothing can be keyed by it; this type
-//! carries the `method` a registered Provider surface resolves on. The
-//! transport that turns a vendor notification into this event is M1.17.
+//! A `_`-prefixed ACP request or notification, carried through the session
+//! stream so registered Provider surfaces can inspect it and answer requests.
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// One untyped vendor-extension request, keyed by Provider and method.
+/// One untyped vendor-extension request or notification.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct ProviderExtension {
-    /// Provider that raised the request (its profile/registry id).
+    /// Provider integration id (or `custom-acp` for an unregistered profile).
     pub provider_id: String,
     /// The ACP extension method, verbatim (`_kiro.dev/mcp/oauth_request`).
     pub method: String,
+    /// Present for requests waiting for `thread.respond_extension`.
+    #[serde(default)]
+    pub request_id: Option<String>,
     /// The request payload as a JSON string, matching
     /// `TurnEventBody::Unknown { raw }`'s convention and keeping this crate's
     /// runtime dependencies at serde + specta.
@@ -28,7 +28,7 @@ mod tests {
 
     #[test]
     fn round_trips_byte_identically() {
-        let json = r#"{"provider_id":"kiro","method":"_kiro.dev/mcp/oauth_request","params":"{\"url\":\"https://example.test\"}"}"#;
+        let json = r#"{"provider_id":"kiro","method":"_kiro.dev/mcp/oauth_request","request_id":null,"params":"{\"url\":\"https://example.test\"}"}"#;
         let parsed: ProviderExtension = serde_json::from_str(json).expect(json);
         assert_eq!(
             serde_json::to_value(&parsed).expect("serialize"),
