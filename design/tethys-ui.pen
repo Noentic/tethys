@@ -14554,7 +14554,7 @@
                           "id": "CwwId",
                           "name": "Label",
                           "fill": "$text-muted",
-                          "content": "opencode",
+                          "content": "OpenCode",
                           "lineHeight": "$text-mono-micro-lh",
                           "fontFamily": "$font-mono",
                           "fontSize": "$text-mono-micro-size",
@@ -18312,7 +18312,7 @@
                       "id": "vrDC6",
                       "name": "Label",
                       "fill": "$text-muted",
-                      "content": "opencode",
+                      "content": "OpenCode",
                       "lineHeight": "$text-mono-micro-lh",
                       "fontFamily": "$font-mono",
                       "fontSize": "$text-mono-micro-size",
@@ -25529,8 +25529,8 @@
         "mode": "dark"
       },
       "clip": true,
-      "width": 2535,
-      "height": 1526,
+      "width": 2764,
+      "height": 1780,
       "fill": "$canvas",
       "layout": "vertical",
       "gap": 24,
@@ -26332,6 +26332,51 @@
                         },
                         {
                           "type": "frame",
+                          "id": "L00u0",
+                          "name": "Codex",
+                          "width": "fill_container",
+                          "height": 32,
+                          "cornerRadius": "$radius-sm",
+                          "gap": 8,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "AJvfL",
+                              "type": "ref",
+                              "ref": "v8365J",
+                              "name": "Health",
+                              "fill": "$status-success"
+                            },
+                            {
+                              "id": "Anthl",
+                              "type": "ref",
+                              "ref": "oDKnM",
+                              "name": "Glyph",
+                              "width": 16,
+                              "height": 16
+                            },
+                            {
+                              "type": "text",
+                              "id": "W5l4e",
+                              "name": "Name",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Codex",
+                              "lineHeight": "$text-label-md-lh",
+                              "fontFamily": "$font-sans",
+                              "fontSize": "$text-label-md-size",
+                              "fontWeight": "$text-label-md-weight",
+                              "letterSpacing": "$text-label-md-ls"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
                           "id": "htTOk",
                           "name": "opencode",
                           "width": "fill_container",
@@ -26364,7 +26409,7 @@
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "opencode",
+                              "content": "OpenCode",
                               "lineHeight": "$text-label-md-lh",
                               "fontFamily": "$font-sans",
                               "fontSize": "$text-label-md-size",
@@ -27552,6 +27597,276 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "zjM6a",
+          "name": "Row 3",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 10,
+          "children": [
+            {
+              "type": "text",
+              "id": "w9Iabx",
+              "name": "Group title",
+              "fill": "$text-secondary",
+              "content": "Config panel states  (pre-prompt: connecting, ready, auth required, setup error)",
+              "lineHeight": "$text-label-md-lh",
+              "fontFamily": "$font-sans",
+              "fontSize": "$text-label-md-size",
+              "fontWeight": "$text-label-md-weight",
+              "letterSpacing": "$text-label-md-ls"
+            },
+            {
+              "type": "frame",
+              "id": "xvJGA",
+              "name": "Config panel states",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "jETwL",
+                  "name": "Config panel — Connecting",
+                  "width": 240,
+                  "fill": "$surface-overlay",
+                  "cornerRadius": "$radius-md",
+                  "stroke": "$hairline-strong",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LwCTS",
+                      "name": "State",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "KAka9",
+                          "type": "ref",
+                          "ref": "v8365J",
+                          "name": "Status Dot",
+                          "width": 8,
+                          "height": 8,
+                          "fill": "$text-muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "dz7Ba",
+                          "name": "State name",
+                          "fill": "$text-primary",
+                          "content": "Preparing the session…",
+                          "lineHeight": "$text-label-md-lh",
+                          "fontFamily": "$font-sans",
+                          "fontSize": "$text-label-md-size",
+                          "fontWeight": "$text-label-md-weight",
+                          "letterSpacing": "$text-label-md-ls"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "mDsql",
+                      "name": "Detail",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Waiting for session/new to return the real config.",
+                      "lineHeight": "$text-body-sm-lh",
+                      "fontFamily": "$font-sans",
+                      "fontSize": "$text-body-sm-size",
+                      "fontWeight": "$text-body-sm-weight",
+                      "letterSpacing": "$text-body-sm-ls"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "opLLS",
+                  "name": "Config panel — Ready",
+                  "width": 240,
+                  "fill": "$surface-overlay",
+                  "cornerRadius": "$radius-md",
+                  "stroke": "$hairline-strong",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "lRuNV",
+                      "name": "State",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "MFBN7",
+                          "type": "ref",
+                          "ref": "v8365J",
+                          "name": "Status Dot",
+                          "width": 8,
+                          "height": 8,
+                          "fill": "$status-success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "EKZaP",
+                          "name": "State name",
+                          "fill": "$text-primary",
+                          "content": "Session ready",
+                          "lineHeight": "$text-label-md-lh",
+                          "fontFamily": "$font-sans",
+                          "fontSize": "$text-label-md-size",
+                          "fontWeight": "$text-label-md-weight",
+                          "letterSpacing": "$text-label-md-ls"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "ymU6x",
+                      "name": "Detail",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Model, effort, and mode come from the bootstrap.",
+                      "lineHeight": "$text-body-sm-lh",
+                      "fontFamily": "$font-sans",
+                      "fontSize": "$text-body-sm-size",
+                      "fontWeight": "$text-body-sm-weight",
+                      "letterSpacing": "$text-body-sm-ls"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "W6Sc5a",
+                  "name": "Config panel — Auth required",
+                  "width": 240,
+                  "fill": "$surface-overlay",
+                  "cornerRadius": "$radius-md",
+                  "stroke": "$hairline-strong",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "o8E8DH",
+                      "name": "State",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "CXVIJ",
+                          "type": "ref",
+                          "ref": "v8365J",
+                          "name": "Status Dot",
+                          "width": 8,
+                          "height": 8,
+                          "fill": "$status-warning"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Tc6dl",
+                          "name": "State name",
+                          "fill": "$text-primary",
+                          "content": "Sign in to continue",
+                          "lineHeight": "$text-label-md-lh",
+                          "fontFamily": "$font-sans",
+                          "fontSize": "$text-label-md-size",
+                          "fontWeight": "$text-label-md-weight",
+                          "letterSpacing": "$text-label-md-ls"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "v0M6x",
+                      "name": "Detail",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The Provider needs sign-in before a session can start.",
+                      "lineHeight": "$text-body-sm-lh",
+                      "fontFamily": "$font-sans",
+                      "fontSize": "$text-body-sm-size",
+                      "fontWeight": "$text-body-sm-weight",
+                      "letterSpacing": "$text-body-sm-ls"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "rEAFV",
+                  "name": "Config panel — Setup error",
+                  "width": 240,
+                  "fill": "$surface-overlay",
+                  "cornerRadius": "$radius-md",
+                  "stroke": "$hairline-strong",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "z1Tm8P",
+                      "name": "State",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "w25IE7",
+                          "type": "ref",
+                          "ref": "v8365J",
+                          "name": "Status Dot",
+                          "width": 8,
+                          "height": 8,
+                          "fill": "$status-danger"
+                        },
+                        {
+                          "type": "text",
+                          "id": "RmThc",
+                          "name": "State name",
+                          "fill": "$text-primary",
+                          "content": "Session setup failed",
+                          "lineHeight": "$text-label-md-lh",
+                          "fontFamily": "$font-sans",
+                          "fontSize": "$text-label-md-size",
+                          "fontWeight": "$text-label-md-weight",
+                          "letterSpacing": "$text-label-md-ls"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "q5jUiy",
+                      "name": "Detail",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Retry keeps the draft and prepares again.",
+                      "lineHeight": "$text-body-sm-lh",
+                      "fontFamily": "$font-sans",
+                      "fontSize": "$text-body-sm-size",
+                      "fontWeight": "$text-body-sm-weight",
+                      "letterSpacing": "$text-body-sm-ls"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -28084,7 +28399,7 @@
                 {
                   "type": "frame",
                   "id": "HToXo",
-                  "name": "Login dialog  (420, URL + code method, numeric m:ss countdown)",
+                  "name": "Login dialog · ACP method selection",
                   "layout": "vertical",
                   "gap": 10,
                   "children": [
@@ -28093,7 +28408,7 @@
                       "id": "OYNc9",
                       "name": "Group title",
                       "fill": "$text-secondary",
-                      "content": "Login dialog  (420, URL + code method, numeric m:ss countdown)",
+                      "content": "Login dialog · ACP method selection",
                       "lineHeight": "$text-label-md-lh",
                       "fontFamily": "$font-sans",
                       "fontSize": "$text-label-md-size",
@@ -28143,7 +28458,7 @@
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Open the sign-in page, then enter the code it shows.",
+                          "content": "Choose a method declared by this provider. Terminal Auth runs its sign-in command in the Tethys terminal.",
                           "lineHeight": "$text-body-sm-lh",
                           "fontFamily": "$font-sans",
                           "fontSize": "$text-body-sm-size",
@@ -28151,31 +28466,19 @@
                           "letterSpacing": "$text-body-sm-ls"
                         },
                         {
-                          "id": "xDGzt",
-                          "type": "ref",
-                          "ref": "Tf2qn",
-                          "name": "Open sign-in",
-                          "descendants": {
-                            "A8OCd": {
-                              "content": "Sign in with Claude Code →"
-                            }
-                          }
-                        },
-                        {
                           "type": "frame",
-                          "id": "GzwpK",
-                          "name": "Code field",
+                          "id": "nncvV",
+                          "name": "Sign-in method picker",
                           "width": "fill_container",
                           "layout": "vertical",
                           "gap": 6,
                           "children": [
                             {
                               "type": "text",
-                              "id": "xNlOI",
-                              "name": "Label",
+                              "id": "PkWgd",
+                              "name": "Method label",
                               "fill": "$text-muted",
-                              "content": "Code",
-                              "lineHeight": "$text-label-sm-lh",
+                              "content": "Sign-in method",
                               "fontFamily": "$font-sans",
                               "fontSize": "$text-label-sm-size",
                               "fontWeight": "$text-label-sm-weight",
@@ -28183,8 +28486,8 @@
                             },
                             {
                               "type": "frame",
-                              "id": "o1HcFg",
-                              "name": "Field",
+                              "id": "aRMK9",
+                              "name": "Selected method",
                               "width": "fill_container",
                               "height": 36,
                               "fill": "$surface-panel",
@@ -28201,31 +28504,36 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "V9KuC",
-                                  "name": "Code",
+                                  "id": "m7xhOY",
+                                  "name": "Selected method name",
                                   "fill": "$text-primary",
-                                  "content": "K7QX-PM2D",
-                                  "lineHeight": "$text-mono-code-lh",
-                                  "fontFamily": "$font-mono",
-                                  "fontSize": "$text-mono-code-size",
-                                  "fontWeight": "$text-mono-code-weight",
-                                  "letterSpacing": "$text-mono-code-ls"
+                                  "content": "Terminal Auth",
+                                  "fontFamily": "$font-sans",
+                                  "fontSize": "$text-body-sm-size",
+                                  "fontWeight": "normal"
                                 },
                                 {
-                                  "type": "text",
-                                  "id": "Xn1FW",
-                                  "name": "Countdown",
-                                  "fill": "$text-muted",
-                                  "content": "4:32",
-                                  "lineHeight": "$text-mono-micro-lh",
-                                  "fontFamily": "$font-mono",
-                                  "fontSize": "$text-mono-micro-size",
-                                  "fontWeight": "$text-mono-micro-weight",
-                                  "letterSpacing": "$text-mono-micro-ls"
+                                  "id": "bK8oj",
+                                  "type": "ref",
+                                  "ref": "zMYnl",
+                                  "name": "Method menu icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "$text-muted"
                                 }
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "KL05R",
+                          "name": "Terminal sign-in status",
+                          "fill": "$text-muted",
+                          "content": "Starting the provider sign-in terminal…",
+                          "fontFamily": "$font-sans",
+                          "fontSize": "$text-body-sm-size",
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
@@ -28693,6 +29001,66 @@
                           "name": "Glyph",
                           "x": 24,
                           "y": 59
+                        },
+                        {
+                          "type": "frame",
+                          "id": "gQojB",
+                          "name": "Sign-in method picker",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "YovAC",
+                              "name": "Method label",
+                              "fill": "$text-muted",
+                              "content": "Sign-in method",
+                              "fontFamily": "$font-sans",
+                              "fontSize": "$text-label-sm-size",
+                              "fontWeight": "$text-label-sm-weight",
+                              "letterSpacing": "$text-label-sm-ls"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "mYF8b",
+                              "name": "Selected method",
+                              "width": "fill_container",
+                              "height": 36,
+                              "fill": "$surface-panel",
+                              "cornerRadius": "$radius-sm",
+                              "stroke": "$border-control",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "padding": [
+                                0,
+                                12
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "UoutT",
+                                  "name": "Selected method name",
+                                  "fill": "$text-primary",
+                                  "content": "Agent Auth",
+                                  "fontFamily": "$font-sans",
+                                  "fontSize": "$text-body-sm-size",
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "id": "auhNn",
+                                  "type": "ref",
+                                  "ref": "zMYnl",
+                                  "name": "Method menu icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "$text-muted"
+                                }
+                              ]
+                            }
+                          ]
                         },
                         {
                           "type": "text",
@@ -29385,7 +29753,7 @@
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "claude login",
+                          "content": "Sign in to Claude Code",
                           "lineHeight": "$text-mono-code-lh",
                           "fontFamily": "$font-mono",
                           "fontSize": "$text-mono-code-size",
@@ -29435,7 +29803,7 @@
                           "id": "pwf37",
                           "name": "Line",
                           "fill": "$text-on-sunken-secondary",
-                          "content": "Opening your browser to sign in…",
+                          "content": "Complete sign-in in the provider terminal.",
                           "lineHeight": "$text-mono-code-lh",
                           "fontFamily": "$font-mono",
                           "fontSize": "$text-mono-code-size",
@@ -29447,12 +29815,52 @@
                           "id": "R9KecC",
                           "name": "Line",
                           "fill": "$text-on-sunken-secondary",
-                          "content": "Waiting for authorization",
+                          "content": "Waiting for authentication…",
                           "lineHeight": "$text-mono-code-lh",
                           "fontFamily": "$font-mono",
                           "fontSize": "$text-mono-code-size",
                           "fontWeight": "$text-mono-code-weight",
                           "letterSpacing": "$text-mono-code-ls"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "PlULO",
+                      "name": "Terminal input hint",
+                      "width": "fill_container",
+                      "height": 36,
+                      "fill": "$surface-sunken",
+                      "cornerRadius": "$radius-sm",
+                      "stroke": "$hairline-on-sunken",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "padding": [
+                        0,
+                        12
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "j6MlMT",
+                          "name": "Input prompt",
+                          "fill": "$text-on-sunken-secondary",
+                          "content": "Type a response or code…",
+                          "fontFamily": "$font-mono",
+                          "fontSize": "$text-mono-micro-size",
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "bDTro",
+                          "name": "Input shortcut",
+                          "fill": "$text-on-sunken-muted",
+                          "content": "Enter sends · Ctrl+C cancels",
+                          "fontFamily": "$font-sans",
+                          "fontSize": "$text-label-sm-size",
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -36302,7 +36710,7 @@
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "Claude Code and opencode are ready. Codex needs setup; Antigravity and Kiro arrive in a later milestone.",
+                              "content": "Claude Code is ready. Codex needs setup. OpenCode is ready. Antigravity and Kiro arrive later.",
                               "lineHeight": "$text-label-md-lh",
                               "fontFamily": "$font-sans",
                               "fontSize": "$text-label-md-size",
@@ -36331,36 +36739,6 @@
                       "ref": "n5duDz",
                       "name": "Accordion",
                       "width": "fill_container"
-                    },
-                    {
-                      "id": "n1j6Gj",
-                      "type": "ref",
-                      "ref": "ze7h5",
-                      "name": "opencode",
-                      "width": "fill_container",
-                      "descendants": {
-                        "zZoDA": {
-                          "id": "Bnpb1",
-                          "type": "ref",
-                          "ref": "pWCgE",
-                          "name": "Glyph"
-                        },
-                        "k0e2Z": {
-                          "fill": "$status-success"
-                        },
-                        "ip68g": {
-                          "content": "opencode"
-                        },
-                        "a6mqK5": {
-                          "content": "Detected — ready to connect"
-                        },
-                        "OvMA5": {
-                          "enabled": true
-                        },
-                        "OvMA5/uOqGU": {
-                          "content": "18ms"
-                        }
-                      }
                     },
                     {
                       "id": "v6W8F",
@@ -36652,6 +37030,36 @@
                           ]
                         }
                       ]
+                    },
+                    {
+                      "id": "n1j6Gj",
+                      "type": "ref",
+                      "ref": "ze7h5",
+                      "name": "opencode",
+                      "width": "fill_container",
+                      "descendants": {
+                        "zZoDA": {
+                          "id": "Bnpb1",
+                          "type": "ref",
+                          "ref": "pWCgE",
+                          "name": "Glyph"
+                        },
+                        "k0e2Z": {
+                          "fill": "$status-success"
+                        },
+                        "ip68g": {
+                          "content": "opencode"
+                        },
+                        "a6mqK5": {
+                          "content": "Detected — ready to connect"
+                        },
+                        "OvMA5": {
+                          "enabled": true
+                        },
+                        "OvMA5/uOqGU": {
+                          "content": "18ms"
+                        }
+                      }
                     },
                     {
                       "id": "j1udDv",
@@ -37684,25 +38092,6 @@
                       }
                     },
                     {
-                      "id": "EF879",
-                      "type": "ref",
-                      "ref": "v9ispA",
-                      "name": "OpenCode",
-                      "descendants": {
-                        "Jc1mU": {
-                          "id": "ydWQ2",
-                          "type": "ref",
-                          "ref": "ebyCu",
-                          "name": "Glyph",
-                          "width": 16,
-                          "height": 16
-                        },
-                        "VMIVW": {
-                          "content": "OpenCode"
-                        }
-                      }
-                    },
-                    {
                       "id": "gN6RG",
                       "type": "ref",
                       "ref": "D95Kk",
@@ -37718,6 +38107,25 @@
                         },
                         "P9nnr": {
                           "content": "Codex CLI"
+                        }
+                      }
+                    },
+                    {
+                      "id": "EF879",
+                      "type": "ref",
+                      "ref": "v9ispA",
+                      "name": "OpenCode",
+                      "descendants": {
+                        "Jc1mU": {
+                          "id": "ydWQ2",
+                          "type": "ref",
+                          "ref": "ebyCu",
+                          "name": "Glyph",
+                          "width": 16,
+                          "height": 16
+                        },
+                        "VMIVW": {
+                          "content": "OpenCode"
                         }
                       }
                     },
