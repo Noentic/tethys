@@ -2,12 +2,22 @@
 
 use tethys_schema::cancel::CancelState;
 use tethys_schema::queue::QueuedPrompt;
-use tethys_schema::thread::{ContentBlock, CreateThread, ThreadId, ThreadSummary, ThreadView};
+use tethys_schema::thread::{
+    ContentBlock, CreateThread, ProviderSessionPage, ThreadBootstrap, ThreadId, ThreadSessionView,
+    ThreadSummary,
+};
 
 use crate::ApiError;
 
 /// Thread lifecycle, prompting, queue and config methods.
 pub trait ThreadApi: Send + Sync {
+    fn thread_prepare(
+        &self,
+        _request: CreateThread,
+    ) -> impl std::future::Future<Output = Result<ThreadBootstrap, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("thread.prepare")) }
+    }
+
     fn thread_create(
         &self,
         _request: CreateThread,
@@ -24,7 +34,7 @@ pub trait ThreadApi: Send + Sync {
     fn thread_get(
         &self,
         _id: ThreadId,
-    ) -> impl std::future::Future<Output = Result<ThreadView, ApiError>> + Send {
+    ) -> impl std::future::Future<Output = Result<ThreadSessionView, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.get")) }
     }
 
@@ -90,10 +100,38 @@ pub trait ThreadApi: Send + Sync {
         async { Err(ApiError::Unimplemented("thread.resume")) }
     }
 
+    /// One page of Provider sessions for the trusted root; cursor in/out.
+    fn thread_list_provider_sessions(
+        &self,
+        _profile_id: String,
+        _workspace_id: String,
+        _cursor: Option<String>,
+    ) -> impl std::future::Future<Output = Result<ProviderSessionPage, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("thread.list_provider_sessions")) }
+    }
+
     fn thread_import_sessions(
         &self,
-    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+        _profile_id: String,
+        _workspace_id: String,
+    ) -> impl std::future::Future<Output = Result<Vec<ThreadSummary>, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.import_sessions")) }
+    }
+
+    fn thread_respond_extension(
+        &self,
+        _id: ThreadId,
+        _request_id: String,
+        _response_json: String,
+    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("thread.respond_extension")) }
+    }
+
+    fn thread_delete_provider_session(
+        &self,
+        _id: ThreadId,
+    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("thread.delete_provider_session")) }
     }
 
     fn thread_fork(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {

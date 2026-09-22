@@ -1,7 +1,8 @@
 //! `agent.*` namespace (`architecture.md` §12.1).
 
 use tethys_schema::agents::{
-    AgentProfileView, AgentRegistryEntryView, InstallResult, ProcessSample, ProfileInput,
+    AgentLoginOutcome, AgentProfileView, AgentRegistryEntryView, InstallResult,
+    LoginTerminalOutput, ProcessSample, ProfileInput,
 };
 use tethys_schema::connection::ConnectionEntry;
 
@@ -78,8 +79,33 @@ pub trait AgentApi: Send + Sync {
         &self,
         _profile_id: String,
         _method_id: String,
-    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+    ) -> impl std::future::Future<Output = Result<AgentLoginOutcome, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("agent.login")) }
+    }
+
+    fn agent_login_terminal_output(
+        &self,
+        _profile_id: String,
+        _terminal_id: String,
+    ) -> impl std::future::Future<Output = Result<LoginTerminalOutput, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("agent.login_terminal_output")) }
+    }
+
+    fn agent_login_terminal_write(
+        &self,
+        _profile_id: String,
+        _terminal_id: String,
+        _text: String,
+    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("agent.login_terminal_write")) }
+    }
+
+    fn agent_login_terminal_cancel(
+        &self,
+        _profile_id: String,
+        _terminal_id: String,
+    ) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("agent.login_terminal_cancel")) }
     }
 
     fn agent_logout(

@@ -22,6 +22,9 @@ export type AgentInfo = {
 	title: string | null,
 };
 
+/**  Result of starting one declared ACP authentication method. */
+export type AgentLoginOutcome = { kind: "complete" } | { kind: "terminal"; terminal_id: string };
+
 /**  A profile merged with its last known health and negotiated capabilities. */
 export type AgentProfileView = {
 	id: string,
@@ -33,6 +36,7 @@ export type AgentProfileView = {
 	projection_target: ProjectionTarget | null,
 	preferred_protocol: AcpProtocol | null,
 	health: ProviderHealth,
+	auth_state: AuthState,
 	/**  Human-readable reason for `health` (e.g. `needs Node.js`). */
 	detail: string | null,
 	/**  Protocol actually negotiated at the last handshake. */
@@ -53,9 +57,20 @@ export type AgentRegistryEntryView = {
 	version: string,
 	description: string | null,
 	repository: string | null,
+	authors: string[],
 	license: string | null,
+	license_url: string | null,
+	website: string | null,
+	icon: string | null,
+	preview_version: string | null,
 	/**  Distribution kinds the entry offers: `npx`, `binary`, `uvx`. */
 	distributions: string[],
+	/**  The server's deterministic current-host choice, if one is available. */
+	selected_distribution: string | null,
+	needs_node: boolean,
+	needs_uvx: boolean,
+	selection_reason: string | null,
+	install_block_reason: string | null,
 	installed: boolean,
 	pinned_version: string | null,
 	update: UpdateAvailability | null,
@@ -112,6 +127,9 @@ export type AuthMethodView = {
 	description: string | null,
 	shape: AuthMethodShape,
 };
+
+/**  Current authentication state, independent of available authentication methods. */
+export type AuthState = "unknown" | "ready" | "required";
 
 /**  How a profile was created. */
 export type BackendClass = "registry" | "manual";
@@ -295,20 +313,42 @@ export type ConnectionKey = {
  */
 export type ConnectionState = "Connecting" | "Connected" | "Error" | "Draining";
 
-export type ContentBlock = ({ Text: string }) & { Image?: never; ResourceLink?: never; Unknown?: never } | ({ ResourceLink: {
+export type ContentBlock = ({ Text: string }) & { Audio?: never; Image?: never; Resource?: never; ResourceLink?: never; TextWithMetadata?: never; Unknown?: never } | 
+/**  Text with ACP annotations or `_meta` retained as opaque JSON. */
+({ TextWithMetadata: {
+	text: string,
+	acp_metadata: string,
+} }) & { Audio?: never; Image?: never; Resource?: never; ResourceLink?: never; Text?: never; Unknown?: never } | ({ ResourceLink: {
 	uri: string,
 	name: string,
 	mime_type: string | null,
-} }) & { Image?: never; Text?: never; Unknown?: never } | ({ Image: {
+	acp_metadata?: string | null,
+} }) & { Audio?: never; Image?: never; Resource?: never; Text?: never; TextWithMetadata?: never; Unknown?: never } | ({ Image: {
 	mime_type: string,
 	data: string,
-} }) & { ResourceLink?: never; Text?: never; Unknown?: never } | ({ Unknown: string }) & { Image?: never; ResourceLink?: never; Text?: never };
+	acp_metadata?: string | null,
+} }) & { Audio?: never; Resource?: never; ResourceLink?: never; Text?: never; TextWithMetadata?: never; Unknown?: never } | ({ Audio: {
+	mime_type: string,
+	data: string,
+	acp_metadata?: string | null,
+} }) & { Image?: never; Resource?: never; ResourceLink?: never; Text?: never; TextWithMetadata?: never; Unknown?: never } | ({ Resource: {
+	uri: string,
+	mime_type: string | null,
+	text: string | null,
+	blob: string | null,
+	acp_metadata?: string | null,
+} }) & { Audio?: never; Image?: never; ResourceLink?: never; Text?: never; TextWithMetadata?: never; Unknown?: never } | ({ Unknown: string }) & { Audio?: never; Image?: never; Resource?: never; ResourceLink?: never; Text?: never; TextWithMetadata?: never };
 
-/**  Request for `thread.create`. */
+/**  Request for `thread.create` / `thread.prepare`. */
 export type CreateThread = {
 	workspace_id: string,
 	agent_profile_id: string,
 	workdir: string,
+	/**
+	 *  Additional trusted-root ids the session may read/write, passed to the
+	 *  agent as ACP `additionalDirectories` (M1.17 R6).
+	 */
+	additional_directories?: string[],
 };
 
 export type Decider = "User" | "Policy";
@@ -560,11 +600,15 @@ export type ImportScan = {
 export type InstallResult = {
 	profile_id: string,
 	version: string,
+	distribution: string,
+	selection_reason: string | null,
 	launch_spec: LaunchSpecInput,
 	/**  Set when an optional integrity field was absent (`sha256`). */
 	warning: string | null,
 	/**  True when an `npx` install needs Node.js that is not on PATH. */
 	needs_node: boolean,
+	/**  True when an `uvx` install needs uv that is not on PATH. */
+	needs_uvx: boolean,
 };
 
 /**  The launch inputs a profile owns (architecture §12). */
@@ -573,6 +617,14 @@ export type LaunchSpecInput = {
 	args?: string[],
 	cwd: string | null,
 	env?: EnvVarInput[],
+};
+
+/**  Current output and process state for a Terminal Auth session. */
+export type LoginTerminalOutput = {
+	output: string,
+	truncated: boolean,
+	exited: boolean,
+	exit_code: number | null,
 };
 
 /**  Transports an agent advertised for a session. */
@@ -604,7 +656,17 @@ export type NewEvent = {
 export type NormalizedCapabilities = {
 	load_session: boolean,
 	resume: boolean,
+	close_session?: boolean,
+	list_sessions?: boolean,
+	delete_session?: boolean,
+	logout?: boolean,
 	mcp: McpTransports,
+	/**  ACP requires every agent to accept text prompts. */
+	prompt_text?: boolean,
+	/**  ACP requires every agent to accept resource links in prompts. */
+	prompt_resource_link?: boolean,
+	prompt_image?: boolean,
+	prompt_audio?: boolean,
 	prompt_embedded_context: boolean,
 	/**
 	 *  Whether Tethys advertised form elicitation and may receive
@@ -707,12 +769,14 @@ export type ProviderColumn = {
 	target?: ProjectionTarget | null,
 };
 
-/**  One untyped vendor-extension request, keyed by Provider and method. */
+/**  One untyped vendor-extension request or notification. */
 export type ProviderExtension = {
-	/**  Provider that raised the request (its profile/registry id). */
+	/**  Provider integration id (or `custom-acp` for an unregistered profile). */
 	provider_id: string,
 	/**  The ACP extension method, verbatim (`_kiro.dev/mcp/oauth_request`). */
 	method: string,
+	/**  Present for requests waiting for `thread.respond_extension`. */
+	request_id?: string | null,
 	/**
 	 *  The request payload as a JSON string, matching
 	 *  `TurnEventBody::Unknown { raw }`'s convention and keeping this crate's
@@ -727,6 +791,20 @@ export type ProviderHealth =
 "unknown" | "healthy" | "auth-required" | 
 /**  Program not found on PATH or missing install (e.g. Node.js for `npx`). */
 "not-found" | "error";
+
+/**  One page of Provider sessions; `next_cursor` continues exclusively. */
+export type ProviderSessionPage = {
+	sessions: ProviderSessionSummary[],
+	next_cursor: string | null,
+};
+
+/**  One Provider session offered for import (M1.17 R6). */
+export type ProviderSessionSummary = {
+	id: string,
+	title: string | null,
+	cwd: string,
+	updated_at: string | null,
+};
 
 /**  One staged prompt in a thread's queue. */
 export type QueuedPrompt = {
@@ -767,6 +845,8 @@ export type RegistryEntryView = {
 export type RegistryRef = {
 	id: string,
 	version: string,
+	/**  The distribution form resolved at install time; absent on older rows. */
+	distribution?: string | null,
 };
 
 /**
@@ -945,8 +1025,28 @@ export type StreamChunk = {
 /**  A file surface or session that a registry entry can be projected to (legacy). */
 export type TargetId = "session" | "claude-code" | "codex" | "open-code";
 
+/**  Result of preparing a new ACP session before the composer is enabled. */
+export type ThreadBootstrap = {
+	thread: ThreadSummary,
+	events: EventEnvelope[],
+	config_options: ConfigOption[],
+	capabilities: NormalizedCapabilities | null,
+	permission_mode: PermissionMode,
+	latest_seq: number,
+};
+
 /**  Stable thread identifier. */
 export type ThreadId = string;
+
+/**  Thread identity and ordered session snapshot (`thread.get`). */
+export type ThreadSessionView = {
+	thread: ThreadSummary,
+	events: EventEnvelope[],
+	config_options: ConfigOption[],
+	capabilities: NormalizedCapabilities | null,
+	permission_mode: PermissionMode,
+	latest_seq: number,
+};
 
 /**  UI-02 thread states. */
 export type ThreadState = "Idle" | "Running" | "AwaitingApproval" | "Error" | "Interrupted" | "Suspended" | "Archived";
@@ -1103,7 +1203,12 @@ export type TurnEventBody = { type: "StateChanged"; body: StateChanged } | { typ
  *  emitted by M1.12's Stop backend and read by the `Stop` control. The
  *  backend owns the clock, so the payload carries the absolute deadline.
  */
-{ type: "CancelPhaseChanged"; body: CancelState };
+{ type: "CancelPhaseChanged"; body: CancelState } | 
+/**  A claimed ACP extension request was answered or cancelled. */
+{ type: "ProviderExtensionResolved"; body: {
+	request_id: string,
+	cancelled: boolean,
+} };
 
 /**  Refs holding the pre-restore state so restore is itself reversible. */
 export type UndoCapture = {
@@ -1185,6 +1290,7 @@ export type WorkspaceListItem = {
  */
 export type WorkspaceSessionSummary = {
 	id: string,
+	agent_profile_id: string,
 	title: string,
 	state: ThreadState,
 };

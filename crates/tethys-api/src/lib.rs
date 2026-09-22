@@ -10,6 +10,7 @@
 //! bind to. A chunk adding a namespace method edits only that namespace file.
 
 use futures::stream::Stream;
+use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use tethys_schema::thread::EventEnvelope;
 
@@ -46,10 +47,51 @@ pub use workspace::WorkspaceApi;
 /// Subscription stream returned by `events.subscribe`.
 pub type EventStream = Pin<Box<dyn Stream<Item = EventEnvelope> + Send>>;
 
+/// The stage a Provider failure reached, so the UI can name the fix instead of
+/// flattening every failure into `internal` (M1.17 R9, `provider_health` row).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FailureStage {
+    /// Download, integrity, extraction, or pin replacement failed.
+    Install,
+    /// The program could not be spawned.
+    Spawn,
+    /// `initialize` failed or negotiated an unsupported protocol.
+    Initialize,
+    /// The ACP session could not be created, loaded, or resumed.
+    SessionSetup,
+    /// The agent does not support the requested capability or content.
+    Unsupported,
+    /// The transport was lost after connecting.
+    Transport,
+    /// The Provider rejected the request.
+    ProviderRejected,
+}
+
+impl FailureStage {
+    /// Stable uppercase code carried in the API error text.
+    pub fn code(self) -> &'static str {
+        match self {
+            FailureStage::Install => "INSTALL_FAILED",
+            FailureStage::Spawn => "SPAWN_FAILED",
+            FailureStage::Initialize => "INITIALIZE_FAILED",
+            FailureStage::SessionSetup => "SESSION_SETUP_FAILED",
+            FailureStage::Unsupported => "UNSUPPORTED",
+            FailureStage::Transport => "TRANSPORT_LOST",
+            FailureStage::ProviderRejected => "PROVIDER_REJECTED",
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("internal: {0}")]
     Internal(String),
+    /// A Provider failure with its stage preserved.
+    #[error("{}: {message}", stage.code())]
+    Failure {
+        stage: FailureStage,
+        message: String,
+    },
     #[error("not found: {0}")]
     NotFound(String),
     #[error("UNIMPLEMENTED: {0}")]
@@ -62,6 +104,8 @@ pub enum ApiError {
     InvalidConfig(String),
     #[error("CONFLICT: {0}")]
     Conflict(String),
+    #[error("AUTH_REQUIRED: {0}")]
+    AuthRequired(String),
     #[error("CAPABILITIES_NOT_NEGOTIATED: connection has not negotiated capabilities yet")]
     CapabilitiesNotNegotiated,
     #[error(

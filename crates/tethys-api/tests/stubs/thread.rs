@@ -45,7 +45,20 @@ async fn thread_defaults_return_unimplemented() {
         "thread.resume",
         api.thread_resume(ThreadId::from("t1")).await,
     );
-    assert_unimplemented("thread.import_sessions", api.thread_import_sessions().await);
+    assert_unimplemented(
+        "thread.import_sessions",
+        api.thread_import_sessions("profile".into(), "workspace".into())
+            .await,
+    );
+    assert_unimplemented(
+        "thread.respond_extension",
+        api.thread_respond_extension("t1".into(), "extension-1".into(), "{}".into())
+            .await,
+    );
+    assert_unimplemented(
+        "thread.delete_provider_session",
+        api.thread_delete_provider_session("t1".into()).await,
+    );
     assert_unimplemented("thread.fork", api.thread_fork().await);
     assert_unimplemented(
         "thread.archive",
