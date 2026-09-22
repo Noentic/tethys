@@ -3,14 +3,12 @@
 use std::path::PathBuf;
 
 use tethys_api::{ApiError, CommandsApi};
-use tethys_schema::composer::{
-    CommandInfo, CommandScope, CommandSource, ExpandedCommand,
-};
+use tethys_schema::composer::{CommandInfo, CommandScope, CommandSource, ExpandedCommand};
 use tethys_schema::sync::WorkspaceId;
 
 use crate::composer::{
-    delete_command, expand_command, global_commands_dir, list_commands, list_commands_with_shadowed,
-    read_command, workspace_commands_dir, write_command,
+    delete_command, expand_command, global_commands_dir, list_commands,
+    list_commands_with_shadowed, read_command, workspace_commands_dir, write_command,
 };
 use crate::Core;
 

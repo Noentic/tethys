@@ -7,6 +7,7 @@
 
 #![cfg(unix)]
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -24,13 +25,70 @@ use tethys_core::permission::DenyPermissionResolver;
 use tethys_core::thread_session::{SyncSource, ThreadSessions};
 use tethys_core::Core;
 use tethys_schema::agents::UpdateAvailability;
-use tethys_schema::connection::AcpProtocol;
-use tethys_schema::thread::{ContentBlock, CreateThread, SessionState, TurnEventBody};
+use tethys_schema::connection::{AcpProtocol, ConnectionKey};
+use tethys_schema::elicitation::{
+    ElicitationOutcome, ElicitationRequest, ElicitationResponse, ElicitationValue,
+};
+use tethys_schema::thread::{ContentBlock, CreateThread, SessionState, ThreadId, TurnEventBody};
+use tethys_thread::{ElicitationResolver, SessionId};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const AGENT_ID: &str = "mock-vendor";
 const TOKEN: &str = "pinned-run-token";
+
+/// Answers the mock's form elicitation without a UI, proving the shared
+/// resolver path works for a standards-only agent.
+struct AutoElicit;
+
+#[async_trait]
+impl ElicitationResolver for AutoElicit {
+    async fn resolve(
+        &self,
+        _session: &SessionId,
+        request: ElicitationRequest,
+    ) -> ElicitationResponse {
+        let values = request
+            .fields
+            .iter()
+            .any(|field| field.key == "name")
+            .then(|| {
+                BTreeMap::from([("name".to_string(), ElicitationValue::Text("tethys".into()))])
+            })
+            .unwrap_or_default();
+        ElicitationResponse::accepted(request.req_id, values)
+    }
+}
+
+/// Sends one prompt and collects normalized events until the turn goes idle.
+async fn prompt_and_collect(
+    core: &Core,
+    id: &ThreadId,
+    events: &mut tethys_api::EventStream,
+    text: &str,
+) -> Vec<TurnEventBody> {
+    core.thread_prompt(id.clone(), vec![ContentBlock::Text(text.into())])
+        .await
+        .expect("prompt");
+    let mut bodies = Vec::new();
+    for _ in 0..512 {
+        let event = tokio::time::timeout(Duration::from_secs(10), events.next())
+            .await
+            .expect("event within timeout")
+            .expect("stream open");
+        let body = event.event;
+        let idle = matches!(
+            &body,
+            TurnEventBody::StateChanged(changed)
+                if matches!(changed.state, SessionState::Idle { .. })
+        );
+        bodies.push(body);
+        if idle {
+            break;
+        }
+    }
+    bodies
+}
 
 fn main() {
     if tethys_acp::mock::run_if_requested() {
@@ -131,7 +189,14 @@ async fn run() {
             .await
             .expect("store"),
     );
-    let options = StoreOptions::new(AcpProtocol::V1, Arc::new(DenyPermissionResolver));
+    let mut options = StoreOptions::new(AcpProtocol::V1, Arc::new(DenyPermissionResolver));
+    assert!(
+        options.provider_integrations.get(AGENT_ID).is_none(),
+        "the standards-only fixture must not need a Provider descriptor"
+    );
+    options.client_services = options
+        .client_services
+        .with_elicitation(Arc::new(AutoElicit));
     let sessions = Arc::new(ThreadSessions::new(
         ConnectionStore::new(options),
         SyncSource::new(home.path(), Arc::new(tethys_sync::MemorySecrets::new())),
@@ -168,6 +233,26 @@ async fn run() {
         })
         .await
         .expect("trust");
+    store
+        .ensure_workspace("extra", &workdir("extra").display().to_string(), "worktree")
+        .await
+        .expect("additional workspace row");
+    store
+        .upsert_trust(tethys_store::TrustRow {
+            workspace_id: "extra".into(),
+            resolved_path: workdir("extra")
+                .canonicalize()
+                .expect("canonicalize")
+                .to_string_lossy()
+                .to_string(),
+            host: "local".into(),
+            remote_url: None,
+            permission_mode: "supervised".into(),
+            scope: "folder".into(),
+            trusted_at: 0,
+        })
+        .await
+        .expect("additional trust");
 
     // Install: the archive is downloaded, verified and extracted, and the spec
     // points at the extracted executable.
@@ -182,6 +267,14 @@ async fn run() {
     );
     let program = PathBuf::from(&installed.launch_spec.program);
     assert!(program.exists(), "extracted executable kept on disk");
+    let lease = core
+        .sessions()
+        .store()
+        .acquire(&ConnectionKey::new(AGENT_ID, "local"))
+        .await
+        .expect("unknown standards-only registry agent connects");
+    assert_eq!(lease.connection().integration_id(), Some(AGENT_ID));
+    drop(lease);
 
     // The registry moves on to a release whose archive is gone.
     {
@@ -204,24 +297,27 @@ async fn run() {
     );
 
     // Run: a thread on the pinned install echoes its prompt through the mock.
-    let thread = core
-        .thread_create(CreateThread {
+    std::fs::write(workdir("extra").join("probe.txt"), "root-probe").expect("probe");
+    let bootstrap = core
+        .thread_prepare(CreateThread {
             workspace_id: "workspace".into(),
             agent_profile_id: AGENT_ID.into(),
             workdir: workdir("thread").display().to_string(),
+            additional_directories: vec!["extra".into()],
         })
         .await
-        .expect("thread from the pinned install")
-        .id;
+        .expect("thread from the pinned install");
+    let thread = bootstrap.thread.id;
     let mut events = core
-        .events_subscribe(thread.clone(), 0)
+        .events_subscribe(thread.clone(), bootstrap.latest_seq)
         .await
         .expect("subscribe");
-    core.thread_prompt(thread, vec![ContentBlock::Text(TOKEN.into())])
+    core.thread_prompt(thread.clone(), vec![ContentBlock::Text(TOKEN.into())])
         .await
         .expect("prompt");
 
     let mut saw_token = false;
+    let mut saw_idle = false;
     for _ in 0..512 {
         let event = tokio::time::timeout(Duration::from_secs(10), events.next())
             .await
@@ -236,10 +332,73 @@ async fn run() {
             TurnEventBody::StateChanged(changed)
                 if saw_token && matches!(changed.state, SessionState::Idle { .. }) =>
             {
-                return;
+                saw_idle = true;
+                break;
             }
             _ => {}
         }
     }
-    panic!("the pinned install never finished its turn (saw token: {saw_token})");
+    assert!(saw_token, "the pinned install never echoed its turn");
+    assert!(saw_idle, "the pinned install never completed its turn");
+
+    // The same standards-only fixture completes every advertised callback.
+    let permission = prompt_and_collect(&core, &thread, &mut events, "permission").await;
+    assert!(
+        permission
+            .iter()
+            .any(|body| matches!(body, TurnEventBody::PermissionRequested(_))),
+        "permission request never reached the client: {permission:?}"
+    );
+    assert!(
+        permission
+            .iter()
+            .any(|body| matches!(body, TurnEventBody::PermissionResolved { .. })),
+        "permission resolution never reached the event stream: {permission:?}"
+    );
+
+    let elicitation = prompt_and_collect(&core, &thread, &mut events, "elicit-form").await;
+    assert!(
+        elicitation
+            .iter()
+            .any(|body| matches!(body, TurnEventBody::ElicitationRequested(_))),
+        "elicitation request never reached the client: {elicitation:?}"
+    );
+    assert!(
+        elicitation.iter().any(|body| matches!(
+            body,
+            TurnEventBody::ElicitationResolved { outcome, values, .. }
+                if *outcome == ElicitationOutcome::Accepted && values.contains_key("name")
+        )),
+        "elicitation answer never reached the event stream: {elicitation:?}"
+    );
+
+    let terminal = prompt_and_collect(&core, &thread, &mut events, "terminal-lifecycle").await;
+    assert!(
+        terminal.iter().any(|body| matches!(
+            body,
+            TurnEventBody::TerminalOutputChunk { bytes, .. } if bytes.contains("terminal-ok")
+        )),
+        "terminal lifecycle never reported output: {terminal:?}"
+    );
+
+    let filesystem = prompt_and_collect(&core, &thread, &mut events, "fs/read").await;
+    assert!(
+        filesystem.iter().any(|body| matches!(
+            body,
+            TurnEventBody::MessageChunk(chunk)
+                if matches!(&chunk.block, ContentBlock::Text(text) if text.contains("probe:root-probe"))
+        )),
+        "filesystem callback never returned the additional-directory probe: {filesystem:?}"
+    );
+
+    core.thread_delete(thread).await.expect("delete thread");
+    core.agent_profiles_delete(AGENT_ID.into())
+        .await
+        .expect("delete installed profile");
+    assert!(core
+        .agent_profiles_list()
+        .await
+        .expect("profiles")
+        .into_iter()
+        .all(|profile| profile.id != AGENT_ID));
 }

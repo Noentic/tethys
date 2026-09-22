@@ -39,8 +39,10 @@ impl WorkspaceApi for Core {
                 .list()
                 .into_iter()
                 .filter(|thread| thread.workspace_id == row.id)
+                .filter(|thread| thread.state != tethys_schema::thread::ThreadState::Archived)
                 .map(|thread| WorkspaceSessionSummary {
                     id: thread.id.0.clone(),
+                    agent_profile_id: thread.agent_profile_id,
                     title: thread.title,
                     state: thread.state,
                 })
@@ -154,9 +156,7 @@ impl WorkspaceApi for Core {
     async fn workspace_probe(&self, path: String) -> Result<Vcs, ApiError> {
         let probe = PathBuf::from(&path);
         if !probe.is_dir() {
-            return Err(ApiError::InvalidConfig(format!(
-                "not a directory: {path}"
-            )));
+            return Err(ApiError::InvalidConfig(format!("not a directory: {path}")));
         }
         tokio::task::spawn_blocking(move || capability::vcs_for_root(&probe))
             .await

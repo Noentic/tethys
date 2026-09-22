@@ -212,7 +212,10 @@ fn skill_without_description_still_resolves() {
 fn list_reports_first_body_line_as_description() {
     let tmp = tempfile::tempdir().expect("temp dir");
     let global = global_dir(tmp.path());
-    write(&global.join("review.md"), "\n\nReview the staged diff.\nMore.");
+    write(
+        &global.join("review.md"),
+        "\n\nReview the staged diff.\nMore.",
+    );
 
     let commands = list_commands(&global, None).expect("list");
     assert_eq!(
@@ -239,10 +242,8 @@ fn shadowed_list_returns_both_scopes() {
     let names: Vec<&str> = commands.iter().map(|c| c.name.as_str()).collect();
     assert_eq!(names, vec!["global-only", "review", "review"]);
 
-    let review: Vec<&tethys_schema::composer::CommandInfo> = commands
-        .iter()
-        .filter(|c| c.name == "review")
-        .collect();
+    let review: Vec<&tethys_schema::composer::CommandInfo> =
+        commands.iter().filter(|c| c.name == "review").collect();
     assert_eq!(review.len(), 2);
     let global_review = review
         .iter()
@@ -261,8 +262,8 @@ fn write_read_delete_round_trip() {
     let tmp = tempfile::tempdir().expect("temp dir");
     let global = global_dir(tmp.path());
 
-    let info = write_command(&global, "review", "Review {{args}}.", CommandScope::Global)
-        .expect("write");
+    let info =
+        write_command(&global, "review", "Review {{args}}.", CommandScope::Global).expect("write");
     assert_eq!(info.name, "review");
     assert_eq!(info.description.as_deref(), Some("Review {{args}}."));
     assert!(!info.shadowed);

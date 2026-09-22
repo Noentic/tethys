@@ -14,8 +14,13 @@ use tethys_store::AgentProfileRow;
 use crate::ApiError;
 
 /// Builds a `LaunchSpec` from a stored/input launch spec.
-pub fn spec_from_input(profile_id: &str, input: &LaunchSpecInput) -> LaunchSpec {
+pub fn spec_from_input(
+    profile_id: &str,
+    input: &LaunchSpecInput,
+    integration_id: Option<&str>,
+) -> LaunchSpec {
     let mut spec = LaunchSpec::new(profile_id, input.program.clone());
+    spec.integration_id = integration_id.map(str::to_string);
     spec.args = input.args.clone();
     spec.cwd = input.cwd.as_ref().map(PathBuf::from);
     spec.env = input
@@ -209,6 +214,7 @@ mod tests {
             registry_ref: Some(&RegistryRef {
                 id: "opencode".into(),
                 version: "1.0.0".into(),
+                distribution: Some("binary".into()),
             }),
             projection_target: Some(ProjectionTarget::ClaudeCode),
             preferred_protocol: Some(AcpProtocol::V1),
@@ -219,7 +225,8 @@ mod tests {
             registry_ref_from_row(&row).expect("ref"),
             Some(RegistryRef {
                 id: "opencode".into(),
-                version: "1.0.0".into()
+                version: "1.0.0".into(),
+                distribution: Some("binary".into()),
             })
         );
         assert_eq!(row.projection_target.as_deref(), Some("claude-code"));

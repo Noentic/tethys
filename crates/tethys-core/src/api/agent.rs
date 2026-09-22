@@ -1,16 +1,19 @@
 //! `agent.*` implementations (M1.12/M1.13).
 
 use tethys_agent_servers::registry::{
-    compliance_note, install, update_availability, InstallOptions, InstallOutcome,
+    compliance_note, install, select_distribution, update_availability, InstallOptions,
+    InstallOutcome,
 };
-use tethys_api::{AgentApi, ApiError};
+use tethys_api::{AgentApi, ApiError, FailureStage};
 use tethys_schema::agents::{
-    AgentProfileView, AgentRegistryEntryView, BackendClass, EnvVarInput, InstallResult,
-    ProcessSample, ProfileInput, RecheckStatus,
+    AgentLoginOutcome, AgentProfileView, AgentRegistryEntryView, AuthMethodShape, BackendClass,
+    EnvVarInput, InstallResult, LoginTerminalOutput, ProcessSample, ProfileInput, RecheckStatus,
 };
 use tethys_schema::connection::ConnectionEntry;
 use tethys_store::{AgentProfileRow, StoreError};
 use tethys_thread::AgentConnection;
+
+use crate::provider_error::{map_connection, map_store as map_connection_store};
 
 use std::sync::Arc;
 
@@ -111,6 +114,9 @@ impl AgentApi for Core {
     async fn agent_registry_list(&self) -> Result<Vec<AgentRegistryEntryView>, ApiError> {
         let registry = self.registry().await?;
         let rows = self.profile_rows().await?;
+        let platform_key = tethys_agent_servers::registry::platform::host_platform_key();
+        let node_present = which::which("npx").is_ok();
+        let uv_present = which::which("uvx").is_ok();
         let mut views = Vec::with_capacity(registry.agents.len());
         for agent in &registry.agents {
             let stored = rows.iter().find(|row| row.id == agent.id);
@@ -120,14 +126,53 @@ impl AgentApi for Core {
             let update = pinned
                 .as_deref()
                 .map(|pinned| update_availability(pinned, &agent.version));
+            let (
+                selected_distribution,
+                needs_node,
+                needs_uvx,
+                selection_reason,
+                install_block_reason,
+            ) = match select_distribution(
+                &agent.distribution,
+                platform_key,
+                node_present,
+                uv_present,
+            ) {
+                Ok(selection) => (
+                    Some(selection.kind),
+                    selection.needs_node,
+                    selection.needs_uvx,
+                    selection.reason,
+                    None,
+                ),
+                Err(error) => (None, false, false, None, Some(error.to_string())),
+            };
             views.push(AgentRegistryEntryView {
                 id: agent.id.clone(),
                 name: agent.name.clone(),
                 version: agent.version.clone(),
                 description: agent.description.clone(),
                 repository: agent.repository.clone(),
+                authors: agent.authors.clone(),
                 license: agent.license.clone(),
-                distributions: vec![agent.distribution.kind().to_string()],
+                license_url: agent.license_url.clone(),
+                website: agent.website.clone(),
+                icon: agent.icon.clone(),
+                preview_version: agent
+                    .preview
+                    .as_ref()
+                    .map(|preview| preview.version.clone()),
+                distributions: agent
+                    .distribution
+                    .kinds()
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+                selected_distribution,
+                needs_node,
+                needs_uvx,
+                selection_reason,
+                install_block_reason,
                 installed: stored.is_some(),
                 pinned_version: pinned,
                 update,
@@ -151,6 +196,7 @@ impl AgentApi for Core {
             install_root: self.install_root(),
             platform: None,
             node_present: None,
+            uv_present: None,
         };
         let outcome = install(&agent, version.as_deref(), &options)
             .await
@@ -185,6 +231,7 @@ impl AgentApi for Core {
             install_root: self.install_root(),
             platform: None,
             node_present: None,
+            uv_present: None,
         };
         let outcome = install(&agent, None, &options)
             .await
@@ -204,24 +251,129 @@ impl AgentApi for Core {
         Ok(())
     }
 
-    async fn agent_login(&self, profile_id: String, method_id: String) -> Result<(), ApiError> {
+    async fn agent_login(
+        &self,
+        profile_id: String,
+        method_id: String,
+    ) -> Result<AgentLoginOutcome, ApiError> {
         let key = self
             .sessions
             .connection_key(&profile_id)
             .ok_or_else(|| ApiError::NotFound(format!("agent profile {profile_id}")))?;
-        // Best-effort vendor handshake. `Unsupported` is fine: terminal and
-        // agent-auth flows are owned by the vendor, and Tethys never holds the
-        // credential (G7).
-        if let Ok(lease) = self.sessions.store().acquire(&key).await {
-            let _ = lease.connection().login(&method_id).await;
+        let lease =
+            self.sessions.store().acquire(&key).await.map_err(|error| {
+                map_connection_store(self.sessions.health(), &profile_id, error)
+            })?;
+        let method = lease
+            .connection()
+            .auth_methods()
+            .iter()
+            .find(|method| method.id == method_id)
+            .ok_or_else(|| ApiError::InvalidConfig(format!("unknown auth method {method_id}")))?;
+        if matches!(&method.shape, AuthMethodShape::CliPassthrough) {
+            drop(lease);
+            let terminal_id = self
+                .sessions
+                .store()
+                .start_terminal_auth(&key, &method_id)
+                .await
+                .map_err(|error| {
+                    map_connection_store(self.sessions.health(), &profile_id, error)
+                })?;
+            return Ok(AgentLoginOutcome::Terminal { terminal_id });
         }
+        if matches!(&method.shape, AuthMethodShape::Unknown { .. }) {
+            return Err(ApiError::InvalidConfig(format!(
+                "unsupported auth method {method_id}"
+            )));
+        }
+        lease
+            .connection()
+            .login(&method_id)
+            .await
+            .map_err(|error| map_connection(self.sessions.health(), &profile_id, error))?;
+        drop(lease);
         self.sessions.health().mark_authenticated(&profile_id);
         self.sessions.health().recheck(&key).await;
+        Ok(AgentLoginOutcome::Complete)
+    }
+
+    async fn agent_login_terminal_output(
+        &self,
+        profile_id: String,
+        terminal_id: String,
+    ) -> Result<LoginTerminalOutput, ApiError> {
+        let key = self
+            .sessions
+            .connection_key(&profile_id)
+            .ok_or_else(|| ApiError::NotFound(format!("agent profile {profile_id}")))?;
+        let output = self
+            .sessions
+            .store()
+            .terminal_auth_output(&key, &terminal_id)
+            .map_err(|error| map_connection_store(self.sessions.health(), &profile_id, error))?;
+        if output.exited {
+            let _ = self
+                .sessions
+                .store()
+                .terminal_auth_cancel(&key, &terminal_id);
+        }
+        Ok(output)
+    }
+
+    async fn agent_login_terminal_write(
+        &self,
+        profile_id: String,
+        terminal_id: String,
+        text: String,
+    ) -> Result<(), ApiError> {
+        let key = self
+            .sessions
+            .connection_key(&profile_id)
+            .ok_or_else(|| ApiError::NotFound(format!("agent profile {profile_id}")))?;
+        self.sessions
+            .store()
+            .terminal_auth_write(&key, &terminal_id, &text)
+            .map_err(|error| map_connection_store(self.sessions.health(), &profile_id, error))?;
         Ok(())
     }
 
-    async fn agent_logout(&self, _profile_id: String) -> Result<(), ApiError> {
-        // Logout is delegated to the vendor CLI; no credential is held here.
+    async fn agent_login_terminal_cancel(
+        &self,
+        profile_id: String,
+        terminal_id: String,
+    ) -> Result<(), ApiError> {
+        let key = self
+            .sessions
+            .connection_key(&profile_id)
+            .ok_or_else(|| ApiError::NotFound(format!("agent profile {profile_id}")))?;
+        self.sessions
+            .store()
+            .terminal_auth_cancel(&key, &terminal_id)
+            .map_err(|error| map_connection_store(self.sessions.health(), &profile_id, error))?;
+        Ok(())
+    }
+
+    async fn agent_logout(&self, profile_id: String) -> Result<(), ApiError> {
+        let key = self
+            .sessions
+            .connection_key(&profile_id)
+            .ok_or_else(|| ApiError::NotFound(format!("agent profile {profile_id}")))?;
+        let lease =
+            self.sessions.store().acquire(&key).await.map_err(|error| {
+                map_connection_store(self.sessions.health(), &profile_id, error)
+            })?;
+        if !lease.connection().capabilities().logout {
+            return Err(ApiError::Unimplemented("agent.logout"));
+        }
+        lease
+            .connection()
+            .logout()
+            .await
+            .map_err(|error| map_connection(self.sessions.health(), &profile_id, error))?;
+        drop(lease);
+        self.sessions.health().mark_logged_out(&profile_id);
+        self.sessions.store().retire_idle(&key).await;
         Ok(())
     }
 
@@ -361,9 +513,12 @@ impl Core {
         Ok(InstallResult {
             profile_id: outcome.profile_id.clone(),
             version: outcome.registry_ref.version.clone(),
+            distribution: outcome.distribution.clone(),
+            selection_reason: outcome.selection_reason.clone(),
             launch_spec: outcome.launch_spec.clone(),
             warning: outcome.warning.clone(),
             needs_node: outcome.needs_node,
+            needs_uvx: outcome.needs_uvx,
         })
     }
 
@@ -381,7 +536,11 @@ impl Core {
         let Ok(input) = profile::input_from_row(row) else {
             return;
         };
-        let spec = profile::spec_from_input(&row.id, &input);
+        let integration_id = profile::registry_ref_from_row(row)
+            .ok()
+            .flatten()
+            .map(|reference| reference.id);
+        let spec = profile::spec_from_input(&row.id, &input, integration_id.as_deref());
         let compat = profile::compat_from_row(row);
         self.sessions.register_profile(spec, compat);
         self.sessions.set_profile_enabled(&row.id, row.enabled);
@@ -412,6 +571,7 @@ impl Core {
                 .and_then(tethys_schema::sync::ProjectionTarget::parse),
             preferred_protocol: profile::compat_from_row(row).preferred_protocol,
             health,
+            auth_state: record.auth_state,
             detail,
             protocol: record.protocol,
             capabilities: record.capabilities,
@@ -437,5 +597,19 @@ fn map_store(error: StoreError) -> ApiError {
 }
 
 fn map_registry(error: tethys_agent_servers::registry::RegistryError) -> ApiError {
-    ApiError::Internal(error.to_string())
+    use tethys_agent_servers::registry::RegistryError;
+    let stage = match &error {
+        RegistryError::Fetch(_) | RegistryError::Malformed(_) => FailureStage::Install,
+        RegistryError::UnknownAgent(_) | RegistryError::VersionUnavailable { .. } => {
+            FailureStage::ProviderRejected
+        }
+        RegistryError::UnsupportedDistribution(_) | RegistryError::UnsupportedPlatform(_) => {
+            FailureStage::Unsupported
+        }
+        RegistryError::Integrity { .. } | RegistryError::Install(_) => FailureStage::Install,
+    };
+    ApiError::Failure {
+        stage,
+        message: error.to_string(),
+    }
 }

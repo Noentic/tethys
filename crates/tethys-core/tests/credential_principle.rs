@@ -101,10 +101,16 @@ async fn run() {
                 cwd: None,
                 // `MOCK_ENV` makes the re-executed test binary act as the mock
                 // agent; without it the child would re-run this whole audit.
-                env: vec![EnvVarInput {
-                    key: MOCK_ENV.into(),
-                    value: "v1".into(),
-                }],
+                env: vec![
+                    EnvVarInput {
+                        key: MOCK_ENV.into(),
+                        value: "v1".into(),
+                    },
+                    EnvVarInput {
+                        key: "TETHYS_MOCK_AUTH".into(),
+                        value: "agent".into(),
+                    },
+                ],
             },
             projection_target: None,
             preferred_protocol: Some(AcpProtocol::V1),
@@ -191,6 +197,7 @@ async fn run() {
             workspace_id: "workspace".into(),
             agent_profile_id: "audit".into(),
             workdir: workdir("thread").display().to_string(),
+            additional_directories: Vec::new(),
         })
         .await
         .expect("thread")

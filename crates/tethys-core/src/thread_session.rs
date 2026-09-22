@@ -4,6 +4,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use futures::stream::{self, StreamExt};
@@ -11,22 +12,32 @@ use parking_lot::{Mutex, RwLock};
 use tethys_acp::AcpConnection;
 use tethys_agent_servers::{ConnectionLease, ConnectionStore, LaunchSpec};
 use tethys_schema::cancel::{CancelPhase, CancelState};
-use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionEntry, ConnectionKey};
+use tethys_schema::connection::{
+    AcpProtocol, AgentCompat, ConnectionEntry, ConnectionKey, NormalizedCapabilities,
+};
+use tethys_schema::store::NewEvent;
 use tethys_schema::sync::{McpTransports, WorkspaceId};
 use tethys_schema::thread::{
-    ContentBlock, CreateThread, EventEnvelope, ThreadId, ThreadSummary, ThreadView, TurnEventBody,
+    ConfigOption, ContentBlock, CreateThread, EventEnvelope, ThreadBootstrap, ThreadId,
+    ThreadSessionView, ThreadSummary, TurnEventBody,
 };
+use tethys_store::{EventStore, ThreadRecord};
 use tethys_sync::SecretStore;
 use tethys_thread::{
-    AgentConnection, EventOrigin, NewSession, ResumeSession, SessionId, ThreadMachine,
+    AgentConnection, ConnectionError, EventOrigin, NewSession, ResumeSession, SessionId,
+    ThreadMachine,
 };
 use tokio::sync::broadcast;
+use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 
 use crate::health::HealthRegistry;
 use crate::permission::pending::{Isolation, PermissionRegistry, ThreadPermissionContext};
+use crate::provider_error::{map_connection as map_connection_error, map_store as map_store_error};
 use crate::workspace_roots::WorkspaceRoots;
 use crate::ApiError;
+
+const THREAD_EVENT: &str = "thread.event";
 
 /// Everything the spawn path needs to build a session's MCP server set.
 pub struct SyncSource {
@@ -47,6 +58,8 @@ impl SyncSource {
 
 struct ThreadHandle {
     inner: Mutex<ThreadInner>,
+    connect_guard: AsyncMutex<()>,
+    event_writer: AsyncMutex<()>,
     subscribers: broadcast::Sender<EventEnvelope>,
     reader: Mutex<Option<JoinHandle<()>>>,
     /// Grace-window timer for `cancel`; aborted when the turn settles.
@@ -59,11 +72,31 @@ struct ThreadInner {
     agent_profile_id: String,
     workdir: PathBuf,
     workspace_root: PathBuf,
+    /// Canonical additional trusted roots for ACP `additionalDirectories`.
+    additional_directories: Vec<PathBuf>,
     session: Option<SessionId>,
+    config_options: Vec<ConfigOption>,
+    capabilities: Option<NormalizedCapabilities>,
+    prepared: bool,
     lease: Option<ConnectionLease>,
     events: Vec<EventEnvelope>,
     next_seq: u32,
     cancel: CancelState,
+    prompt_in_flight: bool,
+    pending_extensions: HashSet<String>,
+}
+
+impl ThreadHandle {
+    fn new(inner: ThreadInner) -> Arc<Self> {
+        Arc::new(Self {
+            inner: Mutex::new(inner),
+            connect_guard: AsyncMutex::new(()),
+            event_writer: AsyncMutex::new(()),
+            subscribers: broadcast::channel(1024).0,
+            reader: Mutex::new(None),
+            cancel_timer: Mutex::new(None),
+        })
+    }
 }
 
 impl ThreadInner {
@@ -89,6 +122,8 @@ pub struct ThreadSessions {
     /// Profiles the user switched off; the health sweep skips them.
     disabled: Mutex<HashSet<String>>,
     threads: Mutex<HashMap<ThreadId, Arc<ThreadHandle>>>,
+    next_thread_id: AtomicU64,
+    event_store: RwLock<Option<Arc<EventStore>>>,
     permissions: RwLock<Arc<PermissionRegistry>>,
     health: Arc<HealthRegistry>,
 }
@@ -107,6 +142,8 @@ impl ThreadSessions {
             profiles: Mutex::new(HashMap::new()),
             disabled: Mutex::new(HashSet::new()),
             threads: Mutex::new(HashMap::new()),
+            next_thread_id: AtomicU64::new(1),
+            event_store: RwLock::new(None),
             permissions: RwLock::new(PermissionRegistry::new()),
             health,
         }
@@ -118,6 +155,124 @@ impl ThreadSessions {
             sync,
             Arc::new(crate::workspace_roots::StaticWorkspaces::new()),
         )
+    }
+
+    /// Attaches the existing durable event log used by a persistent Core.
+    pub fn set_event_store(&self, store: Arc<EventStore>) {
+        *self.event_store.write() = Some(store);
+    }
+
+    /// Restores committed threads and removes unprompted drafts left by a crash.
+    pub async fn hydrate_threads(&self) -> Result<(), ApiError> {
+        let event_store = self.event_store.read().clone();
+        let Some(store) = event_store else {
+            return Ok(());
+        };
+        let records = store
+            .list_threads()
+            .await
+            .map_err(|error| ApiError::Internal(error.to_string()))?;
+        for record in records {
+            if record.prepared {
+                store
+                    .delete_thread(&record.summary.id)
+                    .await
+                    .map_err(|error| ApiError::Internal(error.to_string()))?;
+                continue;
+            }
+            if let Some(number) = record
+                .summary
+                .id
+                .as_str()
+                .strip_prefix("thread-")
+                .and_then(|suffix| suffix.parse::<u64>().ok())
+            {
+                self.next_thread_id
+                    .fetch_max(number.saturating_add(1), Ordering::Relaxed);
+            }
+            let workspace_id = WorkspaceId::new(&record.summary.workspace_id);
+            let workspace_root = self.roots.read().clone().root(&workspace_id).await?;
+            let event_count = store
+                .count_events(&record.summary.id)
+                .await
+                .map_err(|error| ApiError::Internal(error.to_string()))?;
+            let stored_events = store
+                .read_events(
+                    &record.summary.id,
+                    0,
+                    u32::try_from(event_count).unwrap_or(u32::MAX),
+                )
+                .await
+                .map_err(|error| ApiError::Internal(error.to_string()))?;
+            let mut machine = ThreadMachine::new(record.summary.id.clone());
+            machine.set_title(record.summary.title.clone());
+            if let Some(session_id) = &record.summary.session_id {
+                machine.set_session(SessionId(session_id.clone()));
+            }
+            let mut events = Vec::new();
+            for stored in stored_events {
+                if stored.event_type != THREAD_EVENT {
+                    continue;
+                }
+                let Ok(mut body) = serde_json::from_str::<TurnEventBody>(&stored.payload) else {
+                    continue;
+                };
+                if let TurnEventBody::ProviderExtension(extension) = &mut body {
+                    // ACP responders are process-local; after restart these rows
+                    // remain inspectable but cannot be answered.
+                    extension.request_id = None;
+                }
+                let seq = u32::try_from(stored.seq).unwrap_or(u32::MAX);
+                machine.apply(seq, &body, EventOrigin::Live);
+                events.push(EventEnvelope {
+                    thread_id: record.summary.id.clone(),
+                    seq,
+                    event: body,
+                });
+            }
+            match record.summary.state {
+                tethys_schema::thread::ThreadState::Archived => machine.archive(),
+                tethys_schema::thread::ThreadState::Interrupted => machine.mark_interrupted(),
+                _ if matches!(
+                    machine.state(),
+                    tethys_schema::thread::ThreadState::Running
+                        | tethys_schema::thread::ThreadState::AwaitingApproval
+                ) =>
+                {
+                    machine.mark_interrupted()
+                }
+                _ => {}
+            }
+            let next_seq = u32::try_from(record.latest_seq.saturating_add(1)).unwrap_or(u32::MAX);
+            let id = record.summary.id.clone();
+            let handle = ThreadHandle::new(ThreadInner {
+                machine,
+                workspace_id: record.summary.workspace_id,
+                agent_profile_id: record.summary.agent_profile_id,
+                workdir: PathBuf::from(record.workdir),
+                workspace_root,
+                additional_directories: record
+                    .additional_directories
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect(),
+                session: record.summary.session_id.map(SessionId),
+                config_options: record.config_options,
+                capabilities: record.capabilities,
+                prepared: false,
+                lease: None,
+                events,
+                next_seq,
+                cancel: CancelState {
+                    thread_id: id.clone(),
+                    phase: CancelPhase::Idle,
+                },
+                prompt_in_flight: false,
+                pending_extensions: HashSet::new(),
+            });
+            self.threads.lock().insert(id, handle);
+        }
+        Ok(())
     }
 
     pub fn set_roots(&self, roots: Arc<dyn WorkspaceRoots>) {
@@ -166,6 +321,11 @@ impl ThreadSessions {
         &self.store
     }
 
+    async fn persist_thread(&self, handle: &Arc<ThreadHandle>) -> Result<(), ApiError> {
+        let event_store = self.event_store.read().clone();
+        persist_thread_state(event_store, handle).await
+    }
+
     pub fn sync(&self) -> &SyncSource {
         &self.sync
     }
@@ -207,7 +367,12 @@ impl ThreadSessions {
             let Ok(input) = crate::agent_profile::input_from_row(row) else {
                 continue;
             };
-            let spec = crate::agent_profile::spec_from_input(&row.id, &input);
+            let integration_id = crate::agent_profile::registry_ref_from_row(row)
+                .ok()
+                .flatten()
+                .map(|reference| reference.id);
+            let spec =
+                crate::agent_profile::spec_from_input(&row.id, &input, integration_id.as_deref());
             let compat = crate::agent_profile::compat_from_row(row);
             self.register_profile(spec, compat);
             self.set_profile_enabled(&row.id, row.enabled);
@@ -251,6 +416,14 @@ impl ThreadSessions {
     }
 
     pub async fn create(&self, request: CreateThread) -> Result<ThreadSummary, ApiError> {
+        self.create_with_visibility(request, false).await
+    }
+
+    async fn create_with_visibility(
+        &self,
+        request: CreateThread,
+        prepared: bool,
+    ) -> Result<ThreadSummary, ApiError> {
         if !self.profiles.lock().contains_key(&request.agent_profile_id) {
             return Err(ApiError::NotFound(format!(
                 "agent profile {}",
@@ -260,6 +433,21 @@ impl ThreadSessions {
         let workspace_id = WorkspaceId::new(&request.workspace_id);
         let roots = self.roots.read().clone();
         let workspace_root = roots.root(&workspace_id).await?;
+        let mut additional_directories = Vec::new();
+        for root_id in &request.additional_directories {
+            if root_id == &request.workspace_id {
+                return Err(ApiError::InvalidConfig(
+                    "additional directory repeats the workspace root".into(),
+                ));
+            }
+            let path = roots.root(&WorkspaceId::new(root_id)).await?;
+            let canonical = tokio::fs::canonicalize(&path).await.map_err(|error| {
+                ApiError::NotFound(format!("additional directory {}: {error}", path.display()))
+            })?;
+            if !additional_directories.contains(&canonical) {
+                additional_directories.push(canonical);
+            }
+        }
         // The one `thread.create` call site consults `max_concurrent_sessions`
         // (architecture §10.6): a non-git folder admits one session, so a second
         // window or a direct API caller cannot bypass the cap. The check runs a
@@ -291,30 +479,217 @@ impl ThreadSessions {
                 });
             }
         }
-        let id = ThreadId::new(format!("thread-{}", self.threads.lock().len() + 1));
-        let handle = Arc::new(ThreadHandle {
-            inner: Mutex::new(ThreadInner {
-                machine: ThreadMachine::new(id.clone()),
-                workspace_id: request.workspace_id,
-                agent_profile_id: request.agent_profile_id,
-                workdir: PathBuf::from(request.workdir),
-                workspace_root,
-                session: None,
+        let id = ThreadId::new(format!(
+            "thread-{}",
+            self.next_thread_id.fetch_add(1, Ordering::Relaxed)
+        ));
+        let handle = ThreadHandle::new(ThreadInner {
+            machine: ThreadMachine::new(id.clone()),
+            workspace_id: request.workspace_id,
+            agent_profile_id: request.agent_profile_id,
+            workdir: PathBuf::from(request.workdir),
+            workspace_root,
+            additional_directories,
+            session: None,
+            config_options: Vec::new(),
+            capabilities: None,
+            prepared,
+            lease: None,
+            events: Vec::new(),
+            next_seq: 1,
+            cancel: CancelState {
+                thread_id: id.clone(),
+                phase: CancelPhase::Idle,
+            },
+            prompt_in_flight: false,
+            pending_extensions: HashSet::new(),
+        });
+        let summary = handle.inner.lock().summary();
+        self.persist_thread(&handle).await?;
+        self.threads.lock().insert(id, handle);
+        Ok(summary)
+    }
+
+    /// One page of Provider sessions under the trusted root (`thread.list_provider_sessions`).
+    pub async fn list_provider_sessions(
+        &self,
+        profile_id: &str,
+        workspace_id: &str,
+        cursor: Option<&str>,
+    ) -> Result<tethys_schema::thread::ProviderSessionPage, ApiError> {
+        let key = self.profile_key(profile_id)?;
+        let roots = self.roots.read().clone();
+        let workspace_root = roots.root(&WorkspaceId::new(workspace_id)).await?;
+        let lease = self
+            .store
+            .acquire(&key)
+            .await
+            .map_err(|error| map_store_error(&self.health, profile_id, error))?;
+        let connection = lease.connection().clone();
+        let (listed, next_cursor) = connection
+            .list_sessions_page(&workspace_root, cursor)
+            .await
+            .map_err(|error| map_connection_error(&self.health, profile_id, error))?;
+        drop(lease);
+
+        let canonical_root = workspace_root.clone();
+        let sessions = tokio::task::spawn_blocking(move || {
+            let canonical_root = std::fs::canonicalize(canonical_root)
+                .map_err(|error| ApiError::Internal(error.to_string()))?;
+            Ok::<_, ApiError>(
+                listed
+                    .into_iter()
+                    .filter_map(|session| {
+                        if !session.cwd.is_absolute() {
+                            return None;
+                        }
+                        let cwd = std::fs::canonicalize(&session.cwd).ok()?;
+                        cwd.starts_with(&canonical_root).then_some(
+                            tethys_schema::thread::ProviderSessionSummary {
+                                id: session.id.0,
+                                title: session.title,
+                                cwd: cwd.display().to_string(),
+                                updated_at: session.updated_at,
+                            },
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .await
+        .map_err(|error| ApiError::Internal(format!("session list check failed: {error}")))??;
+
+        Ok(tethys_schema::thread::ProviderSessionPage {
+            sessions,
+            next_cursor,
+        })
+    }
+
+    /// Connects and creates the ACP session before returning composer controls.
+    pub async fn prepare(&self, request: CreateThread) -> Result<ThreadBootstrap, ApiError> {
+        let summary = self.create_with_visibility(request, true).await?;
+        let handle = self.handle(&summary.id)?;
+        if let Err(error) = self.ensure_connection(&handle).await {
+            let _ = self.delete(&summary.id).await;
+            return Err(error);
+        }
+        let (thread, events, config_options, capabilities, session, latest_seq) = {
+            let inner = handle.inner.lock();
+            (
+                inner.summary(),
+                inner.events.clone(),
+                inner.config_options.clone(),
+                inner.capabilities.clone(),
+                inner.session.clone(),
+                inner.next_seq.saturating_sub(1),
+            )
+        };
+        let permission_mode = session
+            .as_ref()
+            .and_then(|session| self.permissions().context(session))
+            .map(|context| context.mode)
+            .unwrap_or(tethys_schema::workspace::PermissionMode::Supervised);
+        Ok(ThreadBootstrap {
+            thread,
+            events,
+            config_options,
+            capabilities,
+            permission_mode,
+            latest_seq,
+        })
+    }
+
+    /// Imports Provider sessions whose working directories remain inside the
+    /// selected trusted workspace. The ACP adapter consumes all list cursors.
+    pub async fn import_sessions(
+        &self,
+        profile_id: &str,
+        workspace_id: &str,
+    ) -> Result<Vec<ThreadSummary>, ApiError> {
+        let key = self.profile_key(profile_id)?;
+        let roots = self.roots.read().clone();
+        let workspace_root = roots.root(&WorkspaceId::new(workspace_id)).await?;
+        let lease = self
+            .store
+            .acquire(&key)
+            .await
+            .map_err(|error| map_store_error(&self.health, profile_id, error))?;
+        let connection = lease.connection().clone();
+        let listed = connection
+            .list_sessions(&workspace_root)
+            .await
+            .map_err(|error| ApiError::Internal(error.to_string()))?;
+        let canonical_root = workspace_root.clone();
+        let (workspace_root, listed) = tokio::task::spawn_blocking(move || {
+            let workspace_root = std::fs::canonicalize(canonical_root)
+                .map_err(|error| ApiError::Internal(error.to_string()))?;
+            let sessions = listed
+                .into_iter()
+                .filter_map(|session| {
+                    if !session.cwd.is_absolute() {
+                        return None;
+                    }
+                    let cwd = std::fs::canonicalize(&session.cwd).ok()?;
+                    cwd.starts_with(&workspace_root).then_some((session, cwd))
+                })
+                .collect::<Vec<_>>();
+            Ok::<_, ApiError>((workspace_root, sessions))
+        })
+        .await
+        .map_err(|error| ApiError::Internal(format!("session import check failed: {error}")))??;
+        let capabilities = connection.capabilities().clone();
+        drop(lease);
+
+        let mut imported = Vec::new();
+        for (session, cwd) in listed {
+            let existing = self.threads.lock().values().find_map(|handle| {
+                let inner = handle.inner.lock();
+                (inner.agent_profile_id == profile_id
+                    && inner.workspace_id == workspace_id
+                    && inner.session.as_ref() == Some(&session.id))
+                .then(|| inner.summary())
+            });
+            if let Some(existing) = existing {
+                imported.push(existing);
+                continue;
+            }
+
+            let id = ThreadId::new(format!(
+                "thread-{}",
+                self.next_thread_id.fetch_add(1, Ordering::Relaxed)
+            ));
+            let mut machine = ThreadMachine::new(id.clone());
+            machine.set_session(session.id.clone());
+            if let Some(title) = &session.title {
+                machine.set_title(title.clone());
+            }
+            let handle = ThreadHandle::new(ThreadInner {
+                machine,
+                workspace_id: workspace_id.to_string(),
+                agent_profile_id: profile_id.to_string(),
+                workdir: cwd,
+                workspace_root: workspace_root.clone(),
+                additional_directories: Vec::new(),
+                session: Some(session.id),
+                config_options: Vec::new(),
+                capabilities: Some(capabilities.clone()),
+                prepared: false,
                 lease: None,
                 events: Vec::new(),
-                next_seq: 0,
+                next_seq: 1,
                 cancel: CancelState {
                     thread_id: id.clone(),
                     phase: CancelPhase::Idle,
                 },
-            }),
-            subscribers: broadcast::channel(1024).0,
-            reader: Mutex::new(None),
-            cancel_timer: Mutex::new(None),
-        });
-        let summary = handle.inner.lock().summary();
-        self.threads.lock().insert(id, handle);
-        Ok(summary)
+                prompt_in_flight: false,
+                pending_extensions: HashSet::new(),
+            });
+            let summary = handle.inner.lock().summary();
+            self.persist_thread(&handle).await?;
+            self.threads.lock().insert(id, handle);
+            imported.push(summary);
+        }
+        Ok(imported)
     }
 
     pub fn thread_workspace_root(&self, id: &ThreadId) -> Result<PathBuf, ApiError> {
@@ -340,32 +715,222 @@ impl ThreadSessions {
         self.threads
             .lock()
             .values()
-            .map(|handle| handle.inner.lock().summary())
+            .filter_map(|handle| {
+                let inner = handle.inner.lock();
+                (!inner.prepared).then(|| inner.summary())
+            })
             .collect()
     }
 
-    pub fn get(&self, id: &ThreadId) -> Result<ThreadView, ApiError> {
+    pub async fn get(&self, id: &ThreadId) -> Result<ThreadSessionView, ApiError> {
         let handle = self.handle(id)?;
-        let inner = handle.inner.lock();
-        Ok(ThreadView {
-            thread: inner.summary(),
-            entries: inner.machine.entries().to_vec(),
-            latest_seq: inner.next_seq,
+        let (state, profile_id) = {
+            let inner = handle.inner.lock();
+            (inner.machine.state(), inner.agent_profile_id.clone())
+        };
+        // A persisted transcript remains readable before profiles are restored
+        // (for example during a cold open or when a provider was removed).
+        // Reconnect when the profile is available, but do not make hydration
+        // depend on a live child process.
+        if state != tethys_schema::thread::ThreadState::Archived
+            && self.profile_key(&profile_id).is_ok()
+        {
+            self.ensure_connection(&handle).await?;
+        }
+        let (thread, entries, events, config_options, capabilities, session, latest_seq) = {
+            let inner = handle.inner.lock();
+            (
+                inner.summary(),
+                inner.machine.entries().to_vec(),
+                inner.events.clone(),
+                inner.config_options.clone(),
+                inner.capabilities.clone(),
+                inner.session.clone(),
+                inner.next_seq.saturating_sub(1),
+            )
+        };
+        let permission_mode = session
+            .as_ref()
+            .and_then(|session| self.permissions().context(session))
+            .map(|context| context.mode)
+            .unwrap_or(tethys_schema::workspace::PermissionMode::Supervised);
+        Ok(ThreadSessionView {
+            thread,
+            entries,
+            events,
+            config_options,
+            capabilities,
+            permission_mode,
+            latest_seq,
         })
     }
 
     pub async fn prompt(&self, id: &ThreadId, blocks: Vec<ContentBlock>) -> Result<(), ApiError> {
         let handle = self.handle(id)?;
+        if handle.inner.lock().machine.state() == tethys_schema::thread::ThreadState::Archived {
+            return Err(ApiError::Conflict(
+                "archived thread must be resumed before prompting".into(),
+            ));
+        }
         self.ensure_connection(&handle).await?;
         let (connection, session) = live_connection(&handle)?;
-        let result = connection.prompt(&session, blocks).await;
-        // The turn settled (acknowledged cancel, completion, or error): close
-        // the cancel window so no `grace_elapsed` follows an answered turn.
-        self.finish_cancel(id);
-        result.map_err(|error| {
-            self.mark_transport_lost(&handle);
-            ApiError::Internal(error.to_string())
-        })
+        {
+            let mut inner = handle.inner.lock();
+            if inner.prompt_in_flight {
+                return Err(ApiError::Conflict("a prompt is already in flight".into()));
+            }
+            inner.prompt_in_flight = true;
+            inner.prepared = false;
+        }
+        if let Err(error) = self.persist_thread(&handle).await {
+            let mut inner = handle.inner.lock();
+            inner.prompt_in_flight = false;
+            inner.prepared = true;
+            return Err(error);
+        }
+        let task_handle = handle.clone();
+        let permissions = self.permissions();
+        let health = self.health.clone();
+        let profile_id = handle.inner.lock().agent_profile_id.clone();
+        let event_store = self.event_store.read().clone();
+        let thread_store = event_store.clone();
+        tokio::spawn(async move {
+            let result = connection.prompt(&session, blocks).await;
+            if let Some(timer) = task_handle.cancel_timer.lock().take() {
+                timer.abort();
+            }
+            if let Err(error) = result {
+                let auth_required = matches!(error, ConnectionError::AuthRequired);
+                if auth_required {
+                    health.mark_auth_required(&profile_id);
+                }
+                let thread_id = {
+                    let mut inner = task_handle.inner.lock();
+                    inner.prompt_in_flight = false;
+                    inner.lease = None;
+                    inner.machine.id().clone()
+                };
+                let _ = append_event(
+                    &task_handle,
+                    event_store.clone(),
+                    TurnEventBody::Error {
+                        code: if auth_required {
+                            "auth_required".into()
+                        } else {
+                            "prompt_failed".into()
+                        },
+                        message: error.to_string(),
+                        retryable: true,
+                    },
+                    EventOrigin::Live,
+                )
+                .await;
+                task_handle.inner.lock().machine.mark_interrupted();
+                let _ = persist_thread_state(thread_store, &task_handle).await;
+                if let Some(reader) = task_handle.reader.lock().take() {
+                    reader.abort();
+                }
+                permissions.cancel_thread(&thread_id);
+            }
+            let cancel_state = {
+                let mut inner = task_handle.inner.lock();
+                inner.prompt_in_flight = false;
+                if matches!(inner.cancel.phase, CancelPhase::Idle) {
+                    None
+                } else {
+                    inner.cancel.phase = CancelPhase::Idle;
+                    Some(inner.cancel.clone())
+                }
+            };
+            if let Some(cancel_state) = cancel_state {
+                let _ = append_event(
+                    &task_handle,
+                    event_store,
+                    TurnEventBody::CancelPhaseChanged(cancel_state),
+                    EventOrigin::Live,
+                )
+                .await;
+            }
+        });
+        Ok(())
+    }
+
+    pub async fn set_config_option(
+        &self,
+        id: &ThreadId,
+        option_id: &str,
+        value: &str,
+    ) -> Result<(), ApiError> {
+        let handle = self.handle(id)?;
+        let (is_mode, boolean) = {
+            let inner = handle.inner.lock();
+            let option = inner
+                .config_options
+                .iter()
+                .find(|option| option.id == option_id)
+                .ok_or_else(|| {
+                    ApiError::InvalidConfig(format!("unknown config option {option_id}"))
+                })?;
+            (
+                option.category.as_deref() == Some("mode"),
+                option.kind == Some(tethys_schema::thread::ConfigOptionKind::Boolean),
+            )
+        };
+        if is_mode {
+            let known = {
+                let inner = handle.inner.lock();
+                inner
+                    .config_options
+                    .iter()
+                    .find(|option| option.id == option_id)
+                    .map(|option| option.values.clone())
+                    .unwrap_or_default()
+            };
+            if !known.is_empty() && !known.iter().any(|known| known == value) {
+                return Err(ApiError::InvalidConfig(format!("unknown mode {value}")));
+            }
+        }
+        let (connection, session) = live_connection(&handle)?;
+        let options = if is_mode {
+            connection
+                .set_mode(&session, value)
+                .await
+                .map_err(|error| ApiError::Internal(error.to_string()))?;
+            let mut inner = handle.inner.lock();
+            if let Some(option) = inner
+                .config_options
+                .iter_mut()
+                .find(|option| option.id == option_id)
+            {
+                option.current_value = value.to_string();
+            }
+            inner.config_options.clone()
+        } else {
+            let value = if boolean {
+                serde_json::Value::Bool(value.parse().map_err(|_| {
+                    ApiError::InvalidConfig(format!("{option_id} expects true or false"))
+                })?)
+            } else {
+                serde_json::Value::String(value.to_string())
+            };
+            let options = connection
+                .set_config_option(&session, option_id, value)
+                .await
+                .map_err(|error| ApiError::Internal(error.to_string()))?;
+            let mut inner = handle.inner.lock();
+            merge_config_options(&mut inner.config_options, &options);
+            inner.config_options.clone()
+        };
+        self.persist_thread(&handle).await?;
+        let event_store = self.event_store.read().clone();
+        append_event(
+            &handle,
+            event_store,
+            TurnEventBody::ConfigOptionsChanged { options },
+            EventOrigin::Live,
+        )
+        .await?;
+        Ok(())
     }
 
     /// Requests cancellation and advances the M1.6c phase contract (spec §4).
@@ -384,7 +949,7 @@ impl ThreadSessions {
         match phase {
             CancelPhase::GraceElapsed => {
                 let key = self.profile_key(&handle.inner.lock().agent_profile_id)?;
-                self.emit_cancel(&handle, CancelPhase::Terminating);
+                self.emit_cancel(&handle, CancelPhase::Terminating).await;
                 self.store
                     .force_kill(&key)
                     .await
@@ -412,12 +977,14 @@ impl ThreadSessions {
                     CancelPhase::CancelRequested {
                         grace_deadline: deadline,
                     },
-                );
+                )
+                .await;
                 // Armed before the protocol cancel is sent: if that send fails the
                 // window still closes into `grace_elapsed` (Force kill is offered)
                 // rather than sticking in `cancel_requested`, and a fast settle
                 // finds the timer to abort.
-                arm_grace_timer(&handle, grace);
+                let event_store = self.event_store.read().clone();
+                arm_grace_timer(&handle, grace, event_store);
                 connection
                     .cancel(&session)
                     .await
@@ -436,30 +1003,20 @@ impl ThreadSessions {
     }
 
     /// Emits a cancel phase on the same ordered stream as turn events.
-    fn emit_cancel(&self, handle: &Arc<ThreadHandle>, phase: CancelPhase) {
-        let mut inner = handle.inner.lock();
-        inner.cancel.phase = phase;
-        let body = TurnEventBody::CancelPhaseChanged(inner.cancel.clone());
-        let envelope = push_event(&mut inner, body);
-        let _ = handle.subscribers.send(envelope);
-    }
-
-    /// Closes the cancel window once the turn settles (idempotent).
-    fn finish_cancel(&self, id: &ThreadId) {
-        let Ok(handle) = self.handle(id) else {
-            return;
+    async fn emit_cancel(&self, handle: &Arc<ThreadHandle>, phase: CancelPhase) {
+        let state = {
+            let mut inner = handle.inner.lock();
+            inner.cancel.phase = phase;
+            inner.cancel.clone()
         };
-        if let Some(task) = handle.cancel_timer.lock().take() {
-            task.abort();
-        }
-        let mut inner = handle.inner.lock();
-        if matches!(inner.cancel.phase, CancelPhase::Idle) {
-            return;
-        }
-        inner.cancel.phase = CancelPhase::Idle;
-        let body = TurnEventBody::CancelPhaseChanged(inner.cancel.clone());
-        let envelope = push_event(&mut inner, body);
-        let _ = handle.subscribers.send(envelope);
+        let event_store = self.event_store.read().clone();
+        let _ = append_event(
+            handle,
+            event_store,
+            TurnEventBody::CancelPhaseChanged(state),
+            EventOrigin::Live,
+        )
+        .await;
     }
 
     /// Reconnects an interrupted thread: acquires a fresh lease and resumes the
@@ -474,14 +1031,111 @@ impl ThreadSessions {
         self.ensure_connection(&handle).await
     }
 
-    pub fn archive(&self, id: &ThreadId) -> Result<(), ApiError> {
+    pub async fn archive(&self, id: &ThreadId) -> Result<(), ApiError> {
         let handle = self.handle(id)?;
-        handle.inner.lock().machine.archive();
+        if let Ok((connection, session)) = live_connection(&handle) {
+            if connection.capabilities().close_session {
+                connection
+                    .close_session(&session)
+                    .await
+                    .map_err(|error| ApiError::Internal(error.to_string()))?;
+            } else {
+                connection
+                    .cancel(&session)
+                    .await
+                    .map_err(|error| ApiError::Internal(error.to_string()))?;
+            }
+        }
+        let lease = {
+            let mut inner = handle.inner.lock();
+            inner.machine.archive();
+            inner.session = None;
+            inner.pending_extensions.clear();
+            inner.lease.take()
+        };
+        drop(lease);
+        self.persist_thread(&handle).await?;
         Ok(())
     }
 
-    pub fn delete(&self, id: &ThreadId) -> Result<(), ApiError> {
+    pub async fn respond_extension(
+        &self,
+        id: &ThreadId,
+        request_id: &str,
+        response_json: &str,
+    ) -> Result<(), ApiError> {
+        let response: serde_json::Value = serde_json::from_str(response_json).map_err(|error| {
+            ApiError::InvalidConfig(format!("invalid extension response: {error}"))
+        })?;
+        let handle = self.handle(id)?;
+        if !handle.inner.lock().pending_extensions.contains(request_id) {
+            return Err(ApiError::NotFound(format!(
+                "extension request {request_id}"
+            )));
+        }
+        let (connection, session) = live_connection(&handle)?;
+        connection
+            .respond_extension(&session, request_id, response)
+            .await
+            .map_err(|error| ApiError::Internal(error.to_string()))?;
+        let event_store = self.event_store.read().clone();
+        append_event(
+            &handle,
+            event_store,
+            TurnEventBody::ProviderExtensionResolved {
+                request_id: request_id.to_string(),
+                cancelled: false,
+            },
+            EventOrigin::Live,
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn delete_provider_session(&self, id: &ThreadId) -> Result<(), ApiError> {
+        let handle = self.handle(id)?;
+        let (key, session) = {
+            let inner = handle.inner.lock();
+            let session = inner
+                .session
+                .clone()
+                .ok_or_else(|| ApiError::NotFound("Provider session".into()))?;
+            (self.profile_key(&inner.agent_profile_id)?, session)
+        };
+        let lease = self.store.acquire(&key).await.map_err(|error| {
+            let profile_id = handle.inner.lock().agent_profile_id.clone();
+            map_store_error(&self.health, &profile_id, error)
+        })?;
+        let connection = lease.connection().clone();
+        let deleter = connection.session_deleter().ok_or_else(|| {
+            ApiError::InvalidConfig("provider does not support session deletion".into())
+        })?;
+        deleter
+            .delete_session(&session)
+            .await
+            .map_err(|error| ApiError::Internal(error.to_string()))?;
+        let thread_lease = {
+            let mut inner = handle.inner.lock();
+            inner.machine.archive();
+            inner.session = None;
+            inner.pending_extensions.clear();
+            inner.lease.take()
+        };
+        drop(thread_lease);
+        drop(lease);
+        self.persist_thread(&handle).await
+    }
+
+    pub async fn delete(&self, id: &ThreadId) -> Result<(), ApiError> {
         self.permissions().cancel_thread(id);
+        self.archive(id).await?;
+        let event_store = self.event_store.read().clone();
+        if let Some(store) = event_store {
+            store
+                .delete_thread(id)
+                .await
+                .map_err(|error| ApiError::Internal(error.to_string()))?;
+        }
         if let Some(handle) = self.threads.lock().remove(id) {
             let session = handle.inner.lock().session.clone();
             if let Some(session) = session {
@@ -519,7 +1173,7 @@ impl ThreadSessions {
             let backlog: Vec<EventEnvelope> = inner
                 .events
                 .iter()
-                .filter(|event| event.seq >= since_seq)
+                .filter(|event| event.seq > since_seq)
                 .cloned()
                 .collect();
             (receiver, backlog)
@@ -602,7 +1256,8 @@ impl ThreadSessions {
     /// its reader task. New sessions start fresh; replaced connections resume
     /// with replay (D12/D13).
     async fn ensure_connection(&self, handle: &Arc<ThreadHandle>) -> Result<(), ApiError> {
-        let (key, existing_session, workdir, workspace_root) = {
+        let _connect_guard = handle.connect_guard.lock().await;
+        let (key, existing_session, workdir, workspace_root, additional_directories) = {
             let inner = handle.inner.lock();
             let key = self.profile_key(&inner.agent_profile_id)?;
             (
@@ -610,6 +1265,7 @@ impl ThreadSessions {
                 inner.session.clone(),
                 inner.workdir.clone(),
                 inner.workspace_root.clone(),
+                inner.additional_directories.clone(),
             )
         };
 
@@ -617,44 +1273,92 @@ impl ThreadSessions {
             return Ok(());
         }
 
-        let lease = self
-            .store
-            .acquire(&key)
-            .await
-            .map_err(|error| ApiError::Internal(error.to_string()))?;
+        let lease = self.store.acquire(&key).await.map_err(|error| {
+            let profile_id = handle.inner.lock().agent_profile_id.clone();
+            map_store_error(&self.health, &profile_id, error)
+        })?;
 
         let mcp_servers = self.mcp_servers(&workspace_root, &key)?;
 
-        let session = match existing_session {
+        let session_handle = match existing_session {
             Some(session) => {
-                lease
-                    .connection()
-                    .resume_session(ResumeSession {
-                        session_id: session.clone(),
-                        cwd: workdir,
-                        additional_directories: vec![],
-                        mcp_servers: mcp_servers.clone(),
-                        replay: true,
-                    })
-                    .await
-                    .map_err(|error| ApiError::Internal(error.to_string()))?;
-                session
+                let connection = lease.connection();
+                if connection.capabilities().resume {
+                    connection
+                        .resume_session(ResumeSession {
+                            session_id: session,
+                            cwd: workdir.clone(),
+                            additional_directories: additional_directories.clone(),
+                            mcp_servers: mcp_servers.clone(),
+                            replay: true,
+                        })
+                        .await
+                        .map_err(|error| {
+                            let profile_id = handle.inner.lock().agent_profile_id.clone();
+                            map_connection_error(&self.health, &profile_id, error)
+                        })?
+                } else if connection.capabilities().load_session {
+                    connection
+                        .load_session(ResumeSession {
+                            session_id: session,
+                            cwd: workdir.clone(),
+                            additional_directories: additional_directories.clone(),
+                            mcp_servers: mcp_servers.clone(),
+                            replay: true,
+                        })
+                        .await
+                        .map_err(|error| {
+                            let profile_id = handle.inner.lock().agent_profile_id.clone();
+                            map_connection_error(&self.health, &profile_id, error)
+                        })?
+                } else {
+                    // Neither lifecycle call exists: keep the cached transcript
+                    // read-only and start a fresh session with a visible notice.
+                    let fresh = connection
+                        .new_session(NewSession {
+                            cwd: workdir,
+                            additional_directories,
+                            mcp_servers,
+                        })
+                        .await
+                        .map_err(|error| {
+                            let profile_id = handle.inner.lock().agent_profile_id.clone();
+                            map_connection_error(&self.health, &profile_id, error)
+                        })?;
+                    let event_store = self.event_store.read().clone();
+                    let _ = append_event(
+                        handle,
+                        event_store,
+                        TurnEventBody::Error {
+                            code: "provider_cannot_resume".into(),
+                            message:
+                                "this provider cannot load or resume sessions; a fresh session was started"
+                                    .into(),
+                            retryable: false,
+                        },
+                        EventOrigin::Live,
+                    )
+                    .await;
+                    fresh
+                }
             }
-            None => {
-                lease
-                    .connection()
-                    .new_session(NewSession {
-                        cwd: workdir,
-                        additional_directories: vec![],
-                        mcp_servers,
-                    })
-                    .await
-                    .map_err(|error| ApiError::Internal(error.to_string()))?
-                    .id
-            }
+            None => lease
+                .connection()
+                .new_session(NewSession {
+                    cwd: workdir,
+                    additional_directories,
+                    mcp_servers,
+                })
+                .await
+                .map_err(|error| {
+                    let profile_id = handle.inner.lock().agent_profile_id.clone();
+                    map_connection_error(&self.health, &profile_id, error)
+                })?,
         };
 
+        let session = session_handle.id.clone();
         let connection = lease.connection().clone();
+        let capabilities = self.store.entry(&key).and_then(|entry| entry.capabilities);
         let existing_mode = self
             .permissions()
             .context(&session)
@@ -662,8 +1366,11 @@ impl ThreadSessions {
         {
             let mut inner = handle.inner.lock();
             inner.session = Some(session.clone());
+            inner.config_options = session_handle.config_options;
+            inner.capabilities = capabilities;
             inner.lease = Some(lease);
         }
+        self.persist_thread(handle).await?;
         self.register_permission_context(handle, &session, existing_mode);
         self.start_reader(handle, connection, session);
         Ok(())
@@ -722,21 +1429,21 @@ impl ThreadSessions {
         }
         let task_handle = handle.clone();
         let permissions = self.permissions();
+        let event_store = self.event_store.read().clone();
         let task = tokio::spawn(async move {
             let mut events = connection.events(&session);
             loop {
                 tokio::select! {
                     event = events.next() => {
                         let Some(Ok(event)) = event else { break };
-                        let mut inner = task_handle.inner.lock();
-                        let seq = inner.next_seq;
-                        inner.next_seq += 1;
                         let origin = if event.replayed { EventOrigin::Replay } else { EventOrigin::Live };
-                        inner.machine.apply(seq, &event.body, origin);
-                        let envelope = EventEnvelope { thread_id: inner.machine.id().clone(), seq, event: event.body };
-                        // ponytail: in-memory log; U6 swaps this for tethys-store once M1.1 lands.
-                        inner.events.push(envelope.clone());
-                        let _ = task_handle.subscribers.send(envelope);
+                        if let TurnEventBody::ConfigOptionsChanged { options } = &event.body {
+                            let mut inner = task_handle.inner.lock();
+                            merge_config_options(&mut inner.config_options, options);
+                        }
+                        if append_event(&task_handle, event_store.clone(), event.body, origin).await.is_err() {
+                            break;
+                        }
                     }
                     _ = connection.wait_closed() => break,
                 }
@@ -759,15 +1466,37 @@ impl ThreadSessions {
         });
         *handle.reader.lock() = Some(task);
     }
+}
 
-    fn mark_transport_lost(&self, handle: &Arc<ThreadHandle>) {
-        let thread_id = {
-            let mut inner = handle.inner.lock();
-            inner.lease = None;
-            inner.machine.mark_interrupted();
-            inner.machine.id().clone()
-        };
-        self.permissions().cancel_thread(&thread_id);
+/// Merges an update into the cached option list: unknown ids append, known ids
+/// keep their labels and value sets when the agent sends a partial update (v1
+/// mode updates carry only the current id).
+fn merge_config_options(current: &mut Vec<ConfigOption>, incoming: &[ConfigOption]) {
+    for option in incoming {
+        match current.iter_mut().find(|existing| existing.id == option.id) {
+            Some(existing) => {
+                existing.current_value = option.current_value.clone();
+                if !option.name.is_empty() {
+                    existing.name = option.name.clone();
+                }
+                if option.description.is_some() {
+                    existing.description = option.description.clone();
+                }
+                if !option.values.is_empty() {
+                    existing.values = option.values.clone();
+                }
+                if !option.value_options.is_empty() {
+                    existing.value_options = option.value_options.clone();
+                }
+                if option.category.is_some() {
+                    existing.category = option.category.clone();
+                }
+                if option.kind.is_some() {
+                    existing.kind = option.kind.clone();
+                }
+            }
+            None => current.push(option.clone()),
+        }
     }
 }
 
@@ -782,30 +1511,123 @@ fn live_connection(
 }
 
 /// Appends an event to the thread's in-memory log and returns its envelope.
-fn push_event(inner: &mut ThreadInner, body: TurnEventBody) -> EventEnvelope {
-    let seq = inner.next_seq;
-    inner.next_seq += 1;
-    let envelope = EventEnvelope {
-        thread_id: inner.machine.id().clone(),
-        seq,
-        event: body,
+async fn append_event(
+    handle: &Arc<ThreadHandle>,
+    event_store: Option<Arc<EventStore>>,
+    body: TurnEventBody,
+    origin: EventOrigin,
+) -> Result<EventEnvelope, ApiError> {
+    let _writer = handle.event_writer.lock().await;
+    let (thread_id, local_seq) = {
+        let inner = handle.inner.lock();
+        (inner.machine.id().clone(), inner.next_seq)
     };
-    inner.events.push(envelope.clone());
-    envelope
+    let seq = if let Some(store) = event_store {
+        let payload =
+            serde_json::to_string(&body).map_err(|error| ApiError::Internal(error.to_string()))?;
+        let range = store
+            .append_batch(
+                &thread_id,
+                &[NewEvent {
+                    kind: THREAD_EVENT.into(),
+                    payload,
+                    entry: None,
+                }],
+            )
+            .await
+            .map_err(|error| ApiError::Internal(error.to_string()))?;
+        u32::try_from(range.last)
+            .map_err(|error| ApiError::Internal(format!("thread sequence overflow: {error}")))?
+    } else {
+        local_seq
+    };
+    let envelope = {
+        let mut inner = handle.inner.lock();
+        inner.next_seq = seq.saturating_add(1);
+        match &body {
+            TurnEventBody::ProviderExtension(extension) => {
+                if let Some(request_id) = &extension.request_id {
+                    inner.pending_extensions.insert(request_id.clone());
+                }
+            }
+            TurnEventBody::ProviderExtensionResolved { request_id, .. } => {
+                inner.pending_extensions.remove(request_id);
+            }
+            _ => {}
+        }
+        inner.machine.apply(seq, &body, origin);
+        let envelope = EventEnvelope {
+            thread_id,
+            seq,
+            event: body,
+        };
+        inner.events.push(envelope.clone());
+        envelope
+    };
+    let _ = handle.subscribers.send(envelope.clone());
+    Ok(envelope)
+}
+
+async fn persist_thread_state(
+    event_store: Option<Arc<EventStore>>,
+    handle: &Arc<ThreadHandle>,
+) -> Result<(), ApiError> {
+    let Some(store) = event_store else {
+        return Ok(());
+    };
+    let (record, workspace_root) = {
+        let inner = handle.inner.lock();
+        (
+            ThreadRecord {
+                summary: inner.summary(),
+                workdir: inner.workdir.display().to_string(),
+                additional_directories: inner
+                    .additional_directories
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect(),
+                config_options: inner.config_options.clone(),
+                capabilities: inner.capabilities.clone(),
+                prepared: inner.prepared,
+                latest_seq: inner.next_seq.saturating_sub(1) as u64,
+            },
+            inner.workspace_root.display().to_string(),
+        )
+    };
+    store
+        .ensure_workspace(&record.summary.workspace_id, &workspace_root, "main")
+        .await
+        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    store
+        .save_thread(record)
+        .await
+        .map_err(|error| ApiError::Internal(error.to_string()))
 }
 
 /// Moves the thread to `grace_elapsed` when the window closes unanswered.
-fn arm_grace_timer(handle: &Arc<ThreadHandle>, grace: std::time::Duration) {
+fn arm_grace_timer(
+    handle: &Arc<ThreadHandle>,
+    grace: std::time::Duration,
+    event_store: Option<Arc<EventStore>>,
+) {
     let timer_handle = handle.clone();
     let task = tokio::spawn(async move {
         tokio::time::sleep(grace).await;
-        let mut inner = timer_handle.inner.lock();
-        if matches!(inner.cancel.phase, CancelPhase::CancelRequested { .. }) {
+        let state = {
+            let mut inner = timer_handle.inner.lock();
+            if !matches!(inner.cancel.phase, CancelPhase::CancelRequested { .. }) {
+                return;
+            }
             inner.cancel.phase = CancelPhase::GraceElapsed;
-            let body = TurnEventBody::CancelPhaseChanged(inner.cancel.clone());
-            let envelope = push_event(&mut inner, body);
-            let _ = timer_handle.subscribers.send(envelope);
-        }
+            inner.cancel.clone()
+        };
+        let _ = append_event(
+            &timer_handle,
+            event_store,
+            TurnEventBody::CancelPhaseChanged(state),
+            EventOrigin::Live,
+        )
+        .await;
     });
     *handle.cancel_timer.lock() = Some(task);
 }

@@ -9,6 +9,7 @@ pub mod health;
 pub mod mcp;
 pub mod monitor;
 pub mod permission;
+mod provider_error;
 pub mod skills;
 pub mod synthetic;
 pub mod thread_queue;
@@ -192,9 +193,11 @@ impl Core {
             workspace_roots.clone(),
         ));
         sessions.set_permissions(permissions);
+        sessions.set_event_store(Arc::clone(&store));
         if let Ok(rows) = store.agent_profiles().await {
             sessions.hydrate_profiles(&rows);
         }
+        sessions.hydrate_threads().await?;
         // Two of the seven re-check triggers (spec §5.2): arm the interval poller
         // and run one check of every enabled Provider now (cold start).
         let health = Arc::clone(sessions.health());
@@ -223,6 +226,7 @@ impl Core {
             trust.clone(),
         ));
         self.sessions.set_roots(roots.clone());
+        self.sessions.set_event_store(Arc::clone(&store));
         self.workspace_roots = roots;
         self.trust = trust;
         self.store = Some(store);
@@ -390,7 +394,9 @@ fn policy_store_options(
         AcpProtocol::V1,
         Arc::new(PolicyResolver::new(permissions.clone())),
     );
-    options.elicitation_resolver = Arc::new(ElicitationPolicyResolver::new(permissions));
+    options.client_services = options
+        .client_services
+        .with_elicitation(Arc::new(ElicitationPolicyResolver::new(permissions)));
     options.env_resolver = Arc::new(env_secrets::KeychainEnv::new(secrets));
     options
 }

@@ -80,6 +80,10 @@ async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
         Some(NormalizedCapabilities {
             load_session: true,
             resume: true,
+            close_session: false,
+            list_sessions: false,
+            delete_session: false,
+            logout: false,
             mcp: McpTransports {
                 stdio: true,
                 http: true,
@@ -87,6 +91,7 @@ async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
             },
             prompt_embedded_context: false,
             elicitation: false,
+            ..Default::default()
         }),
     );
 
@@ -96,6 +101,7 @@ async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
             workspace_id: "ws-1".into(),
             agent_profile_id: profile_id.clone(),
             workdir: worktree.display().to_string(),
+            additional_directories: Vec::new(),
         })
         .await
         .expect("create worktree thread");
@@ -117,6 +123,7 @@ async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
             workspace_id: "ws-1".into(),
             agent_profile_id: profile_id,
             workdir: ws_root.display().to_string(),
+            additional_directories: Vec::new(),
         })
         .await
         .expect("create plain thread");
@@ -166,6 +173,10 @@ async fn resume_and_recovery_spawn_carry_workspace_root_servers() {
         Some(NormalizedCapabilities {
             load_session: true,
             resume: true,
+            close_session: false,
+            list_sessions: false,
+            delete_session: false,
+            logout: false,
             mcp: McpTransports {
                 stdio: true,
                 http: false,
@@ -173,6 +184,7 @@ async fn resume_and_recovery_spawn_carry_workspace_root_servers() {
             },
             prompt_embedded_context: false,
             elicitation: false,
+            ..Default::default()
         }),
     );
 
@@ -181,6 +193,7 @@ async fn resume_and_recovery_spawn_carry_workspace_root_servers() {
             workspace_id: "ws-2".into(),
             agent_profile_id: profile_id,
             workdir: worktree.display().to_string(),
+            additional_directories: Vec::new(),
         })
         .await
         .expect("create thread");
@@ -245,6 +258,7 @@ async fn connection_with_no_negotiated_capabilities_yields_capabilities_not_nego
             workspace_id: "ws-3".into(),
             agent_profile_id: profile_id,
             workdir: ws_root.display().to_string(),
+            additional_directories: Vec::new(),
         })
         .await
         .expect("create thread");
@@ -286,6 +300,10 @@ fn v1_connection_always_keeps_stdio_servers_http_only_with_mcp_capabilities() {
         Some(NormalizedCapabilities {
             load_session: true,
             resume: true,
+            close_session: false,
+            list_sessions: false,
+            delete_session: false,
+            logout: false,
             mcp: McpTransports {
                 stdio: false, // Even if raw is false, v1 floor mandates stdio = true
                 http: false,
@@ -293,6 +311,7 @@ fn v1_connection_always_keeps_stdio_servers_http_only_with_mcp_capabilities() {
             },
             prompt_embedded_context: false,
             elicitation: false,
+            ..Default::default()
         }),
     );
     let transports = sessions.transports_for(&key).expect("transports");
@@ -308,6 +327,10 @@ fn v1_connection_always_keeps_stdio_servers_http_only_with_mcp_capabilities() {
         Some(NormalizedCapabilities {
             load_session: true,
             resume: true,
+            close_session: false,
+            list_sessions: false,
+            delete_session: false,
+            logout: false,
             mcp: McpTransports {
                 stdio: true,
                 http: true,
@@ -315,6 +338,7 @@ fn v1_connection_always_keeps_stdio_servers_http_only_with_mcp_capabilities() {
             },
             prompt_embedded_context: false,
             elicitation: false,
+            ..Default::default()
         }),
     );
     let transports_http = sessions.transports_for(&key).expect("transports with http");

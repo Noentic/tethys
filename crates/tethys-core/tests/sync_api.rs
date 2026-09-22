@@ -284,6 +284,10 @@ async fn mcp_attachments_returns_grid_through_core() {
         Some(tethys_schema::connection::NormalizedCapabilities {
             load_session: true,
             resume: true,
+            close_session: false,
+            list_sessions: false,
+            delete_session: false,
+            logout: false,
             mcp: tethys_schema::sync::McpTransports {
                 stdio: true,
                 http: false,
@@ -291,6 +295,7 @@ async fn mcp_attachments_returns_grid_through_core() {
             },
             prompt_embedded_context: false,
             elicitation: false,
+            ..Default::default()
         }),
     );
 
@@ -308,9 +313,14 @@ async fn mcp_attachments_returns_grid_through_core() {
         Some(tethys_schema::connection::NormalizedCapabilities {
             load_session: false,
             resume: false,
+            close_session: false,
+            list_sessions: false,
+            delete_session: false,
+            logout: false,
             mcp: tethys_schema::sync::McpTransports::default(),
             prompt_embedded_context: false,
             elicitation: false,
+            ..Default::default()
         }),
     );
 
@@ -384,9 +394,14 @@ async fn projection_plan_names_matching_providers_and_handles_unmatched_target()
         Some(tethys_schema::connection::NormalizedCapabilities {
             load_session: false,
             resume: false,
+            close_session: false,
+            list_sessions: false,
+            delete_session: false,
+            logout: false,
             mcp: tethys_schema::sync::McpTransports::default(),
             prompt_embedded_context: false,
             elicitation: false,
+            ..Default::default()
         }),
     );
 

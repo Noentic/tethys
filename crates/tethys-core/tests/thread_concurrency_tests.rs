@@ -50,6 +50,7 @@ fn request(profile: &str, root: &Path) -> CreateThread {
         workspace_id: "ws".into(),
         agent_profile_id: profile.to_string(),
         workdir: root.display().to_string(),
+        additional_directories: Vec::new(),
     }
 }
 
@@ -109,7 +110,7 @@ async fn archiving_the_first_session_frees_the_cap() {
         .create(request(&profile, &root))
         .await
         .expect("first session");
-    sessions.archive(&first.id).expect("archive");
+    sessions.archive(&first.id).await.expect("archive");
 
     sessions
         .create(request(&profile, &root))
@@ -128,7 +129,7 @@ async fn deleting_the_first_session_frees_the_cap() {
         .create(request(&profile, &root))
         .await
         .expect("first session");
-    sessions.delete(&first.id).expect("delete");
+    sessions.delete(&first.id).await.expect("delete");
 
     sessions
         .create(request(&profile, &root))

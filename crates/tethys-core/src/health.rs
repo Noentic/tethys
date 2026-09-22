@@ -5,13 +5,13 @@
 //! `authMethods` and a status. The interval scheduler and the six manual
 //! triggers all funnel here, so there is a single behavioural implementation.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use parking_lot::{Mutex, RwLock};
 use tethys_agent_servers::ConnectionStore;
-use tethys_schema::agents::{AuthMethodView, ProviderHealth, RecheckStatus};
+use tethys_schema::agents::{AuthMethodView, AuthState, ProviderHealth, RecheckStatus};
 use tethys_schema::connection::{AcpProtocol, ConnectionKey, NormalizedCapabilities};
 use tethys_thread::AgentConnection;
 use tokio::task::JoinHandle;
@@ -20,6 +20,7 @@ use tokio::task::JoinHandle;
 #[derive(Debug, Clone, PartialEq)]
 pub struct HealthRecord {
     pub health: ProviderHealth,
+    pub auth_state: AuthState,
     pub detail: Option<String>,
     pub protocol: Option<AcpProtocol>,
     pub capabilities: Option<NormalizedCapabilities>,
@@ -34,6 +35,7 @@ impl Default for HealthRecord {
     fn default() -> Self {
         Self {
             health: ProviderHealth::Unknown,
+            auth_state: AuthState::Unknown,
             detail: None,
             protocol: None,
             capabilities: None,
@@ -54,7 +56,6 @@ pub const DEFAULT_INTERVAL_SECS: u64 = 300;
 pub struct HealthRegistry {
     store: Arc<ConnectionStore>,
     records: RwLock<HashMap<String, HealthRecord>>,
-    authenticated: RwLock<HashSet<String>>,
     enabled: RwLock<Vec<ConnectionKey>>,
     interval_secs: Mutex<u64>,
     scheduler: Mutex<Option<JoinHandle<()>>>,
@@ -65,7 +66,6 @@ impl HealthRegistry {
         Arc::new(Self {
             store,
             records: RwLock::new(HashMap::new()),
-            authenticated: RwLock::new(HashSet::new()),
             enabled: RwLock::new(Vec::new()),
             interval_secs: Mutex::new(0),
             scheduler: Mutex::new(None),
@@ -86,10 +86,31 @@ impl HealthRegistry {
             .unwrap_or_default()
     }
 
-    /// Marks a profile as authenticated after a successful login; the next
-    /// re-check then reports `healthy` rather than `auth_required`.
+    /// Records a successful auth flow independently from declared methods.
     pub fn mark_authenticated(&self, profile_id: &str) {
-        self.authenticated.write().insert(profile_id.to_string());
+        let mut records = self.records.write();
+        let record = records.entry(profile_id.to_string()).or_default();
+        record.auth_state = AuthState::Ready;
+        record.health = ProviderHealth::Healthy;
+        record.detail = None;
+    }
+
+    /// Clears cached auth readiness after a successful logout.
+    pub fn mark_logged_out(&self, profile_id: &str) {
+        let mut records = self.records.write();
+        let record = records.entry(profile_id.to_string()).or_default();
+        record.auth_state = AuthState::Unknown;
+        record.detail = None;
+    }
+
+    /// Records an auth-required response from `initialize`, `session/new`, or a
+    /// prompt, independently from the declared method list (M1.17 AD8).
+    pub fn mark_auth_required(&self, profile_id: &str) {
+        let mut records = self.records.write();
+        let record = records.entry(profile_id.to_string()).or_default();
+        record.health = ProviderHealth::AuthRequired;
+        record.auth_state = AuthState::Required;
+        record.detail = Some("authentication required".to_string());
     }
 
     /// The configured interval in seconds (`0` = manual only).
@@ -156,21 +177,12 @@ impl HealthRegistry {
                 let latency_ms = started.elapsed().as_millis().min(u32::MAX as u128) as u32;
                 drop(lease);
 
-                let authenticated = self.authenticated.read().contains(&profile_id);
-                let (health, detail) = if !auth_methods.is_empty() && !authenticated {
-                    (
-                        ProviderHealth::AuthRequired,
-                        Some("authentication required".to_string()),
-                    )
-                } else {
-                    (ProviderHealth::Healthy, None)
-                };
-
                 self.finish(
                     &profile_id,
                     HealthRecord {
-                        health,
-                        detail,
+                        health: ProviderHealth::Healthy,
+                        auth_state: AuthState::Ready,
+                        detail: None,
                         protocol,
                         capabilities: Some(capabilities),
                         auth_methods,
@@ -178,6 +190,18 @@ impl HealthRegistry {
                         latency_ms: Some(latency_ms),
                         last_checked_ms: now_ms(),
                         recheck: RecheckStatus::Idle,
+                    },
+                );
+            }
+            Err(tethys_agent_servers::StoreError::AuthRequired) => {
+                self.finish(
+                    &profile_id,
+                    HealthRecord {
+                        health: ProviderHealth::AuthRequired,
+                        auth_state: AuthState::Required,
+                        detail: Some("authentication required".to_string()),
+                        last_checked_ms: now_ms(),
+                        ..Default::default()
                     },
                 );
             }

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tethys_agent_servers::{ConnectionStore, LaunchSpec, StoreOptions};
 use tethys_core::permission::DenyPermissionResolver;
 use tethys_core::thread_session::{SyncSource, ThreadSessions};
-use tethys_schema::agents::ProviderHealth;
+use tethys_schema::agents::{AuthState, ProviderHealth};
 use tethys_schema::connection::{AcpProtocol, AgentCompat};
 
 fn main() {
@@ -21,7 +21,7 @@ fn main() {
     runtime.block_on(async {
         missing_binary_is_not_found().await;
         a_mock_handshake_is_healthy_with_capabilities().await;
-        declared_auth_methods_require_login_then_clear().await;
+        declared_auth_methods_do_not_imply_auth_required().await;
         interval_zero_disarms_and_a_positive_value_arms().await;
         recheck_is_scoped_to_one_profile().await;
     });
@@ -91,7 +91,7 @@ async fn a_mock_handshake_is_healthy_with_capabilities() {
     assert_eq!(record.protocol, Some(AcpProtocol::V1));
 }
 
-async fn declared_auth_methods_require_login_then_clear() {
+async fn declared_auth_methods_do_not_imply_auth_required() {
     let sessions = sessions();
     let id = sessions.register_profile(
         mock_spec("m1.12-auth").env("TETHYS_MOCK_AUTH", "agent"),
@@ -100,15 +100,9 @@ async fn declared_auth_methods_require_login_then_clear() {
     let key = sessions.connection_key(&id).expect("key");
     sessions.health().recheck(&key).await;
     let record = sessions.health().record(&id);
-    assert_eq!(record.health, ProviderHealth::AuthRequired, "{record:?}");
+    assert_eq!(record.health, ProviderHealth::Healthy, "{record:?}");
+    assert_eq!(record.auth_state, AuthState::Ready);
     assert_eq!(record.auth_methods.len(), 1);
-
-    sessions.health().mark_authenticated(&id);
-    sessions.health().recheck(&key).await;
-    assert_eq!(
-        sessions.health().record(&id).health,
-        ProviderHealth::Healthy
-    );
 }
 
 async fn interval_zero_disarms_and_a_positive_value_arms() {

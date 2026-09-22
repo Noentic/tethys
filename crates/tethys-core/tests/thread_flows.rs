@@ -12,9 +12,13 @@ use tethys_core::permission::DenyPermissionResolver;
 use tethys_core::thread_session::ThreadSessions;
 use tethys_core::Core;
 use tethys_schema::connection::{AcpProtocol, AgentCompat, ConnectionKey};
-use tethys_schema::thread::{ContentBlock, CreateThread, Entry, ThreadId, ThreadState};
+use tethys_schema::thread::{
+    ContentBlock, CreateThread, Entry, ThreadId, ThreadState, TurnEventBody,
+};
 
 const PROFILE_V1: &str = "mock-v1";
+const PROFILE_AUTH: &str = "mock-v1-auth";
+const PROFILE_NO_LOAD: &str = "mock-v1-no-load";
 #[cfg(feature = "acp-v2")]
 const PROFILE_V2: &str = "mock-v2";
 
@@ -29,7 +33,12 @@ fn main() {
     runtime.block_on(async {
         prompt_streams_entries_and_backlog().await;
         kill_mid_turn_marks_interrupted_and_resume_keeps_history().await;
+        reconnect_without_load_starts_fresh_session_once().await;
         four_threads_across_two_workdirs_stay_isolated().await;
+        mode_and_config_changes_dispatch_and_cache().await;
+        auth_required_session_updates_profile_auth_state().await;
+        additional_directories_reach_the_session_and_stay_jailed().await;
+        provider_sessions_paginate_with_a_cursor().await;
     });
     println!("thread_flows tests passed");
 }
@@ -51,7 +60,7 @@ fn init_git(dir: &Path) {
     assert!(output.status.success(), "git init failed");
 }
 
-fn build_core(grace: Duration) -> Core {
+fn build_sessions(grace: Duration) -> Arc<ThreadSessions> {
     let options = StoreOptions {
         idle_grace: grace,
         cancel_grace: Duration::from_millis(200),
@@ -59,8 +68,11 @@ fn build_core(grace: Duration) -> Core {
     };
     let workspace_root = workdir("workspace");
     init_git(&workspace_root);
+    let extra_root = workdir("extra");
     let roots = Arc::new(
-        tethys_core::workspace_roots::StaticWorkspaces::new().with("workspace", workspace_root),
+        tethys_core::workspace_roots::StaticWorkspaces::new()
+            .with("workspace", workspace_root)
+            .with("extra", extra_root),
     );
     let sessions = Arc::new(ThreadSessions::new(
         ConnectionStore::new(options),
@@ -84,6 +96,36 @@ fn build_core(grace: Duration) -> Core {
             ..Default::default()
         },
     );
+    sessions.register_profile(
+        LaunchSpec::new(
+            PROFILE_AUTH,
+            std::env::current_exe()
+                .expect("current exe")
+                .to_string_lossy()
+                .to_string(),
+        )
+        .env(tethys_acp::mock::MOCK_ENV, "v1")
+        .env("TETHYS_MOCK_REQUIRE_AUTH", "new"),
+        AgentCompat {
+            preferred_protocol: Some(AcpProtocol::V1),
+            ..Default::default()
+        },
+    );
+    sessions.register_profile(
+        LaunchSpec::new(
+            PROFILE_NO_LOAD,
+            std::env::current_exe()
+                .expect("current exe")
+                .to_string_lossy()
+                .to_string(),
+        )
+        .env(tethys_acp::mock::MOCK_ENV, "v1")
+        .env("TETHYS_MOCK_NO_LOAD", "1"),
+        AgentCompat {
+            preferred_protocol: Some(AcpProtocol::V1),
+            ..Default::default()
+        },
+    );
     #[cfg(feature = "acp-v2")]
     sessions.register_profile(
         LaunchSpec::new(
@@ -99,7 +141,11 @@ fn build_core(grace: Duration) -> Core {
             ..Default::default()
         },
     );
-    Core::with_sessions("test", sessions)
+    sessions
+}
+
+fn build_core(grace: Duration) -> Core {
+    Core::with_sessions("test", build_sessions(grace))
 }
 
 async fn create(core: &Core, profile: &str, name: &str) -> ThreadId {
@@ -107,6 +153,7 @@ async fn create(core: &Core, profile: &str, name: &str) -> ThreadId {
         workspace_id: "workspace".into(),
         agent_profile_id: profile.into(),
         workdir: workdir(name).display().to_string(),
+        additional_directories: Vec::new(),
     })
     .await
     .expect("create thread")
@@ -124,18 +171,20 @@ async fn prompt(core: &Core, id: &ThreadId, text: &str) {
 async fn drain_until_token_idle(stream: &mut tethys_api::EventStream, token: &str) {
     let mut count = 0;
     let mut saw_token = false;
+    let mut text_seen = String::new();
+    let mut seen = Vec::new();
     loop {
         let event = tokio::time::timeout(Duration::from_secs(10), stream.next())
             .await
-            .expect("event within timeout")
+            .unwrap_or_else(|_| panic!("event within timeout; saw {seen:?}"))
             .expect("stream open");
+        seen.push(format!("{:?}", event.event));
         count += 1;
         match &event.event {
             tethys_schema::thread::TurnEventBody::MessageChunk(chunk) => {
                 if let ContentBlock::Text(text) = &chunk.block {
-                    if text.contains(token) {
-                        saw_token = true;
-                    }
+                    text_seen.push_str(text);
+                    saw_token = text_seen.contains(token);
                 }
             }
             tethys_schema::thread::TurnEventBody::StateChanged(changed)
@@ -188,6 +237,176 @@ async fn wait_for_state(core: &Core, id: &ThreadId, state: ThreadState) {
     }
 }
 
+async fn mode_and_config_changes_dispatch_and_cache() {
+    let core = build_core(Duration::from_millis(50));
+    let bootstrap = core
+        .thread_prepare(CreateThread {
+            workspace_id: "workspace".into(),
+            agent_profile_id: PROFILE_V1.into(),
+            workdir: workdir("mode-config").display().to_string(),
+            additional_directories: Vec::new(),
+        })
+        .await
+        .expect("prepare");
+    let id = bootstrap.thread.id.clone();
+
+    let mode = bootstrap
+        .config_options
+        .iter()
+        .find(|option| option.id == "mode")
+        .expect("mode option from session/new");
+    assert_eq!(mode.category.as_deref(), Some("mode"));
+    assert_eq!(mode.current_value, "default");
+    assert_eq!(mode.values, vec!["default", "plan", "accept-edits"]);
+    assert!(
+        bootstrap
+            .config_options
+            .iter()
+            .any(|option| option.id == "thought_level"),
+        "config options from session/new are preserved"
+    );
+
+    // A mode change dispatches to session/set_mode, not session/set_config_option.
+    core.thread_set_config_option(id.clone(), "mode".into(), "plan".into())
+        .await
+        .expect("set mode");
+    let view = core.thread_get(id.clone()).await.expect("get");
+    let mode = view
+        .config_options
+        .iter()
+        .find(|option| option.id == "mode")
+        .expect("mode");
+    assert_eq!(mode.current_value, "plan");
+    assert!(view.events.iter().any(|envelope| matches!(
+        &envelope.event,
+        TurnEventBody::ConfigOptionsChanged { options }
+            if options.iter().any(|option| option.id == "mode" && option.current_value == "plan")
+    )));
+
+    // An unknown mode is rejected before the wire call.
+    let rejected = core
+        .thread_set_config_option(id.clone(), "mode".into(), "nope".into())
+        .await;
+    assert!(matches!(
+        rejected,
+        Err(tethys_api::ApiError::InvalidConfig(_))
+    ));
+
+    // A config change dispatches to session/set_config_option and merges.
+    core.thread_set_config_option(id.clone(), "thought_level".into(), "high".into())
+        .await
+        .expect("set config");
+    let view = core.thread_get(id.clone()).await.expect("get");
+    let level = view
+        .config_options
+        .iter()
+        .find(|option| option.id == "thought_level")
+        .expect("thought_level");
+    assert_eq!(level.current_value, "high");
+    let mode = view
+        .config_options
+        .iter()
+        .find(|option| option.id == "mode")
+        .expect("mode");
+    assert_eq!(mode.current_value, "plan", "config update keeps the mode");
+
+    core.thread_delete(id).await.expect("delete");
+}
+
+async fn auth_required_session_updates_profile_auth_state() {
+    use tethys_schema::agents::{AuthState, ProviderHealth};
+
+    let sessions = build_sessions(Duration::from_millis(50));
+    let core = Core::with_sessions("test", sessions.clone());
+    let result = core
+        .thread_prepare(CreateThread {
+            workspace_id: "workspace".into(),
+            agent_profile_id: PROFILE_AUTH.into(),
+            workdir: workdir("auth-required").display().to_string(),
+            additional_directories: Vec::new(),
+        })
+        .await;
+
+    assert!(
+        matches!(result, Err(tethys_api::ApiError::AuthRequired(_))),
+        "session/new auth-required surfaces as its own stage"
+    );
+    let record = sessions.health().record(PROFILE_AUTH);
+    assert_eq!(record.health, ProviderHealth::AuthRequired);
+    assert_eq!(record.auth_state, AuthState::Required);
+}
+
+async fn additional_directories_reach_the_session_and_stay_jailed() {
+    let core = build_core(Duration::from_millis(50));
+    let extra = workdir("extra");
+    std::fs::write(extra.join("probe.txt"), "root-probe").expect("probe");
+
+    let bootstrap = core
+        .thread_prepare(CreateThread {
+            workspace_id: "workspace".into(),
+            agent_profile_id: PROFILE_V1.into(),
+            workdir: workdir("additional").display().to_string(),
+            additional_directories: vec!["extra".into()],
+        })
+        .await
+        .expect("prepare");
+    let id = bootstrap.thread.id.clone();
+
+    let mut stream = core
+        .events_subscribe(id.clone(), bootstrap.latest_seq)
+        .await
+        .expect("subscribe");
+    prompt(&core, &id, "fs/read").await;
+    drain_until_token_idle(&mut stream, "probe:root-probe").await;
+
+    let latest = core.thread_get(id.clone()).await.expect("get").latest_seq;
+    let mut stream = core
+        .events_subscribe(id.clone(), latest)
+        .await
+        .expect("subscribe");
+    prompt(&core, &id, "fs/read escape").await;
+    drain_until_token_idle(&mut stream, "fs-error").await;
+
+    let view = core.thread_get(id.clone()).await.expect("get");
+    let text = entry_text(&view.entries);
+    assert!(
+        !text.contains("root:x:"),
+        "a path outside the trusted roots must not be read: {text}"
+    );
+    core.thread_delete(id).await.expect("delete");
+}
+
+async fn provider_sessions_paginate_with_a_cursor() {
+    let core = build_core(Duration::from_millis(50));
+    let root = workdir("workspace");
+    for index in 1..=3 {
+        std::fs::create_dir_all(root.join(format!("session-{index}"))).expect("session dir");
+    }
+
+    let first = core
+        .thread_list_provider_sessions(PROFILE_V1.into(), "workspace".into(), None)
+        .await
+        .expect("page 1");
+    assert_eq!(first.sessions.len(), 2, "page size comes from the provider");
+    assert_eq!(first.next_cursor.as_deref(), Some("page-2"));
+    assert!(first
+        .sessions
+        .iter()
+        .all(|session| session.cwd.starts_with(root.display().to_string().as_str())));
+
+    let second = core
+        .thread_list_provider_sessions(
+            PROFILE_V1.into(),
+            "workspace".into(),
+            first.next_cursor.clone(),
+        )
+        .await
+        .expect("page 2");
+    assert_eq!(second.sessions.len(), 1);
+    assert!(second.next_cursor.is_none());
+    assert_eq!(second.sessions[0].title.as_deref(), Some("Listed 3"));
+}
+
 async fn prompt_streams_entries_and_backlog() {
     let core = build_core(Duration::from_secs(30));
     let id = create(&core, PROFILE_V1, "basic").await;
@@ -209,7 +428,7 @@ async fn prompt_streams_entries_and_backlog() {
         .await
         .expect("subscribe");
     let first = replay.next().await.expect("backlog event");
-    assert_eq!(first.seq, 0);
+    assert_eq!(first.seq, 1);
     assert_eq!(first.thread_id, id);
 
     core.thread_delete(id).await.expect("delete");
@@ -268,6 +487,62 @@ async fn kill_mid_turn_marks_interrupted_and_resume_keeps_history() {
     assert!(text.contains("echo: again"), "new turn appended: {text}");
     assert_eq!(view.thread.state, ThreadState::Idle);
 
+    core.thread_delete(id).await.expect("delete");
+}
+
+async fn reconnect_without_load_starts_fresh_session_once() {
+    let core = build_core(Duration::from_millis(50));
+    let bootstrap = core
+        .thread_prepare(CreateThread {
+            workspace_id: "workspace".into(),
+            agent_profile_id: PROFILE_NO_LOAD.into(),
+            workdir: workdir("no-load").display().to_string(),
+            additional_directories: Vec::new(),
+        })
+        .await
+        .expect("prepare");
+    let id = bootstrap.thread.id.clone();
+    let original_session = bootstrap.thread.session_id.expect("provider session");
+    let mut stream = core
+        .events_subscribe(id.clone(), bootstrap.latest_seq)
+        .await
+        .expect("subscribe");
+    prompt(&core, &id, "before reconnect").await;
+    drain_until_token_idle(&mut stream, "before reconnect").await;
+
+    let key = ConnectionKey::new(PROFILE_NO_LOAD, "local");
+    core.sessions()
+        .store()
+        .restart(&key)
+        .await
+        .expect("restart connection");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let view = loop {
+        let view = core.thread_get(id.clone()).await.expect("reconnect");
+        if view.thread.session_id.as_deref() != Some(original_session.as_str()) {
+            break view;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "fresh session was not created: {:?}",
+            core.sessions().connections()
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    assert_eq!(
+        view.events
+            .iter()
+            .filter(|event| matches!(
+                &event.event,
+                TurnEventBody::Error { code, .. } if code == "provider_cannot_resume"
+            ))
+            .count(),
+        1,
+    );
+
+    prompt(&core, &id, "after reconnect").await;
+    drain_until_token_idle(&mut stream, "after reconnect").await;
     core.thread_delete(id).await.expect("delete");
 }
 

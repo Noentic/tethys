@@ -35,11 +35,11 @@ impl FixtureSource {
     fn set_version(&self, version: &str) {
         let mut registry = self.0.lock().expect("lock");
         registry.agents[0].version = version.to_string();
-        let tethys_agent_servers::registry::Distribution::Npx(npx) =
-            &mut registry.agents[0].distribution
-        else {
-            panic!("fixture is npx");
-        };
+        let npx = registry.agents[0]
+            .distribution
+            .npx
+            .as_mut()
+            .expect("fixture is npx");
         npx.package = format!("@agentclientprotocol/claude-agent-acp@{version}");
     }
 }

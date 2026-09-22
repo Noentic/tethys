@@ -104,8 +104,9 @@ pub fn write_command(
         )));
     }
     let path = command_file(dir, name)?;
-    write_atomic(&path, body)
-        .map_err(|error| ApiError::Internal(format!("write command {}: {error}", path.display())))?;
+    write_atomic(&path, body).map_err(|error| {
+        ApiError::Internal(format!("write command {}: {error}", path.display()))
+    })?;
     Ok(CommandInfo {
         name: name.to_string(),
         scope,
@@ -118,8 +119,7 @@ pub fn write_command(
 /// Deletes one command file; a missing file is `NotFound` (CMP-07).
 pub fn delete_command(dir: &Path, name: &str, _scope: CommandScope) -> Result<(), ApiError> {
     let path = command_file(dir, name)?;
-    fs::remove_file(&path)
-        .map_err(|_| ApiError::NotFound(format!("command not found: {name}")))
+    fs::remove_file(&path).map_err(|_| ApiError::NotFound(format!("command not found: {name}")))
 }
 
 /// Authoring rule for new names (CMP-07): lowercase letters, digits, `-`, `_`.
