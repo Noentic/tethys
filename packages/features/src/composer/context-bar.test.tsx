@@ -7,7 +7,7 @@ import {
 } from "@tethys/ui";
 import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ContextBar } from "./context-bar";
+import { ContextBar, formatUsage } from "./context-bar";
 import { registerQueueCountSlot } from "./queue-count-slot";
 
 // The row's width budget, from the pure fold (packages/ui/src/context-bar-fold):
@@ -73,6 +73,32 @@ const baseProps = {
   onSetOption: vi.fn().mockResolvedValue(undefined),
   queueCount: 0,
 };
+
+describe("formatUsage", () => {
+  it("uses input/output when the provider reports them", () => {
+    expect(
+      formatUsage({
+        input_tokens: 1200,
+        output_tokens: 340,
+        total_tokens: 1540,
+        cost: null,
+      }),
+    ).toBe("1,200 in · 340 out");
+  });
+
+  it("falls back to total/context for v1 used/size updates", () => {
+    expect(
+      formatUsage({
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 4200,
+        cost: 0.12,
+        context_size: 8000,
+        cost_currency: "USD",
+      }),
+    ).toBe("4,200 tokens · ctx 8,000 · 0.12 USD");
+  });
+});
 
 describe("context bar", () => {
   beforeEach(() => {

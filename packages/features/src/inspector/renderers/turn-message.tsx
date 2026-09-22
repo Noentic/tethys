@@ -67,6 +67,15 @@ function attachmentKey(block: ContentBlock): string {
   if ("Image" in block && block.Image) {
     return `img:${block.Image.data.slice(0, 24)}`;
   }
+  if ("Audio" in block && block.Audio) {
+    return `audio:${block.Audio.data.slice(0, 24)}`;
+  }
+  if ("Resource" in block && block.Resource) {
+    return `resource:${block.Resource.uri}`;
+  }
+  if ("TextWithMetadata" in block && block.TextWithMetadata) {
+    return `text:${block.TextWithMetadata.text.slice(0, 24)}`;
+  }
   if ("Text" in block && typeof block.Text === "string") {
     return `text:${block.Text.slice(0, 24)}`;
   }

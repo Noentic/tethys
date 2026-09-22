@@ -9,9 +9,13 @@ import {
   clearFocusTrapsForTesting,
   clearRegistriesForTesting,
   ModalDialog,
-  registerProviderSurface,
 } from "@tethys/ui";
 import { beforeEach, describe, expect, it } from "vitest";
+import {
+  FIXTURE_PROVIDER_METHOD as METHOD,
+  FIXTURE_PROVIDER_ID as PROVIDER,
+  registerFixtureProviderIntegration,
+} from "./integrations/fixture";
 import {
   clearPendingExtensionsForTesting,
   enqueueProviderExtension,
@@ -21,16 +25,18 @@ import {
   ProviderExtensionSurface,
   ProviderPendingCount,
   ProviderPopover,
-  queueProviderExtension,
 } from "./provider-popover";
 
-const PROVIDER = "fixture-provider";
-const METHOD = "_fixture.dev/oauth_request";
+const THREAD = "thread-fixture";
 
-function fixtureExtension(overrides: Record<string, unknown> = {}) {
+function fixtureExtension(
+  overrides: Record<string, unknown> = {},
+  requestId = "request-1",
+) {
   return {
     provider_id: PROVIDER,
     method: METHOD,
+    request_id: requestId,
     params: JSON.stringify({
       title: "Authorize access",
       body: "Paste the code from the browser.",
@@ -72,44 +78,48 @@ describe("provider-popover scaffold (M1.7 U13)", () => {
     clearRegistriesForTesting();
     clearFocusTrapsForTesting();
     clearPendingExtensionsForTesting();
-    registerProviderSurface(PROVIDER, METHOD, ProviderExtensionSurface);
+    registerFixtureProviderIntegration();
   });
 
   it("does not enqueue a method with no registered surface", () => {
     expect(
-      queueProviderExtension({
+      enqueueProviderExtension(THREAD, {
         provider_id: PROVIDER,
         method: "_fixture.dev/unknown",
+        request_id: null,
         params: "{}",
       }),
     ).toBe(false);
-    expect(getPendingExtensions(PROVIDER)).toHaveLength(0);
+    expect(getPendingExtensions(THREAD)).toHaveLength(0);
   });
 
   it("opens with the Provider's own actions in its own order", () => {
-    enqueueProviderExtension(fixtureExtension());
-    render(<ProviderPopover providerId={PROVIDER} />);
+    enqueueProviderExtension(THREAD, fixtureExtension());
+    render(<ProviderPopover threadId={THREAD} onRespond={async () => {}} />);
     expect(screen.getByText("Authorize access")).toBeTruthy();
     const buttons = screen.getAllByRole("button").map((b) => b.textContent);
     expect(buttons).toEqual(["Open browser", "Cancel", "Copy code"]);
   });
 
   it("shows the pending count as text on the pill", () => {
-    enqueueProviderExtension(fixtureExtension());
-    enqueueProviderExtension(fixtureExtension({ title: "Second" }));
-    render(<ProviderPendingCount providerId={PROVIDER} />);
+    enqueueProviderExtension(THREAD, fixtureExtension());
+    enqueueProviderExtension(
+      THREAD,
+      fixtureExtension({ title: "Second" }, "request-2"),
+    );
+    render(<ProviderPendingCount threadId={THREAD} />);
     expect(screen.getByTestId("provider-pending-count").textContent).toBe("2");
   });
 
   it("traps Tab and restores focus to the invoker on Escape", async () => {
-    enqueueProviderExtension(fixtureExtension());
+    enqueueProviderExtension(THREAD, fixtureExtension());
     const { rerender } = render(<button type="button">invoker</button>);
     const invoker = screen.getByText("invoker");
     invoker.focus();
     rerender(
       <>
         <button type="button">invoker</button>
-        <ProviderPopover providerId={PROVIDER} />
+        <ProviderPopover threadId={THREAD} onRespond={async () => {}} />
       </>,
     );
 
@@ -126,20 +136,20 @@ describe("provider-popover scaffold (M1.7 U13)", () => {
   });
 
   it("queues behind a real open dialog and opens when it closes", async () => {
-    enqueueProviderExtension(fixtureExtension());
+    enqueueProviderExtension(THREAD, fixtureExtension());
     const view = (dialogOpen: boolean) => (
       <>
         <ModalDialog open={dialogOpen} onClose={() => {}} title="Sign in">
           <button type="button">inside the dialog</button>
         </ModalDialog>
-        <ProviderPopover providerId={PROVIDER} />
+        <ProviderPopover threadId={THREAD} onRespond={async () => {}} />
       </>
     );
     const { rerender } = render(view(true));
     // The request waits: only the dialog is on screen.
     expect(screen.getByRole("dialog", { name: "Sign in" })).toBeTruthy();
     expect(screen.queryByText("Authorize access")).toBeNull();
-    expect(getPendingExtensions(PROVIDER)).toHaveLength(1);
+    expect(getPendingExtensions(THREAD)).toHaveLength(1);
 
     rerender(view(false));
     await waitFor(() =>
@@ -148,10 +158,10 @@ describe("provider-popover scaffold (M1.7 U13)", () => {
   });
 
   it("does not steal Tab from a dialog that opened after it", async () => {
-    enqueueProviderExtension(fixtureExtension());
+    enqueueProviderExtension(THREAD, fixtureExtension());
     const view = (dialogOpen: boolean) => (
       <>
-        <ProviderPopover providerId={PROVIDER} />
+        <ProviderPopover threadId={THREAD} onRespond={async () => {}} />
         <ModalDialog open={dialogOpen} onClose={() => {}} title="Sign in">
           <button type="button">only</button>
         </ModalDialog>
@@ -171,8 +181,10 @@ describe("provider-popover scaffold (M1.7 U13)", () => {
   });
 
   it("does not open another Provider's popover", () => {
-    enqueueProviderExtension(fixtureExtension());
-    render(<ProviderPopover providerId="other-provider" />);
+    enqueueProviderExtension(THREAD, fixtureExtension());
+    render(
+      <ProviderPopover threadId="other-thread" onRespond={async () => {}} />,
+    );
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

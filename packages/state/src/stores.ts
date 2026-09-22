@@ -54,10 +54,11 @@ export function getSessionStore(sessionId: string): SessionStore | undefined {
 
 export function getOrCreateSessionStore(
   sessionId: string,
-  providerId = "default-provider",
-  workspaceId = "default-workspace",
-  title = "Thread",
+  providerId = "",
+  workspaceId = "",
+  title = "Loading thread",
   branchName?: string,
+  workdir = "",
 ): SessionStore {
   const existing = sessionStores.get(sessionId);
   if (existing) {
@@ -69,6 +70,7 @@ export function getOrCreateSessionStore(
     workspaceId,
     title,
     branchName,
+    workdir,
   );
   return createSessionStore(initial);
 }

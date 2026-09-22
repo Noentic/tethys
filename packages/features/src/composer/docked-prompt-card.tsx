@@ -20,14 +20,20 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useSessionState } from "../inspector/use-session-state";
+import {
+  AttachmentPicker,
+  type ComposerAttachment,
+  ComposerAttachmentChip,
+} from "./attachments";
 import { ComposerConfigChips } from "./config-chips";
-import { ContextBar } from "./context-bar";
+import { ContextBar, formatUsage } from "./context-bar";
 import {
   type ComposerClient,
   commandSource,
   pathSource,
   skillSource,
 } from "./popups";
+import { promptContentBlocks } from "./prompt-blocks";
 import { PromptQueue } from "./queue";
 
 /**
@@ -45,6 +51,11 @@ export type DockedComposerClient = ComposerClient &
         optionId: string,
         value: string,
       ): Promise<void>;
+      respondExtension?: (
+        id: string,
+        requestId: string,
+        response: unknown,
+      ) => Promise<void>;
     };
   };
 
@@ -85,6 +96,7 @@ export function DockedPromptCard({
     () => queueStore.state.items.length,
   );
   const [hasText, setHasText] = useState(false);
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
   const submitting = useRef(false);
 
@@ -92,6 +104,7 @@ export function DockedPromptCard({
   // while it waits on the user: a prompt sent then is queued, not interleaved.
   const turnInFlight = TURN_IN_FLIGHT.includes(state.status);
   const stopping = state.cancellationState !== "idle";
+  const hasPrompt = hasText || attachments.length > 0;
 
   const sources = useMemo(
     () => ({
@@ -142,16 +155,20 @@ export function DockedPromptCard({
     // A second submit before the first settles must not send twice.
     if (submitting.current) return;
     const text = editorRef.current?.serializeToPrompt().trim() ?? "";
-    if (text === "") return;
+    if (text === "" && attachments.length === 0) return;
     submitting.current = true;
     try {
-      const blocks = [{ Text: text }] as ContentBlock[];
+      const parts = editorRef.current?.serializeToPromptParts() ?? [
+        { kind: "text" as const, text },
+      ];
+      const blocks = promptContentBlocks(parts, attachments, state.workdir);
       if (turnInFlight) {
         await enqueuePrompt(queueStore, client, sessionId, blocks);
       } else {
         await client.thread.prompt(sessionId, blocks);
       }
       editorRef.current?.clear();
+      setAttachments([]);
       setHasText(false);
       setSendError(null);
     } catch (cause) {
@@ -182,6 +199,7 @@ export function DockedPromptCard({
         values={values}
         onSetOption={setOption}
         queueCount={queueCount}
+        usageText={state.usage ? formatUsage(state.usage) : undefined}
         slotData={slotData}
         providerAnchorRef={providerAnchorRef}
       />
@@ -198,6 +216,34 @@ export function DockedPromptCard({
         }
         onChange={(text) => setHasText(text.trim().length > 0)}
         onSubmit={() => void submit()}
+      />
+
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-sm" data-testid="prompt-attachments">
+          {attachments.map((attachment) => (
+            <ComposerAttachmentChip
+              key={attachment.id}
+              attachment={attachment}
+              onRemove={() =>
+                setAttachments((current) =>
+                  current.filter((item) => item.id !== attachment.id),
+                )
+              }
+            />
+          ))}
+        </div>
+      )}
+
+      <AttachmentPicker
+        providerName={state.providerId}
+        capabilities={{
+          image: state.capabilities?.prompt_image ?? false,
+          audio: state.capabilities?.prompt_audio ?? false,
+          embeddedContext: state.capabilities?.prompt_embedded_context ?? false,
+        }}
+        onAttach={(attachment) =>
+          setAttachments((current) => [...current, attachment])
+        }
       />
 
       {sendError && (
@@ -227,8 +273,8 @@ export function DockedPromptCard({
         ) : (
           <ActionIconButton
             label="Send prompt"
-            ready={hasText}
-            disabled={!hasText}
+            ready={hasPrompt}
+            disabled={!hasPrompt}
             onClick={() => void submit()}
           >
             <span aria-hidden="true">{"↑"}</span>

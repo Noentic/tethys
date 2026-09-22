@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { CreateThread, ThreadBootstrap } from "@tethys/bindings";
 import {
   noProviderFixtures,
   providerConnectionFixtures,
@@ -7,6 +8,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { ComposerClient } from "../composer/popups";
 import { PromptCard } from "./prompt-card";
+import type { DraftSessionClient } from "./use-prepared-draft";
 
 function client(): ComposerClient {
   return {
@@ -18,8 +20,55 @@ function client(): ComposerClient {
   };
 }
 
+function bootstrapFor(request: CreateThread): ThreadBootstrap {
+  return {
+    thread: {
+      id: "thread-1",
+      workspace_id: request.workspace_id,
+      agent_profile_id: request.agent_profile_id,
+      title: "Untitled",
+      workdir: request.workdir,
+      state: "Idle" as const,
+      session_id: "session-1",
+    },
+    events: [],
+    config_options: [
+      {
+        id: "model",
+        name: "Model",
+        description: null,
+        current_value: "claude-sonnet-x",
+        values: ["claude-sonnet-x", "claude-opus-x"],
+        category: "model",
+        kind: "select" as const,
+        value_options: [],
+      },
+    ],
+    capabilities: null,
+    permission_mode: "supervised" as const,
+    latest_seq: 0,
+  };
+}
+
+function session(): DraftSessionClient {
+  return {
+    thread: {
+      prepare: vi.fn(async (request) => bootstrapFor(request)),
+      delete: vi.fn(async () => {}),
+    },
+  };
+}
+
 function submitButton() {
   return screen.getByRole("button", { name: "Submit prompt" });
+}
+
+async function selectClaude() {
+  fireEvent.click(screen.getByRole("combobox"));
+  const claude = screen
+    .getAllByRole("option")
+    .find((option) => option.textContent?.includes("Claude Code"));
+  fireEvent.click(claude as HTMLElement);
 }
 
 describe("PromptCard", () => {
@@ -27,6 +76,7 @@ describe("PromptCard", () => {
     render(
       <PromptCard
         client={client()}
+        session={session()}
         providers={providerConnectionFixtures}
         workspaces={trustedWorkspaceFixtures}
         onStart={vi.fn()}
@@ -39,6 +89,7 @@ describe("PromptCard", () => {
     render(
       <PromptCard
         client={client()}
+        session={session()}
         providers={noProviderFixtures}
         workspaces={trustedWorkspaceFixtures}
         initialWorkspace={trustedWorkspaceFixtures[0]}
@@ -61,6 +112,7 @@ describe("PromptCard", () => {
     render(
       <PromptCard
         client={client()}
+        session={session()}
         providers={providerConnectionFixtures}
         workspaces={trustedWorkspaceFixtures}
         onStart={vi.fn()}
@@ -76,11 +128,37 @@ describe("PromptCard", () => {
     expect(submitButton().hasAttribute("disabled")).toBe(true);
   });
 
-  it("submits exactly once when the send button is clicked", () => {
+  it("prepares the selected provider and gates send until the draft is ready", async () => {
+    const sessionClient = session();
+    render(
+      <PromptCard
+        client={client()}
+        session={sessionClient}
+        providers={providerConnectionFixtures}
+        workspaces={trustedWorkspaceFixtures}
+        initialWorkspace={trustedWorkspaceFixtures[0]}
+        queuedCount={1}
+        onStart={vi.fn()}
+      />,
+    );
+    await selectClaude();
+    expect(sessionClient.thread.prepare).toHaveBeenCalledWith({
+      workspace_id: trustedWorkspaceFixtures[0].id,
+      agent_profile_id: "claude-code",
+      workdir: trustedWorkspaceFixtures[0].path,
+      additional_directories: [],
+    });
+    await waitFor(() =>
+      expect(submitButton().hasAttribute("disabled")).toBe(false),
+    );
+  });
+
+  it("submits exactly once with the prepared draft when send is clicked", async () => {
     const onStart = vi.fn();
     render(
       <PromptCard
         client={client()}
+        session={session()}
         providers={providerConnectionFixtures}
         workspaces={trustedWorkspaceFixtures}
         initialWorkspace={trustedWorkspaceFixtures[0]}
@@ -88,20 +166,49 @@ describe("PromptCard", () => {
         onStart={onStart}
       />,
     );
-    fireEvent.click(screen.getByRole("combobox"));
-    const claude = screen
-      .getAllByRole("option")
-      .find((option) => option.textContent?.includes("Claude Code"));
-    expect(claude).toBeTruthy();
-    fireEvent.click(claude as HTMLElement);
+    await selectClaude();
+    await waitFor(() =>
+      expect(submitButton().hasAttribute("disabled")).toBe(false),
+    );
     fireEvent.click(submitButton());
     expect(onStart).toHaveBeenCalledTimes(1);
+    expect(onStart.mock.calls[0][0].draft.thread.id).toBe("thread-1");
+  });
+
+  it("keeps the selections and re-prepares when submit fails", async () => {
+    const sessionClient = session();
+    const onStart = vi.fn().mockRejectedValue(new Error("config rejected"));
+    render(
+      <PromptCard
+        client={client()}
+        session={sessionClient}
+        providers={providerConnectionFixtures}
+        workspaces={trustedWorkspaceFixtures}
+        initialWorkspace={trustedWorkspaceFixtures[0]}
+        queuedCount={1}
+        onStart={onStart}
+      />,
+    );
+    await selectClaude();
+    await waitFor(() =>
+      expect(submitButton().hasAttribute("disabled")).toBe(false),
+    );
+    fireEvent.click(submitButton());
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain(
+        "config rejected",
+      ),
+    );
+    await waitFor(() =>
+      expect(sessionClient.thread.prepare).toHaveBeenCalledTimes(2),
+    );
   });
 
   it("shows the resolved workspace path as a mono tooltip", () => {
     render(
       <PromptCard
         client={client()}
+        session={session()}
         providers={providerConnectionFixtures}
         workspaces={trustedWorkspaceFixtures}
         initialWorkspace={trustedWorkspaceFixtures[0]}

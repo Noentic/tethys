@@ -1,7 +1,11 @@
 //! `prompt-card` (DESIGN.md; spec §3) — the new-thread composer with the
 //! three-precondition submit gate.
 
-import type { AgentCommand } from "@tethys/bindings";
+import type {
+  AgentCommand,
+  ConfigOption,
+  ThreadBootstrap,
+} from "@tethys/bindings";
 import { ComposerEditor, type EditorHandle } from "@tethys/composer";
 import {
   hasSelectableProvider,
@@ -10,26 +14,43 @@ import {
   type TrustedWorkspace,
   useProviderConnections,
 } from "@tethys/state";
-import { ActionIconButton } from "@tethys/ui";
+import { ActionIconButton, Chip, Listbox, Popover } from "@tethys/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AttachmentPicker,
+  type ComposerAttachment,
+  ComposerAttachmentChip,
+} from "../composer/attachments";
 import {
   type ComposerClient,
   commandSource,
   pathSource,
   skillSource,
 } from "../composer/popups";
+import { promptContentBlocks } from "../composer/prompt-blocks";
 import { ModelSelector } from "./model-selector";
+import {
+  type DraftSessionClient,
+  type PreparedDraft,
+  usePreparedDraft,
+} from "./use-prepared-draft";
 import { WorkspaceSelector } from "./workspace-selector";
 
 const ZERO_PROVIDER_PLACEHOLDER =
   "Connect a provider in Settings to send a message";
 const UNRESOLVED_WORKSPACE_PLACEHOLDER = "Choose a folder to start a thread";
+const UNSELECTED_PROVIDER_PLACEHOLDER = "Choose a provider to start a thread";
 const PROMPT_PLACEHOLDER =
   "Ask Claude to edit files, run bash commands, or type / for commands…";
 const COMMANDS_GUIDE = "Type / for commands · @ for files · $ for skills";
+// Pen `XrH5y / additional-folder pill`: matches the workspace pill.
+const ADDITIONAL_PILL_CLASS =
+  "focus-ring flex h-[22px] items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 text-label-md text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 
 export interface PromptCardProps {
   client: ComposerClient;
+  /** `thread.prepare` / `thread.delete` for the prepared draft. */
+  session: DraftSessionClient;
   providers?: ProviderConnection[];
   workspaces?: TrustedWorkspace[];
   initialWorkspace?: TrustedWorkspace | null;
@@ -41,27 +62,27 @@ export interface PromptCardProps {
   onStart: (input: {
     workspace: TrustedWorkspace;
     provider: ProviderConnection;
+    draft: ThreadBootstrap;
     promptText: string;
     changedConfig: Record<string, string>;
+    blocks: import("@tethys/bindings").ContentBlock[];
   }) => unknown;
 }
 
-function defaultConfig(
-  provider: ProviderConnection | null,
-): Record<string, string> {
+function defaultValues(options: ConfigOption[]): Record<string, string> {
   const values: Record<string, string> = {};
-  for (const option of provider?.configSchema ?? []) {
+  for (const option of options) {
     values[option.id] = option.current_value;
   }
   return values;
 }
 
 function changedConfig(
-  provider: ProviderConnection | null,
+  options: ConfigOption[],
   values: Record<string, string>,
 ): Record<string, string> {
   const changed: Record<string, string> = {};
-  for (const option of provider?.configSchema ?? []) {
+  for (const option of options) {
     const value = values[option.id];
     if (value !== undefined && value !== option.current_value) {
       changed[option.id] = value;
@@ -70,8 +91,31 @@ function changedConfig(
   return changed;
 }
 
+function setupPlaceholder(input: {
+  workspace: TrustedWorkspace | null;
+  zeroProvider: boolean;
+  selectedProvider: ProviderConnection | null;
+  draft: PreparedDraft;
+}): string {
+  if (input.workspace === null) return UNRESOLVED_WORKSPACE_PLACEHOLDER;
+  if (input.zeroProvider) return ZERO_PROVIDER_PLACEHOLDER;
+  if (input.selectedProvider === null) return UNSELECTED_PROVIDER_PLACEHOLDER;
+  const name = input.selectedProvider.name;
+  switch (input.draft.status) {
+    case "preparing":
+      return `Preparing ${name}…`;
+    case "auth-required":
+      return `Sign in to ${name} in Settings to continue`;
+    case "error":
+      return `Setup failed for ${name}; change the selection to retry`;
+    default:
+      return PROMPT_PLACEHOLDER;
+  }
+}
+
 export function PromptCard({
   client,
+  session,
   providers,
   workspaces,
   initialWorkspace = null,
@@ -87,6 +131,11 @@ export function PromptCard({
   const [providerId, setProviderId] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [promptText, setPromptText] = useState("");
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [extraRoots, setExtraRoots] = useState<TrustedWorkspace[]>([]);
+  const [foldersOpen, setFoldersOpen] = useState(false);
+  const foldersAnchorRef = useRef<HTMLButtonElement>(null);
 
   const providerList = useProviderConnections(providers);
 
@@ -103,6 +152,28 @@ export function PromptCard({
   const anySelectable = hasSelectableProvider(providerList);
   const zeroProvider = !anySelectable;
 
+  const draft = usePreparedDraft(
+    session,
+    workspace,
+    selectedProvider,
+    extraRoots,
+  );
+  const draftOptions = draft.bootstrap?.config_options ?? [];
+  const draftId = draft.bootstrap?.thread.id ?? null;
+
+  // A ready draft replaces the panel values; a new draft resets any edits made
+  // against the previous Provider's options. Guarded render-time reset (React
+  // "adjusting state when props change") so the panel never paints stale values.
+  const seededDraft = useRef<string | null>(null);
+  if (draft.status === "ready" && draftId !== null) {
+    if (seededDraft.current !== draftId) {
+      seededDraft.current = draftId;
+      setValues(defaultValues(draftOptions));
+    }
+  } else if (seededDraft.current !== null && draftId === null) {
+    seededDraft.current = null;
+  }
+
   const sources = useMemo(
     () => ({
       command: commandSource(
@@ -117,37 +188,68 @@ export function PromptCard({
     [client, workspace?.id, agentCommands, selectedProvider?.name],
   );
 
+  const draftReady = draft.status === "ready" && draft.bootstrap !== null;
   const submitDisabled =
     disabled ||
     workspace === null ||
-    !anySelectable ||
-    (promptText.trim().length === 0 && queuedCount === 0);
+    !draftReady ||
+    (promptText.trim().length === 0 &&
+      attachments.length === 0 &&
+      queuedCount === 0);
 
   const submit = () => {
-    if (submitDisabled || !workspace || !selectedProvider) return;
+    if (submitDisabled || !workspace || !selectedProvider || !draft.bootstrap) {
+      return;
+    }
     const promptTextNow = editorRef.current?.serializeToPrompt() ?? promptText;
-    void onStart({
-      workspace,
-      provider: selectedProvider,
-      promptText: promptTextNow,
-      changedConfig: changedConfig(selectedProvider, values),
+    const parts = editorRef.current?.serializeToPromptParts() ?? [
+      { kind: "text" as const, text: promptTextNow },
+    ];
+    const bootstrap = draft.bootstrap;
+    setSubmitError(null);
+    draft.release();
+    Promise.resolve(
+      onStart({
+        workspace,
+        provider: selectedProvider,
+        draft: bootstrap,
+        promptText: promptTextNow,
+        changedConfig: changedConfig(draftOptions, values),
+        blocks: promptContentBlocks(parts, attachments, workspace.path),
+      }),
+    ).catch((error: unknown) => {
+      // The released draft was never promoted: prepare a replacement so the
+      // selections and typed prompt can be retried.
+      setSubmitError(error instanceof Error ? error.message : String(error));
+      draft.retry();
     });
   };
 
   const handleSelectProvider = (provider: ProviderConnection) => {
     if (!isProviderSelectable(provider)) return;
     setProviderId(provider.id);
-    setValues(defaultConfig(provider));
+    setValues({});
+  };
+
+  const trustedFolders = workspaces ?? [];
+  const extraCandidates = trustedFolders.filter(
+    (candidate) =>
+      candidate.id !== workspace?.id &&
+      !extraRoots.some((root) => root.id === candidate.id),
+  );
+  const handleSelectWorkspace = (next: TrustedWorkspace) => {
+    setWorkspace(next);
+    setExtraRoots((roots) => roots.filter((root) => root.id !== next.id));
   };
 
   // One instruction, never three: the first missing precondition names itself
   // (d0-rc10 prompt-card; pen `IAlPm`).
-  const placeholder =
-    workspace === null
-      ? UNRESOLVED_WORKSPACE_PLACEHOLDER
-      : zeroProvider
-        ? ZERO_PROVIDER_PLACEHOLDER
-        : PROMPT_PLACEHOLDER;
+  const placeholder = setupPlaceholder({
+    workspace,
+    zeroProvider,
+    selectedProvider,
+    draft,
+  });
   const empty = promptText.trim().length === 0;
 
   return (
@@ -164,8 +266,67 @@ export function PromptCard({
           <WorkspaceSelector
             workspaces={workspaces}
             selected={workspace}
-            onSelect={setWorkspace}
+            onSelect={handleSelectWorkspace}
           />
+
+          {trustedFolders.length > 1 && (
+            <div className="relative flex items-center gap-xs">
+              <button
+                ref={foldersAnchorRef}
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={foldersOpen}
+                aria-label="Additional folders"
+                onClick={() => setFoldersOpen((open) => !open)}
+                className={ADDITIONAL_PILL_CLASS}
+              >
+                {"+"} Folder
+              </button>
+              <Popover
+                open={foldersOpen}
+                onClose={() => setFoldersOpen(false)}
+                anchorRef={foldersAnchorRef}
+                className="top-full left-0 mt-1.5"
+              >
+                <div className="w-72">
+                  <div className="px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider">
+                    Additional Trusted Folders
+                  </div>
+                  {extraCandidates.length === 0 ? (
+                    <p className="px-3 py-2 text-body-sm text-(--tethys-text-muted)">
+                      No further trusted folders.
+                    </p>
+                  ) : (
+                    <Listbox
+                      label="Additional trusted folders"
+                      items={extraCandidates.map((candidate) => ({
+                        id: candidate.id,
+                        value: candidate,
+                        label: candidate.name,
+                        sublabel: candidate.path,
+                      }))}
+                      onSelect={(item) => {
+                        setExtraRoots((roots) => [...roots, item.value]);
+                        setFoldersOpen(false);
+                      }}
+                    />
+                  )}
+                </div>
+              </Popover>
+              {extraRoots.map((root) => (
+                <Chip
+                  key={root.id}
+                  onRemove={() =>
+                    setExtraRoots((roots) =>
+                      roots.filter((candidate) => candidate.id !== root.id),
+                    )
+                  }
+                >
+                  {root.name}
+                </Chip>
+              ))}
+            </div>
+          )}
 
           <ModelSelector
             providers={providerList}
@@ -175,6 +336,9 @@ export function PromptCard({
             onConfigChange={(optionId, value) =>
               setValues((prev) => ({ ...prev, [optionId]: value }))
             }
+            configOptions={draftOptions}
+            draftStatus={draft.status}
+            draftError={draft.error}
           />
         </div>
 
@@ -196,6 +360,47 @@ export function PromptCard({
             onSubmit={submit}
           />
         </div>
+
+        {attachments.length > 0 && (
+          <div
+            className="flex flex-wrap gap-sm"
+            data-testid="prompt-attachments"
+          >
+            {attachments.map((attachment) => (
+              <ComposerAttachmentChip
+                key={attachment.id}
+                attachment={attachment}
+                onRemove={() =>
+                  setAttachments((current) =>
+                    current.filter((item) => item.id !== attachment.id),
+                  )
+                }
+              />
+            ))}
+          </div>
+        )}
+
+        <AttachmentPicker
+          providerName={selectedProvider?.name ?? "a selected Provider"}
+          capabilities={{
+            image: selectedProvider?.imagePrompts ?? false,
+            audio: selectedProvider?.audioPrompts ?? false,
+            embeddedContext: selectedProvider?.embeddedContext ?? false,
+          }}
+          onAttach={(attachment) =>
+            setAttachments((current) => [...current, attachment])
+          }
+          disabled={disabled || !selectedProvider}
+        />
+
+        {submitError !== null && (
+          <p
+            role="alert"
+            className="text-body-sm text-(--tethys-status-danger)"
+          >
+            {submitError}
+          </p>
+        )}
 
         <div className="flex items-center justify-between gap-lg">
           <span className="truncate font-mono text-mono-micro text-(--tethys-text-muted)">

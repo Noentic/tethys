@@ -17,6 +17,7 @@ function authProfile(
     projection_target: null,
     preferred_protocol: "V1",
     health: "auth-required",
+    auth_state: "required",
     detail: null,
     protocol: "V1",
     capabilities: null,
@@ -35,7 +36,7 @@ function authProfile(
 }
 
 describe("login surfaces per authMethods shape (M1.12 U9)", () => {
-  it("env-var hands the typed value up once, masked, and closes once", () => {
+  it("env-var hands the typed value up once, masked, and closes once", async () => {
     const onClose = vi.fn();
     const onSubmitEnv = vi.fn();
     render(
@@ -61,8 +62,10 @@ describe("login surfaces per authMethods shape (M1.12 U9)", () => {
     expect(onSubmitEnv).toHaveBeenCalledWith([
       { key: "API_KEY", value: "secret-value" },
     ]);
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(onClose).toHaveBeenCalledWith("success");
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledWith("success");
+    });
   });
 
   it("env-var refuses a name the host would reject", () => {
@@ -132,19 +135,35 @@ describe("login surfaces per authMethods shape (M1.12 U9)", () => {
     ).toBeTruthy();
   });
 
-  it("cli-passthrough opens a sheet titled with the vendor command", () => {
+  it("cli-passthrough runs the declared method in a terminal and closes on success", async () => {
     const onClose = vi.fn();
+    const onLogin = vi.fn(async () => ({
+      kind: "terminal" as const,
+      terminal_id: "auth-1",
+    }));
+    const onTerminalOutput = vi.fn(async () => ({
+      output: "Sign in now",
+      truncated: false,
+      exited: true,
+      exit_code: 0,
+    }));
     render(
       <LoginSurface
         profile={authProfile([{ shape: "cli-passthrough" }])}
         onClose={onClose}
+        onLogin={onLogin}
+        onTerminalOutput={onTerminalOutput}
         command="gemini acp --login"
       />,
     );
-    expect(screen.getByText("gemini acp --login")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(onClose).toHaveBeenCalledWith("process-exit");
+    await waitFor(() => expect(onLogin).toHaveBeenCalledWith("method-0"));
+    await waitFor(() =>
+      expect(onTerminalOutput).toHaveBeenCalledWith("auth-1"),
+    );
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledWith("success");
+    });
   });
 
   it("agent-auth shows a waiting state with no code field and cancels once", () => {
@@ -162,6 +181,27 @@ describe("login surfaces per authMethods shape (M1.12 U9)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledWith("cancel");
+  });
+
+  it("selects and starts the exact ACP auth method", async () => {
+    const onClose = vi.fn();
+    const onLogin = vi.fn(async () => ({ kind: "complete" as const }));
+    render(
+      <LoginSurface
+        profile={authProfile([
+          { shape: "unknown", id: "future-auth" },
+          { shape: "agent-auth" },
+        ])}
+        onClose={onClose}
+        onLogin={onLogin}
+      />,
+    );
+    expect(onLogin).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Sign-in method"), {
+      target: { value: "method-1" },
+    });
+    await waitFor(() => expect(onLogin).toHaveBeenCalledWith("method-1"));
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith("success"));
   });
 
   it("renders nothing when the Provider declares no authMethods", () => {

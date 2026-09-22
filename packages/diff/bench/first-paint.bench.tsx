@@ -8,10 +8,10 @@
  * the U1 row model, and mounts the U4 viewer once per run.
  */
 
-import type { DiffFileDetail, DiffHunk, DiffLineKind } from "@tethys/bindings";
-import { cleanup, render } from "@testing-library/react";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { cleanup, render } from "@testing-library/react";
+import type { DiffFileDetail, DiffHunk, DiffLineKind } from "@tethys/bindings";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DiffViewer } from "../src/diff-viewer";
 import { buildDiffRows } from "../src/row-model";
@@ -33,7 +33,8 @@ function generateSyntheticDiff(totalLines: number): DiffHunk[] {
           : lineNumber % 5 === 1
             ? "Deletion"
             : "Context";
-      const prefix = kind === "Addition" ? "+ " : kind === "Deletion" ? "- " : "  ";
+      const prefix =
+        kind === "Addition" ? "+ " : kind === "Deletion" ? "- " : "  ";
       return {
         kind,
         text: `${prefix}const line_${lineNumber} = calculate_value(${lineNumber}, "synthetic-patch-data");`,
@@ -52,7 +53,10 @@ function generateSyntheticDiff(totalLines: number): DiffHunk[] {
 }
 
 function percentile(sorted: number[], fraction: number): number {
-  const index = Math.min(sorted.length - 1, Math.floor(sorted.length * fraction));
+  const index = Math.min(
+    sorted.length - 1,
+    Math.floor(sorted.length * fraction),
+  );
   return sorted[index];
 }
 
@@ -82,10 +86,18 @@ beforeAll(() => {
 
 afterAll(() => {
   if (originalOffsetHeight) {
-    Object.defineProperty(HTMLElement.prototype, "offsetHeight", originalOffsetHeight);
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetHeight",
+      originalOffsetHeight,
+    );
   }
   if (originalOffsetWidth) {
-    Object.defineProperty(HTMLElement.prototype, "offsetWidth", originalOffsetWidth);
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetWidth",
+      originalOffsetWidth,
+    );
   }
 });
 

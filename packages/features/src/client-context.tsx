@@ -1,4 +1,8 @@
-import type { ElicitationResponse, EventEnvelope } from "@tethys/bindings";
+import type {
+  ElicitationResponse,
+  EventEnvelope,
+  ThreadSessionView,
+} from "@tethys/bindings";
 import { createContext, type ReactNode, useContext } from "react";
 import type { DockedComposerClient } from "./composer/docked-prompt-card";
 
@@ -25,13 +29,16 @@ export interface InspectorClient {
       sinceSeq: number,
       onEvent: (event: EventEnvelope) => void,
     ): Promise<void>;
+    unsubscribe?(threadId: string): Promise<void>;
   };
   /**
    * What the docked composer calls: prompt, queue, cancel, config, and the
    * `/` and `@` sources. `TethysClient` has all of it. A client without it (a
    * preview, a test) simply has no composer.
    */
-  thread?: DockedComposerClient["thread"];
+  thread?: DockedComposerClient["thread"] & {
+    get?(id: string): Promise<ThreadSessionView>;
+  };
   commands?: DockedComposerClient["commands"];
   search?: DockedComposerClient["search"];
 }

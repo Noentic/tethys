@@ -20,6 +20,7 @@ import {
 } from "@tethys/ui";
 import { useEffect, useRef, useState } from "react";
 import { optionValues, SessionConfigPanel } from "./session-config-panel";
+import type { PreparedDraftStatus } from "./use-prepared-draft";
 
 // Pen `XrH5y / Provider model pill`: 22px, surface-card, md radius, hairline.
 const PILL_CLASS =
@@ -29,7 +30,7 @@ const SECTION_LABEL_CLASS =
   "px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider";
 
 /** Short `Model · Effort`-style summary from the Provider's own schema. */
-export function configSummary(
+function configSummary(
   schema: ConfigOption[],
   values: Record<string, string>,
 ): string {
@@ -46,13 +47,35 @@ export function configSummary(
     .join(" · ");
 }
 
+/** The config column's status line: Provider auth wins over draft progress. */
+function configColumnCopy(
+  provider: ProviderConnection,
+  status: PreparedDraftStatus,
+): string {
+  if (provider.status === "auth_required" || status === "auth-required") {
+    return "Sign in to configure this provider";
+  }
+  switch (status) {
+    case "preparing":
+      return "Preparing the session…";
+    case "error":
+      return "Session setup failed";
+    default:
+      return "Session options";
+  }
+}
+
 export interface ModelSelectorProps {
   providers?: ProviderConnection[];
   selectedProviderId: string | null;
   onSelectProvider: (provider: ProviderConnection) => void;
   values: Record<string, string>;
   onConfigChange: (optionId: string, value: string) => void;
-  unavailableIds?: string[];
+  /** Real `session/new` options from the prepared draft (never a fixture). */
+  configOptions?: ConfigOption[];
+  /** Prepared-draft state driving the config column copy. */
+  draftStatus?: PreparedDraftStatus;
+  draftError?: string | null;
   /** Called after Esc / selection close, so the caller can restore focus. */
   onClosed?: () => void;
 }
@@ -63,7 +86,9 @@ export function ModelSelector({
   onSelectProvider,
   values,
   onConfigChange,
-  unavailableIds = [],
+  configOptions = [],
+  draftStatus = "idle",
+  draftError = null,
   onClosed,
 }: ModelSelectorProps) {
   const providers = useProviderConnections(providersProp);
@@ -76,9 +101,7 @@ export function ModelSelector({
     providers.find((provider) => provider.id === selectedProviderId) ?? null;
   const label = selected?.name ?? "No provider available";
   const summary =
-    selected && selected.configSchema.length > 0
-      ? configSummary(selected.configSchema, values)
-      : "";
+    configOptions.length > 0 ? configSummary(configOptions, values) : "";
 
   useEffect(() => {
     if (open && !anySelectable) {
@@ -220,17 +243,28 @@ export function ModelSelector({
                     {selected.name} Configuration
                   </span>
                   <span className="text-label-sm text-(--tethys-text-muted)">
-                    {selected.status === "auth_required"
-                      ? "Sign in to configure this provider"
-                      : "Session options"}
+                    {configColumnCopy(selected, draftStatus)}
                   </span>
                 </div>
-                <SessionConfigPanel
-                  options={selected.configSchema}
-                  values={values}
-                  onChange={onConfigChange}
-                  unavailableIds={unavailableIds}
-                />
+                {draftError !== null && draftStatus === "error" ? (
+                  <p
+                    role="alert"
+                    className="text-body-sm text-(--tethys-status-danger)"
+                  >
+                    {draftError}
+                  </p>
+                ) : (
+                  <SessionConfigPanel
+                    options={configOptions}
+                    values={values}
+                    onChange={onConfigChange}
+                    emptyCopy={
+                      draftStatus === "preparing"
+                        ? "Preparing the session…"
+                        : undefined
+                    }
+                  />
+                )}
               </>
             ) : (
               <EmptyState title="No provider selected" />

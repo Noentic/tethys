@@ -17,6 +17,7 @@ import type {
   ComposerSources,
   EditorChip,
   EditorHandle,
+  PromptPart,
 } from "./types";
 
 const DOCUMENT_EXTENSION = DocumentNode;
@@ -127,6 +128,50 @@ export function serializePrompt(doc: {
   return blocks.join("\n").trimEnd();
 }
 
+function serializePromptParts(doc: {
+  forEach: (fn: (node: SerializeNode) => void) => void;
+}): PromptPart[] {
+  const parts: PromptPart[] = [];
+  let text = "";
+  const flushText = () => {
+    if (text !== "") parts.push({ kind: "text", text });
+    text = "";
+  };
+
+  let blockIndex = 0;
+  doc.forEach((block) => {
+    if (blockIndex > 0) text += "\n";
+    blockIndex += 1;
+    block.forEach((child) => {
+      if (child.isText) {
+        text += child.text ?? "";
+      } else if (
+        child.type?.name === CHIP_NODE &&
+        child.attrs?.kind === "path"
+      ) {
+        flushText();
+        const path = String(child.attrs?.path ?? "");
+        if (path !== "") {
+          parts.push({
+            kind: "path",
+            name: String(child.attrs?.name ?? path),
+            path,
+          });
+        } else {
+          text += String(child.attrs?.token ?? "");
+        }
+      } else if (child.type?.name === CHIP_NODE) {
+        text += String(child.attrs?.token ?? "");
+      } else {
+        text += child.textContent ?? "";
+      }
+    });
+  });
+  text = text.trimEnd();
+  flushText();
+  return parts;
+}
+
 interface SerializeNode {
   isText?: boolean;
   text?: string | null;
@@ -235,6 +280,8 @@ export const ComposerEditor = React.forwardRef<
       insertChip,
       serializeToPrompt: () =>
         editor ? serializePrompt(editor.state.doc) : "",
+      serializeToPromptParts: () =>
+        editor ? serializePromptParts(editor.state.doc) : [],
       setText: (text) => editor?.commands.setContent(paragraphTextToDoc(text)),
       clear: () => editor?.commands.clearContent(),
       focus: () => editor?.commands.focus(),

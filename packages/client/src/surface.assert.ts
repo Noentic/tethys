@@ -84,6 +84,8 @@ interface ExpectedClientSurface {
     queue_reorder: unknown;
     cancel: unknown;
     resume: unknown;
+    listProviderSessions: unknown;
+    list_provider_sessions: unknown;
     importSessions: unknown;
     import_sessions: unknown;
     fork: unknown;

@@ -19,10 +19,15 @@ function profile(overrides: Partial<AgentProfileView> = {}): AgentProfileView {
       cwd: null,
       env: [{ key: "API_KEY", value: "keychain:profiles/claude-acp/API_KEY" }],
     },
-    registry_ref: { id: "claude-acp", version: "1.0.0" },
+    registry_ref: {
+      id: "claude-acp",
+      version: "1.0.0",
+      distribution: "npx",
+    },
     projection_target: null,
     preferred_protocol: "V2",
     health: "healthy",
+    auth_state: "ready",
     detail: null,
     protocol: "V2",
     capabilities: {

@@ -27,6 +27,7 @@ function view(
     projection_target: null,
     preferred_protocol: "V1",
     health,
+    auth_state: "unknown",
     detail: null,
     protocol: "V1",
     capabilities: null,

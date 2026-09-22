@@ -42,7 +42,14 @@ const row: WorkspaceListItem = {
   path: "/home/dev/acme-web",
   capabilities: workspaceCapabilityFixtures["git-remote"],
   trust: "trusted",
-  sessions: [{ id: "s1", title: "feature/x", state: "Running" }],
+  sessions: [
+    {
+      id: "s1",
+      title: "feature/x",
+      state: "Running",
+      agent_profile_id: "claude-code",
+    },
+  ],
 };
 
 afterEach(() => {

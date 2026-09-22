@@ -14,8 +14,8 @@ export interface SessionConfigPanelProps {
   /** Selected value per option id; falls back to `current_value`. */
   values: Record<string, string>;
   onChange: (optionId: string, value: string) => void;
-  /** Option ids the Provider marks unavailable for the current selection. */
-  unavailableIds?: string[];
+  /** Empty-state title override while a prepared draft is still resolving. */
+  emptyCopy?: string;
 }
 
 const BOOLEAN_PAIRS = [
@@ -68,13 +68,17 @@ export function SessionConfigPanel({
   options,
   values,
   onChange,
-  unavailableIds = [],
+  emptyCopy,
 }: SessionConfigPanelProps) {
   if (options.length === 0) {
     return (
       <EmptyState
-        title="No session options for this provider"
-        description="This Provider exposes no configurable session options."
+        title={emptyCopy ?? "No session options for this provider"}
+        description={
+          emptyCopy === undefined
+            ? "This Provider exposes no configurable session options."
+            : undefined
+        }
       />
     );
   }
@@ -83,7 +87,6 @@ export function SessionConfigPanel({
     <div className="flex flex-col">
       {options.map((option) => {
         const current = values[option.id] ?? option.current_value;
-        const unavailable = unavailableIds.includes(option.id);
         return (
           <SchemaFieldGroup key={option.id} label={option.name}>
             {isBoolean(option) ? (
@@ -100,7 +103,6 @@ export function SessionConfigPanel({
                     current.toLowerCase() === "on" ||
                     current.toLowerCase() === "enabled"
                   }
-                  disabled={unavailable}
                   onCheckedChange={(checked) =>
                     onChange(option.id, checked ? "true" : "false")
                   }
@@ -109,7 +111,7 @@ export function SessionConfigPanel({
             ) : optionValues(option).length > 1 ||
               option.kind === "select" ||
               option.values.length > 0 ? (
-              <div className={unavailable ? "opacity-50" : undefined}>
+              <div>
                 <Listbox
                   label={option.name}
                   selectedId={current}

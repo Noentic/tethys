@@ -73,6 +73,19 @@ export function CapabilitiesPanel({
           label="embedded context"
           value={capabilities.prompt_embedded_context ? "yes" : "no"}
         />
+        <CapabilityRow
+          label="prompt media"
+          value={
+            [
+              capabilities.prompt_text !== false ? "text" : null,
+              capabilities.prompt_resource_link !== false ? "links" : null,
+              capabilities.prompt_image ? "images" : null,
+              capabilities.prompt_audio ? "audio" : null,
+            ]
+              .filter(Boolean)
+              .join(", ") || "none"
+          }
+        />
       </SchemaFieldGroup>
       <SchemaFieldGroup label="Last check">
         <CapabilityRow

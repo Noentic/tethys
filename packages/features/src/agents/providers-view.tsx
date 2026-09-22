@@ -59,10 +59,10 @@ function joinNames(names: string[]): string {
 function entryForProfile(profile: AgentProfileView): ProviderCatalogEntry {
   return {
     id: profile.id,
+    registryId: profile.registry_ref?.id ?? profile.id,
     name: profile.name,
     icon: "",
     support: "ready",
-    aliases: [],
     setup: [],
   };
 }
@@ -107,6 +107,7 @@ export function ProvidersView({
   const pendingSecrets = useRef<Promise<void>>(Promise.resolve());
   const [stderrById, setStderrById] = useState<Record<string, string>>({});
   const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
+  const [registryNotice, setRegistryNotice] = useState<string | null>(null);
   // One process tree per Provider, so Restart and the cancel ladder target the
   // Provider whose processes are listed.
   const [samplesById, setSamplesById] = useState<
@@ -226,8 +227,22 @@ export function ProvidersView({
     async (entry: AgentRegistryEntryView) => {
       setBusyEntryId(entry.id);
       try {
-        await client.agent.registryInstall(entry.id, entry.version);
+        const result = await client.agent.registryInstall(
+          entry.id,
+          entry.version,
+        );
+        const notices = [
+          result.warning,
+          result.selection_reason,
+          result.needs_node ? "Install Node.js to launch this provider." : null,
+          result.needs_uvx ? "Install uv to launch this provider." : null,
+        ].filter((message): message is string => message !== null);
+        setRegistryNotice(notices.length > 0 ? notices.join(" ") : null);
         await Promise.all([refresh(), refreshRegistry()]);
+      } catch (error) {
+        setRegistryNotice(
+          `Could not install ${entry.name}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       } finally {
         setBusyEntryId(null);
       }
@@ -239,8 +254,19 @@ export function ProvidersView({
     async (entry: AgentRegistryEntryView) => {
       setBusyEntryId(entry.id);
       try {
-        await client.agent.registryUpdate(entry.id);
+        const result = await client.agent.registryUpdate(entry.id);
+        const notices = [
+          result.warning,
+          result.selection_reason,
+          result.needs_node ? "Install Node.js to launch this provider." : null,
+          result.needs_uvx ? "Install uv to launch this provider." : null,
+        ].filter((message): message is string => message !== null);
+        setRegistryNotice(notices.length > 0 ? notices.join(" ") : null);
         await Promise.all([refresh(), refreshRegistry()]);
+      } catch (error) {
+        setRegistryNotice(
+          `Could not update ${entry.name}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       } finally {
         setBusyEntryId(null);
       }
@@ -392,6 +418,9 @@ export function ProvidersView({
                     void saveLaunchSpec(profile, spec, protocol)
                   }
                   onLogin={() => setLoginProfile(profile)}
+                  onLogout={() =>
+                    void client.agent.logout(profile.id).then(refresh)
+                  }
                   onRestart={() =>
                     void client.agent
                       .connectionsRestart(profile.id)
@@ -419,6 +448,14 @@ export function ProvidersView({
           <h2 className="text-heading-md text-(--tethys-text-primary)">
             ACP Registry
           </h2>
+          {registryNotice && (
+            <p
+              className="rounded-md bg-(--tethys-status-warning-soft) px-3 py-2 text-body-sm text-(--tethys-text-primary)"
+              role="status"
+            >
+              {registryNotice}
+            </p>
+          )}
           {registry.map((entry) => (
             <ProfileCard
               key={entry.id}
@@ -450,34 +487,46 @@ export function ProvidersView({
       {loginProfile && (
         <LoginSurface
           profile={loginProfile}
-          onClose={() => {
+          onClose={(reason) => {
             const profile = loginProfile;
             setLoginProfile(null);
-            void pendingSecrets.current
-              .then(() => client.agent.recheck(profile.id))
-              .then(refresh);
+            const recheck =
+              reason === "success"
+                ? pendingSecrets.current
+                : pendingSecrets.current.then(() =>
+                    client.agent.recheck(profile.id),
+                  );
+            void recheck.then(refresh);
           }}
           onExpiry={() => {
             void client.agent.recheck(loginProfile.id).then(refresh);
           }}
           command={loginProfile.launch_spec.program}
-          onSubmitEnv={(rows) => {
+          onLogin={(methodId) => client.agent.login(loginProfile.id, methodId)}
+          onTerminalOutput={(terminalId) =>
+            client.agent.loginTerminalOutput(loginProfile.id, terminalId)
+          }
+          onTerminalWrite={(terminalId, text) =>
+            client.agent.loginTerminalWrite(loginProfile.id, terminalId, text)
+          }
+          onTerminalCancel={(terminalId) =>
+            client.agent.loginTerminalCancel(loginProfile.id, terminalId)
+          }
+          onTerminalExit={async () => {
+            await client.agent.recheck(loginProfile.id);
+            await refresh();
+          }}
+          onSubmitEnv={async (rows) => {
             // Each value goes straight to the host, which writes it to the
             // keychain and keeps only a reference; nothing is retained here.
             const profile = loginProfile;
-            const method = profile.auth_methods.find(
-              (candidate) => candidate.shape.shape === "env-var",
-            );
             pendingSecrets.current = (async () => {
               for (const row of rows) {
                 await client.agent.envSecretSet(profile.id, row.key, row.value);
               }
-              if (rows.length > 0 && method) {
-                await client.agent.login(profile.id, method.id);
-              }
-            })().catch((error: unknown) => {
-              console.error("could not store the secret", error);
-            });
+              await client.agent.recheck(profile.id);
+            })();
+            await pendingSecrets.current;
           }}
         />
       )}

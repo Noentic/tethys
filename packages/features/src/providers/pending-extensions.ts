@@ -1,24 +1,31 @@
-//! Per-Provider pending vendor-extension queue (M1.7 U13).
-//!
-//! A `ProviderExtension` whose `(provider_id, method)` has a registered surface
-//! enqueues here; an unregistered method falls through to generic rendering and
-//! is never enqueued. The queue is a pure projection the popover and the pill
-//! count both read.
+//! Thread-scoped queue for registered ACP Provider extension surfaces.
 
 import type { ProviderExtension } from "@tethys/bindings";
 import { getProviderSurface } from "@tethys/ui";
 import { useSyncExternalStore } from "react";
 
-const pending = new Map<string, ProviderExtension[]>();
-const listeners = new Set<() => void>();
-
-function notify(): void {
-  for (const listener of listeners) {
-    listener();
-  }
+interface ThreadQueue {
+  items: ProviderExtension[];
+  dismissed: Set<ProviderExtension>;
+  revision: number;
 }
 
-/** True when a request's method has a registered surface. */
+const pending = new Map<string, ThreadQueue>();
+const listeners = new Set<() => void>();
+
+function queue(threadId: string): ThreadQueue {
+  let current = pending.get(threadId);
+  if (!current) {
+    current = { items: [], dismissed: new Set(), revision: 0 };
+    pending.set(threadId, current);
+  }
+  return current;
+}
+
+function notify(): void {
+  for (const listener of listeners) listener();
+}
+
 export function hasProviderSurface(
   providerId: string,
   method: string,
@@ -26,36 +33,65 @@ export function hasProviderSurface(
   return getProviderSurface(providerId, method) !== undefined;
 }
 
-/**
- * Enqueues an extension request, unless its method has no registered surface —
- * those fall through to the generic unknown-event rendering.
- */
+/** Unregistered notifications still appear in the transcript's generic row. */
 export function enqueueProviderExtension(
+  threadId: string,
   extension: ProviderExtension,
 ): boolean {
-  if (!hasProviderSurface(extension.provider_id, extension.method)) {
+  if (!hasProviderSurface(extension.provider_id, extension.method))
     return false;
+  const current = queue(threadId);
+  if (
+    extension.request_id &&
+    current.items.some((item) => item.request_id === extension.request_id)
+  ) {
+    return true;
   }
-  const list = pending.get(extension.provider_id) ?? [];
-  pending.set(extension.provider_id, [...list, extension]);
+  current.items = [...current.items, extension];
+  current.revision += 1;
   notify();
   return true;
 }
 
-export function getPendingExtensions(providerId: string): ProviderExtension[] {
-  return pending.get(providerId) ?? [];
+export function getPendingExtensions(threadId: string): ProviderExtension[] {
+  return queue(threadId).items;
 }
 
-/** Removes one request from a Provider's queue (popover dismissed/handled). */
-export function dequeueProviderExtension(
-  providerId: string,
+export function isProviderExtensionDismissed(
+  threadId: string,
+  extension: ProviderExtension,
+): boolean {
+  return queue(threadId).dismissed.has(extension);
+}
+
+/** Hides a request while preserving its live ACP responder for later. */
+export function dismissProviderExtension(
+  threadId: string,
   extension: ProviderExtension,
 ): void {
-  const list = pending.get(providerId) ?? [];
-  pending.set(
-    providerId,
-    list.filter((candidate) => candidate !== extension),
+  const current = queue(threadId);
+  current.dismissed.add(extension);
+  current.revision += 1;
+  notify();
+}
+
+export function reopenProviderExtensions(threadId: string): void {
+  const current = queue(threadId);
+  current.dismissed.clear();
+  current.revision += 1;
+  notify();
+}
+
+export function dequeueProviderExtension(
+  threadId: string,
+  requestId: string,
+): void {
+  const current = queue(threadId);
+  current.items = current.items.filter((item) => item.request_id !== requestId);
+  current.dismissed = new Set(
+    [...current.dismissed].filter((item) => item.request_id !== requestId),
   );
+  current.revision += 1;
   notify();
 }
 
@@ -69,12 +105,11 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-export function usePendingExtensions(providerId: string): ProviderExtension[] {
-  return (
-    useSyncExternalStore(
-      subscribe,
-      () => pending.get(providerId),
-      () => pending.get(providerId),
-    ) ?? []
+export function usePendingExtensions(threadId: string): ProviderExtension[] {
+  useSyncExternalStore(
+    subscribe,
+    () => queue(threadId).revision,
+    () => queue(threadId).revision,
   );
+  return queue(threadId).items;
 }

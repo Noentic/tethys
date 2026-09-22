@@ -23,22 +23,22 @@ export interface ProviderSetupStep {
 
 export interface ProviderCatalogEntry {
   id: string;
+  /** ACP Registry identity; launch command names are not provider identity. */
+  registryId: string;
   name: string;
   /** Asset URL rendered in an `<img>`; the repo has no svgr plugin. */
   icon: string;
   support: "ready" | "soon";
-  /** Substrings that identify this provider in a profile's launch spec. */
-  aliases: string[];
   setup: ProviderSetupStep[];
 }
 
 export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   {
     id: "claude-code",
+    registryId: "claude-acp",
     name: "Claude Code",
     icon: claudeIcon,
     support: "ready",
-    aliases: ["claude"],
     setup: [
       {
         label: "Install the CLI",
@@ -48,56 +48,57 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     ],
   },
   {
+    id: "codex",
+    registryId: "codex-acp",
+    name: "Codex",
+    icon: codexIcon,
+    support: "ready",
+    setup: [
+      {
+        label: "Install the CLI",
+        command: "npm install -g @openai/codex",
+      },
+      { label: "Sign in once", command: "codex login" },
+    ],
+  },
+  {
     id: "opencode",
-    name: "opencode",
+    registryId: "opencode",
+    name: "OpenCode",
     icon: opencodeIcon,
     support: "ready",
-    aliases: ["opencode"],
     setup: [
       { label: "Install the CLI", command: "npm i -g opencode-ai" },
       { label: "Sign in once", command: "opencode auth login" },
     ],
   },
   {
-    id: "codex",
-    name: "Codex",
-    icon: codexIcon,
-    support: "ready",
-    aliases: ["codex"],
-    setup: [
-      { label: "Install the CLI", command: "npm install -g @openai/codex" },
-      { label: "Sign in once", command: "codex login" },
-    ],
-  },
-  {
     id: "antigravity",
+    registryId: "antigravity-acp",
     name: "Antigravity",
     icon: antigravityIcon,
     support: "soon",
-    aliases: ["antigravity", "agy"],
     setup: [],
   },
   {
     id: "kiro",
+    registryId: "kiro",
     name: "kiro",
     icon: kiroIcon,
     support: "soon",
-    aliases: ["kiro"],
     setup: [],
   },
 ];
 
 /** The catalog entry that owns a profile, or null for an unrecognised profile. */
 export function catalogEntryForProfile<
-  T extends { launch_spec: { program: string; args?: string[] } },
+  T extends { registry_ref: { id: string } | null },
 >(catalog: ProviderCatalogEntry[], profile: T): ProviderCatalogEntry | null {
-  const haystack =
-    `${profile.launch_spec.program} ${(profile.launch_spec.args ?? []).join(" ")}`.toLowerCase();
   return (
     catalog.find(
       (entry) =>
         entry.support === "ready" &&
-        entry.aliases.some((alias) => haystack.includes(alias)),
+        entry.registryId === profile.registry_ref?.id,
     ) ?? null
   );
 }

@@ -10,9 +10,9 @@
     "includes": [
       "apps/**/*",
       "packages/**/*",
-      "!**/dist/**",
-      "!**/src/generated/**",
-      "!packages/features/src/agents/provider-icons/**"
+      "!**/dist",
+      "!**/src/generated",
+      "!packages/features/src/agents/provider-icons"
     ]
   },
   "formatter": {

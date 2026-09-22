@@ -3,7 +3,14 @@
 //! trust-filtered list comes from `workspace.list` (fixture default per D12);
 //! approval content is worktree A's inbox through a fixture-backed hook.
 
-import type { TrustGrant, Vcs, WorkspaceListItem } from "@tethys/bindings";
+import type {
+  AgentProfileView,
+  ProviderSessionPage,
+  ThreadSummary,
+  TrustGrant,
+  Vcs,
+  WorkspaceListItem,
+} from "@tethys/bindings";
 import { createClient } from "@tethys/client";
 import {
   type CatalogViewState,
@@ -13,6 +20,7 @@ import {
   queryClient,
   queryKeys,
   selectCatalog,
+  useProvidersQuery,
   useWorkspaceFavorites,
   useWorkspaceRows,
   workspaceNeedsAttention,
@@ -29,7 +37,10 @@ import {
 } from "@tethys/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WorkspaceCard } from "./workspace-card";
-import { WorkspacePeekDrawer } from "./workspace-peek-drawer";
+import {
+  type ProviderSessionBrowserState,
+  WorkspacePeekDrawer,
+} from "./workspace-peek-drawer";
 import { WorkspaceTrustDialog } from "./workspace-trust-dialog";
 
 /** The narrow slice of the client the catalog needs. */
@@ -38,6 +49,23 @@ export interface WorkspaceCatalogClient {
     list(): Promise<WorkspaceListItem[]>;
     add(request: TrustGrant): Promise<WorkspaceListItem>;
     remove(workspaceId: string): Promise<void>;
+  };
+  agent: {
+    profilesList(): Promise<AgentProfileView[]>;
+  };
+  thread: {
+    listProviderSessions(
+      profileId: string,
+      workspaceId: string,
+      cursor?: string,
+    ): Promise<ProviderSessionPage>;
+    importSessions(
+      profileId: string,
+      workspaceId: string,
+    ): Promise<ThreadSummary[]>;
+    archive(id: string): Promise<void>;
+    delete(id: string): Promise<void>;
+    deleteProviderSession(id: string): Promise<void>;
   };
 }
 
@@ -94,19 +122,55 @@ export function WorkspacesView({
   onNavigate,
 }: WorkspacesViewProps) {
   const rows = useWorkspaceRows(client, workspaces === undefined);
+  const providers = useProvidersQuery(client);
   const [pendingAdds, setPendingAdds] = useState<CatalogWorkspace[]>([]);
+  const profilesById = useMemo(
+    () =>
+      new Map((providers.data ?? []).map((profile) => [profile.id, profile])),
+    [providers.data],
+  );
   const items = useMemo(() => {
     const added = new Set(pendingAdds.map((workspace) => workspace.id));
-    return [
+    const merged = [
       ...pendingAdds,
       ...(workspaces ?? rows).filter((workspace) => !added.has(workspace.id)),
     ];
-  }, [pendingAdds, rows, workspaces]);
+    return merged.map((workspace) => ({
+      ...workspace,
+      sessions: workspace.sessions.map((session) => {
+        const profile = session.profileId
+          ? profilesById.get(session.profileId)
+          : undefined;
+        return profile
+          ? {
+              ...session,
+              providerId: profile.registry_ref?.id ?? profile.id,
+              providerName: profile.name,
+              canDeleteProviderSession:
+                profile.capabilities?.delete_session === true,
+            }
+          : session;
+      }),
+    }));
+  }, [pendingAdds, rows, workspaces, profilesById]);
   const [view, setView] = useState<CatalogViewState>(initialCatalogViewState);
   const [peekOpen, setPeekOpen] = useState(false);
   const [trustOpen, setTrustOpen] = useState(false);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const [pendingVcs, setPendingVcs] = useState<Vcs | null>(null);
+  const [importingProfileId, setImportingProfileId] = useState<string | null>(
+    null,
+  );
+  const [importError, setImportError] = useState<string | null>(null);
+  const [providerSessions, setProviderSessions] = useState<
+    (ProviderSessionBrowserState & { key: string }) | null
+  >(null);
+  const [pendingSessionAction, setPendingSessionAction] = useState<
+    string | null
+  >(null);
+  const [sessionActionError, setSessionActionError] = useState<string | null>(
+    null,
+  );
 
   const favorites = useWorkspaceFavorites();
   const visible = useMemo(
@@ -146,6 +210,7 @@ export function WorkspacesView({
     workspace: CatalogWorkspace,
     tab?: "sessions" | "approvals",
   ) => {
+    setProviderSessions(null);
     patch({
       selectedId: workspace.id,
       peekTab:
@@ -178,6 +243,122 @@ export function WorkspacesView({
     ]);
     setTrustOpen(false);
     void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+  };
+
+  const importSessions = async (profileId: string) => {
+    if (!selected) return;
+    setImportingProfileId(profileId);
+    setImportError(null);
+    try {
+      await client.thread.importSessions(profileId, selected.id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspaces }),
+      ]);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setImportingProfileId(null);
+    }
+  };
+
+  const browseProviderSessions = async (profileId: string, cursor?: string) => {
+    if (!selected) return;
+    const key = `${selected.id}\u0000${profileId}`;
+    setProviderSessions((current) => ({
+      key,
+      profileId,
+      sessions:
+        cursor !== undefined && current?.key === key ? current.sessions : [],
+      nextCursor: current?.key === key ? current.nextCursor : null,
+      loading: true,
+      loaded: cursor !== undefined && current?.key === key && current.loaded,
+      error: null,
+      failedCursor: null,
+    }));
+    try {
+      const page = await client.thread.listProviderSessions(
+        profileId,
+        selected.id,
+        cursor,
+      );
+      setProviderSessions((current) =>
+        current?.key === key
+          ? {
+              ...current,
+              sessions:
+                cursor === undefined
+                  ? page.sessions
+                  : [...current.sessions, ...page.sessions],
+              nextCursor: page.next_cursor,
+              loading: false,
+              loaded: true,
+            }
+          : current,
+      );
+    } catch (error) {
+      setProviderSessions((current) =>
+        current?.key === key
+          ? {
+              ...current,
+              loading: false,
+              error: error instanceof Error ? error.message : String(error),
+              failedCursor: cursor ?? null,
+            }
+          : current,
+      );
+    }
+  };
+
+  const runSessionAction = async (
+    sessionId: string,
+    action: () => Promise<void>,
+  ) => {
+    setPendingSessionAction(sessionId);
+    setSessionActionError(null);
+    try {
+      await action();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspaces }),
+      ]);
+    } catch (error) {
+      setSessionActionError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setPendingSessionAction(null);
+    }
+  };
+
+  const archiveSession = (sessionId: string) =>
+    runSessionAction(sessionId, () => client.thread.archive(sessionId));
+
+  const deleteLocalSession = (sessionId: string) => {
+    if (
+      !window.confirm(
+        "Delete this local thread and transcript? The ACP session will be closed or cancelled when supported.",
+      )
+    ) {
+      return;
+    }
+    return runSessionAction(sessionId, () => client.thread.delete(sessionId));
+  };
+
+  const deleteProviderSession = (
+    session: CatalogWorkspace["sessions"][number],
+  ) => {
+    const provider = session.providerName ?? session.providerId;
+    if (
+      !window.confirm(
+        `Delete this session from ${provider}? The local transcript will remain.`,
+      )
+    ) {
+      return;
+    }
+    return runSessionAction(session.id, () =>
+      client.thread.deleteProviderSession(session.id),
+    );
   };
 
   return (
@@ -329,6 +510,22 @@ export function WorkspacesView({
         workspace={selected}
         open={peekOpen}
         initialTab={view.peekTab}
+        importableProviders={(providers.data ?? []).filter(
+          (provider) =>
+            provider.enabled &&
+            provider.health === "healthy" &&
+            provider.capabilities?.list_sessions === true,
+        )}
+        importingProfileId={importingProfileId}
+        importError={importError}
+        providerSessions={providerSessions}
+        pendingSessionAction={pendingSessionAction}
+        sessionActionError={sessionActionError}
+        onImportSessions={importSessions}
+        onBrowseProviderSessions={browseProviderSessions}
+        onArchiveSession={archiveSession}
+        onDeleteLocalSession={deleteLocalSession}
+        onDeleteProviderSession={deleteProviderSession}
         onClose={() => {
           setPeekOpen(false);
           patch({ selectedId: null });

@@ -36,6 +36,7 @@ export function sunkenWellTheme(element: HTMLElement) {
 interface TerminalLike {
   write(data: string): void;
   dispose(): void;
+  onData?(listener: (data: string) => void): { dispose(): void };
 }
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
@@ -80,14 +81,24 @@ export interface TerminalViewProps {
   output: string;
   title?: string;
   className?: string;
+  onData?: (data: string) => void;
 }
 
-export function TerminalView({ output, title, className }: TerminalViewProps) {
+export function TerminalView({
+  output,
+  title,
+  className,
+  onData,
+}: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<TerminalLike | null>(null);
+  const terminalDisposablesRef = useRef<Array<{ dispose(): void }>>([]);
   const writtenRef = useRef(0);
   const reducedMotion = usePrefersReducedMotion();
   const [loadFailed, setLoadFailed] = useState(false);
+  const [fallbackInput, setFallbackInput] = useState("");
+  const onDataRef = useRef(onData);
+  onDataRef.current = onData;
   // The static tail replaces the animated surface for reduced motion, and also
   // when xterm cannot load.
   const useFallback = reducedMotion || loadFailed;
@@ -106,15 +117,18 @@ export function TerminalView({ output, title, className }: TerminalViewProps) {
         }
         const terminal = new Terminal({
           ...terminalOptions,
+          disableStdin: onDataRef.current === undefined,
           theme: sunkenWellTheme(containerRef.current),
         }) as unknown as TerminalLike;
         (terminal as unknown as { open(el: HTMLElement): void }).open(
           containerRef.current,
         );
         terminalRef.current = terminal;
+        const input = terminal.onData?.((data) => onDataRef.current?.(data));
         writtenRef.current = 0;
         terminal.write(output);
         writtenRef.current = output.length;
+        terminalDisposablesRef.current = input ? [input] : [];
       } catch {
         if (!cancelled) {
           setLoadFailed(true);
@@ -123,6 +137,10 @@ export function TerminalView({ output, title, className }: TerminalViewProps) {
     })();
     return () => {
       cancelled = true;
+      terminalDisposablesRef.current.forEach((disposable) => {
+        disposable.dispose();
+      });
+      terminalDisposablesRef.current = [];
       terminalRef.current?.dispose();
       terminalRef.current = null;
     };
@@ -149,17 +167,49 @@ export function TerminalView({ output, title, className }: TerminalViewProps) {
 
   if (useFallback) {
     return (
-      <pre
-        data-testid="terminal-fallback"
-        role="log"
-        aria-label={title ?? "Terminal output"}
-        className={cn(
-          "max-h-80 overflow-auto rounded-sm bg-(--tethys-surface-sunken) p-sm font-mono text-mono-code text-(--tethys-text-on-sunken-secondary)",
-          className,
+      <div className={cn("flex flex-col gap-xs", className)}>
+        <pre
+          data-testid="terminal-fallback"
+          role="log"
+          aria-label={title ?? "Terminal output"}
+          className="max-h-80 overflow-auto rounded-sm bg-(--tethys-surface-sunken) p-sm font-mono text-mono-code text-(--tethys-text-on-sunken-secondary)"
+        >
+          {output}
+        </pre>
+        {onData && (
+          <input
+            aria-label="Terminal input"
+            autoComplete="off"
+            className="rounded-sm border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) px-sm py-xs font-mono text-mono-code text-(--tethys-text-on-sunken-secondary)"
+            placeholder="Type a response and press Enter"
+            value={fallbackInput}
+            onChange={(event) => setFallbackInput(event.target.value)}
+            onKeyDown={(event) => {
+              const controls: Record<string, string> = {
+                ArrowUp: "\u001b[A",
+                ArrowDown: "\u001b[B",
+                ArrowRight: "\u001b[C",
+                ArrowLeft: "\u001b[D",
+                Tab: "\t",
+              };
+              if (
+                (event.ctrlKey || event.metaKey) &&
+                event.key.toLowerCase() === "c"
+              ) {
+                event.preventDefault();
+                onData("\u0003");
+              } else if (event.key in controls) {
+                event.preventDefault();
+                onData(controls[event.key]);
+              } else if (event.key === "Enter") {
+                event.preventDefault();
+                onData(`${fallbackInput}\r`);
+                setFallbackInput("");
+              }
+            }}
+          />
         )}
-      >
-        {output}
-      </pre>
+      </div>
     );
   }
 

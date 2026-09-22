@@ -20,10 +20,11 @@ function profile(overrides: Partial<AgentProfileView> = {}): AgentProfileView {
       cwd: null,
       env: [],
     },
-    registry_ref: null,
+    registry_ref: { id: "claude-acp", version: "0.79.0", distribution: "npx" },
     projection_target: null,
     preferred_protocol: "V2",
     health: "healthy",
+    auth_state: "ready",
     detail: null,
     protocol: "V2",
     capabilities: null,
@@ -48,6 +49,7 @@ function client(profiles: AgentProfileView[]): ProvidersClient {
       registryUpdate: vi.fn(),
       connectionsRestart: vi.fn(async () => {}),
       login: vi.fn(async () => {}),
+      logout: vi.fn(async () => {}),
       envSecretSet: vi.fn(async () => profile()),
       stderr: vi.fn(async () => ""),
       processSample: vi.fn(async () => []),
@@ -68,8 +70,8 @@ describe("providers view catalog", () => {
     const rows = screen.getAllByTestId("provider-row");
     expect(rows.map((row) => row.dataset.provider)).toEqual([
       "claude-code",
-      "opencode",
       "codex",
+      "opencode",
       "antigravity",
       "kiro",
     ]);
@@ -82,7 +84,7 @@ describe("providers view catalog", () => {
     await screen.findByTestId("providers-detection");
     expect(screen.getByText("0 of 5 providers detected")).toBeTruthy();
     expect(
-      screen.getByText(/Claude Code, opencode and Codex need setup/),
+      screen.getByText(/Claude Code, Codex and OpenCode need setup/),
     ).toBeTruthy();
     // Every ready provider is undetected, so every one shows its steps.
     const guides = await screen.findAllByTestId("provider-setup-guide");
@@ -110,6 +112,7 @@ describe("providers view catalog", () => {
           profile({
             id: "custom",
             name: "My ACP Server",
+            registry_ref: null,
             launch_spec: {
               program: "/opt/agent",
               args: ["--acp"],

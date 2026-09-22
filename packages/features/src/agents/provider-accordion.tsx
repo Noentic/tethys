@@ -18,6 +18,7 @@ export interface ProviderAccordionProps {
     preferredProtocol: AcpProtocol | null,
   ) => void;
   onLogin?: () => void;
+  onLogout?: () => void;
   onRestart?: () => void;
   onViewStderr?: () => void;
   className?: string;
@@ -28,11 +29,15 @@ export function ProviderAccordion({
   stderr = "",
   onSaveLaunchSpec,
   onLogin,
+  onLogout,
   onRestart,
   onViewStderr,
   className,
 }: ProviderAccordionProps): React.ReactElement {
-  const hasLogin = profile.auth_methods.length > 0;
+  const canLogin =
+    profile.auth_state === "required" && profile.auth_methods.length > 0;
+  const canLogout =
+    profile.auth_state === "ready" && profile.capabilities?.logout === true;
 
   return (
     <div
@@ -43,9 +48,14 @@ export function ProviderAccordion({
 
       <SchemaFieldGroup label="Connection">
         <div className="flex flex-wrap items-center gap-sm">
-          {hasLogin && (
+          {canLogin && (
             <Button variant="secondary" size="sm" onClick={onLogin}>
               Sign in
+            </Button>
+          )}
+          {canLogout && (
+            <Button variant="secondary" size="sm" onClick={onLogout}>
+              Sign out
             </Button>
           )}
           <Button variant="secondary" size="sm" onClick={onRestart}>

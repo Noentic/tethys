@@ -4,10 +4,12 @@
 //! untyped until M2.5 owns their bodies.
 
 import type {
+  AgentLoginOutcome,
   AgentProfileView,
   AgentRegistryEntryView,
   ConnectionEntry,
   InstallResult,
+  LoginTerminalOutput,
   ProcessSample,
   ProfileInput,
 } from "@tethys/bindings";
@@ -51,7 +53,20 @@ export function agentNamespace(call: Call) {
     connections_restart: (profileId: string) =>
       call<void>("agent_connections_restart", { profileId }),
     login: (profileId: string, methodId: string) =>
-      call<void>("agent_login", { profileId, methodId }),
+      call<AgentLoginOutcome>("agent_login", { profileId, methodId }),
+    loginTerminalOutput: (profileId: string, terminalId: string) =>
+      call<LoginTerminalOutput>("agent_login_terminal_output", {
+        profileId,
+        terminalId,
+      }),
+    loginTerminalWrite: (profileId: string, terminalId: string, text: string) =>
+      call<void>("agent_login_terminal_write", {
+        profileId,
+        terminalId,
+        text,
+      }),
+    loginTerminalCancel: (profileId: string, terminalId: string) =>
+      call<void>("agent_login_terminal_cancel", { profileId, terminalId }),
     logout: (profileId: string) => call<void>("agent_logout", { profileId }),
     stderr: (profileId: string) => call<string>("agent_stderr", { profileId }),
 

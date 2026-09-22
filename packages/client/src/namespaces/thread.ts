@@ -6,7 +6,10 @@ import type {
   ContentBlock,
   CreateThread,
   PermissionMode,
+  ProviderSessionPage,
   QueuedPrompt,
+  ThreadBootstrap,
+  ThreadSessionView,
   ThreadSummary,
 } from "@tethys/bindings";
 
@@ -14,10 +17,12 @@ import type { Call } from "../transport";
 
 export function threadNamespace(call: Call) {
   return {
+    prepare: (request: CreateThread) =>
+      call<ThreadBootstrap>("thread_prepare", { request }),
     create: (request: CreateThread) =>
       call<ThreadSummary>("thread_create", { request }),
     list: () => call<ThreadSummary[]>("thread_list"),
-    get: () => call<void>("thread_get"),
+    get: (id: string) => call<ThreadSessionView>("thread_get", { id }),
     prompt: (id: string, blocks: ContentBlock[]) =>
       call<void>("thread_prompt", { id, blocks }),
     queueList: (id: string) =>
@@ -42,8 +47,44 @@ export function threadNamespace(call: Call) {
     cancel_state: (id: string) =>
       call<CancelState>("thread_cancel_state", { id }),
     resume: (id: string) => call<void>("thread_resume", { id }),
-    importSessions: () => call<void>("thread_import_sessions"),
-    import_sessions: () => call<void>("thread_import_sessions"),
+    listProviderSessions: (
+      profileId: string,
+      workspaceId: string,
+      cursor?: string,
+    ) =>
+      call<ProviderSessionPage>("thread_list_provider_sessions", {
+        profileId,
+        workspaceId,
+        cursor,
+      }),
+    list_provider_sessions: (
+      profileId: string,
+      workspaceId: string,
+      cursor?: string,
+    ) =>
+      call<ProviderSessionPage>("thread_list_provider_sessions", {
+        profileId,
+        workspaceId,
+        cursor,
+      }),
+    importSessions: (profileId: string, workspaceId: string) =>
+      call<ThreadSummary[]>("thread_import_sessions", {
+        profileId,
+        workspaceId,
+      }),
+    import_sessions: (profileId: string, workspaceId: string) =>
+      call<ThreadSummary[]>("thread_import_sessions", {
+        profileId,
+        workspaceId,
+      }),
+    respondExtension: (id: string, requestId: string, response: unknown) =>
+      call<void>("thread_respond_extension", {
+        id,
+        requestId,
+        responseJson: JSON.stringify(response),
+      }),
+    deleteProviderSession: (id: string) =>
+      call<void>("thread_delete_provider_session", { id }),
     fork: () => call<void>("thread_fork"),
     archive: (id: string) => call<void>("thread_archive", { id }),
     delete: (id: string) => call<void>("thread_delete", { id }),

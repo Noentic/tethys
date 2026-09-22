@@ -32,6 +32,10 @@ export interface ProviderConnection {
   authMethods: string[];
   /** Whether the Provider declared image prompts (composer attachments). */
   imagePrompts: boolean;
+  /** Whether the Provider declared audio prompt support. */
+  audioPrompts?: boolean;
+  /** Whether the Provider accepts embedded resources in prompts. */
+  embeddedContext?: boolean;
 }
 
 function select(
@@ -88,6 +92,24 @@ export const providerConnectionFixtures: ProviderConnection[] = [
           ["high", "High"],
         ],
         "medium",
+      ),
+    ],
+  },
+  {
+    id: "codex",
+    profileId: "codex",
+    name: "Codex",
+    status: "healthy",
+    protocol: "V2",
+    authMethods: [],
+    imagePrompts: false,
+    configSchema: [
+      select(
+        "model",
+        "Model",
+        "model",
+        [["codex-default", "Default"]],
+        "codex-default",
       ),
     ],
   },
@@ -155,7 +177,9 @@ export function toProviderConnection(
     protocol: view.protocol,
     configSchema: [],
     authMethods: view.auth_methods.map((method) => method.id),
-    imagePrompts: false,
+    imagePrompts: view.capabilities?.prompt_image ?? false,
+    audioPrompts: view.capabilities?.prompt_audio ?? false,
+    embeddedContext: view.capabilities?.prompt_embedded_context ?? false,
   };
 }
 

@@ -50,8 +50,14 @@ export interface ComposerSources {
 export interface EditorHandle {
   insertChip(chip: EditorChip): void;
   serializeToPrompt(): string;
+  serializeToPromptParts(): PromptPart[];
   setText(text: string): void;
   clear(): void;
   focus(): void;
   isEmpty(): boolean;
 }
+
+/** Plain prompt text and resolved path-chip identity in document order. */
+export type PromptPart =
+  | { kind: "text"; text: string }
+  | { kind: "path"; name: string; path: string };

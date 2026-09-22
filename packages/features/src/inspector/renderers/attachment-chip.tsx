@@ -46,6 +46,18 @@ export function AttachmentChip({
     );
   }
 
+  if ("Audio" in block && block.Audio) {
+    return <Chip className={className}>Audio · {block.Audio.mime_type}</Chip>;
+  }
+
+  if ("Resource" in block && block.Resource) {
+    return (
+      <Chip className={className} interactive>
+        {name ?? block.Resource.uri}
+      </Chip>
+    );
+  }
+
   return (
     <ProviderCapabilityNotice
       provider={provider ?? "This Provider"}

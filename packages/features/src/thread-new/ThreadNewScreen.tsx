@@ -57,11 +57,23 @@ export function ThreadNewScreen({
       </h1>
       <PromptCard
         client={client}
+        session={client}
         providers={providers}
         workspaces={trusted}
         initialWorkspace={preselected}
         agentCommands={agentCommands}
-        onStart={(input) => startSession(client, input, navigate)}
+        onStart={(input) =>
+          startSession(
+            client,
+            {
+              draft: input.draft,
+              promptText: input.promptText,
+              changedConfig: input.changedConfig,
+              blocks: input.blocks,
+            },
+            navigate,
+          )
+        }
       />
     </div>
   );

@@ -24,6 +24,11 @@ export function ProfileCard({
       ? { label: "Update", handler: onUpdate }
       : null
     : { label: "Install", handler: onInstall };
+  const runtime = entry.needs_node
+    ? "Requires Node.js"
+    : entry.needs_uvx
+      ? "Requires uv"
+      : null;
 
   return (
     <Card
@@ -36,8 +41,15 @@ export function ProfileCard({
             {entry.name}
           </span>
           <Badge variant="muted" size="sm">
-            {entry.distributions.join(", ")}
+            {entry.selected_distribution
+              ? `${entry.selected_distribution} selected`
+              : entry.distributions.join(", ")}
           </Badge>
+          {entry.preview_version && (
+            <Badge variant="muted" size="sm">
+              Preview {entry.preview_version}
+            </Badge>
+          )}
           {updateAvailable && (
             <Badge variant="warning" size="sm" data-testid="update-available">
               Update available
@@ -49,6 +61,21 @@ export function ProfileCard({
             ? `Pinned ${entry.pinned_version} · latest ${entry.version}`
             : (entry.description ?? entry.version)}
         </span>
+        {runtime && (
+          <span className="text-label-sm text-(--tethys-status-warning)">
+            {runtime}
+          </span>
+        )}
+        {entry.install_block_reason && (
+          <span className="text-label-sm text-(--tethys-status-danger)">
+            {entry.install_block_reason}
+          </span>
+        )}
+        {entry.selection_reason && (
+          <span className="text-label-sm text-(--tethys-text-muted)">
+            {entry.selection_reason}
+          </span>
+        )}
         {entry.compliance_note && (
           <span className="mt-1 text-label-md text-(--tethys-status-warning)">
             {entry.compliance_note}
@@ -61,6 +88,8 @@ export function ProfileCard({
           variant={entry.installed ? "secondary" : "primary"}
           size="sm"
           loading={busy}
+          disabled={!entry.installed && entry.install_block_reason !== null}
+          title={entry.install_block_reason ?? undefined}
           onClick={action.handler}
         >
           {action.label}

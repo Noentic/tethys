@@ -3,22 +3,82 @@
 //! An image is refused at attach time for a Provider that did not declare
 //! image prompts, with the one `provider-capability-notice` treatment.
 
+import type { ContentBlock } from "@tethys/bindings";
 import { Chip } from "@tethys/ui";
 import { useState } from "react";
 import { ProviderCapabilityNotice } from "../providers/capability-notice";
 
 export interface ComposerAttachment {
+  /** Stable identity for list keys and per-chip removal. */
+  id: string;
   name: string;
   mime: string;
+  block: ContentBlock;
 }
 
-/** An image needs declared image support; other files always attach. */
+export interface PromptCapabilities {
+  image: boolean;
+  audio: boolean;
+  embeddedContext: boolean;
+}
+
+/** Refuse content that the provider did not negotiate. */
 export function canAcceptAttachment(
-  imagePrompts: boolean,
+  capabilities: PromptCapabilities | boolean,
   mime: string,
 ): boolean {
-  if (mime.startsWith("image/")) return imagePrompts;
-  return true;
+  if (typeof capabilities === "boolean") {
+    return mime.startsWith("image/") ? capabilities : true;
+  }
+  if (mime.startsWith("image/")) return capabilities.image;
+  if (mime.startsWith("audio/")) return capabilities.audio;
+  return capabilities.embeddedContext;
+}
+
+async function base64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function createAttachment(file: File): Promise<ComposerAttachment> {
+  const mime = file.type || "application/octet-stream";
+  const data = await base64(file);
+  const acp_metadata = JSON.stringify({ name: file.name });
+  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${file.size}`;
+  if (mime.startsWith("image/")) {
+    return {
+      id,
+      name: file.name,
+      mime,
+      block: { Image: { mime_type: mime, data, acp_metadata } },
+    };
+  }
+  if (mime.startsWith("audio/")) {
+    return {
+      id,
+      name: file.name,
+      mime,
+      block: { Audio: { mime_type: mime, data, acp_metadata } },
+    };
+  }
+  return {
+    id,
+    name: file.name,
+    mime,
+    block: {
+      Resource: {
+        uri: `urn:tethys:attachment:${id}`,
+        mime_type: mime,
+        text: mime.startsWith("text/") ? await file.text() : null,
+        blob: mime.startsWith("text/") ? null : data,
+        acp_metadata,
+      },
+    },
+  };
 }
 
 export function ComposerAttachmentChip({
@@ -37,29 +97,50 @@ export function ComposerAttachmentChip({
 
 export interface AttachmentPickerProps {
   providerName: string;
-  imagePrompts: boolean;
+  capabilities?: PromptCapabilities;
+  /** Legacy test/preview prop; production callers pass negotiated capabilities. */
+  imagePrompts?: boolean;
   onAttach: (attachment: ComposerAttachment) => void;
   disabled?: boolean;
 }
 
 export function AttachmentPicker({
   providerName,
+  capabilities = {
+    image: false,
+    audio: false,
+    embeddedContext: true,
+  },
   imagePrompts,
   onAttach,
   disabled = false,
 }: AttachmentPickerProps) {
-  const [refused, setRefused] = useState(false);
+  const negotiated =
+    imagePrompts === undefined
+      ? capabilities
+      : { image: imagePrompts, audio: false, embeddedContext: true };
+  const [refused, setRefused] = useState<string | null>(null);
 
-  const handleFiles = (files: FileList | null) => {
+  const handleFiles = async (files: FileList | null) => {
     if (!files) return;
     for (const file of Array.from(files)) {
       const mime = file.type || "application/octet-stream";
-      if (!canAcceptAttachment(imagePrompts, mime)) {
-        setRefused(true);
+      if (!canAcceptAttachment(negotiated, mime)) {
+        setRefused(
+          mime.startsWith("image/")
+            ? "accept image prompts"
+            : mime.startsWith("audio/")
+              ? "accept audio prompts"
+              : "accept embedded resources",
+        );
         continue;
       }
-      setRefused(false);
-      onAttach({ name: file.name, mime });
+      try {
+        onAttach(await createAttachment(file));
+        setRefused(null);
+      } catch {
+        setRefused("read this attachment");
+      }
     }
   };
 
@@ -74,7 +155,7 @@ export function AttachmentPicker({
           className="hidden"
           aria-label="Attach files"
           onChange={(event) => {
-            handleFiles(event.target.files);
+            void handleFiles(event.target.files);
             event.target.value = "";
           }}
         />
@@ -82,7 +163,7 @@ export function AttachmentPicker({
       {refused && (
         <ProviderCapabilityNotice
           provider={providerName}
-          capability="accept images"
+          capability={refused}
         />
       )}
     </div>

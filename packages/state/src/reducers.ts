@@ -14,6 +14,7 @@ import type {
   PlanEntryStatus,
   Role,
   StopReason,
+  ToolCallContent,
   ToolKind,
   ToolLocation,
   ToolOrigin,
@@ -159,6 +160,7 @@ export interface SessionState {
   sessionId: string;
   providerId: string;
   workspaceId: string;
+  workdir: string;
   title: string;
   branchName?: string;
   status: string; // "idle" | "running" | "awaiting_approval" | "error" | "interrupted" | "suspended" | "archived"
@@ -181,11 +183,16 @@ export interface SessionState {
   agentCommands: AgentCommand[];
   /** Current session config options (`ConfigOptionsChanged`); composer chips. */
   configOptions: ConfigOption[];
+  /** Negotiated ACP features for this prepared session. */
+  capabilities: import("@tethys/bindings").NormalizedCapabilities | null;
 }
 
-export function extractTextFromContentBlock(block: ContentBlock): string {
+function extractTextFromContentBlock(block: ContentBlock): string {
   if ("Text" in block && typeof block.Text === "string") {
     return block.Text;
+  }
+  if ("TextWithMetadata" in block && block.TextWithMetadata) {
+    return block.TextWithMetadata.text;
   }
   if ("ResourceLink" in block && block.ResourceLink) {
     return block.ResourceLink.name;
@@ -193,13 +200,19 @@ export function extractTextFromContentBlock(block: ContentBlock): string {
   if ("Image" in block && block.Image) {
     return "[Image]";
   }
+  if ("Audio" in block && block.Audio) {
+    return "[Audio]";
+  }
+  if ("Resource" in block && block.Resource) {
+    return block.Resource.text ?? block.Resource.uri;
+  }
   if ("Unknown" in block && typeof block.Unknown === "string") {
     return block.Unknown;
   }
   return "";
 }
 
-export function extractTextFromContentBlocks(blocks: ContentBlock[]): string {
+function extractTextFromContentBlocks(blocks: ContentBlock[]): string {
   return blocks.map(extractTextFromContentBlock).join("");
 }
 
@@ -225,11 +238,13 @@ export function createInitialSessionState(
   workspaceId: string,
   title = "New Thread",
   branchName?: string,
+  workdir = "",
 ): SessionState {
   return {
     sessionId,
     providerId,
     workspaceId,
+    workdir,
     title,
     branchName,
     status: "idle",
@@ -248,6 +263,7 @@ export function createInitialSessionState(
     error: null,
     agentCommands: [],
     configOptions: [],
+    capabilities: null,
   };
 }
 
@@ -273,7 +289,9 @@ function rebuildCombinedEntries(
 
 function nonTextAttachments(blocks: ContentBlock[]): ContentBlock[] {
   return blocks.filter(
-    (block) => !("Text" in block && typeof block.Text === "string"),
+    (block) =>
+      !("Text" in block && typeof block.Text === "string") &&
+      !("TextWithMetadata" in block && block.TextWithMetadata),
   );
 }
 
@@ -316,6 +334,18 @@ export function turnNoticeForStopReason(
     return make("cancelled", "The turn was cancelled.");
   }
   return null;
+}
+
+/** Plain text form of one tool-call content item, for the tool entry body. */
+function toolContentText(item: ToolCallContent): string {
+  if ("Text" in item && typeof item.Text === "string") return item.Text;
+  if ("Diff" in item && item.Diff) return item.Diff.patch;
+  if ("Terminal" in item && item.Terminal) {
+    return `[terminal ${item.Terminal.terminal_id}]`;
+  }
+  if ("Unknown" in item && typeof item.Unknown === "string")
+    return item.Unknown;
+  return "";
 }
 
 export function sessionReducer(
@@ -425,9 +455,16 @@ export function sessionReducer(
       if (existingIndex >= 0) {
         nextLive = [...state.liveEntries];
         const existing = nextLive[existingIndex] as TurnMessageEntry;
+        const attachment =
+          "Text" in chunk.block || "TextWithMetadata" in chunk.block
+            ? undefined
+            : chunk.block;
         nextLive[existingIndex] = {
           ...existing,
           content: existing.content + textDelta,
+          attachments: attachment
+            ? [...(existing.attachments ?? []), attachment]
+            : existing.attachments,
         };
       } else {
         const newEntry: TurnMessageEntry = {
@@ -435,6 +472,10 @@ export function sessionReducer(
           kind: "turn_message",
           role: chunk.role,
           content: textDelta,
+          attachments:
+            "Text" in chunk.block || "TextWithMetadata" in chunk.block
+              ? []
+              : [chunk.block],
           streaming: chunk.role !== "User",
           timestamp: Date.now(),
         };
@@ -741,6 +782,37 @@ export function sessionReducer(
       };
     }
 
+    case "ProviderExtension": {
+      const requestId = event.body.request_id;
+      const entry: GenericEntry = {
+        id: requestId
+          ? `provider-extension-${requestId}`
+          : `provider-extension-notification-${currentSeq}`,
+        kind: "provider_extension",
+        data: event.body,
+        timestamp: Date.now(),
+      };
+      const nextLive = [...state.liveEntries, entry];
+      return {
+        ...state,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
+    case "ProviderExtensionResolved": {
+      const nextLive = state.liveEntries.filter(
+        (entry) => entry.id !== `provider-extension-${event.body.request_id}`,
+      );
+      return {
+        ...state,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
     case "Usage": {
       return {
         ...state,
@@ -791,6 +863,60 @@ export function sessionReducer(
         ...state,
         status: "error",
         error: event.body.message,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
+    case "SessionInfo": {
+      const title = event.body.title;
+      return {
+        ...state,
+        title: title ?? state.title,
+        seq: currentSeq,
+      };
+    }
+
+    case "ToolCallContentChunk": {
+      const { tool_call_id, item } = event.body;
+      const existingIndex = state.liveEntries.findIndex(
+        (entry) => entry.id === tool_call_id && entry.kind === "tool_call",
+      );
+      if (existingIndex < 0) {
+        return { ...state, seq: currentSeq };
+      }
+      const nextLive = [...state.liveEntries];
+      const existing = nextLive[existingIndex] as ToolCallEntry;
+      const chunk = toolContentText(item);
+      if (chunk.length === 0) {
+        return { ...state, seq: currentSeq };
+      }
+      nextLive[existingIndex] = {
+        ...existing,
+        output:
+          existing.output && existing.output.length > 0
+            ? `${existing.output}${chunk}`
+            : chunk,
+      };
+      return {
+        ...state,
+        liveEntries: nextLive,
+        entries: rebuildCombinedEntries(state.historyEntries, nextLive),
+        seq: currentSeq,
+      };
+    }
+
+    case "Unknown": {
+      const entry: GenericEntry = {
+        id: `unknown-${currentSeq}`,
+        kind: "unknown",
+        data: { raw: event.body.raw },
+        timestamp: Date.now(),
+      };
+      const nextLive = [...state.liveEntries, entry];
+      return {
+        ...state,
         liveEntries: nextLive,
         entries: rebuildCombinedEntries(state.historyEntries, nextLive),
         seq: currentSeq,

@@ -1,5 +1,11 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import {
   nextTerminalDelta,
   sunkenWellTheme,
@@ -7,7 +13,7 @@ import {
   terminalOptions,
 } from "./index";
 
-describe("@tethys/terminal read-only surface (M1.7 U7)", () => {
+describe("@tethys/terminal surface (M1.7 U7)", () => {
   it("themes the xterm canvas from the well tokens, not xterm's black", () => {
     const element = document.createElement("div");
     element.style.setProperty("--tethys-surface-sunken", "#e4e4e7");
@@ -115,6 +121,20 @@ describe("@tethys/terminal read-only surface (M1.7 U7)", () => {
       try {
         render(<TerminalView output="static" />);
         expect(screen.getByTestId("terminal-fallback")).toBeDefined();
+      } finally {
+        media.restore();
+      }
+    });
+
+    it("keeps line input available for Terminal Auth in reduced-motion mode", () => {
+      const media = stubReducedMotion(true);
+      const onData = vi.fn();
+      try {
+        render(<TerminalView output="Enter code:" onData={onData} />);
+        const input = screen.getByLabelText("Terminal input");
+        fireEvent.change(input, { target: { value: "ABCD" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+        expect(onData).toHaveBeenCalledWith("ABCD\r");
       } finally {
         media.restore();
       }

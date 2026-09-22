@@ -38,13 +38,15 @@ export type ProviderSurfaceComponent = React.ComponentType<{
   providerId: string;
   method: string;
   params: string;
+  requestId?: string | null;
+  onAction?: (response: unknown) => void;
   className?: string;
 }>;
 
-export const entryRenderers = new Map<string, EntryRendererComponent>();
-export const inspectorSlots = new Map<string, InspectorSlotComponent>();
-export const composerContextSlots = new Map<string, ComposerContextSlotEntry>();
-export const providerSurfaces = new Map<string, ProviderSurfaceComponent>();
+const entryRenderers = new Map<string, EntryRendererComponent>();
+const inspectorSlots = new Map<string, InspectorSlotComponent>();
+const composerContextSlots = new Map<string, ComposerContextSlotEntry>();
+const providerSurfaces = new Map<string, ProviderSurfaceComponent>();
 let approvalDrawerBody: ApprovalDrawerBodyComponent | null = null;
 
 function providerSurfaceKey(providerId: string, method: string): string {
@@ -93,12 +95,6 @@ export function registerInspectorSlot(
   component: InspectorSlotComponent,
 ): void {
   inspectorSlots.set(id, component);
-}
-
-export function getInspectorSlot(
-  id: string,
-): InspectorSlotComponent | undefined {
-  return inspectorSlots.get(id);
 }
 
 export function getAllInspectorSlots(): Array<

@@ -14,7 +14,6 @@
 import type {
   PermissionMode,
   ThreadState,
-  Vcs,
   WorkspaceCapabilities,
   WorkspaceListItem,
   WorkspaceTrustState,
@@ -26,6 +25,9 @@ import { workspaceCapabilityFixtures } from "./workspace-capabilities";
 export interface CatalogSession {
   id: string;
   providerId: string;
+  profileId?: string;
+  providerName?: string;
+  canDeleteProviderSession?: boolean;
   branchName: string;
   /** Typed thread state; the view maps it through `sessionStatusKey`. */
   status: ThreadState;
@@ -103,6 +105,7 @@ export function mapListItem(item: WorkspaceListItem): CatalogWorkspace {
     sessions: item.sessions.map((session) => ({
       id: session.id,
       providerId: "unknown",
+      profileId: session.agent_profile_id,
       branchName: session.title,
       status: session.state,
       turnCount: 0,
@@ -130,7 +133,7 @@ export function sessionStatusKey(
   return "idle";
 }
 
-export function isAwaiting(state: ThreadState | string): boolean {
+function isAwaiting(state: ThreadState | string): boolean {
   return sessionStatusKey(state) === "awaiting_approval";
 }
 
@@ -140,7 +143,7 @@ export function isRunning(state: ThreadState | string): boolean {
 
 export const CHIP_MIN_WIDTH = 96;
 export const CHIP_MAX_WIDTH = 240;
-export const CHIP_MAX_VISIBLE = 3;
+const CHIP_MAX_VISIBLE = 3;
 
 /** The turn count drops first, then the diff stat; glyph/marker/branch stay. */
 export function chipFields(width: number): {
@@ -265,9 +268,4 @@ export function selectCatalog(
       favorites.includes(workspace.id) ? 0 : 1;
     return rank(a) - rank(b);
   });
-}
-
-/** The source badge inputs for a workspace's resolved capabilities. */
-export function workspaceVcs(workspace: CatalogWorkspace): Vcs {
-  return workspace.capabilities.vcs;
 }

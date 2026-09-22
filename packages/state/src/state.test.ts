@@ -7,11 +7,14 @@ import {
   cancelPhaseFixtures,
   cancelPhaseToState,
   clearAllSessionStoresForTesting,
+  clearAllSessionStreamsForTesting,
   configOptionFixtures,
   createInitialSessionState,
   createSessionStore,
   getOrCreateSessionStore,
+  getSessionStreamManager,
   type HistoryDividerEntry,
+  hydrateSessionView,
   loadHistoryIntoSession,
   NO_GIT_REVERT_REASON,
   PERMISSION_MODE_LABELS,
@@ -40,6 +43,7 @@ import {
 describe("@tethys/state Store & Reducer Architecture (U7 / D5)", () => {
   beforeEach(() => {
     clearAllSessionStoresForTesting();
+    clearAllSessionStreamsForTesting();
     setCustomRafScheduler(null, null);
   });
 
@@ -536,7 +540,54 @@ describe("Thread-view contract fixtures (M1.6c U13)", () => {
 describe("Inspector session model (M1.7 U5)", () => {
   beforeEach(() => {
     clearAllSessionStoresForTesting();
+    clearAllSessionStreamsForTesting();
     setCustomRafScheduler(null, null);
+  });
+
+  it("hydrates a cold route from its typed thread view before opening the stream", () => {
+    const view = {
+      thread: {
+        id: "thread-1",
+        workspace_id: "workspace-1",
+        agent_profile_id: "codex-profile",
+        title: "Review changes",
+        workdir: "/workspace",
+        state: "Idle" as const,
+        session_id: "session-1",
+      },
+      events: [
+        {
+          thread_id: "thread-1",
+          seq: 3,
+          event: {
+            type: "MessageUpsert" as const,
+            body: {
+              message_id: "message-1",
+              role: "Agent" as const,
+              content: {
+                type: "Set" as const,
+                value: [{ Text: "Restored reply" }],
+              },
+            },
+          },
+        },
+      ],
+      config_options: [],
+      capabilities: null,
+      permission_mode: "supervised" as const,
+      latest_seq: 5,
+    };
+
+    const store = hydrateSessionView(view);
+    const manager = getSessionStreamManager("thread-1", store, view.latest_seq);
+    expect(store.state.providerId).toBe("codex-profile");
+    expect(store.state.workspaceId).toBe("workspace-1");
+    expect(store.state.title).toBe("Review changes");
+    expect(store.state.liveEntries[0]).toMatchObject({
+      id: "message-1",
+      content: "Restored reply",
+    });
+    expect(manager.getSinceSeq()).toBe(5);
   });
 
   it("keeps one plan entry updated in place", () => {

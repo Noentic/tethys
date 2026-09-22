@@ -26,6 +26,7 @@ function authProfile(shape: AuthMethodShape): AgentProfileView {
     projection_target: null,
     preferred_protocol: "V1",
     health: "auth-required",
+    auth_state: "required",
     detail: null,
     protocol: "V1",
     capabilities: null,
@@ -48,7 +49,24 @@ function clientFor(profile: AgentProfileView): ProvidersClient {
       registryInstall: vi.fn(),
       registryUpdate: vi.fn(),
       connectionsRestart: vi.fn(async () => {}),
-      login: vi.fn(async () => {}),
+      login: vi.fn(async () => {
+        if (profile.auth_methods[0]?.shape.shape === "cli-passthrough") {
+          return { kind: "terminal" as const, terminal_id: "login-terminal" };
+        }
+        if (profile.auth_methods[0]?.shape.shape === "agent-auth") {
+          return new Promise<never>(() => {});
+        }
+        return { kind: "complete" as const };
+      }),
+      loginTerminalOutput: vi.fn(async () => ({
+        output: "authenticated",
+        truncated: false,
+        exited: true,
+        exit_code: 0,
+      })),
+      loginTerminalWrite: vi.fn(async () => {}),
+      loginTerminalCancel: vi.fn(async () => {}),
+      logout: vi.fn(async () => {}),
       envSecretSet: vi.fn(async () => profile),
       stderr: vi.fn(async () => ""),
       processSample: vi.fn(async () => []),
@@ -104,7 +122,7 @@ describe("login-close re-check per authMethods shape (M1.12 U9)", () => {
     expect(rechecksFor(client, "gemini")).toBe(0);
     release();
     await waitFor(() => expect(rechecksFor(client, "gemini")).toBe(1));
-    expect(client.agent.login).toHaveBeenCalledWith("gemini", "method");
+    expect(client.agent.login).not.toHaveBeenCalled();
   });
 
   it("url-code: Esc closes the dialog and re-checks that Provider once", async () => {
@@ -114,10 +132,15 @@ describe("login-close re-check per authMethods shape (M1.12 U9)", () => {
     await waitFor(() => expect(rechecksFor(client, "gemini")).toBe(1));
   });
 
-  it("cli-passthrough: the vendor process exiting re-checks that Provider once", async () => {
+  it("cli-passthrough: the ACP terminal auth exit re-checks that Provider once", async () => {
     const client = clientFor(authProfile({ shape: "cli-passthrough" }));
     await openLogin(client);
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() =>
+      expect(client.agent.loginTerminalOutput).toHaveBeenCalledWith(
+        "gemini",
+        "login-terminal",
+      ),
+    );
     await waitFor(() => expect(rechecksFor(client, "gemini")).toBe(1));
   });
 

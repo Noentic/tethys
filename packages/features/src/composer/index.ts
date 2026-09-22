@@ -5,6 +5,7 @@ export * from "./context-bar";
 export * from "./docked-prompt-card";
 export * from "./mode-pill";
 export * from "./popups";
+export * from "./prompt-blocks";
 export * from "./queue";
 export * from "./queue-count-slot";
 export * from "./register";

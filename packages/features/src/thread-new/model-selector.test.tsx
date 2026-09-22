@@ -13,6 +13,7 @@ function renderSelector(
     onSelectProvider: vi.fn(),
     values: {},
     onConfigChange: vi.fn(),
+    configOptions: providerConnectionFixtures[0]?.configSchema ?? [],
     ...overrides,
   };
   render(<ModelSelector {...props} />);
@@ -44,11 +45,19 @@ describe("ModelSelector", () => {
   });
 
   it("shows the empty-state copy when the provider has no options", () => {
-    renderSelector({ selectedProviderId: "codex-cli" });
+    renderSelector({ selectedProviderId: "codex-cli", configOptions: [] });
     openPopover();
     expect(
       screen.getByText("No session options for this provider"),
     ).toBeTruthy();
+  });
+
+  it("names draft progress instead of options while the session prepares", () => {
+    renderSelector({ draftStatus: "preparing", configOptions: [] });
+    openPopover();
+    expect(
+      screen.getAllByText("Preparing the session…").length,
+    ).toBeGreaterThan(0);
   });
 
   it("gates an auth_required provider and offers Sign in", () => {

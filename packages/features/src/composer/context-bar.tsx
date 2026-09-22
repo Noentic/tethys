@@ -14,13 +14,14 @@ import {
 } from "@tethys/ui";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { ProviderPendingCount } from "../providers/provider-popover";
 import { SessionConfigPanel } from "../thread-new/session-config-panel";
 
 /** Categories that already have a home on the card, so the full panel omits them. */
 const HOMED_CATEGORIES = ["mode", "model", "thought_level"];
 
 /** Options only the full panel shows: every category without a chip or pill. */
-export function panelOptions(options: ConfigOption[]): ConfigOption[] {
+function panelOptions(options: ConfigOption[]): ConfigOption[] {
   return options.filter(
     (option) => !HOMED_CATEGORIES.includes(option.category ?? ""),
   );
@@ -39,6 +40,34 @@ function useContentWidth(ref: React.RefObject<HTMLElement | null>): number {
     return () => observer.disconnect();
   }, [ref]);
   return width;
+}
+
+/**
+ * Usage text from whatever the Provider actually reported. v1 agents report
+ * `used`/`size` (stored as `total_tokens`/`context_size`), so input/output are
+ * not assumed to be populated.
+ */
+export function formatUsage(
+  usage: import("@tethys/bindings").UsageSnapshot,
+): string {
+  if (usage.input_tokens > 0 || usage.output_tokens > 0) {
+    return `${usage.input_tokens.toLocaleString()} in · ${usage.output_tokens.toLocaleString()} out`;
+  }
+  const parts: string[] = [];
+  if (usage.total_tokens > 0) {
+    parts.push(`${usage.total_tokens.toLocaleString()} tokens`);
+  }
+  if (usage.context_size != null && usage.context_size > 0) {
+    parts.push(`ctx ${usage.context_size.toLocaleString()}`);
+  }
+  if (usage.cost != null) {
+    parts.push(
+      usage.cost_currency
+        ? `${usage.cost} ${usage.cost_currency}`
+        : `${usage.cost}`,
+    );
+  }
+  return parts.join(" · ");
 }
 
 export interface ContextBarProps {
@@ -90,30 +119,40 @@ export function ContextBar({
       id: "provider/config",
       priority: CONTEXT_BAR_PRIORITY["provider/config"],
       node: (
-        <div className="relative">
-          <button
-            ref={providerAnchorRef}
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={configOpen}
-            onClick={() => setConfigOpen((open) => !open)}
-            className="focus-ring inline-flex h-5 items-center gap-1 rounded-xs border border-(--tethys-hairline-strong) px-2 font-mono text-mono-micro text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover)"
-          >
-            {providerName}
-            <span aria-hidden="true">{"\u2228"}</span>
-          </button>
-          <Popover
-            open={configOpen}
-            onClose={() => setConfigOpen(false)}
-            anchorRef={barRef}
-            className="bottom-full left-0 mb-2 w-80"
-          >
-            <SessionConfigPanel
-              options={panelOptions(configOptions)}
-              values={values}
-              onChange={(optionId, value) => void onSetOption(optionId, value)}
-            />
-          </Popover>
+        <div className="flex items-center gap-xs">
+          <div className="relative">
+            <button
+              ref={providerAnchorRef}
+              type="button"
+              aria-label={
+                providerName
+                  ? `${providerName} provider and session configuration`
+                  : "Provider and session configuration"
+              }
+              aria-haspopup="dialog"
+              aria-expanded={configOpen}
+              onClick={() => setConfigOpen((open) => !open)}
+              className="focus-ring inline-flex h-5 items-center gap-1 rounded-xs border border-(--tethys-hairline-strong) px-2 font-mono text-mono-micro text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover)"
+            >
+              {providerName}
+              <span aria-hidden="true">{"\u2228"}</span>
+            </button>
+            <Popover
+              open={configOpen}
+              onClose={() => setConfigOpen(false)}
+              anchorRef={barRef}
+              className="bottom-full left-0 mb-2 w-80"
+            >
+              <SessionConfigPanel
+                options={panelOptions(configOptions)}
+                values={values}
+                onChange={(optionId, value) =>
+                  void onSetOption(optionId, value)
+                }
+              />
+            </Popover>
+          </div>
+          <ProviderPendingCount threadId={sessionId} />
         </div>
       ),
     },

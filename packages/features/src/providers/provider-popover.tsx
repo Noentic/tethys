@@ -7,11 +7,13 @@ import {
   useFocusTrap,
   useFocusTrapBelow,
 } from "@tethys/ui";
-import { useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
 import {
   dequeueProviderExtension,
-  enqueueProviderExtension,
+  dismissProviderExtension,
   hasProviderSurface,
+  isProviderExtensionDismissed,
+  reopenProviderExtensions,
   usePendingExtensions,
 } from "./pending-extensions";
 
@@ -36,28 +38,17 @@ function parseParams(params: string): ExtensionParams {
   }
 }
 
-/** Queues one extension request when its method has a registered surface. */
-export function queueProviderExtension(params: {
-  provider_id: string;
-  method: string;
-  params: string;
-}): boolean {
-  return enqueueProviderExtension(params);
-}
-
-/**
- * The default vendor-extension surface: the Provider's title, a body through
- * `schema-field-group` spacing, and the Provider's own actions in its order.
- * Register it (or a vendor one) with `registerProviderSurface`.
- */
+/** Generic action surface used by a Provider registration when its payload fits. */
 export function ProviderExtensionSurface({
   params,
+  requestId,
   onAction,
 }: {
   providerId: string;
   method: string;
   params: string;
-  onAction?: (actionId: string) => void;
+  requestId?: string | null;
+  onAction?: (response: unknown) => void;
 }) {
   const parsed = parseParams(params);
   const titleId = useId();
@@ -74,54 +65,66 @@ export function ProviderExtensionSurface({
           {parsed.body ?? ""}
         </p>
       </SchemaFieldGroup>
-      <div className="mt-sm flex justify-end gap-sm">
-        {(parsed.actions ?? []).map((action) => (
-          <Button
-            key={action.id}
-            size="sm"
-            variant={
-              action.kind === "destructive" ? "destructive" : "secondary"
-            }
-            onClick={() => onAction?.(action.id)}
-          >
-            {action.label}
-          </Button>
-        ))}
-      </div>
+      {requestId && (
+        <div className="mt-sm flex justify-end gap-sm">
+          {(parsed.actions ?? []).map((action) => (
+            <Button
+              key={action.id}
+              size="sm"
+              variant={
+                action.kind === "destructive" ? "destructive" : "secondary"
+              }
+              onClick={() => onAction?.({ actionId: action.id })}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-/**
- * Hosts a vendor-extension request anchored to the Provider pill (M1.7 U13).
- * Opens only while no other focus trap is open, traps `Tab`, and restores focus
- * to the invoker on close. Reachable only through `registerProviderSurface`.
- */
+/** Thread-scoped Provider request popover anchored to the docked Provider pill. */
 export function ProviderPopover({
-  providerId,
+  threadId,
   anchorRef,
   className,
+  onRespond,
 }: {
-  providerId: string;
+  threadId: string;
   anchorRef?: React.RefObject<HTMLElement | null>;
   className?: string;
+  onRespond?: (requestId: string, response: unknown) => Promise<void>;
 }) {
-  const extensions = usePendingExtensions(providerId);
-  // Because it traps focus it never opens over a lower trap (a dialog, a
-  // drawer): the request waits in the Provider's pending list until it closes.
+  const extensions = usePendingExtensions(threadId);
   const trapped = useFocusTrapBelow("popover");
   const containerRef = useRef<HTMLDivElement>(null);
-  const top = extensions.find((extension) =>
-    hasProviderSurface(extension.provider_id, extension.method),
+  const [responseError, setResponseError] = useState<string | null>(null);
+  const top = extensions.find(
+    (extension) =>
+      hasProviderSurface(extension.provider_id, extension.method) &&
+      !isProviderExtensionDismissed(threadId, extension),
   );
   const Surface = top
     ? getProviderSurface(top.provider_id, top.method)
     : undefined;
 
   const close = () => {
-    if (top) {
-      dequeueProviderExtension(top.provider_id, top);
-    }
+    if (top) dismissProviderExtension(threadId, top);
+  };
+
+  const respond = (response: unknown) => {
+    if (!top?.request_id || !onRespond) return;
+    const requestId = top.request_id;
+    setResponseError(null);
+    void onRespond(requestId, response)
+      .then(() => dequeueProviderExtension(threadId, requestId))
+      .catch((error: unknown) => {
+        setResponseError(
+          error instanceof Error ? error.message : String(error),
+        );
+      });
   };
 
   const active = Boolean(top && Surface && !trapped);
@@ -133,9 +136,7 @@ export function ProviderPopover({
     initialFocus: "first",
   });
 
-  if (!top || !Surface || trapped) {
-    return null;
-  }
+  if (!top || !Surface || trapped) return null;
 
   return (
     <Popover open onClose={close} anchorRef={anchorRef} className={className}>
@@ -144,24 +145,35 @@ export function ProviderPopover({
           providerId={top.provider_id}
           method={top.method}
           params={top.params}
+          requestId={top.request_id}
+          onAction={respond}
         />
+        {responseError && (
+          <p
+            role="alert"
+            className="mt-sm text-body-sm text-(--tethys-status-danger)"
+          >
+            {responseError}
+          </p>
+        )}
       </div>
     </Popover>
   );
 }
 
-/** Text pending count for the Provider pill. */
-export function ProviderPendingCount({ providerId }: { providerId: string }) {
-  const count = usePendingExtensions(providerId).length;
-  if (count === 0) {
-    return null;
-  }
+/** Pending count doubles as the affordance to reopen a dismissed request. */
+export function ProviderPendingCount({ threadId }: { threadId: string }) {
+  const count = usePendingExtensions(threadId).length;
+  if (count === 0) return null;
   return (
-    <span
+    <button
+      type="button"
+      onClick={() => reopenProviderExtensions(threadId)}
+      aria-label="Reopen provider requests"
       data-testid="provider-pending-count"
       className="ml-1 font-mono text-mono-micro text-(--tethys-status-warning)"
     >
       {count}
-    </span>
+    </button>
   );
 }

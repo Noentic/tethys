@@ -12,6 +12,10 @@ import {
   LogoGitlab,
   Plus,
 } from "@nebutra/icons";
+import type {
+  AgentProfileView,
+  ProviderSessionSummary,
+} from "@tethys/bindings";
 import {
   type CatalogPeekTab,
   type CatalogSession,
@@ -32,15 +36,39 @@ export interface ApprovalEntry {
   kind: "permission" | "elicitation";
 }
 
+export interface ProviderSessionBrowserState {
+  profileId: string;
+  sessions: ProviderSessionSummary[];
+  nextCursor: string | null;
+  loading: boolean;
+  loaded: boolean;
+  error: string | null;
+  failedCursor: string | null;
+}
+
 export interface WorkspacePeekDrawerProps {
   workspace: CatalogWorkspace | null;
   open: boolean;
   initialTab?: CatalogPeekTab;
   /** Test override; the live session stores are the default source. */
   approvals?: ApprovalEntry[];
+  importableProviders?: AgentProfileView[];
+  importingProfileId?: string | null;
+  importError?: string | null;
+  providerSessions?: ProviderSessionBrowserState | null;
+  pendingSessionAction?: string | null;
+  sessionActionError?: string | null;
   onClose: () => void;
   onOpenThread?: (sessionId: string) => void;
   onNewThread?: () => void;
+  onImportSessions?: (profileId: string) => Promise<void>;
+  onBrowseProviderSessions?: (
+    profileId: string,
+    cursor?: string,
+  ) => Promise<void>;
+  onArchiveSession?: (sessionId: string) => void;
+  onDeleteLocalSession?: (sessionId: string) => void;
+  onDeleteProviderSession?: (session: CatalogSession) => void;
 }
 
 /**
@@ -82,7 +110,10 @@ function groupByProvider(
     list.push(session);
     groups.set(key, list);
   }
-  return [...groups.entries()];
+  return [...groups.entries()].map(([key, grouped]) => [
+    grouped[0]?.providerName ?? key,
+    grouped,
+  ]);
 }
 
 function sourceIcon(workspace: CatalogWorkspace) {
@@ -98,9 +129,20 @@ export function WorkspacePeekDrawer({
   open,
   initialTab = "sessions",
   approvals,
+  importableProviders = [],
+  importingProfileId = null,
+  importError = null,
+  providerSessions = null,
+  pendingSessionAction = null,
+  sessionActionError = null,
   onClose,
   onOpenThread,
   onNewThread,
+  onImportSessions,
+  onBrowseProviderSessions,
+  onArchiveSession,
+  onDeleteLocalSession,
+  onDeleteProviderSession,
 }: WorkspacePeekDrawerProps) {
   const [tab, setTab] = useState<CatalogPeekTab>(initialTab);
   const liveApprovals = useWorkspaceApprovals(workspace?.id);
@@ -165,29 +207,174 @@ export function WorkspacePeekDrawer({
 
         <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {tab === "sessions" ? (
-            workspace.sessions.length === 0 ? (
-              <p className="py-2xl text-center text-body-sm text-(--tethys-text-muted)">
-                No active sessions running in this workspace.
-              </p>
-            ) : (
-              groupByProvider(workspace.sessions).map(
-                ([provider, sessions]) => (
-                  <div key={provider} className="flex flex-col">
-                    <div className="flex h-7 items-center gap-1.5 px-3 text-label-md text-(--tethys-text-muted)">
-                      <span aria-hidden="true">▾</span>
-                      <span>{provider}</span>
+            <>
+              {workspace.sessions.length === 0 ? (
+                <p className="py-2xl text-center text-body-sm text-(--tethys-text-muted)">
+                  No active sessions running in this workspace.
+                </p>
+              ) : (
+                groupByProvider(workspace.sessions).map(
+                  ([provider, sessions]) => (
+                    <div key={provider} className="flex flex-col">
+                      <div className="flex h-7 items-center gap-1.5 px-3 text-label-md text-(--tethys-text-muted)">
+                        <span aria-hidden="true">▾</span>
+                        <span>{provider}</span>
+                      </div>
+                      {sessions.map((session) => (
+                        <SessionItemRow
+                          key={session.id}
+                          session={session}
+                          onOpen={() => onOpenThread?.(session.id)}
+                          busy={pendingSessionAction === session.id}
+                          onArchive={
+                            onArchiveSession
+                              ? () => onArchiveSession(session.id)
+                              : undefined
+                          }
+                          onDeleteLocal={
+                            onDeleteLocalSession
+                              ? () => onDeleteLocalSession(session.id)
+                              : undefined
+                          }
+                          onDeleteProvider={
+                            session.canDeleteProviderSession &&
+                            onDeleteProviderSession
+                              ? () => onDeleteProviderSession(session)
+                              : undefined
+                          }
+                        />
+                      ))}
                     </div>
-                    {sessions.map((session) => (
-                      <SessionItemRow
-                        key={session.id}
-                        session={session}
-                        onOpen={() => onOpenThread?.(session.id)}
-                      />
-                    ))}
+                  ),
+                )
+              )}
+              {sessionActionError && (
+                <p
+                  role="alert"
+                  className="px-3 py-2 text-body-sm text-(--tethys-status-danger)"
+                >
+                  {sessionActionError}
+                </p>
+              )}
+              {importableProviders.length > 0 && (
+                <div className="mt-lg border-t border-(--tethys-hairline) px-2 pt-lg">
+                  <p className="mb-sm text-label-md text-(--tethys-text-muted)">
+                    Import provider sessions
+                  </p>
+                  <div className="flex flex-col gap-md">
+                    {importableProviders.map((provider) => {
+                      const browser =
+                        providerSessions?.profileId === provider.id
+                          ? providerSessions
+                          : null;
+                      return (
+                        <div key={provider.id} className="flex flex-col gap-sm">
+                          <div className="flex flex-wrap gap-sm">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={browser?.loading === true}
+                              aria-busy={browser?.loading === true}
+                              onClick={() =>
+                                void onBrowseProviderSessions?.(provider.id)
+                              }
+                            >
+                              {browser?.loading && !browser.loaded
+                                ? `Loading ${provider.name}…`
+                                : `Browse ${provider.name}`}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={importingProfileId !== null}
+                              aria-busy={importingProfileId === provider.id}
+                              onClick={() =>
+                                void onImportSessions?.(provider.id)
+                              }
+                            >
+                              {importingProfileId === provider.id
+                                ? `Importing ${provider.name}…`
+                                : `Import ${provider.name}`}
+                            </Button>
+                          </div>
+                          {browser?.loaded && browser.sessions.length === 0 && (
+                            <p className="text-body-sm text-(--tethys-text-muted)">
+                              No sessions from {provider.name} in this
+                              workspace.
+                            </p>
+                          )}
+                          {browser && browser.sessions.length > 0 && (
+                            <ul
+                              aria-label={`${provider.name} sessions`}
+                              className="flex flex-col divide-y divide-(--tethys-hairline) rounded-md border border-(--tethys-hairline)"
+                            >
+                              {browser.sessions.map((session) => (
+                                <li
+                                  key={session.id}
+                                  className="flex flex-col gap-0.5 px-3 py-2"
+                                >
+                                  <span className="text-label-md text-(--tethys-text-primary)">
+                                    {session.title ?? session.id}
+                                  </span>
+                                  <span className="truncate font-mono text-mono-micro text-(--tethys-text-muted)">
+                                    {session.cwd}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {browser?.error && (
+                            <div className="flex items-center gap-sm">
+                              <p
+                                role="alert"
+                                className="flex-1 text-body-sm text-(--tethys-status-danger)"
+                              >
+                                {browser.error}
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() =>
+                                  void onBrowseProviderSessions?.(
+                                    provider.id,
+                                    browser.failedCursor ?? undefined,
+                                  )
+                                }
+                              >
+                                Retry
+                              </Button>
+                            </div>
+                          )}
+                          {browser?.nextCursor && !browser.error && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={browser.loading}
+                              onClick={() =>
+                                void onBrowseProviderSessions?.(
+                                  provider.id,
+                                  browser.nextCursor ?? undefined,
+                                )
+                              }
+                            >
+                              {browser.loading ? "Loading more…" : "Load more"}
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                ),
-              )
-            )
+                  {importError && (
+                    <p
+                      role="alert"
+                      className="mt-sm text-body-sm text-(--tethys-status-danger)"
+                    >
+                      {importError}
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           ) : entries.length === 0 ? (
             <p className="py-2xl text-center text-body-sm text-(--tethys-text-muted)">
               No pending approvals for this workspace.
