@@ -78,6 +78,36 @@ struct MockStateV1 {
     next_session: u32,
     next_message: u32,
     history: HashMap<String, Vec<acp1::SessionUpdate>>,
+    mode: Option<String>,
+    config_value: Option<String>,
+    additional: Vec<std::path::PathBuf>,
+}
+
+/// Modes the v1 mock advertises at `session/new`.
+fn mock_modes_v1() -> acp1::SessionModeState {
+    acp1::SessionModeState::new(
+        "default",
+        vec![
+            acp1::SessionMode::new("default", "Default"),
+            acp1::SessionMode::new("plan", "Plan"),
+            acp1::SessionMode::new("accept-edits", "Accept Edits"),
+        ],
+    )
+}
+
+/// Config options the v1 mock advertises at `session/new`.
+fn mock_config_options_v1(current: Option<&str>) -> Vec<acp1::SessionConfigOption> {
+    let current = current.unwrap_or("medium").to_string();
+    vec![acp1::SessionConfigOption::select(
+        "thought_level",
+        "Effort",
+        current,
+        vec![
+            acp1::SessionConfigSelectOption::new("low", "Low"),
+            acp1::SessionConfigSelectOption::new("medium", "Medium"),
+            acp1::SessionConfigSelectOption::new("high", "High"),
+        ],
+    )]
 }
 
 /// Runs the v1 mock agent over stdio.
@@ -87,52 +117,130 @@ pub async fn run_v1() -> Result<()> {
 
 /// Auth methods the mock advertises when `TETHYS_MOCK_AUTH` is set
 /// (`agent` → agent-auth, `terminal` → CLI passthrough).
-/// Auth methods the mock advertises when `TETHYS_MOCK_AUTH` is set
-/// (`agent` → agent-auth, `terminal` → CLI passthrough).
-fn mock_auth_methods_v1() -> Vec<acp1::AuthMethod> {
-    match std::env::var("TETHYS_MOCK_AUTH").as_deref() {
-        Ok("agent") => vec![acp1::AuthMethod::Agent(acp1::AuthMethodAgent::new(
+fn mock_auth_methods_v1(mode: Option<&str>, terminal_enabled: bool) -> Vec<acp1::AuthMethod> {
+    match mode {
+        Some("agent") => vec![acp1::AuthMethod::Agent(acp1::AuthMethodAgent::new(
             "agent",
             "Agent Auth",
         ))],
-        Ok("terminal") => vec![acp1::AuthMethod::Terminal(acp1::AuthMethodTerminal::new(
-            "tui-auth",
-            "Terminal Auth",
-        ))],
+        Some("terminal") if terminal_enabled => vec![acp1::AuthMethod::Terminal(
+            acp1::AuthMethodTerminal::new("tui-auth", "Terminal Auth"),
+        )],
         _ => Vec::new(),
     }
 }
 
 /// Serves the v1 mock agent over any agent-role transport.
 pub async fn serve_v1(transport: impl agent_client_protocol::ConnectTo<Agent>) -> Result<()> {
+    let auth_mode = std::env::var("TETHYS_MOCK_AUTH").ok();
+    serve_v1_with_auth(transport, auth_mode.as_deref()).await
+}
+
+/// Serves the v1 mock with an explicit authentication declaration.
+pub async fn serve_v1_with_auth(
+    transport: impl agent_client_protocol::ConnectTo<Agent>,
+    auth_mode: Option<&str>,
+) -> Result<()> {
     let state = Arc::new(Mutex::new(MockStateV1::default()));
+    let auth_mode = auth_mode.map(str::to_string);
+    let require_auth = std::env::var("TETHYS_MOCK_REQUIRE_AUTH").ok();
+    let load_sessions = std::env::var_os("TETHYS_MOCK_NO_LOAD").is_none();
     Agent
         .builder()
         .name("tethys-mock-v1")
         .on_receive_request(
-            async |request: acp1::InitializeRequest,
-                   responder: Responder<acp1::InitializeResponse>,
-                   _connection| {
+            async move |request: acp1::InitializeRequest,
+                        responder: Responder<acp1::InitializeResponse>,
+                        _connection| {
+                let auth_methods = mock_auth_methods_v1(
+                    auth_mode.as_deref(),
+                    request.client_capabilities.auth.terminal,
+                );
+                let mut capabilities = acp1::AgentCapabilities::new()
+                    .load_session(load_sessions)
+                    .session_capabilities(
+                        acp1::SessionCapabilities::new()
+                            .list(acp1::SessionListCapabilities::new())
+                            .delete(acp1::SessionDeleteCapabilities::new()),
+                    );
+                if !auth_methods.is_empty() {
+                    capabilities = capabilities.auth(
+                        acp1::AgentAuthCapabilities::new().logout(acp1::LogoutCapabilities::new()),
+                    );
+                }
                 responder.respond(
                     acp1::InitializeResponse::new(request.protocol_version)
                         .agent_info(acp1::Implementation::new("tethys-mock-v1", "0.0.0"))
-                        .agent_capabilities(acp1::AgentCapabilities::new().load_session(true))
-                        .auth_methods(mock_auth_methods_v1()),
+                        .agent_capabilities(capabilities)
+                        .auth_methods(auth_methods),
                 )
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async |_request: acp1::AuthenticateRequest,
+                   responder: Responder<acp1::AuthenticateResponse>,
+                   _connection| {
+                responder.respond(acp1::AuthenticateResponse::new())
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async |_request: acp1::LogoutRequest,
+                   responder: Responder<acp1::LogoutResponse>,
+                   _connection| { responder.respond(acp1::LogoutResponse::new()) },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                async move |request: acp1::ListSessionsRequest,
+                            responder: Responder<acp1::ListSessionsResponse>,
+                            _connection| {
+                    // Three sessions, two pages: exercises cursor in/out.
+                    let cwd = request.cwd.clone().unwrap_or_default();
+                    let sessions = (1..=3)
+                        .map(|index| {
+                            acp1::SessionInfo::new(
+                                format!("mock-listed-{index}"),
+                                cwd.join(format!("session-{index}")),
+                            )
+                            .title(format!("Listed {index}"))
+                        })
+                        .collect::<Vec<_>>();
+                    let (page, next) = match request.cursor.as_deref() {
+                        None => (sessions[..2].to_vec(), Some("page-2".to_string())),
+                        Some("page-2") => (sessions[2..].to_vec(), None),
+                        Some(_) => (Vec::new(), None),
+                    };
+                    responder.respond(acp1::ListSessionsResponse::new(page).next_cursor(next))
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
             {
                 let state = state.clone();
-                async move |_request: acp1::NewSessionRequest,
+                let require_auth = require_auth.clone();
+                async move |request: acp1::NewSessionRequest,
                             responder: Responder<acp1::NewSessionResponse>,
                             _connection| {
+                    if require_auth.as_deref() == Some("new") {
+                        return responder.respond_with_error(Error::auth_required());
+                    }
                     let mut state = state.lock();
+                    state.additional = request.additional_directories.clone();
                     state.next_session += 1;
-                    let session_id = format!("mock-v1-session-{}", state.next_session);
+                    let session_id = format!(
+                        "mock-v1-session-{}-{}",
+                        std::process::id(),
+                        state.next_session
+                    );
                     state.history.insert(session_id.clone(), Vec::new());
-                    responder.respond(acp1::NewSessionResponse::new(session_id))
+                    responder.respond(
+                        acp1::NewSessionResponse::new(session_id)
+                            .modes(mock_modes_v1())
+                            .config_options(mock_config_options_v1(None)),
+                    )
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -162,7 +270,72 @@ pub async fn serve_v1(transport: impl agent_client_protocol::ConnectTo<Agent>) -
                                 ))
                                 .map_err(Error::into_internal_error)?;
                         }
-                        responder.respond(acp1::LoadSessionResponse::new())
+                        responder.respond(
+                            acp1::LoadSessionResponse::new()
+                                .modes(mock_modes_v1())
+                                .config_options(mock_config_options_v1(None)),
+                        )
+                    })?;
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = state.clone();
+                async move |request: acp1::SetSessionModeRequest,
+                            responder: Responder<acp1::SetSessionModeResponse>,
+                            connection: agent_client_protocol::ConnectionTo<
+                    agent_client_protocol::Client,
+                >| {
+                    let session_id = request.session_id.to_string();
+                    let mode_id = request.mode_id.to_string();
+                    state.lock().mode = Some(mode_id.clone());
+                    let notify = connection.clone();
+                    connection.spawn(async move {
+                        notify
+                            .send_notification(acp1::SessionNotification::new(
+                                session_id.clone(),
+                                acp1::SessionUpdate::CurrentModeUpdate(
+                                    acp1::CurrentModeUpdate::new(mode_id),
+                                ),
+                            ))
+                            .map_err(Error::into_internal_error)?;
+                        responder.respond(acp1::SetSessionModeResponse::new())
+                    })?;
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = state.clone();
+                async move |request: acp1::SetSessionConfigOptionRequest,
+                            responder: Responder<acp1::SetSessionConfigOptionResponse>,
+                            connection: agent_client_protocol::ConnectionTo<
+                    agent_client_protocol::Client,
+                >| {
+                    let session_id = request.session_id.to_string();
+                    let value = match request.value {
+                        acp1::SessionConfigOptionValue::ValueId { value } => value.to_string(),
+                        acp1::SessionConfigOptionValue::Boolean { value } => value.to_string(),
+                        _ => "medium".to_string(),
+                    };
+                    state.lock().config_value = Some(value.clone());
+                    let options = mock_config_options_v1(Some(&value));
+                    let notify = connection.clone();
+                    connection.spawn(async move {
+                        notify
+                            .send_notification(acp1::SessionNotification::new(
+                                session_id.clone(),
+                                acp1::SessionUpdate::ConfigOptionUpdate(
+                                    acp1::ConfigOptionUpdate::new(options.clone()),
+                                ),
+                            ))
+                            .map_err(Error::into_internal_error)?;
+                        responder.respond(acp1::SetSessionConfigOptionResponse::new(options))
                     })?;
                     Ok(())
                 }
@@ -185,6 +358,41 @@ pub async fn serve_v1(transport: impl agent_client_protocol::ConnectTo<Agent>) -
                         if prompt.contains("slow") {
                             tokio::time::sleep(std::time::Duration::from_millis(750)).await;
                         }
+                        if prompt.contains("extension") {
+                            let params = Arc::from(
+                                serde_json::value::RawValue::from_string(
+                                    serde_json::json!({ "sessionId": session_id }).to_string(),
+                                )
+                                .map_err(Error::into_internal_error)?,
+                            );
+                            let response = notify
+                                .send_request(acp1::AgentRequest::ExtMethodRequest(
+                                    acp1::ExtRequest::new("_fixture.dev/action", params),
+                                ))
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
+                            let update = acp1::SessionUpdate::AgentMessageChunk(
+                                acp1::ContentChunk::new(acp1::ContentBlock::Text(
+                                    acp1::TextContent::new(response.to_string()),
+                                )),
+                            );
+                            state
+                                .lock()
+                                .history
+                                .entry(session_id.clone())
+                                .or_default()
+                                .push(update.clone());
+                            notify
+                                .send_notification(acp1::SessionNotification::new(
+                                    session_id.clone(),
+                                    update,
+                                ))
+                                .map_err(Error::into_internal_error)?;
+                            responder
+                                .respond(acp1::PromptResponse::new(acp1::StopReason::EndTurn))?;
+                            return Ok(());
+                        }
                         if prompt.contains("contract") {
                             for update in contract_fixture_updates() {
                                 notify
@@ -198,6 +406,153 @@ pub async fn serve_v1(transport: impl agent_client_protocol::ConnectTo<Agent>) -
                                 acp1::StopReason::MaxTurnRequests,
                             ))?;
                             return Ok(());
+                        }
+                        if prompt.contains("fs/read") {
+                            let path = {
+                                let state = state.lock();
+                                if prompt.contains("escape") {
+                                    std::path::PathBuf::from("/etc/passwd")
+                                } else {
+                                    state
+                                        .additional
+                                        .first()
+                                        .cloned()
+                                        .unwrap_or_else(|| std::path::PathBuf::from("."))
+                                        .join("probe.txt")
+                                }
+                            };
+                            let response = notify
+                                .send_request(acp1::ReadTextFileRequest::new(
+                                    session_id.clone(),
+                                    path,
+                                ))
+                                .block_task()
+                                .await;
+                            let text = match response {
+                                Ok(response) => format!("probe:{}", response.content),
+                                Err(_) => "fs-error".to_string(),
+                            };
+                            let update =
+                                acp1::SessionUpdate::AgentMessageChunk(acp1::ContentChunk::new(
+                                    acp1::ContentBlock::Text(acp1::TextContent::new(text)),
+                                ));
+                            state
+                                .lock()
+                                .history
+                                .entry(session_id.clone())
+                                .or_default()
+                                .push(update.clone());
+                            notify
+                                .send_notification(acp1::SessionNotification::new(
+                                    session_id.clone(),
+                                    update,
+                                ))
+                                .map_err(Error::into_internal_error)?;
+                            responder
+                                .respond(acp1::PromptResponse::new(acp1::StopReason::EndTurn))?;
+                            return Ok(());
+                        }
+                        if prompt.contains("elicit-form") {
+                            notify
+                                .send_request(acp1::CreateElicitationRequest::new(
+                                    acp1::ElicitationFormMode::new(
+                                        acp1::ElicitationSessionScope::new(session_id.clone()),
+                                        acp1::ElicitationSchema::new().string("name", true),
+                                    ),
+                                    "Choose a name",
+                                ))
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
+                        }
+                        if prompt.contains("elicit-url") {
+                            notify
+                                .send_request(acp1::CreateElicitationRequest::new(
+                                    acp1::ElicitationUrlMode::new(
+                                        acp1::ElicitationSessionScope::new(session_id.clone()),
+                                        "mock-url",
+                                        "https://example.test/authorize",
+                                    ),
+                                    "Authorize the mock agent",
+                                ))
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
+                        }
+                        if prompt.contains("terminal-lifecycle") {
+                            let (shell, quick_args, long_args) = if cfg!(windows) {
+                                (
+                                    "cmd",
+                                    vec!["/C".to_string(), "echo terminal-ok".to_string()],
+                                    vec!["/C".to_string(), "ping -n 30 127.0.0.1 >NUL".to_string()],
+                                )
+                            } else {
+                                (
+                                    "sh",
+                                    vec!["-c".to_string(), "printf terminal-ok".to_string()],
+                                    vec!["-c".to_string(), "sleep 30".to_string()],
+                                )
+                            };
+                            let quick = notify
+                                .send_request(
+                                    acp1::CreateTerminalRequest::new(session_id.clone(), shell)
+                                        .args(quick_args),
+                                )
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
+                            notify
+                                .send_request(acp1::WaitForTerminalExitRequest::new(
+                                    session_id.clone(),
+                                    quick.terminal_id.clone(),
+                                ))
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
+                            let output = notify
+                                .send_request(acp1::TerminalOutputRequest::new(
+                                    session_id.clone(),
+                                    quick.terminal_id.clone(),
+                                ))
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
+                            if !output.output.contains("terminal-ok") {
+                                return Err(Error::internal_error());
+                            }
+                            notify
+                                .send_request(acp1::ReleaseTerminalRequest::new(
+                                    session_id.clone(),
+                                    quick.terminal_id,
+                                ))
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
+
+                            let long = notify
+                                .send_request(
+                                    acp1::CreateTerminalRequest::new(session_id.clone(), shell)
+                                        .args(long_args),
+                                )
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
+                            notify
+                                .send_request(acp1::KillTerminalRequest::new(
+                                    session_id.clone(),
+                                    long.terminal_id.clone(),
+                                ))
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
+                            notify
+                                .send_request(acp1::ReleaseTerminalRequest::new(
+                                    session_id.clone(),
+                                    long.terminal_id,
+                                ))
+                                .block_task()
+                                .await
+                                .map_err(Error::into_internal_error)?;
                         }
                         if prompt.contains("permission") {
                             let options = vec![
@@ -502,6 +857,19 @@ mod v2 {
                                 );
                                 notify
                                     .send_request(request)
+                                    .block_task()
+                                    .await
+                                    .map_err(Error::into_internal_error)?;
+                            }
+                            if prompt.contains("elicit-form") {
+                                notify
+                                    .send_request(acp2::CreateElicitationRequest::new(
+                                        acp2::ElicitationFormMode::new(
+                                            acp2::ElicitationSessionScope::new(session_id.clone()),
+                                            acp2::ElicitationSchema::new().string("name", true),
+                                        ),
+                                        "Choose a name",
+                                    ))
                                     .block_task()
                                     .await
                                     .map_err(Error::into_internal_error)?;

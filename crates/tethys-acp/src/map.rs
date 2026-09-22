@@ -229,18 +229,81 @@ pub(crate) fn unified_diff(before: &str, after: &str) -> String {
 
 pub(crate) fn content_block(block: &acp1::ContentBlock) -> ContentBlock {
     match block {
-        acp1::ContentBlock::Text(text) => ContentBlock::Text(text.text.clone()),
+        acp1::ContentBlock::Text(text) => match acp_metadata(text, &["text"]) {
+            Some(acp_metadata) => ContentBlock::TextWithMetadata {
+                text: text.text.clone(),
+                acp_metadata,
+            },
+            None => ContentBlock::Text(text.text.clone()),
+        },
         acp1::ContentBlock::ResourceLink(link) => ContentBlock::ResourceLink {
             uri: link.uri.clone(),
             name: link.name.clone(),
             mime_type: link.mime_type.clone(),
+            acp_metadata: acp_metadata(link, &["name", "uri", "mimeType"]),
         },
         acp1::ContentBlock::Image(image) => ContentBlock::Image {
             mime_type: image.mime_type.clone(),
             data: image.data.clone(),
+            acp_metadata: acp_metadata(image, &["data", "mimeType"]),
         },
+        acp1::ContentBlock::Audio(audio) => ContentBlock::Audio {
+            mime_type: audio.mime_type.clone(),
+            data: audio.data.clone(),
+            acp_metadata: acp_metadata(audio, &["data", "mimeType"]),
+        },
+        acp1::ContentBlock::Resource(resource) => {
+            let (uri, mime_type, text, blob, nested_metadata) = match &resource.resource {
+                acp1::EmbeddedResourceResource::TextResourceContents(contents) => (
+                    contents.uri.clone(),
+                    contents.mime_type.clone(),
+                    Some(contents.text.clone()),
+                    None,
+                    acp_metadata(contents, &["uri", "mimeType", "text"]),
+                ),
+                acp1::EmbeddedResourceResource::BlobResourceContents(contents) => (
+                    contents.uri.clone(),
+                    contents.mime_type.clone(),
+                    None,
+                    Some(contents.blob.clone()),
+                    acp_metadata(contents, &["uri", "mimeType", "blob"]),
+                ),
+                _ => return ContentBlock::Unknown(json_string(block)),
+            };
+            let top_metadata = acp_metadata(resource, &["resource"]);
+            let mut metadata = serde_json::Map::new();
+            if let Some(raw) = top_metadata {
+                if let Ok(serde_json::Value::Object(fields)) = serde_json::from_str(&raw) {
+                    metadata.extend(fields);
+                }
+            }
+            if let Some(raw) = nested_metadata {
+                if let Ok(value) = serde_json::from_str(&raw) {
+                    metadata.insert("resource_content".into(), value);
+                }
+            }
+            ContentBlock::Resource {
+                uri,
+                mime_type,
+                text,
+                blob,
+                acp_metadata: (!metadata.is_empty())
+                    .then(|| serde_json::Value::Object(metadata).to_string()),
+            }
+        }
         other => ContentBlock::Unknown(json_string(other)),
     }
+}
+
+pub(crate) fn acp_metadata<T: Serialize>(value: &T, core_fields: &[&str]) -> Option<String> {
+    let serde_json::Value::Object(mut fields) = serde_json::to_value(value).ok()? else {
+        return None;
+    };
+    for field in core_fields {
+        fields.remove(*field);
+    }
+    fields.retain(|_, value| !value.is_null());
+    (!fields.is_empty()).then(|| serde_json::Value::Object(fields).to_string())
 }
 
 pub(crate) fn stop_reason(reason: &acp1::StopReason) -> StopReason {
@@ -277,6 +340,33 @@ pub(crate) fn command(command: &acp1::AvailableCommand) -> AgentCommand {
         name: command.name.clone(),
         description: Some(command.description.clone()),
         input: command.input.as_ref().map(json_string),
+    }
+}
+
+/// ACP v1 mode state mapped onto the normalized option shape, so the UI keeps
+/// one control path for modes and config options (M1.17 AD6).
+pub(crate) fn mode_option(state: &acp1::SessionModeState) -> ConfigOption {
+    ConfigOption {
+        id: "mode".to_string(),
+        name: "Mode".to_string(),
+        description: None,
+        current_value: state.current_mode_id.to_string(),
+        values: state
+            .available_modes
+            .iter()
+            .map(|mode| mode.id.to_string())
+            .collect(),
+        category: Some("mode".to_string()),
+        kind: Some(ConfigOptionKind::Select),
+        value_options: state
+            .available_modes
+            .iter()
+            .map(|mode| ConfigOptionValue {
+                id: mode.id.to_string(),
+                name: mode.name.clone(),
+                description: mode.description.clone(),
+            })
+            .collect(),
     }
 }
 
@@ -389,6 +479,7 @@ pub(crate) fn state_changed(state: SessionState) -> TurnEventBody {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn edit_tool_call_with_location_becomes_a_file_subject() {
@@ -418,5 +509,36 @@ mod tests {
                 tool_call_id: "tool-2".into()
             }
         );
+    }
+
+    #[test]
+    fn content_blocks_preserve_stable_media_resources_and_metadata() {
+        let cases = [
+            json!({"type":"text","text":"hello","_meta":{"trace":"1"}}),
+            json!({"type":"resource_link","uri":"file:///tmp/a.txt","name":"a.txt","mimeType":"text/plain","description":"file"}),
+            json!({"type":"image","data":"aW1hZ2U=","mimeType":"image/png","uri":"urn:image"}),
+            json!({"type":"audio","data":"YXVkaW8=","mimeType":"audio/wav"}),
+            json!({"type":"resource","resource":{"uri":"urn:text","mimeType":"text/plain","text":"embedded"}}),
+            json!({"type":"resource","resource":{"uri":"urn:blob","mimeType":"application/octet-stream","blob":"YmxvYg=="}}),
+        ];
+
+        let blocks = cases
+            .into_iter()
+            .map(|value| serde_json::from_value::<acp1::ContentBlock>(value).expect("ACP block"))
+            .map(|block| content_block(&block))
+            .collect::<Vec<_>>();
+
+        assert!(matches!(blocks[0], ContentBlock::TextWithMetadata { .. }));
+        assert!(matches!(blocks[1], ContentBlock::ResourceLink { .. }));
+        assert!(matches!(blocks[2], ContentBlock::Image { .. }));
+        assert!(matches!(blocks[3], ContentBlock::Audio { .. }));
+        assert!(matches!(
+            blocks[4],
+            ContentBlock::Resource { text: Some(_), .. }
+        ));
+        assert!(matches!(
+            blocks[5],
+            ContentBlock::Resource { blob: Some(_), .. }
+        ));
     }
 }

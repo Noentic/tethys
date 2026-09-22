@@ -5,7 +5,8 @@
 //! `tethys-schema` event model; v2 is compiled behind the `acp-v2` feature.
 
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
@@ -16,31 +17,86 @@ use agent_client_protocol::schema::ProtocolVersion;
 #[cfg(feature = "acp-v2")]
 use agent_client_protocol::V2ConnectionTo;
 use agent_client_protocol::{
-    on_receive_notification, on_receive_request, Agent, Client, ConnectTo, ConnectionTo, Responder,
+    on_receive_notification, on_receive_request, Agent, Client, ConnectTo, ConnectionTo, Handled,
+    Responder,
 };
 use async_trait::async_trait;
-use tethys_schema::agents::{AuthMethodShape, AuthMethodView};
+use tethys_schema::agents::{AuthMethodShape, AuthMethodView, LoginTerminalOutput};
 use tethys_schema::connection::{AcpProtocol, AgentInfo, NormalizedCapabilities};
 use tethys_schema::sync::{McpTransports, RegistryValue, SessionServer, TransportKind};
-use tethys_schema::thread::{ContentBlock, PermOutcome, PermissionRequested, TurnEventBody};
+use tethys_schema::thread::{
+    ConfigOption, ContentBlock, PermOutcome, PermissionRequested, TurnEventBody,
+};
 use tethys_thread::{
     AgentConnection, ConnectionError, ConnectionEvent, ElicitationResolver, EventStream,
-    NewSession, PermissionDecision, PermissionResolver, ResumeSession, SessionHandle, SessionId,
+    NewSession, PermissionDecision, PermissionResolver, ResumeSession, SessionDeleter,
+    SessionHandle, SessionId, SessionSummary,
 };
 use tokio::sync::{broadcast, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use crate::map::{self, SyntheticMessageIds};
+use crate::terminal_host::TerminalHost;
+
+/// Provider-owned handler for one claimed extension request. Returning
+/// `Some(value)` answers the agent immediately with that JSON-RPC result;
+/// returning `None` surfaces the request to the UI responder.
+pub type ExtensionRequestHandler =
+    Arc<dyn Fn(&str, &serde_json::Value) -> Option<serde_json::Value> + Send + Sync>;
+
+/// Provider-owned handler for one claimed extension notification.
+pub type ExtensionNotificationHandler = Arc<dyn Fn(&str, &serde_json::Value) + Send + Sync>;
+
+/// One injected bundle of ACP client services. The advertised capability
+/// payload is derived from what is actually wired, never ahead of a handler
+/// (M1.17 AD4). Filesystem and terminal handlers are always compiled in; the
+/// elicitation and terminal-auth capabilities are opt in.
+#[derive(Clone)]
+pub struct AcpClientServices {
+    pub permission: Arc<dyn PermissionResolver>,
+    pub elicitation: Option<Arc<dyn ElicitationResolver>>,
+    /// Whether a PTY-backed terminal-auth host is wired for this process.
+    pub terminal_auth: bool,
+}
+
+impl AcpClientServices {
+    pub fn new(permission: Arc<dyn PermissionResolver>) -> Self {
+        Self {
+            permission,
+            elicitation: None,
+            terminal_auth: false,
+        }
+    }
+
+    /// Wires the form/URL elicitation handler and advertises it.
+    pub fn with_elicitation(mut self, resolver: Arc<dyn ElicitationResolver>) -> Self {
+        self.elicitation = Some(resolver);
+        self
+    }
+
+    /// Wires terminal authentication and advertises `auth.terminal`.
+    pub fn with_terminal_auth(mut self) -> Self {
+        self.terminal_auth = true;
+        self
+    }
+}
+
+/// Provider-owned data applied to one ACP connection.
+#[derive(Clone)]
+pub struct AcpProviderIntegration {
+    pub id: String,
+    pub initialize_meta: serde_json::Map<String, serde_json::Value>,
+    pub extension_methods: Vec<String>,
+    pub extension_request_handler: Option<ExtensionRequestHandler>,
+    pub extension_notification_handler: Option<ExtensionNotificationHandler>,
+}
 
 /// Connection setup (architecture §7.1: the caller picks the version).
 pub struct AcpConnectOptions {
     pub protocol: AcpProtocol,
     pub client_name: String,
-    pub permission_resolver: Arc<dyn PermissionResolver>,
-    pub elicitation_resolver: Arc<dyn ElicitationResolver>,
-    /// Whether Tethys advertises form elicitation and registers the
-    /// `elicitation/create` handler (M1.7). Defaults to `true`.
-    pub elicitation: bool,
+    pub integration: Option<AcpProviderIntegration>,
+    pub services: AcpClientServices,
 }
 
 impl AcpConnectOptions {
@@ -48,28 +104,9 @@ impl AcpConnectOptions {
         Self {
             protocol,
             client_name: "tethys".to_string(),
-            permission_resolver,
-            elicitation_resolver: Arc::new(crate::client::NoopElicitationResolver),
-            elicitation: true,
+            integration: None,
+            services: AcpClientServices::new(permission_resolver),
         }
-    }
-}
-
-/// Refuses elicitation until a real responder is injected (never surfaces a
-/// request, mirroring the pre-M1.8 deny-by-default posture).
-pub struct NoopElicitationResolver;
-
-#[async_trait]
-impl ElicitationResolver for NoopElicitationResolver {
-    async fn resolve(
-        &self,
-        _session: &SessionId,
-        request: tethys_schema::elicitation::ElicitationRequest,
-    ) -> tethys_schema::elicitation::ElicitationResponse {
-        tethys_schema::elicitation::ElicitationResponse::without_values(
-            request.req_id,
-            tethys_schema::elicitation::ElicitationOutcome::Cancelled,
-        )
     }
 }
 
@@ -92,10 +129,32 @@ struct Shared {
     synthetic: Mutex<HashMap<String, SyntheticMessageIds>>,
     replaying: Mutex<HashMap<String, bool>>,
     resolver: Arc<dyn PermissionResolver>,
-    elicitation_resolver: Arc<dyn ElicitationResolver>,
-    elicitation: bool,
+    elicitation_resolver: Option<Arc<dyn ElicitationResolver>>,
     permission_seq: AtomicU32,
     elicitation_seq: AtomicU32,
+    session_roots: Mutex<HashMap<String, Vec<PathBuf>>>,
+    terminals: TerminalHost,
+    provider_id: String,
+    extension_methods: HashSet<String>,
+    extension_request_handler: Option<ExtensionRequestHandler>,
+    extension_notification_handler: Option<ExtensionNotificationHandler>,
+    extension_seq: AtomicU32,
+    pending_extensions: Mutex<HashMap<String, PendingExtension>>,
+}
+
+struct PendingExtension {
+    session_id: String,
+    response: oneshot::Sender<serde_json::Value>,
+}
+
+enum ExtensionDispatch {
+    Unclaimed,
+    Immediate(serde_json::Value),
+    Pending {
+        session_id: String,
+        request_id: String,
+        response: oneshot::Receiver<serde_json::Value>,
+    },
 }
 
 impl Shared {
@@ -104,11 +163,32 @@ impl Shared {
             sessions: Mutex::new(HashMap::new()),
             synthetic: Mutex::new(HashMap::new()),
             replaying: Mutex::new(HashMap::new()),
-            resolver: Arc::clone(&options.permission_resolver),
-            elicitation_resolver: Arc::clone(&options.elicitation_resolver),
-            elicitation: options.elicitation,
+            resolver: Arc::clone(&options.services.permission),
+            elicitation_resolver: options.services.elicitation.clone(),
             permission_seq: AtomicU32::new(0),
             elicitation_seq: AtomicU32::new(0),
+            session_roots: Mutex::new(HashMap::new()),
+            terminals: TerminalHost::default(),
+            provider_id: options
+                .integration
+                .as_ref()
+                .map(|integration| integration.id.clone())
+                .unwrap_or_else(|| "custom-acp".to_string()),
+            extension_methods: options
+                .integration
+                .as_ref()
+                .map(|integration| integration.extension_methods.iter().cloned().collect())
+                .unwrap_or_default(),
+            extension_request_handler: options
+                .integration
+                .as_ref()
+                .and_then(|integration| integration.extension_request_handler.clone()),
+            extension_notification_handler: options
+                .integration
+                .as_ref()
+                .and_then(|integration| integration.extension_notification_handler.clone()),
+            extension_seq: AtomicU32::new(0),
+            pending_extensions: Mutex::new(HashMap::new()),
         }
     }
 
@@ -147,6 +227,361 @@ impl Shared {
             "elicit-{}",
             self.elicitation_seq.fetch_add(1, Ordering::Relaxed) + 1
         )
+    }
+
+    fn next_extension_id(&self) -> String {
+        format!(
+            "extension-{}",
+            self.extension_seq.fetch_add(1, Ordering::Relaxed) + 1
+        )
+    }
+
+    async fn resolve_permission(
+        &self,
+        session_id: &str,
+        permission: PermissionRequested,
+    ) -> PermissionDecision {
+        self.emit(
+            session_id,
+            TurnEventBody::PermissionRequested(permission.clone()),
+        );
+        let decision = self
+            .resolver
+            .resolve(&SessionId::new(session_id), permission.clone())
+            .await;
+        self.emit(
+            session_id,
+            TurnEventBody::PermissionResolved {
+                req_id: permission.req_id,
+                outcome: decision.outcome,
+                decided_by: decision.decided_by,
+                option_id: decision.option_id.clone(),
+            },
+        );
+        decision
+    }
+
+    async fn resolve_elicitation(
+        &self,
+        session_id: &str,
+        mut request: tethys_schema::elicitation::ElicitationRequest,
+    ) -> Option<tethys_schema::elicitation::ElicitationResponse> {
+        let resolver = self.elicitation_resolver.as_ref()?;
+        request.req_id = self.next_elicitation_id();
+        self.emit(
+            session_id,
+            TurnEventBody::ElicitationRequested(request.clone()),
+        );
+        let response = resolver.resolve(&SessionId::new(session_id), request).await;
+        self.emit(
+            session_id,
+            TurnEventBody::ElicitationResolved {
+                req_id: response.req_id.clone(),
+                outcome: response.outcome,
+                values: response.values.clone(),
+            },
+        );
+        Some(response)
+    }
+
+    fn handle_extension_notification(&self, method: &str, params: String) {
+        let method = canonical_extension_method(method);
+        let value = serde_json::from_str::<serde_json::Value>(&params).ok();
+        if let (Some(handler), Some(value)) = (&self.extension_notification_handler, &value) {
+            handler(&method, value);
+        }
+        let Some(session_id) = value.and_then(|value| extension_session_id(&value)) else {
+            return;
+        };
+        self.emit(
+            &session_id,
+            TurnEventBody::ProviderExtension(
+                tethys_schema::provider_extension::ProviderExtension {
+                    provider_id: self.provider_id.clone(),
+                    method,
+                    request_id: None,
+                    params,
+                },
+            ),
+        );
+    }
+
+    fn prepare_extension_request(
+        &self,
+        method: &str,
+        params: String,
+    ) -> Result<ExtensionDispatch, ()> {
+        let method = canonical_extension_method(method);
+        if !self.extension_methods.contains(&method) {
+            return Ok(ExtensionDispatch::Unclaimed);
+        }
+        let value = serde_json::from_str::<serde_json::Value>(&params).map_err(|_| ())?;
+        if let Some(answer) = self
+            .extension_request_handler
+            .as_ref()
+            .and_then(|handler| handler(&method, &value))
+        {
+            return Ok(ExtensionDispatch::Immediate(answer));
+        }
+        let session_id = extension_session_id(&value).ok_or(())?;
+        let (request_id, response) = self.queue_extension_request(&session_id, method, params);
+        Ok(ExtensionDispatch::Pending {
+            session_id,
+            request_id,
+            response,
+        })
+    }
+
+    fn await_extension_response(
+        self: Arc<Self>,
+        session_id: String,
+        request_id: String,
+        response: oneshot::Receiver<serde_json::Value>,
+        responder: Responder<serde_json::Value>,
+    ) -> impl std::future::Future<Output = Result<(), agent_client_protocol::Error>> + Send {
+        let cancellation = responder.cancellation();
+        async move {
+            tokio::select! {
+                _ = cancellation.cancelled() => {
+                    self.cancel_extension_request(&session_id, &request_id);
+                    responder.respond_with_error(agent_client_protocol::Error::request_cancelled())
+                }
+                response = response => match response {
+                    Ok(value) => responder.respond(value),
+                    Err(_) => responder.respond_with_error(agent_client_protocol::Error::request_cancelled()),
+                }
+            }
+        }
+    }
+
+    fn queue_extension_request(
+        &self,
+        session_id: &str,
+        method: String,
+        params: String,
+    ) -> (String, oneshot::Receiver<serde_json::Value>) {
+        let request_id = self.next_extension_id();
+        let (response, receiver) = oneshot::channel();
+        self.pending_extensions.lock().insert(
+            request_id.clone(),
+            PendingExtension {
+                session_id: session_id.to_string(),
+                response,
+            },
+        );
+        self.emit(
+            session_id,
+            TurnEventBody::ProviderExtension(
+                tethys_schema::provider_extension::ProviderExtension {
+                    provider_id: self.provider_id.clone(),
+                    method,
+                    request_id: Some(request_id.clone()),
+                    params,
+                },
+            ),
+        );
+        (request_id, receiver)
+    }
+
+    fn extension_request_resolved(&self, session_id: &str, request_id: &str, cancelled: bool) {
+        self.emit(
+            session_id,
+            TurnEventBody::ProviderExtensionResolved {
+                request_id: request_id.to_string(),
+                cancelled,
+            },
+        );
+    }
+
+    fn respond_extension(
+        &self,
+        session_id: &SessionId,
+        request_id: &str,
+        response: serde_json::Value,
+    ) -> Result<(), ConnectionError> {
+        let mut pending = self.pending_extensions.lock();
+        let Some(request) = pending.get(request_id) else {
+            return Err(ConnectionError::SessionNotFound(request_id.to_string()));
+        };
+        if request.session_id != session_id.0 {
+            return Err(ConnectionError::Protocol(
+                "extension response belongs to another session".into(),
+            ));
+        }
+        let request = pending
+            .remove(request_id)
+            .ok_or_else(|| ConnectionError::SessionNotFound(request_id.to_string()))?;
+        request
+            .response
+            .send(response)
+            .map_err(|_| ConnectionError::Transport("extension request was cancelled".into()))
+    }
+
+    fn cancel_extension_requests(&self, session_id: &str) {
+        let request_ids = {
+            self.pending_extensions
+                .lock()
+                .iter()
+                .filter(|(_, request)| request.session_id == session_id)
+                .map(|(request_id, _)| request_id.clone())
+                .collect::<Vec<_>>()
+        };
+        for request_id in request_ids {
+            self.cancel_extension_request(session_id, &request_id);
+        }
+    }
+
+    fn cancel_extension_request(&self, session_id: &str, request_id: &str) {
+        let removed = {
+            let mut pending = self.pending_extensions.lock();
+            if pending
+                .get(request_id)
+                .is_some_and(|request| request.session_id == session_id)
+            {
+                pending.remove(request_id).is_some()
+            } else {
+                false
+            }
+        };
+        if removed {
+            self.extension_request_resolved(session_id, request_id, true);
+        }
+    }
+
+    fn close_connection(&self) {
+        let mut session_ids = self.sessions.lock().keys().cloned().collect::<HashSet<_>>();
+        session_ids.extend(self.session_roots.lock().keys().cloned());
+        session_ids.extend(
+            self.pending_extensions
+                .lock()
+                .values()
+                .map(|request| request.session_id.clone()),
+        );
+        for session_id in &session_ids {
+            self.cancel_extension_requests(session_id);
+            self.terminals.close_session(session_id);
+        }
+        self.session_roots.lock().clear();
+        self.sessions.lock().clear();
+        self.synthetic.lock().clear();
+        self.replaying.lock().clear();
+    }
+
+    fn set_session_roots(&self, session_id: &str, cwd: PathBuf, additional: Vec<PathBuf>) {
+        let roots = std::iter::once(cwd).chain(additional).collect();
+        self.session_roots
+            .lock()
+            .insert(session_id.to_string(), roots);
+    }
+
+    fn close_session(&self, session_id: &str) {
+        self.cancel_extension_requests(session_id);
+        self.terminals.close_session(session_id);
+        self.session_roots.lock().remove(session_id);
+        self.sessions.lock().remove(session_id);
+        self.synthetic.lock().remove(session_id);
+        self.replaying.lock().remove(session_id);
+    }
+
+    async fn checked_path(
+        &self,
+        session_id: &str,
+        path: &Path,
+        allow_new_file: bool,
+    ) -> Result<PathBuf, String> {
+        if !path.is_absolute() {
+            return Err("ACP filesystem paths must be absolute".to_string());
+        }
+        let roots = self
+            .session_roots
+            .lock()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| "session has no trusted filesystem roots".to_string())?;
+        let mut canonical_roots = Vec::with_capacity(roots.len());
+        for root in roots {
+            if let Ok(root) = tokio::fs::canonicalize(root).await {
+                canonical_roots.push(root);
+            }
+        }
+        let canonical_path = if allow_new_file {
+            match tokio::fs::canonicalize(path).await {
+                Ok(path) => path,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    let name = path
+                        .file_name()
+                        .filter(|name| !name.is_empty())
+                        .ok_or_else(|| "invalid file path".to_string())?;
+                    let parent = path
+                        .parent()
+                        .ok_or_else(|| "file path has no parent".to_string())?;
+                    tokio::fs::canonicalize(parent)
+                        .await
+                        .map_err(|error| error.to_string())?
+                        .join(name)
+                }
+                Err(error) => return Err(error.to_string()),
+            }
+        } else {
+            tokio::fs::canonicalize(path)
+                .await
+                .map_err(|error| error.to_string())?
+        };
+        if canonical_roots
+            .iter()
+            .any(|root| canonical_path.starts_with(root))
+        {
+            Ok(canonical_path)
+        } else {
+            Err("path is outside the trusted session roots".to_string())
+        }
+    }
+
+    async fn read_text_file(
+        &self,
+        session_id: &str,
+        path: &Path,
+        line: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<String, String> {
+        let path = self.checked_path(session_id, path, false).await?;
+        let content = tokio::fs::read_to_string(path)
+            .await
+            .map_err(|error| error.to_string())?;
+        let lines = content.lines();
+        let lines = lines.skip(line.unwrap_or(1).saturating_sub(1) as usize);
+        Ok(match limit {
+            Some(limit) => lines.take(limit as usize).collect::<Vec<_>>().join("\n"),
+            None => lines.collect::<Vec<_>>().join("\n"),
+        })
+    }
+
+    async fn write_text_file(
+        &self,
+        session_id: &str,
+        path: &Path,
+        content: &str,
+    ) -> Result<(), String> {
+        let path = self.checked_path(session_id, path, true).await?;
+        if let Ok(metadata) = tokio::fs::metadata(&path).await {
+            if metadata.is_dir() {
+                return Err("cannot write text to a directory".to_string());
+            }
+        }
+        tokio::fs::write(path, content)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn session_directory(&self, session_id: &str) -> Result<PathBuf, String> {
+        let root = self
+            .session_roots
+            .lock()
+            .get(session_id)
+            .and_then(|roots| roots.first())
+            .cloned()
+            .ok_or_else(|| "session has no trusted working directory".to_string())?;
+        self.checked_path(session_id, &root, false).await
     }
 
     /// Ensures a session's event channel exists before its first event.
@@ -198,11 +633,23 @@ pub struct AcpConnection {
     info: AgentInfo,
     capabilities: NormalizedCapabilities,
     auth_methods: Vec<AuthMethodView>,
+    terminal_auth: HashMap<String, TerminalAuthSpec>,
+    auth_method_meta: HashMap<String, serde_json::Map<String, serde_json::Value>>,
+    agent_meta: Option<serde_json::Map<String, serde_json::Value>>,
+    integration_id: Option<String>,
     protocol: AcpProtocol,
     wire: Wire,
     shared: Arc<Shared>,
     shutdown: CancellationToken,
     closed: CancellationToken,
+}
+
+/// In-memory terminal auth invocation data. Environment values are never
+/// returned over the UI/API boundary or written to profile storage.
+#[derive(Debug, Clone)]
+struct TerminalAuthSpec {
+    args: Vec<String>,
+    env: HashMap<String, String>,
 }
 
 impl AcpConnection {
@@ -215,6 +662,107 @@ impl AcpConnection {
     pub fn auth_methods(&self) -> &[AuthMethodView] {
         &self.auth_methods
     }
+
+    pub fn integration_id(&self) -> Option<&str> {
+        self.integration_id.as_deref()
+    }
+
+    fn terminal_auth_spec(&self, method_id: &str) -> Option<&TerminalAuthSpec> {
+        self.terminal_auth.get(method_id)
+    }
+
+    /// Starts the ACP-declared terminal login command in an owned PTY.
+    pub async fn start_terminal_auth(
+        &self,
+        profile_id: &str,
+        method_id: &str,
+        command: String,
+        cwd: PathBuf,
+        base_env: Vec<(String, String)>,
+    ) -> Result<String, ConnectionError> {
+        let method = self
+            .terminal_auth_spec(method_id)
+            .ok_or(ConnectionError::Unsupported("terminal_auth_method"))?;
+        let mut env: Vec<acp1::EnvVariable> = base_env
+            .into_iter()
+            .map(|(name, value)| acp1::EnvVariable::new(name, value))
+            .collect();
+        env.extend(
+            method
+                .env
+                .iter()
+                .map(|(name, value)| acp1::EnvVariable::new(name.clone(), value.clone())),
+        );
+        self.shared
+            .terminals
+            .create(
+                terminal_auth_owner(profile_id),
+                command,
+                method.args.clone(),
+                env,
+                cwd,
+                None,
+                Arc::new(|_, _| {}),
+            )
+            .await
+            .map_err(ConnectionError::Transport)
+    }
+
+    pub fn terminal_auth_output(
+        &self,
+        profile_id: &str,
+        terminal_id: &str,
+    ) -> Result<LoginTerminalOutput, ConnectionError> {
+        let snapshot = self
+            .shared
+            .terminals
+            .auth_output(&terminal_auth_owner(profile_id), terminal_id)
+            .map_err(ConnectionError::Transport)?;
+        Ok(LoginTerminalOutput {
+            output: snapshot.output,
+            truncated: snapshot.truncated,
+            exited: snapshot.exited,
+            exit_code: snapshot.exit_code,
+        })
+    }
+
+    pub fn terminal_auth_write(
+        &self,
+        profile_id: &str,
+        terminal_id: &str,
+        text: &str,
+    ) -> Result<(), ConnectionError> {
+        self.shared
+            .terminals
+            .write_auth(&terminal_auth_owner(profile_id), terminal_id, text)
+            .map_err(ConnectionError::Transport)
+    }
+
+    pub fn terminal_auth_cancel(
+        &self,
+        profile_id: &str,
+        terminal_id: &str,
+    ) -> Result<(), ConnectionError> {
+        self.shared
+            .terminals
+            .cancel_auth(&terminal_auth_owner(profile_id), terminal_id)
+            .map_err(ConnectionError::Transport)
+    }
+
+    pub fn auth_method_meta(
+        &self,
+        method_id: &str,
+    ) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        self.auth_method_meta.get(method_id)
+    }
+
+    pub fn agent_meta(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        self.agent_meta.as_ref()
+    }
+}
+
+fn terminal_auth_owner(profile_id: &str) -> String {
+    format!("auth:{profile_id}")
 }
 
 fn auth_method_view(
@@ -283,6 +831,23 @@ pub async fn connect<T>(
 where
     T: ConnectTo<Client> + Send + 'static,
 {
+    let mut methods = HashSet::new();
+    for method in options
+        .integration
+        .iter()
+        .flat_map(|integration| &integration.extension_methods)
+    {
+        if !method.starts_with('_') {
+            return Err(ConnectionError::Protocol(format!(
+                "ACP extension method must start with _: {method}"
+            )));
+        }
+        if !methods.insert(method) {
+            return Err(ConnectionError::Protocol(format!(
+                "duplicate ACP extension method claim: {method}"
+            )));
+        }
+    }
     match options.protocol {
         AcpProtocol::V1 => connect_v1(options, transport).await,
         AcpProtocol::V2 => {
@@ -317,6 +882,36 @@ fn auth_methods_v1(methods: &[acp1::AuthMethod]) -> Vec<AuthMethodView> {
                 method.description(),
                 shape,
             )
+        })
+        .collect()
+}
+
+fn terminal_auth_v1(methods: &[acp1::AuthMethod]) -> HashMap<String, TerminalAuthSpec> {
+    methods
+        .iter()
+        .filter_map(|method| match method {
+            acp1::AuthMethod::Terminal(method) => Some((
+                method.id.0.as_ref().to_string(),
+                TerminalAuthSpec {
+                    args: method.args.clone(),
+                    env: method.env.clone(),
+                },
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+fn auth_method_meta_v1(
+    methods: &[acp1::AuthMethod],
+) -> HashMap<String, serde_json::Map<String, serde_json::Value>> {
+    methods
+        .iter()
+        .filter_map(|method| {
+            method
+                .meta()
+                .filter(|meta| !meta.is_empty())
+                .map(|meta| (method.id().0.as_ref().to_string(), meta.clone()))
         })
         .collect()
 }
@@ -361,12 +956,28 @@ where
     let token = shutdown.clone();
     let closed = CancellationToken::new();
     let closed_task = closed.clone();
+    let connection_shared = shared.clone();
 
     let notify_shared = shared.clone();
     let request_shared = shared.clone();
     let elicitation_shared = shared.clone();
+    let extension_request_shared = shared.clone();
+    let extension_notification_shared = shared.clone();
+    let filesystem_read_shared = shared.clone();
+    let filesystem_write_shared = shared.clone();
+    let terminal_create_shared = shared.clone();
+    let terminal_output_shared = shared.clone();
+    let terminal_wait_shared = shared.clone();
+    let terminal_kill_shared = shared.clone();
+    let terminal_release_shared = shared.clone();
     let client_name = options.client_name.clone();
-    let elicitation_enabled = options.elicitation;
+    let elicitation_enabled = options.services.elicitation.is_some();
+    let terminal_auth_enabled = options.services.terminal_auth;
+    let initialize_meta = options
+        .integration
+        .as_ref()
+        .map(|integration| integration.initialize_meta.clone())
+        .filter(|meta| !meta.is_empty());
     tokio::spawn(async move {
         let result = Client
             .builder()
@@ -413,28 +1024,219 @@ where
                                 })
                                 .collect(),
                         };
-                        shared.emit(
-                            &session_id,
-                            TurnEventBody::PermissionRequested(permission.clone()),
-                        );
-                        let resolver = shared.resolver.clone();
                         let resolve_shared = shared.clone();
                         connection.spawn(async move {
-                            let decision = resolver
-                                .resolve(&SessionId::new(session_id.clone()), permission.clone())
+                            let decision = resolve_shared
+                                .resolve_permission(&session_id, permission)
                                 .await;
-                            resolve_shared.emit(
-                                &session_id,
-                                TurnEventBody::PermissionResolved {
-                                    req_id: permission.req_id.clone(),
-                                    outcome: decision.outcome,
-                                    decided_by: decision.decided_by,
-                                    option_id: decision.option_id.clone(),
-                                },
-                            );
                             responder.respond(v1_permission_response(decision))
                         })?;
                         Ok(())
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_request(
+                move |request: acp1::ReadTextFileRequest,
+                      responder: Responder<acp1::ReadTextFileResponse>,
+                      _connection: ConnectionTo<Agent>| {
+                    let shared = filesystem_read_shared.clone();
+                    async move {
+                        let session_id = request.session_id.to_string();
+                        match shared
+                            .read_text_file(&session_id, &request.path, request.line, request.limit)
+                            .await
+                        {
+                            Ok(content) => {
+                                responder.respond(acp1::ReadTextFileResponse::new(content))
+                            }
+                            Err(error) => responder.respond_with_internal_error(error),
+                        }
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_request(
+                move |request: acp1::WriteTextFileRequest,
+                      responder: Responder<acp1::WriteTextFileResponse>,
+                      _connection: ConnectionTo<Agent>| {
+                    let shared = filesystem_write_shared.clone();
+                    async move {
+                        let session_id = request.session_id.to_string();
+                        match shared
+                            .write_text_file(&session_id, &request.path, &request.content)
+                            .await
+                        {
+                            Ok(()) => responder.respond(acp1::WriteTextFileResponse::new()),
+                            Err(error) => responder.respond_with_internal_error(error),
+                        }
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_request(
+                move |request: acp1::CreateTerminalRequest,
+                      responder: Responder<acp1::CreateTerminalResponse>,
+                      _connection: ConnectionTo<Agent>| {
+                    let shared = terminal_create_shared.clone();
+                    async move {
+                        let session_id = request.session_id.to_string();
+                        let requested_cwd = match request.cwd {
+                            Some(cwd) => cwd,
+                            None => match shared.session_directory(&session_id).await {
+                                Ok(cwd) => cwd,
+                                Err(error) => return responder.respond_with_internal_error(error),
+                            },
+                        };
+                        let cwd = match shared
+                            .checked_path(&session_id, &requested_cwd, false)
+                            .await
+                        {
+                            Ok(cwd) => cwd,
+                            Err(error) => return responder.respond_with_internal_error(error),
+                        };
+                        match tokio::fs::metadata(&cwd).await {
+                            Ok(metadata) if metadata.is_dir() => {}
+                            Ok(_) => {
+                                return responder
+                                    .respond_with_internal_error("terminal cwd is not a directory")
+                            }
+                            Err(error) => return responder.respond_with_internal_error(error),
+                        }
+                        let command = request.command.clone();
+                        let title = std::iter::once(command.as_str())
+                            .chain(request.args.iter().map(String::as_str))
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        let output_shared = shared.clone();
+                        let output_session = session_id.clone();
+                        let output_title = title.clone();
+                        let output_announced = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                        let response_announced = output_announced.clone();
+                        let on_output = Arc::new(move |terminal_id: String, bytes: String| {
+                            if !output_announced.swap(true, Ordering::Relaxed) {
+                                output_shared.emit(
+                                    &output_session,
+                                    TurnEventBody::TerminalUpsert {
+                                        terminal_id: terminal_id.clone(),
+                                        patch: tethys_schema::thread::Patch::Set(
+                                            output_title.clone(),
+                                        ),
+                                    },
+                                );
+                            }
+                            output_shared.emit(
+                                &output_session,
+                                TurnEventBody::TerminalOutputChunk { terminal_id, bytes },
+                            );
+                        });
+                        match shared
+                            .terminals
+                            .create(
+                                session_id.clone(),
+                                command,
+                                request.args,
+                                request.env,
+                                cwd,
+                                request.output_byte_limit,
+                                on_output,
+                            )
+                            .await
+                        {
+                            Ok(terminal_id) => {
+                                if !response_announced.swap(true, Ordering::Relaxed) {
+                                    shared.emit(
+                                        &session_id,
+                                        TurnEventBody::TerminalUpsert {
+                                            terminal_id: terminal_id.clone(),
+                                            patch: tethys_schema::thread::Patch::Set(title),
+                                        },
+                                    );
+                                }
+                                responder.respond(acp1::CreateTerminalResponse::new(terminal_id))
+                            }
+                            Err(error) => responder.respond_with_internal_error(error),
+                        }
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_request(
+                move |request: acp1::TerminalOutputRequest,
+                      responder: Responder<acp1::TerminalOutputResponse>,
+                      _connection: ConnectionTo<Agent>| {
+                    let shared = terminal_output_shared.clone();
+                    async move {
+                        match shared.terminals.output(
+                            &request.session_id.to_string(),
+                            request.terminal_id.0.as_ref(),
+                        ) {
+                            Ok(response) => responder.respond(response),
+                            Err(error) => responder.respond_with_internal_error(error),
+                        }
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_request(
+                move |request: acp1::WaitForTerminalExitRequest,
+                      responder: Responder<acp1::WaitForTerminalExitResponse>,
+                      _connection: ConnectionTo<Agent>| {
+                    let shared = terminal_wait_shared.clone();
+                    async move {
+                        match shared
+                            .terminals
+                            .wait_for_exit(
+                                &request.session_id.to_string(),
+                                request.terminal_id.0.as_ref(),
+                            )
+                            .await
+                        {
+                            Ok(response) => responder.respond(response),
+                            Err(error) => responder.respond_with_internal_error(error),
+                        }
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_request(
+                move |request: acp1::KillTerminalRequest,
+                      responder: Responder<acp1::KillTerminalResponse>,
+                      _connection: ConnectionTo<Agent>| {
+                    let shared = terminal_kill_shared.clone();
+                    async move {
+                        match shared.terminals.kill(
+                            &request.session_id.to_string(),
+                            request.terminal_id.0.as_ref(),
+                        ) {
+                            Ok(()) => responder.respond(acp1::KillTerminalResponse::new()),
+                            Err(error) => responder.respond_with_internal_error(error),
+                        }
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_request(
+                move |request: acp1::ReleaseTerminalRequest,
+                      responder: Responder<acp1::ReleaseTerminalResponse>,
+                      _connection: ConnectionTo<Agent>| {
+                    let shared = terminal_release_shared.clone();
+                    async move {
+                        let session_id = request.session_id.to_string();
+                        let terminal_id = request.terminal_id.to_string();
+                        match shared.terminals.release(&session_id, &terminal_id) {
+                            Ok(()) => {
+                                shared.emit(
+                                    &session_id,
+                                    TurnEventBody::TerminalUpsert {
+                                        terminal_id,
+                                        patch: tethys_schema::thread::Patch::Clear,
+                                    },
+                                );
+                                responder.respond(acp1::ReleaseTerminalResponse::new())
+                            }
+                            Err(error) => responder.respond_with_internal_error(error),
+                        }
                     }
                 },
                 on_receive_request!(),
@@ -454,16 +1256,7 @@ where
                             ))?;
                             return Ok(());
                         };
-                        if !shared.elicitation {
-                            responder.respond(v1_elicitation_response(
-                                tethys_schema::elicitation::ElicitationResponse::without_values(
-                                    String::new(),
-                                    tethys_schema::elicitation::ElicitationOutcome::Cancelled,
-                                ),
-                            ))?;
-                            return Ok(());
-                        }
-                        let mut normalized = crate::elicitation::from_sdk_v1(&request)
+                        let normalized = crate::elicitation::from_sdk_v1(&request)
                             .or_else(|| {
                                 crate::elicitation::from_sdk_v1_url(&request).map(|url| {
                                     tethys_schema::elicitation::ElicitationRequest {
@@ -482,28 +1275,83 @@ where
                                 url: None,
                                 fields: Vec::new(),
                             });
-                        normalized.req_id = shared.next_elicitation_id();
-                        shared.emit(
-                            &session_id,
-                            TurnEventBody::ElicitationRequested(normalized.clone()),
-                        );
-                        let resolver = shared.elicitation_resolver.clone();
                         let resolve_shared = shared.clone();
                         connection.spawn(async move {
-                            let response = resolver
-                                .resolve(&SessionId::new(session_id.clone()), normalized)
-                                .await;
-                            resolve_shared.emit(
-                                &session_id,
-                                TurnEventBody::ElicitationResolved {
-                                    req_id: response.req_id.clone(),
-                                    outcome: response.outcome,
-                                    values: response.values.clone(),
-                                },
-                            );
+                            let response = resolve_shared
+                                .resolve_elicitation(&session_id, normalized)
+                                .await
+                                .unwrap_or_else(|| {
+                                    tethys_schema::elicitation::ElicitationResponse::without_values(
+                                        String::new(),
+                                        tethys_schema::elicitation::ElicitationOutcome::Cancelled,
+                                    )
+                                });
                             responder.respond(v1_elicitation_response(response))
                         })?;
                         Ok(())
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_notification(
+                move |notification: acp1::AgentNotification, connection: ConnectionTo<Agent>| {
+                    let shared = extension_notification_shared.clone();
+                    async move {
+                        let acp1::AgentNotification::ExtNotification(notification) = notification
+                        else {
+                            return Ok(Handled::No {
+                                message: (notification, connection),
+                                retry: false,
+                            });
+                        };
+                        shared.handle_extension_notification(
+                            &notification.method,
+                            notification.params.get().to_string(),
+                        );
+                        Ok(Handled::Yes)
+                    }
+                },
+                on_receive_notification!(),
+            )
+            .on_receive_request(
+                move |request: acp1::AgentRequest,
+                      responder: Responder<serde_json::Value>,
+                      connection: ConnectionTo<Agent>| {
+                    let shared = extension_request_shared.clone();
+                    async move {
+                        let acp1::AgentRequest::ExtMethodRequest(request) = request else {
+                            return Ok(Handled::No {
+                                message: (request, responder),
+                                retry: false,
+                            });
+                        };
+                        let params = request.params.get().to_string();
+                        match shared.prepare_extension_request(&request.method, params) {
+                            Ok(ExtensionDispatch::Unclaimed) => responder.respond_with_error(
+                                agent_client_protocol::Error::method_not_found(),
+                            )?,
+                            Ok(ExtensionDispatch::Immediate(value)) => responder.respond(value)?,
+                            Ok(ExtensionDispatch::Pending {
+                                session_id,
+                                request_id,
+                                response,
+                            }) => {
+                                let task = shared.clone().await_extension_response(
+                                    session_id.clone(),
+                                    request_id.clone(),
+                                    response,
+                                    responder,
+                                );
+                                if let Err(error) = connection.spawn(task) {
+                                    shared.cancel_extension_request(&session_id, &request_id);
+                                    return Err(error);
+                                }
+                            }
+                            Err(()) => responder.respond_with_error(
+                                agent_client_protocol::Error::invalid_params(),
+                            )?,
+                        }
+                        Ok(Handled::Yes)
                     }
                 },
                 on_receive_request!(),
@@ -524,6 +1372,7 @@ where
         if let Err(error) = result {
             tracing::debug!(%error, "ACP v1 connection ended");
         }
+        connection_shared.close_connection();
         closed_task.cancel();
     });
 
@@ -537,7 +1386,11 @@ where
                     client_name,
                     env!("CARGO_PKG_VERSION"),
                 ))
-                .client_capabilities(v1_client_capabilities(elicitation_enabled)),
+                .client_capabilities(v1_client_capabilities(
+                    elicitation_enabled,
+                    terminal_auth_enabled,
+                ))
+                .meta(initialize_meta),
         )
         .block_task()
         .await
@@ -549,10 +1402,19 @@ where
         .map(|info| agent_info(&info.name, info.version.as_str(), info.title.as_deref()))
         .unwrap_or_else(|| agent_info("unknown", "", None));
 
+    let terminal_auth = terminal_auth_v1(&response.auth_methods);
+    let auth_method_meta = auth_method_meta_v1(&response.auth_methods);
     Ok(AcpConnection {
         info,
         capabilities: capabilities_v1(&response.agent_capabilities, elicitation_enabled),
         auth_methods: auth_methods_v1(&response.auth_methods),
+        terminal_auth,
+        auth_method_meta,
+        agent_meta: response.meta.clone(),
+        integration_id: options
+            .integration
+            .as_ref()
+            .map(|integration| integration.id.clone()),
         protocol: AcpProtocol::V1,
         wire: Wire::V1(wire),
         shared,
@@ -575,12 +1437,20 @@ where
     let token = shutdown.clone();
     let closed = CancellationToken::new();
     let closed_task = closed.clone();
+    let connection_shared = shared.clone();
 
     let notify_shared = shared.clone();
     let request_shared = shared.clone();
     let elicitation_shared = shared.clone();
+    let extension_request_shared = shared.clone();
+    let extension_notification_shared = shared.clone();
     let client_name = options.client_name.clone();
-    let elicitation_enabled = options.elicitation;
+    let elicitation_enabled = options.services.elicitation.is_some();
+    let initialize_meta = options
+        .integration
+        .as_ref()
+        .map(|integration| integration.initialize_meta.clone())
+        .filter(|meta| !meta.is_empty());
     tokio::spawn(async move {
         let result = Client
             .v2()
@@ -608,25 +1478,11 @@ where
                         let session_id = request.session_id.to_string();
                         let mut permission = crate::map_v2::permission_request(&request);
                         permission.req_id = shared.next_request_id();
-                        shared.emit(
-                            &session_id,
-                            TurnEventBody::PermissionRequested(permission.clone()),
-                        );
-                        let resolver = shared.resolver.clone();
                         let resolve_shared = shared.clone();
                         connection.spawn(async move {
-                            let decision = resolver
-                                .resolve(&SessionId::new(session_id.clone()), permission.clone())
+                            let decision = resolve_shared
+                                .resolve_permission(&session_id, permission)
                                 .await;
-                            resolve_shared.emit(
-                                &session_id,
-                                TurnEventBody::PermissionResolved {
-                                    req_id: permission.req_id.clone(),
-                                    outcome: decision.outcome,
-                                    decided_by: decision.decided_by,
-                                    option_id: decision.option_id.clone(),
-                                },
-                            );
                             responder.respond(v2_permission_response(decision))
                         })?;
                         Ok(())
@@ -649,16 +1505,7 @@ where
                             ))?;
                             return Ok(());
                         };
-                        if !shared.elicitation {
-                            responder.respond(v2_elicitation_response(
-                                tethys_schema::elicitation::ElicitationResponse::without_values(
-                                    String::new(),
-                                    tethys_schema::elicitation::ElicitationOutcome::Cancelled,
-                                ),
-                            ))?;
-                            return Ok(());
-                        }
-                        let mut normalized = crate::elicitation::from_sdk_v2(&request)
+                        let normalized = crate::elicitation::from_sdk_v2(&request)
                             .or_else(|| {
                                 crate::elicitation::from_sdk_v2_url(&request).map(|url| {
                                     tethys_schema::elicitation::ElicitationRequest {
@@ -677,28 +1524,83 @@ where
                                 url: None,
                                 fields: Vec::new(),
                             });
-                        normalized.req_id = shared.next_elicitation_id();
-                        shared.emit(
-                            &session_id,
-                            TurnEventBody::ElicitationRequested(normalized.clone()),
-                        );
-                        let resolver = shared.elicitation_resolver.clone();
                         let resolve_shared = shared.clone();
                         connection.spawn(async move {
-                            let response = resolver
-                                .resolve(&SessionId::new(session_id.clone()), normalized)
-                                .await;
-                            resolve_shared.emit(
-                                &session_id,
-                                TurnEventBody::ElicitationResolved {
-                                    req_id: response.req_id.clone(),
-                                    outcome: response.outcome,
-                                    values: response.values.clone(),
-                                },
-                            );
+                            let response = resolve_shared
+                                .resolve_elicitation(&session_id, normalized)
+                                .await
+                                .unwrap_or_else(|| {
+                                    tethys_schema::elicitation::ElicitationResponse::without_values(
+                                        String::new(),
+                                        tethys_schema::elicitation::ElicitationOutcome::Cancelled,
+                                    )
+                                });
                             responder.respond(v2_elicitation_response(response))
                         })?;
                         Ok(())
+                    }
+                },
+                on_receive_request!(),
+            )
+            .on_receive_notification(
+                move |notification: acp2::AgentNotification, connection: V2ConnectionTo<Agent>| {
+                    let shared = extension_notification_shared.clone();
+                    async move {
+                        let acp2::AgentNotification::ExtNotification(notification) = notification
+                        else {
+                            return Ok(Handled::No {
+                                message: (notification, connection),
+                                retry: false,
+                            });
+                        };
+                        shared.handle_extension_notification(
+                            &notification.method,
+                            notification.params.get().to_string(),
+                        );
+                        Ok(Handled::Yes)
+                    }
+                },
+                on_receive_notification!(),
+            )
+            .on_receive_request(
+                move |request: acp2::AgentRequest,
+                      responder: Responder<serde_json::Value>,
+                      connection: V2ConnectionTo<Agent>| {
+                    let shared = extension_request_shared.clone();
+                    async move {
+                        let acp2::AgentRequest::ExtMethodRequest(request) = request else {
+                            return Ok(Handled::No {
+                                message: (request, responder),
+                                retry: false,
+                            });
+                        };
+                        let params = request.params.get().to_string();
+                        match shared.prepare_extension_request(&request.method, params) {
+                            Ok(ExtensionDispatch::Unclaimed) => responder.respond_with_error(
+                                agent_client_protocol::Error::method_not_found(),
+                            )?,
+                            Ok(ExtensionDispatch::Immediate(value)) => responder.respond(value)?,
+                            Ok(ExtensionDispatch::Pending {
+                                session_id,
+                                request_id,
+                                response,
+                            }) => {
+                                let task = shared.clone().await_extension_response(
+                                    session_id.clone(),
+                                    request_id.clone(),
+                                    response,
+                                    responder,
+                                );
+                                if let Err(error) = connection.spawn(task) {
+                                    shared.cancel_extension_request(&session_id, &request_id);
+                                    return Err(error);
+                                }
+                            }
+                            Err(()) => responder.respond_with_error(
+                                agent_client_protocol::Error::invalid_params(),
+                            )?,
+                        }
+                        Ok(Handled::Yes)
                     }
                 },
                 on_receive_request!(),
@@ -719,6 +1621,7 @@ where
         if let Err(error) = result {
             tracing::debug!(%error, "ACP v2 connection ended");
         }
+        connection_shared.close_connection();
         closed_task.cancel();
     });
 
@@ -731,7 +1634,8 @@ where
                 ProtocolVersion::V2,
                 acp2::Implementation::new(client_name, env!("CARGO_PKG_VERSION")),
             )
-            .capabilities(v2_client_capabilities(elicitation_enabled)),
+            .capabilities(v2_client_capabilities(elicitation_enabled))
+            .meta(initialize_meta),
         )
         .block_task()
         .await
@@ -745,6 +1649,13 @@ where
         ),
         capabilities: capabilities_v2(&response.capabilities, elicitation_enabled),
         auth_methods: auth_methods_v2(&response.auth_methods),
+        terminal_auth: HashMap::new(),
+        auth_method_meta: HashMap::new(),
+        agent_meta: response.meta.clone(),
+        integration_id: options
+            .integration
+            .as_ref()
+            .map(|integration| integration.id.clone()),
         protocol: AcpProtocol::V2,
         wire: Wire::V2(wire),
         shared,
@@ -776,10 +1687,12 @@ impl AgentConnection for AcpConnection {
     async fn new_session(&self, request: NewSession) -> Result<SessionHandle, ConnectionError> {
         match &self.wire {
             Wire::V1(connection) => {
+                let cwd = request.cwd.clone();
+                let additional_directories = request.additional_directories.clone();
                 let response = connection
                     .send_request(
                         acp1::NewSessionRequest::new(request.cwd)
-                            .additional_directories(request.additional_directories)
+                            .additional_directories(additional_directories.clone())
                             .mcp_servers(v1_mcp_servers(
                                 &request.mcp_servers,
                                 &self.capabilities.mcp,
@@ -790,21 +1703,24 @@ impl AgentConnection for AcpConnection {
                     .map_err(map_sdk_error)?;
                 let id = SessionId::new(response.session_id.to_string());
                 self.shared.register(&id.0);
+                self.shared
+                    .set_session_roots(&id.0, cwd, additional_directories);
                 Ok(SessionHandle {
                     id,
-                    config_options: response
-                        .config_options
-                        .as_ref()
-                        .map(|options| options.iter().map(map::config_option).collect())
-                        .unwrap_or_default(),
+                    config_options: v1_session_config(
+                        response.modes.as_ref(),
+                        response.config_options.as_ref(),
+                    ),
                 })
             }
             #[cfg(feature = "acp-v2")]
             Wire::V2(connection) => {
+                let cwd = request.cwd.clone();
+                let additional_directories = request.additional_directories.clone();
                 let response = connection
                     .send_request(
                         acp2::NewSessionRequest::new(request.cwd)
-                            .additional_directories(request.additional_directories)
+                            .additional_directories(additional_directories.clone())
                             .mcp_servers(v2_mcp_servers(
                                 &request.mcp_servers,
                                 &self.capabilities.mcp,
@@ -815,6 +1731,8 @@ impl AgentConnection for AcpConnection {
                     .map_err(map_sdk_error)?;
                 let id = SessionId::new(response.session_id.to_string());
                 self.shared.register(&id.0);
+                self.shared
+                    .set_session_roots(&id.0, cwd, additional_directories);
                 Ok(SessionHandle {
                     id,
                     config_options: response
@@ -827,54 +1745,132 @@ impl AgentConnection for AcpConnection {
         }
     }
 
+    async fn load_session(&self, request: ResumeSession) -> Result<SessionHandle, ConnectionError> {
+        let session_id = request.session_id.0.clone();
+        let cwd = request.cwd.clone();
+        let additional_directories = request.additional_directories.clone();
+        self.shared.set_replaying(&session_id, true);
+        let result = match &self.wire {
+            Wire::V1(connection) => {
+                if !self.capabilities.load_session {
+                    Err(ConnectionError::Unsupported("load_session"))
+                } else {
+                    let response = connection
+                        .send_request(
+                            acp1::LoadSessionRequest::new(session_id.clone(), request.cwd)
+                                .mcp_servers(v1_mcp_servers(
+                                    &request.mcp_servers,
+                                    &self.capabilities.mcp,
+                                ))
+                                .additional_directories(additional_directories.clone()),
+                        )
+                        .block_task()
+                        .await
+                        .map_err(map_sdk_error);
+                    response.map(|response| {
+                        self.shared.register(&session_id);
+                        self.shared.set_session_roots(
+                            &session_id,
+                            cwd.clone(),
+                            additional_directories.clone(),
+                        );
+                        SessionHandle {
+                            id: request.session_id.clone(),
+                            config_options: v1_session_config(
+                                response.modes.as_ref(),
+                                response.config_options.as_ref(),
+                            ),
+                        }
+                    })
+                }
+            }
+            #[cfg(feature = "acp-v2")]
+            Wire::V2(_) => Err(ConnectionError::Unsupported("load_session")),
+        };
+        self.shared.set_replaying(&session_id, false);
+        result
+    }
+
     async fn resume_session(
         &self,
         request: ResumeSession,
     ) -> Result<SessionHandle, ConnectionError> {
         let session_id = request.session_id.0.clone();
+        let cwd = request.cwd.clone();
+        let additional_directories = request.additional_directories.clone();
         self.shared.set_replaying(&session_id, true);
         let result = match &self.wire {
             Wire::V1(connection) => {
-                let response = connection
-                    .send_request(
-                        acp1::LoadSessionRequest::new(session_id.clone(), request.cwd).mcp_servers(
-                            v1_mcp_servers(&request.mcp_servers, &self.capabilities.mcp),
-                        ),
-                    )
-                    .block_task()
-                    .await
-                    .map_err(map_sdk_error);
-                response.map(|response| SessionHandle {
-                    id: request.session_id.clone(),
-                    config_options: response
-                        .config_options
-                        .as_ref()
-                        .map(|options| options.iter().map(map::config_option).collect())
-                        .unwrap_or_default(),
-                })
+                if !self.capabilities.resume {
+                    Err(ConnectionError::Unsupported("resume_session"))
+                } else {
+                    let response = connection
+                        .send_request(
+                            acp1::ResumeSessionRequest::new(session_id.clone(), request.cwd)
+                                .additional_directories(additional_directories.clone())
+                                .mcp_servers(v1_mcp_servers(
+                                    &request.mcp_servers,
+                                    &self.capabilities.mcp,
+                                )),
+                        )
+                        .block_task()
+                        .await
+                        .map_err(map_sdk_error);
+                    response.map(|response| {
+                        self.shared.register(&session_id);
+                        self.shared.set_session_roots(
+                            &session_id,
+                            cwd.clone(),
+                            additional_directories.clone(),
+                        );
+                        SessionHandle {
+                            id: request.session_id.clone(),
+                            config_options: v1_session_config(
+                                response.modes.as_ref(),
+                                response.config_options.as_ref(),
+                            ),
+                        }
+                    })
+                }
             }
             #[cfg(feature = "acp-v2")]
             Wire::V2(connection) => {
-                let mut resume = acp2::ResumeSessionRequest::new(session_id.clone(), request.cwd)
-                    .additional_directories(request.additional_directories)
-                    .mcp_servers(v2_mcp_servers(&request.mcp_servers, &self.capabilities.mcp));
-                if request.replay {
-                    resume = resume
-                        .replay_from(acp2::ReplayFrom::Start(acp2::ReplayFromStart::default()));
+                if !self.capabilities.resume {
+                    Err(ConnectionError::Unsupported("resume_session"))
+                } else {
+                    let mut resume =
+                        acp2::ResumeSessionRequest::new(session_id.clone(), request.cwd)
+                            .additional_directories(additional_directories.clone())
+                            .mcp_servers(v2_mcp_servers(
+                                &request.mcp_servers,
+                                &self.capabilities.mcp,
+                            ));
+                    if request.replay {
+                        resume = resume
+                            .replay_from(acp2::ReplayFrom::Start(acp2::ReplayFromStart::default()));
+                    }
+                    let response = connection
+                        .send_request(resume)
+                        .block_task()
+                        .await
+                        .map_err(map_sdk_error);
+                    response.map(|response| {
+                        self.shared.register(&session_id);
+                        self.shared.set_session_roots(
+                            &session_id,
+                            cwd.clone(),
+                            additional_directories.clone(),
+                        );
+                        SessionHandle {
+                            id: request.session_id.clone(),
+                            config_options: response
+                                .config_options
+                                .iter()
+                                .map(crate::map_v2::config_option)
+                                .collect(),
+                        }
+                    })
                 }
-                let response = connection
-                    .send_request(resume)
-                    .block_task()
-                    .await
-                    .map_err(map_sdk_error);
-                response.map(|response| SessionHandle {
-                    id: request.session_id.clone(),
-                    config_options: response
-                        .config_options
-                        .iter()
-                        .map(crate::map_v2::config_option)
-                        .collect(),
-                })
             }
         };
         self.shared.set_replaying(&session_id, false);
@@ -883,17 +1879,29 @@ impl AgentConnection for AcpConnection {
 
     async fn close_session(&self, id: &SessionId) -> Result<(), ConnectionError> {
         match &self.wire {
-            Wire::V1(_) => {
-                let _ = id;
-                Err(ConnectionError::Unsupported("close_session_v1"))
+            Wire::V1(connection) => {
+                if !self.capabilities.close_session {
+                    return Err(ConnectionError::Unsupported("close_session"));
+                }
+                connection
+                    .send_request(acp1::CloseSessionRequest::new(id.0.clone()))
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+                self.shared.close_session(&id.0);
+                Ok(())
             }
             #[cfg(feature = "acp-v2")]
             Wire::V2(connection) => {
+                if !self.capabilities.close_session {
+                    return Err(ConnectionError::Unsupported("close_session"));
+                }
                 connection
                     .send_request(acp2::CloseSessionRequest::new(id.0.clone()))
                     .block_task()
                     .await
                     .map_err(map_sdk_error)?;
+                self.shared.close_session(&id.0);
                 Ok(())
             }
         }
@@ -908,7 +1916,7 @@ impl AgentConnection for AcpConnection {
             Wire::V1(connection) => {
                 let blocks = blocks
                     .into_iter()
-                    .map(to_v1_block)
+                    .map(|block| to_v1_block(block, &self.capabilities))
                     .collect::<Result<Vec<_>, _>>()?;
                 self.shared.emit(
                     &id.0,
@@ -931,7 +1939,7 @@ impl AgentConnection for AcpConnection {
             Wire::V2(connection) => {
                 let blocks = blocks
                     .into_iter()
-                    .map(to_v2_block)
+                    .map(|block| to_v2_block(block, &self.capabilities))
                     .collect::<Result<Vec<_>, _>>()?;
                 connection
                     .send_request(acp2::PromptRequest::new(id.0.clone(), blocks))
@@ -944,6 +1952,7 @@ impl AgentConnection for AcpConnection {
     }
 
     async fn cancel(&self, id: &SessionId) -> Result<(), ConnectionError> {
+        self.shared.cancel_extension_requests(&id.0);
         match &self.wire {
             Wire::V1(connection) => connection
                 .send_notification(acp1::CancelNotification::new(id.0.clone()))
@@ -952,6 +1961,212 @@ impl AgentConnection for AcpConnection {
             Wire::V2(connection) => connection
                 .send_notification(acp2::CancelSessionNotification::new(id.0.clone()))
                 .map_err(map_sdk_error),
+        }
+    }
+
+    async fn respond_extension(
+        &self,
+        session_id: &SessionId,
+        request_id: &str,
+        response: serde_json::Value,
+    ) -> Result<(), ConnectionError> {
+        self.shared
+            .respond_extension(session_id, request_id, response)
+    }
+
+    async fn list_sessions_page(
+        &self,
+        cwd: &std::path::Path,
+        cursor: Option<&str>,
+    ) -> Result<(Vec<SessionSummary>, Option<String>), ConnectionError> {
+        match &self.wire {
+            Wire::V1(connection) => {
+                if !self.capabilities.list_sessions {
+                    return Err(ConnectionError::Unsupported("list_sessions"));
+                }
+                let response = connection
+                    .send_request(
+                        acp1::ListSessionsRequest::new()
+                            .cwd(cwd.to_path_buf())
+                            .cursor(cursor.map(str::to_string)),
+                    )
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+                let page = response
+                    .sessions
+                    .into_iter()
+                    .map(|session| SessionSummary {
+                        id: SessionId::new(session.session_id.to_string()),
+                        cwd: session.cwd,
+                        title: session.title,
+                        updated_at: session.updated_at,
+                    })
+                    .collect::<Vec<_>>();
+                Ok((page, response.next_cursor))
+            }
+            #[cfg(feature = "acp-v2")]
+            Wire::V2(connection) => {
+                if !self.capabilities.list_sessions {
+                    return Err(ConnectionError::Unsupported("list_sessions"));
+                }
+                let response = connection
+                    .send_request(
+                        acp2::ListSessionsRequest::new()
+                            .cwd(cwd.to_path_buf())
+                            .cursor(
+                                cursor
+                                    .map(|cursor| acp2::SessionListCursor::new(cursor.to_string())),
+                            ),
+                    )
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+                let page = response
+                    .sessions
+                    .into_iter()
+                    .map(|session| SessionSummary {
+                        id: SessionId::new(session.session_id.to_string()),
+                        cwd: session.cwd.0,
+                        title: session.title,
+                        updated_at: session.updated_at,
+                    })
+                    .collect::<Vec<_>>();
+                Ok((
+                    page,
+                    response
+                        .next_cursor
+                        .map(|cursor| cursor.0.as_ref().to_string()),
+                ))
+            }
+        }
+    }
+
+    async fn set_config_option(
+        &self,
+        id: &SessionId,
+        config_id: &str,
+        value: serde_json::Value,
+    ) -> Result<Vec<ConfigOption>, ConnectionError> {
+        let config_id = config_id.to_string();
+        match &self.wire {
+            Wire::V1(connection) => {
+                let value = match value {
+                    serde_json::Value::Bool(value) => {
+                        acp1::SessionConfigOptionValue::boolean(value)
+                    }
+                    serde_json::Value::String(value) => {
+                        acp1::SessionConfigOptionValue::value_id(value)
+                    }
+                    _ => return Err(ConnectionError::Unsupported("config_option_value")),
+                };
+                let response = connection
+                    .send_request(acp1::SetSessionConfigOptionRequest::new(
+                        id.0.clone(),
+                        config_id.clone(),
+                        value,
+                    ))
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+                Ok(response
+                    .config_options
+                    .iter()
+                    .map(map::config_option)
+                    .collect())
+            }
+            #[cfg(feature = "acp-v2")]
+            Wire::V2(connection) => {
+                let value = match value {
+                    serde_json::Value::Bool(value) => {
+                        acp2::SessionConfigOptionValue::boolean(value)
+                    }
+                    serde_json::Value::String(value) => acp2::SessionConfigOptionValue::id(value),
+                    _ => return Err(ConnectionError::Unsupported("config_option_value")),
+                };
+                let response = connection
+                    .send_request(acp2::SetSessionConfigOptionRequest::new(
+                        id.0.clone(),
+                        config_id.clone(),
+                        value,
+                    ))
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+                Ok(response
+                    .config_options
+                    .iter()
+                    .map(crate::map_v2::config_option)
+                    .collect())
+            }
+        }
+    }
+
+    async fn set_mode(&self, id: &SessionId, mode_id: &str) -> Result<(), ConnectionError> {
+        match &self.wire {
+            Wire::V1(connection) => {
+                connection
+                    .send_request(acp1::SetSessionModeRequest::new(
+                        id.0.clone(),
+                        mode_id.to_string(),
+                    ))
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+                Ok(())
+            }
+            #[cfg(feature = "acp-v2")]
+            Wire::V2(_) => Err(ConnectionError::Unsupported("session/set_mode")),
+        }
+    }
+
+    async fn login(&self, method_id: &str) -> Result<(), ConnectionError> {
+        let method = self
+            .auth_methods
+            .iter()
+            .find(|method| method.id == method_id)
+            .ok_or(ConnectionError::Unsupported("unknown_auth_method"))?;
+        if !matches!(method.shape, AuthMethodShape::AgentAuth) {
+            return Err(ConnectionError::Unsupported("terminal_auth"));
+        }
+        match &self.wire {
+            Wire::V1(connection) => {
+                connection
+                    .send_request(acp1::AuthenticateRequest::new(acp1::AuthMethodId::new(
+                        method_id,
+                    )))
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+                Ok(())
+            }
+            #[cfg(feature = "acp-v2")]
+            Wire::V2(_) => Err(ConnectionError::Unsupported("login_v2")),
+        }
+    }
+
+    async fn logout(&self) -> Result<(), ConnectionError> {
+        if !self.capabilities.logout {
+            return Err(ConnectionError::Unsupported("logout"));
+        }
+        match &self.wire {
+            Wire::V1(connection) => {
+                connection
+                    .send_request(acp1::LogoutRequest::new())
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+                Ok(())
+            }
+            #[cfg(feature = "acp-v2")]
+            Wire::V2(connection) => {
+                connection
+                    .send_request(acp2::LogoutAuthRequest::new())
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+                Ok(())
+            }
         }
     }
 
@@ -972,29 +2187,167 @@ impl AgentConnection for AcpConnection {
             },
         ))
     }
+
+    fn session_deleter(&self) -> Option<&dyn SessionDeleter> {
+        self.capabilities.delete_session.then_some(self)
+    }
 }
 
-fn to_v1_block(block: ContentBlock) -> Result<acp1::ContentBlock, ConnectionError> {
+#[async_trait]
+impl SessionDeleter for AcpConnection {
+    async fn delete_session(&self, id: &SessionId) -> Result<(), ConnectionError> {
+        if !self.capabilities.delete_session {
+            return Err(ConnectionError::Unsupported("delete_session"));
+        }
+        match &self.wire {
+            Wire::V1(connection) => {
+                connection
+                    .send_request(acp1::DeleteSessionRequest::new(id.0.clone()))
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+            }
+            #[cfg(feature = "acp-v2")]
+            Wire::V2(connection) => {
+                connection
+                    .send_request(acp2::DeleteSessionRequest::new(id.0.clone()))
+                    .block_task()
+                    .await
+                    .map_err(map_sdk_error)?;
+            }
+        }
+        self.shared.close_session(&id.0);
+        Ok(())
+    }
+}
+
+fn to_v1_block(
+    block: ContentBlock,
+    capabilities: &NormalizedCapabilities,
+) -> Result<acp1::ContentBlock, ConnectionError> {
     match block {
         ContentBlock::Text(text) => Ok(acp1::ContentBlock::Text(acp1::TextContent::new(text))),
-        other => Err(ConnectionError::Unsupported(match other {
-            ContentBlock::ResourceLink { .. } => "prompt_resource_link",
-            ContentBlock::Image { .. } => "prompt_image",
-            _ => "prompt_content_block",
-        })),
+        ContentBlock::TextWithMetadata { text, acp_metadata } => Ok(acp1::ContentBlock::Text(
+            acp1::TextContent::new(text)
+                .annotations(raw_content_metadata_field(&acp_metadata, "annotations"))
+                .meta(raw_content_metadata_field(&acp_metadata, "_meta")),
+        )),
+        ContentBlock::ResourceLink {
+            uri,
+            name,
+            mime_type,
+            acp_metadata,
+        } => Ok(acp1::ContentBlock::ResourceLink(
+            acp1::ResourceLink::new(name, uri)
+                .mime_type(mime_type)
+                .annotations(content_metadata_field(&acp_metadata, "annotations"))
+                .description(content_metadata_field(&acp_metadata, "description"))
+                .size(content_metadata_field(&acp_metadata, "size"))
+                .title(content_metadata_field(&acp_metadata, "title"))
+                .meta(content_metadata_field(&acp_metadata, "_meta")),
+        )),
+        ContentBlock::Image {
+            mime_type,
+            data,
+            acp_metadata,
+        } => {
+            if !capabilities.prompt_image {
+                return Err(ConnectionError::Unsupported("prompt_image"));
+            }
+            Ok(acp1::ContentBlock::Image(
+                acp1::ImageContent::new(data, mime_type)
+                    .annotations(content_metadata_field(&acp_metadata, "annotations"))
+                    .uri(content_metadata_field(&acp_metadata, "uri"))
+                    .meta(content_metadata_field(&acp_metadata, "_meta")),
+            ))
+        }
+        ContentBlock::Audio {
+            mime_type,
+            data,
+            acp_metadata,
+        } => {
+            if !capabilities.prompt_audio {
+                return Err(ConnectionError::Unsupported("prompt_audio"));
+            }
+            Ok(acp1::ContentBlock::Audio(
+                acp1::AudioContent::new(data, mime_type)
+                    .annotations(content_metadata_field(&acp_metadata, "annotations"))
+                    .meta(content_metadata_field(&acp_metadata, "_meta")),
+            ))
+        }
+        ContentBlock::Resource {
+            uri,
+            mime_type,
+            text,
+            blob,
+            acp_metadata,
+        } => {
+            if !capabilities.prompt_embedded_context {
+                return Err(ConnectionError::Unsupported("prompt_embedded_context"));
+            }
+            let resource_metadata =
+                content_metadata_field::<serde_json::Value>(&acp_metadata, "resource_content")
+                    .map(|metadata| metadata.to_string());
+            let resource = if let Some(text) = text {
+                acp1::EmbeddedResourceResource::TextResourceContents(
+                    acp1::TextResourceContents::new(text, uri)
+                        .mime_type(mime_type)
+                        .meta(content_metadata_field(&resource_metadata, "_meta")),
+                )
+            } else if let Some(blob) = blob {
+                acp1::EmbeddedResourceResource::BlobResourceContents(
+                    acp1::BlobResourceContents::new(blob, uri)
+                        .mime_type(mime_type)
+                        .meta(content_metadata_field(&resource_metadata, "_meta")),
+                )
+            } else {
+                return Err(ConnectionError::Protocol(
+                    "embedded resource must contain text or blob data".into(),
+                ));
+            };
+            Ok(acp1::ContentBlock::Resource(
+                acp1::EmbeddedResource::new(resource)
+                    .annotations(content_metadata_field(&acp_metadata, "annotations"))
+                    .meta(content_metadata_field(&acp_metadata, "_meta")),
+            ))
+        }
+        ContentBlock::Unknown(_) => Err(ConnectionError::Unsupported("prompt_content_block")),
     }
 }
 
 #[cfg(feature = "acp-v2")]
-fn to_v2_block(block: ContentBlock) -> Result<acp2::ContentBlock, ConnectionError> {
-    match block {
-        ContentBlock::Text(text) => Ok(acp2::ContentBlock::Text(acp2::TextContent::new(text))),
-        other => Err(ConnectionError::Unsupported(match other {
-            ContentBlock::ResourceLink { .. } => "prompt_resource_link",
-            ContentBlock::Image { .. } => "prompt_image",
-            _ => "prompt_content_block",
-        })),
-    }
+fn to_v2_block(
+    block: ContentBlock,
+    capabilities: &NormalizedCapabilities,
+) -> Result<acp2::ContentBlock, ConnectionError> {
+    let v1_block = to_v1_block(block, capabilities)?;
+    let value = serde_json::to_value(v1_block)
+        .map_err(|error| ConnectionError::Protocol(error.to_string()))?;
+    serde_json::from_value(value).map_err(|error| ConnectionError::Protocol(error.to_string()))
+}
+
+fn content_metadata_field<T: serde::de::DeserializeOwned>(
+    metadata: &Option<String>,
+    field: &str,
+) -> Option<T> {
+    metadata.as_deref().and_then(|metadata| {
+        serde_json::from_str::<serde_json::Value>(metadata)
+            .ok()?
+            .get(field)
+            .cloned()
+            .and_then(|value| serde_json::from_value(value).ok())
+    })
+}
+
+fn raw_content_metadata_field<T: serde::de::DeserializeOwned>(
+    metadata: &str,
+    field: &str,
+) -> Option<T> {
+    serde_json::from_str::<serde_json::Value>(metadata)
+        .ok()?
+        .get(field)
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
 }
 
 fn v1_permission_response(decision: PermissionDecision) -> acp1::RequestPermissionResponse {
@@ -1028,21 +2381,37 @@ fn capabilities_v1(
     capabilities: &acp1::AgentCapabilities,
     elicitation: bool,
 ) -> NormalizedCapabilities {
+    let session = &capabilities.session_capabilities;
     NormalizedCapabilities {
         load_session: capabilities.load_session,
-        resume: capabilities.load_session,
+        resume: session.resume.is_some(),
+        close_session: session.close.is_some(),
+        list_sessions: session.list.is_some(),
+        delete_session: session.delete.is_some(),
+        logout: capabilities.auth.logout.is_some(),
         mcp: McpTransports {
             stdio: true,
             http: capabilities.mcp_capabilities.http,
             sse: capabilities.mcp_capabilities.sse,
         },
+        prompt_text: true,
+        prompt_resource_link: true,
+        prompt_image: capabilities.prompt_capabilities.image,
+        prompt_audio: capabilities.prompt_capabilities.audio,
         prompt_embedded_context: capabilities.prompt_capabilities.embedded_context,
         elicitation,
     }
 }
 
-fn v1_client_capabilities(elicitation: bool) -> acp1::ClientCapabilities {
-    let mut capabilities = acp1::ClientCapabilities::new();
+fn v1_client_capabilities(elicitation: bool, terminal_auth: bool) -> acp1::ClientCapabilities {
+    let mut capabilities = acp1::ClientCapabilities::new()
+        .fs(acp1::FileSystemCapabilities::new()
+            .read_text_file(true)
+            .write_text_file(true))
+        .terminal(true);
+    if terminal_auth {
+        capabilities.auth = acp1::AuthCapabilities::new().terminal(true);
+    }
     if elicitation {
         capabilities.elicitation = Some(
             acp1::ElicitationCapabilities::new().form(acp1::ElicitationFormCapabilities::new()),
@@ -1061,14 +2430,26 @@ fn capabilities_v2(
     NormalizedCapabilities {
         load_session: false,
         resume: session.is_some(),
+        close_session: false,
+        list_sessions: false,
+        delete_session: session.is_some_and(|session| session.delete.is_some()),
+        logout: false,
         mcp: McpTransports {
             stdio: mcp.and_then(|mcp| mcp.stdio.as_ref()).is_some(),
             http: mcp.and_then(|mcp| mcp.http.as_ref()).is_some(),
             sse: false,
         },
+        prompt_text: true,
+        prompt_resource_link: true,
+        prompt_image: session
+            .and_then(|session| session.prompt.as_ref())
+            .is_some_and(|prompt| prompt.image.is_some()),
+        prompt_audio: session
+            .and_then(|session| session.prompt.as_ref())
+            .is_some_and(|prompt| prompt.audio.is_some()),
         prompt_embedded_context: session
             .and_then(|session| session.prompt.as_ref())
-            .is_some(),
+            .is_some_and(|prompt| prompt.embedded_context.is_some()),
         elicitation,
     }
 }
@@ -1090,6 +2471,21 @@ fn elicitation_session_v1(request: &acp1::CreateElicitationRequest) -> Option<St
         acp1::ElicitationScope::Session(scope) => Some(scope.session_id.to_string()),
         _ => None,
     }
+}
+
+fn canonical_extension_method(method: &str) -> String {
+    if method.starts_with('_') {
+        method.to_string()
+    } else {
+        format!("_{method}")
+    }
+}
+
+fn extension_session_id(params: &serde_json::Value) -> Option<String> {
+    params
+        .get("sessionId")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
 }
 
 #[cfg(feature = "acp-v2")]
@@ -1180,6 +2576,21 @@ fn resolved_value(value: &RegistryValue) -> Option<String> {
         RegistryValue::Plain(text) => Some(text.clone()),
         RegistryValue::Secret { .. } => None,
     }
+}
+
+/// v1 mode state first, then config options, in the normalized option shape.
+fn v1_session_config(
+    modes: Option<&acp1::SessionModeState>,
+    options: Option<&Vec<acp1::SessionConfigOption>>,
+) -> Vec<ConfigOption> {
+    let mut config = Vec::new();
+    if let Some(state) = modes {
+        config.push(map::mode_option(state));
+    }
+    if let Some(options) = options {
+        config.extend(options.iter().map(map::config_option));
+    }
+    config
 }
 
 fn v1_mcp_servers(
@@ -1279,7 +2690,11 @@ fn agent_info(name: &str, version: &str, title: Option<&str>) -> AgentInfo {
 }
 
 fn map_sdk_error(error: agent_client_protocol::Error) -> ConnectionError {
-    ConnectionError::Protocol(error.to_string())
+    if error.code == acp1::ErrorCode::AuthRequired {
+        ConnectionError::AuthRequired
+    } else {
+        ConnectionError::Protocol(error.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -1331,6 +2746,63 @@ mod tests {
         };
         let mapped = v1_mcp_servers(&session_servers(), &stdio_only);
         assert_eq!(mapped.len(), 1);
+    }
+
+    #[test]
+    fn prompt_blocks_follow_negotiated_content_capabilities() {
+        let mut capabilities = NormalizedCapabilities::default();
+        capabilities.prompt_image = true;
+        capabilities.prompt_audio = true;
+        capabilities.prompt_embedded_context = true;
+
+        let resource_link = to_v1_block(
+            ContentBlock::ResourceLink {
+                uri: "file:///tmp/a.txt".into(),
+                name: "a.txt".into(),
+                mime_type: Some("text/plain".into()),
+                acp_metadata: None,
+            },
+            &capabilities,
+        )
+        .expect("resource link");
+        assert!(matches!(resource_link, acp1::ContentBlock::ResourceLink(_)));
+
+        for block in [
+            ContentBlock::Image {
+                mime_type: "image/png".into(),
+                data: "aW1hZ2U=".into(),
+                acp_metadata: None,
+            },
+            ContentBlock::Audio {
+                mime_type: "audio/wav".into(),
+                data: "YXVkaW8=".into(),
+                acp_metadata: None,
+            },
+            ContentBlock::Resource {
+                uri: "urn:text".into(),
+                mime_type: Some("text/plain".into()),
+                text: Some("embedded".into()),
+                blob: None,
+                acp_metadata: None,
+            },
+        ] {
+            to_v1_block(block, &capabilities).expect("negotiated block");
+        }
+
+        capabilities.prompt_image = false;
+        let error = to_v1_block(
+            ContentBlock::Image {
+                mime_type: "image/png".into(),
+                data: "aW1hZ2U=".into(),
+                acp_metadata: None,
+            },
+            &capabilities,
+        )
+        .expect_err("image must be gated");
+        assert!(matches!(
+            error,
+            ConnectionError::Unsupported("prompt_image")
+        ));
     }
 
     #[cfg(feature = "acp-v2")]

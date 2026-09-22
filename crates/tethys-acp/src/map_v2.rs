@@ -8,7 +8,7 @@ use tethys_schema::thread::{
     SessionState, StopReason, ToolCallContent, ToolCallPatch, ToolCallStatus, TurnEventBody,
 };
 
-use crate::map::{json_string, state_changed};
+use crate::map::{acp_metadata, json_string, state_changed};
 
 /// Maps one `session/update` payload to zero or more normalized events.
 pub fn v2_update(update: &acp2::SessionUpdate) -> Vec<TurnEventBody> {
@@ -192,16 +192,68 @@ pub(crate) fn tool_content(content: &acp2::ToolCallContent) -> ToolCallContent {
 
 fn content_block(block: &acp2::ContentBlock) -> ContentBlock {
     match block {
-        acp2::ContentBlock::Text(text) => ContentBlock::Text(text.text.clone()),
+        acp2::ContentBlock::Text(text) => match acp_metadata(text, &["text"]) {
+            Some(acp_metadata) => ContentBlock::TextWithMetadata {
+                text: text.text.clone(),
+                acp_metadata,
+            },
+            None => ContentBlock::Text(text.text.clone()),
+        },
         acp2::ContentBlock::ResourceLink(link) => ContentBlock::ResourceLink {
             uri: link.uri.clone(),
             name: link.name.clone(),
             mime_type: link.mime_type.as_ref().map(|mime| mime.to_string()),
+            acp_metadata: acp_metadata(link, &["name", "uri", "mimeType"]),
         },
         acp2::ContentBlock::Image(image) => ContentBlock::Image {
             mime_type: image.mime_type.to_string(),
             data: image.data.clone(),
+            acp_metadata: acp_metadata(image, &["data", "mimeType"]),
         },
+        acp2::ContentBlock::Audio(audio) => ContentBlock::Audio {
+            mime_type: audio.mime_type.to_string(),
+            data: audio.data.clone(),
+            acp_metadata: acp_metadata(audio, &["data", "mimeType"]),
+        },
+        acp2::ContentBlock::Resource(resource) => {
+            let (uri, mime_type, text, blob, nested_metadata) = match &resource.resource {
+                acp2::EmbeddedResourceResource::TextResourceContents(contents) => (
+                    contents.uri.clone(),
+                    contents.mime_type.as_ref().map(|mime| mime.to_string()),
+                    Some(contents.text.clone()),
+                    None,
+                    acp_metadata(contents, &["uri", "mimeType", "text"]),
+                ),
+                acp2::EmbeddedResourceResource::BlobResourceContents(contents) => (
+                    contents.uri.clone(),
+                    contents.mime_type.as_ref().map(|mime| mime.to_string()),
+                    None,
+                    Some(contents.blob.clone()),
+                    acp_metadata(contents, &["uri", "mimeType", "blob"]),
+                ),
+                _ => return ContentBlock::Unknown(json_string(block)),
+            };
+            let top_metadata = acp_metadata(resource, &["resource"]);
+            let mut metadata = serde_json::Map::new();
+            if let Some(raw) = top_metadata {
+                if let Ok(serde_json::Value::Object(fields)) = serde_json::from_str(&raw) {
+                    metadata.extend(fields);
+                }
+            }
+            if let Some(raw) = nested_metadata {
+                if let Ok(value) = serde_json::from_str(&raw) {
+                    metadata.insert("resource_content".into(), value);
+                }
+            }
+            ContentBlock::Resource {
+                uri,
+                mime_type,
+                text,
+                blob,
+                acp_metadata: (!metadata.is_empty())
+                    .then(|| serde_json::Value::Object(metadata).to_string()),
+            }
+        }
         other => ContentBlock::Unknown(json_string(other)),
     }
 }

@@ -3,6 +3,7 @@
 
 #![cfg(feature = "mock")]
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,18 +11,24 @@ use std::time::Duration;
 use agent_client_protocol::Channel;
 use async_trait::async_trait;
 use futures::stream::StreamExt;
-use tethys_acp::{connect, AcpConnectOptions};
+use tethys_acp::{connect, AcpConnectOptions, AcpProviderIntegration};
 use tethys_schema::connection::AcpProtocol;
+use tethys_schema::elicitation::{
+    ElicitationOutcome, ElicitationRequest, ElicitationResponse, ElicitationValue,
+};
 use tethys_schema::thread::{
     ContentBlock, Decider, PermOutcome, PermissionRequested, TurnEventBody,
 };
 #[cfg(feature = "acp-v2")]
 use tethys_thread::ResumeSession;
 use tethys_thread::{
-    AgentConnection, ConnectionEvent, NewSession, PermissionDecision, PermissionResolver, SessionId,
+    AgentConnection, ConnectionEvent, ElicitationResolver, NewSession, PermissionDecision,
+    PermissionResolver, SessionId,
 };
 
 struct AutoApprove;
+
+struct AutoElicit;
 
 #[async_trait]
 impl PermissionResolver for AutoApprove {
@@ -42,8 +49,45 @@ impl PermissionResolver for AutoApprove {
     }
 }
 
+#[async_trait]
+impl ElicitationResolver for AutoElicit {
+    async fn resolve(
+        &self,
+        _session: &SessionId,
+        request: ElicitationRequest,
+    ) -> ElicitationResponse {
+        let values = request
+            .fields
+            .iter()
+            .any(|field| field.key == "name")
+            .then(|| {
+                BTreeMap::from([("name".to_string(), ElicitationValue::Text("tethys".into()))])
+            })
+            .unwrap_or_default();
+        ElicitationResponse::accepted(request.req_id, values)
+    }
+}
+
 fn options() -> AcpConnectOptions {
     AcpConnectOptions::new(AcpProtocol::V1, Arc::new(AutoApprove))
+}
+
+fn options_with_elicitation() -> AcpConnectOptions {
+    let mut options = options();
+    options.services = options.services.with_elicitation(Arc::new(AutoElicit));
+    options
+}
+
+fn extension_integration(
+    handler: Option<tethys_acp::client::ExtensionRequestHandler>,
+) -> AcpProviderIntegration {
+    AcpProviderIntegration {
+        id: "fixture".into(),
+        initialize_meta: Default::default(),
+        extension_methods: vec!["_fixture.dev/action".into()],
+        extension_request_handler: handler,
+        extension_notification_handler: None,
+    }
 }
 
 async fn collect_until_idle(
@@ -142,6 +186,336 @@ async fn v1_mock_streams_chunks_and_permission_round_trip() {
     drop(events);
     drop(connection);
     let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
+#[tokio::test]
+async fn v1_form_url_elicitation_and_terminal_lifecycle_round_trip() {
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v1(agent_channel).await });
+    let connection = connect(options_with_elicitation(), client_channel)
+        .await
+        .expect("connect v1");
+    let root = std::env::temp_dir().join(format!("tethys-acp-callbacks-{}", std::process::id()));
+    std::fs::create_dir_all(&root).expect("session root");
+    let session = connection
+        .new_session(NewSession {
+            cwd: root,
+            additional_directories: vec![],
+            mcp_servers: vec![],
+        })
+        .await
+        .expect("new session");
+    let mut events = connection.events(&session.id);
+
+    connection
+        .prompt(&session.id, vec![ContentBlock::Text("elicit-form".into())])
+        .await
+        .expect("form elicitation");
+    let form = collect_until_idle(&mut events, 32, false).await;
+    assert!(form.iter().any(|event| matches!(
+        &event.body,
+        TurnEventBody::ElicitationRequested(request)
+            if request.fields.iter().any(|field| field.key == "name")
+    )));
+    assert!(form.iter().any(|event| matches!(
+        &event.body,
+        TurnEventBody::ElicitationResolved { outcome, values, .. }
+            if *outcome == ElicitationOutcome::Accepted && values.contains_key("name")
+    )));
+
+    connection
+        .prompt(&session.id, vec![ContentBlock::Text("elicit-url".into())])
+        .await
+        .expect("url elicitation");
+    let url = collect_until_idle(&mut events, 32, true).await;
+    assert!(url.iter().any(|event| matches!(
+        &event.body,
+        TurnEventBody::ElicitationRequested(request)
+            if request.url.as_deref() == Some("https://example.test/authorize")
+    )));
+
+    connection
+        .prompt(
+            &session.id,
+            vec![ContentBlock::Text("terminal-lifecycle".into())],
+        )
+        .await
+        .expect("terminal lifecycle");
+    let terminal = collect_until_idle(&mut events, 64, true).await;
+    assert!(terminal.iter().any(|event| matches!(
+        &event.body,
+        TurnEventBody::TerminalOutputChunk { bytes, .. } if bytes.contains("terminal-ok")
+    )));
+    assert_eq!(
+        terminal
+            .iter()
+            .filter(|event| matches!(
+                &event.body,
+                TurnEventBody::TerminalUpsert {
+                    patch: tethys_schema::thread::Patch::Clear,
+                    ..
+                }
+            ))
+            .count(),
+        2,
+    );
+
+    drop(events);
+    drop(connection);
+    let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
+#[tokio::test]
+async fn v1_without_an_elicitation_resolver_cancels_the_callback() {
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v1(agent_channel).await });
+    let connection = connect(options(), client_channel)
+        .await
+        .expect("connect v1");
+    assert!(
+        !connection.capabilities().elicitation,
+        "elicitation must not be advertised without a resolver"
+    );
+    let session = connection
+        .new_session(NewSession {
+            cwd: PathBuf::from("/tmp/mock-v1"),
+            additional_directories: vec![],
+            mcp_servers: vec![],
+        })
+        .await
+        .expect("new session");
+    let mut events = connection.events(&session.id);
+    connection
+        .prompt(&session.id, vec![ContentBlock::Text("elicit-form".into())])
+        .await
+        .expect("prompt");
+
+    let collected = collect_until_idle(&mut events, 32, true).await;
+    assert!(
+        !collected.iter().any(|event| matches!(
+            &event.body,
+            TurnEventBody::ElicitationRequested(_) | TurnEventBody::ElicitationResolved { .. }
+        )),
+        "a cancelled callback must not emit elicitation events: {collected:?}"
+    );
+
+    drop(events);
+    drop(connection);
+    let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
+#[tokio::test]
+async fn v1_extension_request_is_answered_by_the_registered_handler() {
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v1(agent_channel).await });
+    let mut connect_options = options();
+    connect_options.integration = Some(extension_integration(Some(Arc::new(|method, _params| {
+        (method == "_fixture.dev/action").then(|| serde_json::json!({ "handled": "backend" }))
+    }))));
+    let connection = Arc::new(
+        connect(connect_options, client_channel)
+            .await
+            .expect("connect v1"),
+    );
+    let session = connection
+        .new_session(NewSession {
+            cwd: PathBuf::from("/tmp/mock-v1-extension-handler"),
+            additional_directories: vec![],
+            mcp_servers: vec![],
+        })
+        .await
+        .expect("new session");
+    let mut events = connection.events(&session.id);
+    connection
+        .prompt(&session.id, vec![ContentBlock::Text("extension".into())])
+        .await
+        .expect("extension prompt");
+
+    let collected = collect_until_idle(&mut events, 16, false).await;
+    let response_text = collected
+        .iter()
+        .filter_map(|event| match &event.body {
+            TurnEventBody::MessageChunk(chunk) => match &chunk.block {
+                ContentBlock::Text(text) => Some(text.as_str()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(
+        response_text.contains("backend"),
+        "the registered handler's response reaches the agent: {response_text}"
+    );
+    assert!(
+        collected
+            .iter()
+            .all(|event| !matches!(event.body, TurnEventBody::ProviderExtension(_))),
+        "an answered request never surfaces as pending UI work"
+    );
+
+    drop(events);
+    drop(connection);
+    let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
+#[tokio::test]
+async fn v1_claimed_extension_request_round_trips_through_the_event_stream() {
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v1(agent_channel).await });
+    let mut connect_options = options();
+    connect_options.integration = Some(extension_integration(None));
+    let connection = Arc::new(
+        connect(connect_options, client_channel)
+            .await
+            .expect("connect v1"),
+    );
+    let session = connection
+        .new_session(NewSession {
+            cwd: PathBuf::from("/tmp/mock-v1-extension"),
+            additional_directories: vec![],
+            mcp_servers: vec![],
+        })
+        .await
+        .expect("new session");
+    let mut events = connection.events(&session.id);
+    let session_id = session.id.clone();
+    let prompt_connection = connection.clone();
+    let prompt = tokio::spawn(async move {
+        prompt_connection
+            .prompt(&session_id, vec![ContentBlock::Text("extension".into())])
+            .await
+    });
+
+    let extension = loop {
+        let event = tokio::time::timeout(Duration::from_secs(5), events.next())
+            .await
+            .expect("extension event within timeout")
+            .expect("stream open")
+            .expect("event ok");
+        if let TurnEventBody::ProviderExtension(extension) = event.body {
+            break extension;
+        }
+    };
+    assert_eq!(extension.method, "_fixture.dev/action");
+    let request_id = extension.request_id.expect("request correlation id");
+    connection
+        .respond_extension(
+            &session.id,
+            &request_id,
+            serde_json::json!({ "actionId": "approve" }),
+        )
+        .await
+        .expect("extension response");
+    prompt.await.expect("prompt task").expect("prompt response");
+
+    let collected = collect_until_idle(&mut events, 16, false).await;
+    let response_text = collected
+        .iter()
+        .filter_map(|event| match &event.body {
+            TurnEventBody::MessageChunk(chunk) => match &chunk.block {
+                ContentBlock::Text(text) => Some(text.as_str()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(response_text.contains(r#"{"actionId":"approve"}"#));
+
+    drop(events);
+    drop(connection);
+    let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
+#[tokio::test]
+async fn v1_unclaimed_extension_request_fails_prompt_without_waiting() {
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v1(agent_channel).await });
+    let connection = connect(options(), client_channel)
+        .await
+        .expect("connect v1");
+    let session = connection
+        .new_session(NewSession {
+            cwd: PathBuf::from("/tmp/mock-v1-unclaimed-extension"),
+            additional_directories: vec![],
+            mcp_servers: vec![],
+        })
+        .await
+        .expect("new session");
+
+    let result = tokio::time::timeout(
+        Duration::from_secs(5),
+        connection.prompt(&session.id, vec![ContentBlock::Text("extension".into())]),
+    )
+    .await
+    .expect("unclaimed extension fails promptly");
+    assert!(result.is_err(), "unclaimed extension must not succeed");
+
+    drop(connection);
+    let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
+#[tokio::test]
+async fn v1_disconnect_releases_pending_extension_request() {
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v1(agent_channel).await });
+    let mut connect_options = options();
+    connect_options.integration = Some(extension_integration(None));
+    let connection = Arc::new(
+        connect(connect_options, client_channel)
+            .await
+            .expect("connect v1"),
+    );
+    let session = connection
+        .new_session(NewSession {
+            cwd: PathBuf::from("/tmp/mock-v1-disconnect-extension"),
+            additional_directories: vec![],
+            mcp_servers: vec![],
+        })
+        .await
+        .expect("new session");
+    let mut events = connection.events(&session.id);
+    let prompt_connection = connection.clone();
+    let session_id = session.id.clone();
+    let prompt = tokio::spawn(async move {
+        prompt_connection
+            .prompt(&session_id, vec![ContentBlock::Text("extension".into())])
+            .await
+    });
+
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(5), events.next())
+            .await
+            .expect("extension event within timeout")
+            .expect("stream open")
+            .expect("event ok");
+        if matches!(event.body, TurnEventBody::ProviderExtension(_)) {
+            break;
+        }
+    }
+
+    server.abort();
+    tokio::time::timeout(Duration::from_secs(5), connection.wait_closed())
+        .await
+        .expect("connection close observed");
+    let resolved = loop {
+        let event = tokio::time::timeout(Duration::from_secs(5), events.next())
+            .await
+            .expect("extension resolution within timeout")
+            .expect("stream remains readable")
+            .expect("event ok");
+        if let TurnEventBody::ProviderExtensionResolved {
+            cancelled: true, ..
+        } = event.body
+        {
+            break true;
+        }
+    };
+    assert!(resolved);
+    assert!(tokio::time::timeout(Duration::from_secs(5), prompt)
+        .await
+        .expect("prompt returns after disconnect")
+        .expect("prompt task joins")
+        .is_err());
 }
 
 #[tokio::test]
@@ -316,6 +690,55 @@ async fn v2_mock_streams_state_chunks_and_replay() {
     assert!(
         replayed.iter().any(|event| event.replayed),
         "resume replay events marked: {replayed:?}"
+    );
+
+    drop(events);
+    drop(connection);
+    let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
+#[cfg(feature = "acp-v2")]
+#[tokio::test]
+async fn v2_form_elicitation_round_trip() {
+    use tethys_acp::AcpConnection;
+
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v2(agent_channel).await });
+
+    let mut options = AcpConnectOptions::new(AcpProtocol::V2, Arc::new(AutoApprove));
+    options.services = options.services.with_elicitation(Arc::new(AutoElicit));
+    let connection: AcpConnection = connect(options, client_channel).await.expect("connect v2");
+
+    let session = connection
+        .new_session(NewSession {
+            cwd: PathBuf::from("/tmp/mock-v2"),
+            additional_directories: vec![],
+            mcp_servers: vec![],
+        })
+        .await
+        .expect("new session");
+    let mut events = connection.events(&session.id);
+    connection
+        .prompt(&session.id, vec![ContentBlock::Text("elicit-form".into())])
+        .await
+        .expect("prompt");
+
+    let collected = collect_until_idle(&mut events, 32, true).await;
+    assert!(
+        collected.iter().any(|event| matches!(
+            &event.body,
+            TurnEventBody::ElicitationRequested(request)
+                if request.fields.iter().any(|field| field.key == "name")
+        )),
+        "v2 elicitation request: {collected:?}"
+    );
+    assert!(
+        collected.iter().any(|event| matches!(
+            &event.body,
+            TurnEventBody::ElicitationResolved { outcome, values, .. }
+                if *outcome == ElicitationOutcome::Accepted && values.contains_key("name")
+        )),
+        "v2 elicitation outcome: {collected:?}"
     );
 
     drop(events);

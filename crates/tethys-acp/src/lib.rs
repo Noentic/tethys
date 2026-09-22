@@ -10,6 +10,7 @@ pub mod map;
 pub mod map_v2;
 #[cfg(feature = "mock")]
 pub mod mock;
+pub(crate) mod terminal_host;
 
-pub use client::{connect, AcpConnectOptions, AcpConnection};
+pub use client::{connect, AcpConnectOptions, AcpConnection, AcpProviderIntegration};
 pub use map::SyntheticMessageIds;
