@@ -4,13 +4,14 @@
 //! until a workspace is picked (or a last-active one is pre-filled by the
 //! caller). The resolved path shows as a `mono-code` tooltip.
 
+import { ChevronDown } from "@nebutra/icons";
 import { type TrustedWorkspace, useTrustedWorkspaces } from "@tethys/state";
 import { Listbox, Popover, Tooltip, WorkspaceSourceBadge } from "@tethys/ui";
 import { useRef, useState } from "react";
 
-// Pen `XrH5y / Git context pill`: 22px, surface-card, md radius, hairline.
+// workspace-selector-pill (DESIGN.md): 28px, surface-card, md radius, hairline.
 const PILL_CLASS =
-  "focus-ring flex h-[22px] items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+  "focus-ring flex h-7 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 
 export interface WorkspaceSelectorProps {
   workspaces?: TrustedWorkspace[];
@@ -55,7 +56,7 @@ export function WorkspaceSelector({
       <WorkspaceSourceBadge
         vcs={selected?.vcs ?? { kind: "none" }}
         glyphOnly
-        className="pointer-events-none"
+        className="pointer-events-none size-3.5"
       />
       <span
         className={
@@ -66,9 +67,10 @@ export function WorkspaceSelector({
       >
         {selected?.name ?? "Choose a folder"}
       </span>
-      <span aria-hidden="true" className="text-(--tethys-text-muted)">
-        {"\u25be"}
-      </span>
+      <ChevronDown
+        aria-hidden="true"
+        className="size-3.5 shrink-0 text-(--tethys-text-muted)"
+      />
     </button>
   );
 

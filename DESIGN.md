@@ -355,7 +355,7 @@ components:
     backgroundColor: "{semantic.canvas}"
     measure: "{layout.stage-measure}"
     padding: "{spacing.xl}"
-    gap: "{spacing.md}"
+    gap: "{spacing.lg}"
   inspector:
     backgroundColor: "{semantic.surface-panel}"
     width: "{layout.shell-inspector}"
@@ -444,8 +444,8 @@ components:
   state-badge:
     backgroundColor: "{semantic.surface-hover}"
     rounded: "{rounded.full}"
-    padding: 2px 8px
-    height: 20px
+    padding: 2px 10px
+    height: 28px
     typography: "{typography.label-md}"
     geometry: "{components.approval-inbox-pill} minus the count — `status-dot.sizeInline` + the state name"
     colour: "the dot and the label take the state's own token per theme: `running` {semantic.accent-agent-active}, `awaiting` {semantic.status-warning}, `error` {semantic.status-danger}, `interrupted` {semantic.status-interrupted}, `idle` {semantic.text-muted}. `suspended` and `archived` take their own dot token but keep the label in {semantic.text-muted}: those dots sit below text contrast by design, so the label is what makes the state legible. Never a fixed colour, and never `text-primary` — the badge's whole job is to carry the state"
@@ -458,8 +458,8 @@ components:
     typography: "{typography.mono-micro}"
     dotColor: "{semantic.status-warning}"
     rounded: "{rounded.full}"
-    padding: 2px 8px
-    height: 20px
+    padding: 2px 10px
+    height: 28px
   stop-control:
     height: 28px
     typography: "{typography.label-md}"
@@ -483,10 +483,10 @@ components:
     backgroundColor: "{semantic.surface-hover}"
     backgroundHover: "{semantic.surface-active}"
     textColor: "{semantic.text-secondary}"
-    typography: "{typography.mono-micro}"
+    typography: "{typography.label-md}"
     rounded: "{rounded.xs}"
-    height: 20px
-    padding: 0 6px
+    height: 28px
+    padding: 0 10px
     label: "both axes, `<working mode> · <approval>`, for example `Plan · Ask first`; only the approval when the Provider declares no working mode"
     scope: "The one home of how the agent may act (P5): the ACP `mode` category and Tethys's approval level for the thread. A Provider's `mode` option is never a `composer-config-chip` and never a row in the `session-config-panel`. Sits at the left of the prompt card's how band, in the New Thread canvas and in a thread alike"
     absent: "never absent: a Provider that declares no `mode` option still has Approvals"
@@ -629,6 +629,8 @@ components:
     overflowTrigger: "a 20px `•••` button at the end of the context bar, `aria-haspopup=dialog`, opening a `popover` at `{stacking.popover}` that lists the folded items in the same order. When the folded set holds a non-empty `queue-count` the trigger carries the same `{semantic.status-warning}` dot the count does, so a pending queue is never hidden by narrowing the window"
     composerGuide: "the placeholder alone teaches the sigils; there is no hint row under the input. `?` in the how band opens the shortcuts sheet"
     threadLowerBar: "docked in-thread composer's lower bar: mention triggers, attachment chips, and single dual-state `action-icon-button` on the right"
+    editorDensity: "the textarea grows with its content and never reserves empty lines: `hero` (New Thread) floors at 72px (three body-md lines), `docked` (in a thread) at one line. Both cap at 40vh and scroll inside the card. The docked card rows sit {spacing.md} apart and the card floats {spacing.lg} above the window edge"
+    chromeIcons: "composer and thread chrome draws its icons from `@nebutra/icons` at 14px (`size-3.5`) in {semantic.text-muted}: `ChevronDown` for a dropdown, `ChevronRight` rotating 90° for a disclosure, and one icon per ACP tool kind (`read` FileText, `edit` Pencil, `delete` Trash, `move` ArrowLeftRight, `search` MagnifyingGlass, `execute` Terminal, `think` Brain, `fetch` Download, `switch_mode` RefreshClockwise, other Wrench). Unicode glyphs (`⑂`, `▾`, `▸`, `⧉`, `↻`) are never used as icons"
   composer-suggestion-popover:
     backgroundColor: "{semantic.surface-overlay}"
     border: "1px solid {semantic.hairline-strong}"
@@ -664,6 +666,7 @@ components:
     rounded: "{rounded.sm}"
     padding: 4px 8px
     height: 28px
+    providerMark: "the catalog's own logo (16px `<img>`) with a corner `status-dot`; a provider the catalog doesn't know (a registry-only profile) falls back to a bare `status-dot`. Same rule at `session-item-chip.ProviderGlyph`, which falls back to two-letter initials instead"
   model-selector-popover:
     backgroundColor: "{semantic.surface-overlay}"
     border: "1px solid {semantic.hairline-strong}"
@@ -685,14 +688,16 @@ components:
     borderColorRunning: "{semantic.hairline-strong}"
     iconColorRunning: "{semantic.text-primary}"
     rounded: "{rounded.full}"
-    size: 32px
+    size: 40px
+    iconSize: 18px
     dualState: "Single action trigger in prompt card. When idle/ready, renders send arrow icon with backgroundReady; when thread is running, morphs to stop/square icon (Geist stop icon) which triggers the protocol cancellation ladder"
   composer-chip:
     backgroundColor: "{semantic.surface-hover}"
     textColor: "{semantic.text-secondary}"
     typography: "{typography.mono-micro}"
     rounded: "{rounded.xs}"
-    padding: 2px 6px
+    height: 24px
+    padding: 2px 8px
   workspace-peek-drawer:
     backgroundColor: "{semantic.surface-elevated}"
     borderLeft: "1px solid {semantic.hairline-strong}"
@@ -727,6 +732,8 @@ components:
     padding: "{spacing.lg}"
     pendingTreatment: "the card keeps its {semantic.hairline} border and gains an attention treatment rather than a perimeter stroke: a {semantic.status-warning-soft} wash in place of the card's own plane (the token is an alpha, so it composites over whatever the card sits on), a 2px {semantic.status-warning} left rule, and the breathing `status-dot` in the header. Same grammar as {components.turn-notice.warningRule}. A saturated perimeter is the loudest possible way to say 'a decision is waiting' and the only way it can be said on a 360px column; the tint plus the rule carry it at a fraction of the ink, and the motion carries the rest"
     pendingHover: "hover never recolours the rule or the wash — the card is not the affordance, its buttons are"
+    header: "a 32px {semantic.status-warning-soft} icon tile in {semantic.status-warning} naming what the request touches (`Pencil` for a file or an edit, `Terminal` for a command, `ShieldCheck` otherwise), the title in {typography.label-md}, and the file path or command under it as a {typography.mono-micro} chip"
+    actions: "the Provider's options in the Provider's order. Variant follows the ACP option kind: `allow_once` primary, `reject_*` destructive, anything else secondary. Each carries its number key as a trailing `kbd` (`aria-keyshortcuts`), never a `1.` prefix"
   elicitation-card:
     backgroundColor: "{semantic.surface-card}"
     border: "1px solid {semantic.hairline}"
@@ -781,19 +788,28 @@ components:
     rounded: "{rounded.sm}"
     padding: 4px 8px
     scope: "The New Thread where band's git control, beside `workspace-selector-pill`. Git only; absent under `isolation: plain`"
-    current: "default. Read-only: `⑂ <branch> · N uncommitted` in {semantic.text-secondary}, then a `New worktree` checkbox ({semantic.border-control} stroke). Tethys never checks out a branch in the user's own tree"
-    worktree: "checkbox on: the branch half becomes a base picker `from <base> ▾` whose popover previews an editable `tethys/<slug>`"
-    sticky: "the checkbox state is remembered per workspace"
+    current: "default. An {components.isolation-toggle} on `Current checkout`, then `N uncommitted` as a {semantic.status-warning-soft} count badge in {typography.mono-micro} when N > 0. Tethys never checks out a branch in the user's own tree"
+    worktree: "toggle on `New worktree`: a joined 28px mono field group `from [<base>] → [tethys/<slug>]`, hairline-separated segments on {semantic.surface-card}"
+    sticky: "the toggle state is remembered per workspace"
     noGit: "`no git · edits apply in place` on {semantic.surface-hover} / {semantic.text-muted}, with an `Initialize git` link and no checkbox"
-    sharedCheckoutNudge: "when another live thread holds the current checkout, a {typography.label-sm} line under the card in {semantic.status-warning}: `1 running thread is already editing this checkout · Use a new worktree`. Advisory, never a block"
+    sharedCheckoutNudge: "when another live thread holds the current checkout, a full-width callout row in the where band: `Warning` icon in {semantic.status-warning}, {semantic.status-warning-soft} fill, hairline border, {typography.label-md} copy, and a trailing `Use a worktree` ghost action that flips the toggle. Advisory, never a block"
+  isolation-toggle:
+    height: 28px
+    typography: "{typography.label-md}"
+    rounded: "{rounded.md} outer, {rounded.sm} segments"
+    backgroundColor: "{semantic.surface-card}"
+    selected: "{semantic.surface-active} / {semantic.text-primary}; unselected {semantic.text-muted}"
+    segments: "`GitBranch` Current checkout · `BranchPlus` New worktree, 14px icons"
+    a11y: "a `radiogroup` labelled `Thread isolation`; each segment is a `radio`"
   branch-bar:
     backgroundColor: "{semantic.surface-panel}"
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.md}"
     height: 36px
     padding: 0 12px
-    typography: "{typography.label-md}; branch and stat in {typography.mono-micro}"
-    scope: "The in-thread where band, git only: branch, isolation tag (`worktree` / `current checkout`, {components.composer-chip} geometry), the thread's stat against its base (`vs main +a −b`, two colours as `diff-viewer.stat`), then `Review` (ghost, opens {components.changes-panel}) and `Commit…` (secondary; primary once the thread has uncommitted changes and no turn is running)"
+    typography: "{typography.label-md}; stat in {typography.mono-micro}"
+    scope: "The in-thread where band, git only: the branch as a 24px mono chip (`GitBranch` icon + the checkout's real branch, read from `git.worktreeList` for worktree and current-checkout threads alike), a muted `checkout · vs HEAD` / `worktree · vs <base>` tag, the thread's stat as a clickable `N files +a −b` pill that opens {components.changes-panel} (hidden at zero files, never `+0 −0`), then `Review` (ghost, `FileText` icon) and `Commit…` (secondary, `GitCommit` icon; primary once the thread has uncommitted changes and no turn is running)"
+    freshness: "the stat and the Changes count refetch whenever a file-writing tool call settles or a turn stops, and keep the last answer on screen while they do"
     commit: "`Commit…` opens a 360px popover: the agent-drafted message (`Draft with agent`), the changed-file count and `Commit`; `Commit & push` only with `forge_cli`. The one place a commit starts (P8)"
     committed: "after a commit: `✓ <sha> · N ahead of <base>` in {semantic.status-success}, with `Merge…` (WT‑07)"
     noGit: "`no git · no revert` in {semantic.text-muted}, nothing else"
@@ -802,7 +818,7 @@ components:
     scope: "Holds the live {components.permission-request-card} or {components.elicitation-card} directly above the prompt card while a request is pending, so the decision is always in view (P15). It is not a new card style: the card keeps its own `pendingTreatment`"
     gap: "{spacing.sm} above the card"
     keys: "the Provider's options are numbered `1`–`N` in the Provider's order; the digits select while focus is in the composer or the dock"
-    queue: "more than one pending request shows `1 of N` in {typography.mono-micro} in the card header and steps in arrival order"
+    queue: "more than one pending request shows a `‹ 1 of N ›` pager (chevron icon buttons, {typography.mono-micro} count) right-aligned above the card and steps in arrival order. The dock carries no `Waiting for you` heading of its own; the transcript anchor already says it"
     anchor: "the transcript keeps a one-line row where the request arose, `Waiting for you ↓` in {semantic.status-warning}, which becomes the record (`Allowed once · <command>`) in {semantic.text-muted} once answered"
     focus: "never traps focus; `Tab` order is dock → branch bar → textarea"
   turn-receipt:
@@ -850,7 +866,7 @@ components:
     backgroundColor: "transparent"
     textColor: "{semantic.text-primary}"
     typography: "{typography.body-md}"
-    userSurface: "a user message sits on {semantic.surface-card} with {rounded.md} and {spacing.md} padding at full measure, left-aligned. No chat-bubble alternation: the stage is a log, not a conversation widget"
+    userSurface: "a user message sits on {semantic.surface-card} with {rounded.md} and {spacing.lg} padding at full measure, left-aligned. No chat-bubble alternation: the stage is a log, not a conversation widget"
     body: "rendered by the incremental markdown worker. A fenced block is a `code-block` from its opening fence (no reflow when the closing fence arrives); a table scrolls horizontally inside `stage-measure` rather than widening it"
     chrome: "`message-actions` on hover and on keyboard focus; `attachment-chip`s under the body"
     replay: "a message restored from history renders exactly as a live one; a replayed user message carries no `Retry`"
@@ -1297,14 +1313,14 @@ The interface relies exclusively on **Geist Sans** for UI hierarchy, **Geist Mon
 | Token | Family | Size | Weight | Line Height | Usage |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `{typography.display-lg}` | Geist Sans | 36px | 600 | 1.15 | Centered prompt header ("What are we building today?") |
-| `{typography.heading-lg}` | Geist Sans | 20px | 600 | 1.4 | View title ("Workspaces") |
-| `{typography.heading-md}` | Geist Sans | 15px | 600 | 1.4 | Workspace card title, drawer headers |
+| `{typography.heading-lg}` | Geist Sans | 22px | 600 | 1.4 | View title ("Workspaces") |
+| `{typography.heading-md}` | Geist Sans | 16px | 600 | 1.4 | Workspace card title, drawer headers |
 | `{typography.body-md}` | Geist Sans | 14px | 400 | 1.5 | Chat messages, primary prompt input |
-| `{typography.body-sm}` | Geist Sans | 13px | 400 | 1.4 | Tab labels, secondary descriptions |
-| `{typography.label-md}` | Geist Sans | 12px | 500 | 1.4 | Segmented control buttons, filter toggles |
-| `{typography.label-sm}` | Geist Sans | 11px | 500 | 1.3 | Service badges, metadata tags |
-| `{typography.mono-code}` | Geist Mono | 12px | 400 | 1.5 | CLI logs, stdout/stderr streams, git hashes, stepper numbers, provider status subtext, diff stats |
-| `{typography.mono-micro}` | Geist Mono | 11px | 500 | 1.3 | Hotkey pills, `session-item` chip/row labels, branch names, port numbers, telemetry (`Checked 1m ago`), health latency badges |
+| `{typography.body-sm}` | Geist Sans | 14px | 400 | 1.4 | Tab labels, secondary descriptions |
+| `{typography.label-md}` | Geist Sans | 13px | 500 | 1.4 | Segmented control buttons, filter toggles |
+| `{typography.label-sm}` | Geist Sans | 12px | 500 | 1.3 | Service badges, metadata tags |
+| `{typography.mono-code}` | Geist Mono | 13px | 400 | 1.5 | CLI logs, stdout/stderr streams, git hashes, stepper numbers, provider status subtext, diff stats |
+| `{typography.mono-micro}` | Geist Mono | 12px | 500 | 1.3 | Hotkey pills, `session-item` chip/row labels, branch names, port numbers, telemetry (`Checked 1m ago`), health latency badges |
 
 ## Iconography (Geist Icons, Decided)
 

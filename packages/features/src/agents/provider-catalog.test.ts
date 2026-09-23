@@ -1,6 +1,10 @@
 import type { AgentProfileView } from "@tethys/bindings";
 import { describe, expect, it } from "vitest";
-import { catalogEntryForProfile, PROVIDER_CATALOG } from "./provider-catalog";
+import {
+  catalogEntryForProfile,
+  PROVIDER_CATALOG,
+  providerEntry,
+} from "./provider-catalog";
 
 function profile(
   registryId: string | null,
@@ -83,5 +87,17 @@ describe("provider catalog", () => {
     expect(
       catalogEntryForProfile(PROVIDER_CATALOG, profile("my-agent")),
     ).toBeNull();
+  });
+});
+
+describe("providerEntry", () => {
+  it("resolves a provider by its catalog id or its registry id", () => {
+    expect(providerEntry("claude-code")?.name).toBe("Claude Code");
+    expect(providerEntry("claude-acp")?.name).toBe("Claude Code");
+    expect(providerEntry("codex-acp")?.name).toBe("Codex");
+  });
+
+  it("returns undefined for a provider the catalog doesn't know", () => {
+    expect(providerEntry("my-agent")).toBeUndefined();
   });
 });

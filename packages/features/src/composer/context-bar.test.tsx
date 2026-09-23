@@ -250,7 +250,7 @@ describe("context bar", () => {
           ]}
         />,
       );
-      fireEvent.click(screen.getByRole("button", { name: /claude-code/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Claude Code/ }));
       expect(screen.getByText("Temperature")).toBeDefined();
       // Model, Effort and Mode each have exactly one other home.
       expect(screen.queryByText("Model")).toBeNull();
@@ -267,7 +267,7 @@ describe("context bar", () => {
           configOptions={[option("temperature", "Temperature", "model_config")]}
         />,
       );
-      fireEvent.click(screen.getByRole("button", { name: /claude-code/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Claude Code/ }));
       expect(
         screen.getByText(
           "Provider is fixed for this thread — start a new thread to switch",
@@ -282,7 +282,7 @@ describe("context bar", () => {
     it("exposes its element as the anchor a Provider request popover mounts on", () => {
       const anchor = createRef<HTMLButtonElement>();
       render(<ContextBar {...baseProps} providerAnchorRef={anchor} />);
-      expect(anchor.current?.textContent).toContain("claude-code");
+      expect(anchor.current?.textContent).toContain("Claude Code");
       expect(anchor.current?.getAttribute("aria-haspopup")).toBe("dialog");
     });
   });

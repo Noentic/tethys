@@ -1,6 +1,7 @@
 import type { TurnMessageEntry } from "@tethys/state";
 import { cn } from "@tethys/ui";
 import { useId, useState } from "react";
+import { DisclosureChevron } from "./tool-kind-icon";
 import { useRenderedMarkdown } from "./turn-message";
 
 /**
@@ -34,7 +35,7 @@ export function ThoughtBlockRenderer({
         onClick={() => setExpanded((value) => !value)}
         className="flex w-full items-center gap-sm px-md py-sm text-left text-label-sm text-(--tethys-text-muted) transition-colors hover:text-(--tethys-text-secondary)"
       >
-        <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+        <DisclosureChevron expanded={expanded} />
         <span>{expanded ? "Thought" : `Thought · ${preview}`}</span>
       </button>
       {expanded && (

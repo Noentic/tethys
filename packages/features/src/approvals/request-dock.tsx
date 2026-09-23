@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from "@nebutra/icons";
 import type {
   ElicitationEntry,
   PermissionRequestEntry,
@@ -40,34 +41,31 @@ export function RequestDock({ entries }: { entries: SessionEntry[] }) {
       aria-label="Requests waiting for you"
       className="flex flex-col gap-sm"
     >
-      <header className="flex items-center gap-sm text-label-sm text-(--tethys-status-warning)">
-        <span>Waiting for you ↓</span>
-        {requests.length > 1 && (
-          <div className="ml-auto flex items-center gap-xs">
-            <button
-              type="button"
-              aria-label="Previous request"
-              disabled={currentIndex === 0}
-              onClick={() => setIndex(currentIndex - 1)}
-              className="focus-ring rounded px-1 disabled:opacity-40"
-            >
-              ‹
-            </button>
-            <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
-              {currentIndex + 1} of {requests.length}
-            </span>
-            <button
-              type="button"
-              aria-label="Next request"
-              disabled={currentIndex === requests.length - 1}
-              onClick={() => setIndex(currentIndex + 1)}
-              className="focus-ring rounded px-1 disabled:opacity-40"
-            >
-              ›
-            </button>
-          </div>
-        )}
-      </header>
+      {requests.length > 1 && (
+        <header className="flex items-center justify-end gap-xs text-(--tethys-text-secondary)">
+          <button
+            type="button"
+            aria-label="Previous request"
+            disabled={currentIndex === 0}
+            onClick={() => setIndex(currentIndex - 1)}
+            className="focus-ring flex size-6 items-center justify-center rounded-sm hover:bg-(--tethys-surface-hover) disabled:opacity-40"
+          >
+            <ChevronLeft aria-hidden="true" className="size-3.5" />
+          </button>
+          <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
+            {currentIndex + 1} of {requests.length}
+          </span>
+          <button
+            type="button"
+            aria-label="Next request"
+            disabled={currentIndex === requests.length - 1}
+            onClick={() => setIndex(currentIndex + 1)}
+            className="focus-ring flex size-6 items-center justify-center rounded-sm hover:bg-(--tethys-surface-hover) disabled:opacity-40"
+          >
+            <ChevronRight aria-hidden="true" className="size-3.5" />
+          </button>
+        </header>
+      )}
       {current.kind === "permission_request" ? (
         <PermissionRequestCard entry={current} />
       ) : (

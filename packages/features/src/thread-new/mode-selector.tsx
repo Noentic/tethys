@@ -1,12 +1,13 @@
+import { ChevronDown } from "@nebutra/icons";
 import type { ConfigOption, PermissionMode } from "@tethys/bindings";
 import { Popover } from "@tethys/ui";
-import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { type KeyboardEvent, type RefObject, useRef, useState } from "react";
 import { optionValues } from "./session-config-panel";
 
 const PILL_CLASS =
-  "focus-ring flex h-[22px] items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+  "focus-ring flex h-7 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 const ROW_CLASS =
-  "focus-ring flex min-h-8 w-full items-center gap-sm rounded-sm px-2 text-left text-body-sm text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)";
+  "focus-ring flex min-h-9 w-full items-center gap-sm rounded-sm px-2.5 text-left text-body-sm text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)";
 
 const APPROVAL_LABELS: Record<PermissionMode, string> = {
   supervised: "Ask first",
@@ -152,9 +153,10 @@ export function ModeSelector({
       >
         <span className="text-(--tethys-text-muted)">Mode</span>
         <span className="text-(--tethys-text-primary)">{display}</span>
-        <span aria-hidden="true" className="text-(--tethys-text-muted)">
-          {"\u25be"}
-        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className="size-3.5 shrink-0 text-(--tethys-text-muted)"
+        />
       </button>
 
       <Popover

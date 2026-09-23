@@ -85,7 +85,8 @@ describe("the docked composer in the thread view", () => {
     await waitFor(() =>
       expect(screen.getByTestId("request-dock")).toBeDefined(),
     );
-    expect(screen.getAllByText("Waiting for you ↓")).toHaveLength(2);
+    // The transcript marker says it once; the dock no longer repeats it.
+    expect(screen.getAllByText("Waiting for you ↓")).toHaveLength(1);
     fireEvent.keyDown(screen.getByRole("button", { name: "Allow once" }), {
       key: "1",
     });
@@ -148,13 +149,13 @@ describe("the docked composer in the thread view", () => {
       },
     ]);
     render(<InspectorScreen sessionId="s-live-no-git" client={fullClient} />);
-    expect(screen.getByText("no git")).toBeDefined();
+    expect(screen.getByText(/no git/)).toBeDefined();
   });
 
   it("offers no git affordance while the workspace is unresolved", () => {
     getOrCreateSessionStore("s-unresolved", "codex", "unknown", "Tidy up");
     render(<InspectorScreen sessionId="s-unresolved" client={fullClient} />);
-    expect(screen.queryByText("no git")).toBeNull();
+    expect(screen.queryByText(/no git/)).toBeNull();
   });
 
   it("reads `no git` for a workspace with no git", () => {
@@ -165,6 +166,6 @@ describe("the docked composer in the thread view", () => {
         capabilityFixture="no-git"
       />,
     );
-    expect(screen.getByText("no git")).toBeDefined();
+    expect(screen.getByText(/no git/)).toBeDefined();
   });
 });

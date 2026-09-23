@@ -4,6 +4,7 @@
 //! `session-config-panel`. Never indexes a possibly-empty provider list for
 //! initial state (the M1.6 shell's `useState(ACP_PROVIDERS[0])` bug).
 
+import { ChevronDown } from "@nebutra/icons";
 import type { ConfigOption } from "@tethys/bindings";
 import {
   hasSelectableProvider,
@@ -18,13 +19,37 @@ import {
   ProtocolPill,
   StatusDot,
 } from "@tethys/ui";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
+import { providerIcon } from "../agents/provider-catalog";
 import { optionValues, SessionConfigPanel } from "./session-config-panel";
 import type { PreparedDraftStatus } from "./use-prepared-draft";
 
+/** The catalog logo with a corner status dot, or a bare status dot when the
+ * provider isn't in the catalog (a registry-only or unrecognised profile). */
+function ProviderMark({
+  providerId,
+  status,
+}: {
+  providerId: string;
+  status: string;
+}) {
+  const icon = providerIcon(providerId);
+  if (!icon) return <StatusDot status={status} inline />;
+  return (
+    <span className="relative inline-flex shrink-0">
+      <img src={icon} alt="" aria-hidden="true" className="h-4 w-4" />
+      <StatusDot
+        status={status}
+        inline
+        className="absolute -right-0.5 -bottom-0.5"
+      />
+    </span>
+  );
+}
+
 // Pen `XrH5y / Provider model pill`: 22px, surface-card, md radius, hairline.
 const PILL_CLASS =
-  "focus-ring flex h-[22px] items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+  "focus-ring flex h-7 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 
 const SECTION_LABEL_CLASS =
   "px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider";
@@ -158,7 +183,7 @@ export function ModelSelector({
         className={PILL_CLASS}
       >
         {selected ? (
-          <StatusDot status={selected.status} inline />
+          <ProviderMark providerId={selected.id} status={selected.status} />
         ) : (
           <StatusDot status="missing" inline />
         )}
@@ -176,9 +201,10 @@ export function ModelSelector({
             · {summary}
           </span>
         )}
-        <span aria-hidden="true" className="text-(--tethys-text-muted)">
-          {"\u25be"}
-        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className="size-3.5 shrink-0 text-(--tethys-text-muted)"
+        />
       </button>
 
       <Popover
@@ -211,7 +237,12 @@ export function ModelSelector({
                   id: provider.id,
                   value: provider,
                   label: provider.name,
-                  icon: <StatusDot status={provider.status} inline />,
+                  icon: (
+                    <ProviderMark
+                      providerId={provider.id}
+                      status={provider.status}
+                    />
+                  ),
                   sublabel:
                     provider.protocol !== null ? (
                       <ProtocolPill>

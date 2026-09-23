@@ -2,6 +2,7 @@ import { cn } from "@tethys/ui";
 import { useEffect, useId, useState } from "react";
 import type { ToolRun } from "../group-runs";
 import { ToolAccordionRenderer } from "./tool-accordion";
+import { DisclosureChevron } from "./tool-kind-icon";
 
 function Spinner() {
   return (
@@ -74,9 +75,10 @@ export function ToolRunGroup({
         <span className="truncate">
           {run.isLive && run.inFlightTitle ? run.inFlightTitle : run.summary}
         </span>
-        <span aria-hidden="true" className="ml-auto">
-          {expanded ? "▾" : "›"}
-        </span>
+        <DisclosureChevron
+          expanded={expanded}
+          className="ml-auto text-(--tethys-text-muted)"
+        />
       </button>
       {expanded && (
         <div id={regionId} className="mt-1 flex flex-col gap-1 pl-md">

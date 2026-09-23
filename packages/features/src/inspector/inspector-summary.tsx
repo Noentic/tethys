@@ -5,7 +5,11 @@ import {
 } from "@tethys/state";
 import { cn } from "@tethys/ui";
 import { type ReactNode, useMemo } from "react";
-import { defaultDiffSource, useDiffSummary } from "../review/use-review-diff";
+import {
+  defaultDiffSource,
+  useDiffRevision,
+  useDiffSummary,
+} from "../review/use-review-diff";
 import { countActivity } from "./ledger-counts";
 import { useSessionState } from "./use-session-state";
 
@@ -94,7 +98,8 @@ export function InspectorSummary({
   const state = useSessionState(sessionId ?? "");
   const gate = useWorkspaceReviewCapability(sessionId ?? "", capabilityFixture);
   const source = useMemo(() => defaultDiffSource(sessionId ?? ""), [sessionId]);
-  const { summary } = useDiffSummary(gate.showDiff ? source : null);
+  const revision = useDiffRevision(sessionId ?? "");
+  const { summary } = useDiffSummary(gate.showDiff ? source : null, revision);
 
   const entries = state.entries;
   const counts = useMemo(() => countActivity(entries), [entries]);

@@ -26,7 +26,7 @@ export function Stage({ store, className }: StageProps) {
       aria-label="Thread Stage"
       className={`min-w-[560px] flex-1 overflow-y-auto ${className ?? ""}`}
     >
-      <div className="mx-auto flex w-full max-w-(--layout-stage-measure) flex-col gap-md px-xl py-xl">
+      <div className="mx-auto flex w-full max-w-(--layout-stage-measure) flex-col gap-lg px-xl py-xl">
         {entries.map((entry) => {
           const Renderer = getEntryRenderer(entry.kind);
           return (

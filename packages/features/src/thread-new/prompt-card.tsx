@@ -1,6 +1,7 @@
 //! `prompt-card` (DESIGN.md; spec §3) — the new-thread composer with the
 //! three-precondition submit gate.
 
+import { ArrowRight, BranchPlus, FolderPlus, Warning } from "@nebutra/icons";
 import type {
   AgentCommand,
   ConfigOption,
@@ -37,6 +38,7 @@ import {
   skillSource,
 } from "../composer/popups";
 import { promptContentBlocks } from "../composer/prompt-blocks";
+import { IsolationToggle } from "./isolation-toggle";
 import { ModeSelector } from "./mode-selector";
 import { ModelSelector } from "./model-selector";
 import {
@@ -57,7 +59,7 @@ const PERMISSION_MODE_PREFERENCE = "tethys:permission-mode:";
 const CURRENT_ISOLATION: ThreadIsolation = { kind: "current" };
 // Pen `XrH5y / additional-folder pill`: matches the workspace pill.
 const ADDITIONAL_PILL_CLASS =
-  "focus-ring flex h-[22px] items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 text-label-md text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+  "focus-ring flex h-7 items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 
 function worktreePreference(workspaceId: string | undefined): boolean {
   if (!workspaceId || typeof localStorage === "undefined") return false;
@@ -457,13 +459,13 @@ export function PromptCard({
     // prompt-card: Level 3 surface, lit top edge, 2xl radius (pen `XrH5y`).
     <div className="edge-lit w-full max-w-(--layout-prompt-width) rounded-2xl border border-(--tethys-hairline-strong) bg-(--tethys-surface-elevated) p-lg transition-colors focus-within:border-(--tethys-text-muted)">
       <form
-        className="flex flex-col gap-5"
+        className="flex flex-col gap-xl"
         onSubmit={(event) => {
           event.preventDefault();
           submit();
         }}
       >
-        <div className="flex flex-wrap items-center gap-sm">
+        <div className="flex flex-wrap items-center gap-md">
           <WorkspaceSelector
             workspaces={workspaces}
             selected={workspace}
@@ -487,52 +489,68 @@ export function PromptCard({
               )}
             </div>
           ) : workspace ? (
-            <div className="flex flex-wrap items-center gap-sm">
-              <span className="text-label-md text-(--tethys-text-secondary)">
-                ⑂{" "}
-                {newWorktree
-                  ? worktreeBranch || defaultBranch(workspace.name)
-                  : "current checkout"}
-                {uncommittedCount !== null &&
-                  ` · ${uncommittedCount} uncommitted`}
-              </span>
-              <label className="flex items-center gap-xs text-label-md text-(--tethys-text-secondary)">
-                <input
-                  type="checkbox"
-                  checked={newWorktree}
-                  onChange={(event) =>
-                    handleWorktreeChange(event.target.checked)
-                  }
-                />
-                New worktree
-              </label>
-              {newWorktree && (
-                <>
-                  <label className="flex items-center gap-xs text-label-md text-(--tethys-text-muted)">
+            <>
+              <IsolationToggle
+                worktree={newWorktree}
+                onChange={handleWorktreeChange}
+              />
+              {newWorktree ? (
+                <div className="inline-flex h-7 items-stretch overflow-hidden rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) font-mono text-mono-micro">
+                  <span className="flex items-center px-2 text-(--tethys-text-muted)">
                     from
-                    <input
-                      aria-label="Worktree base"
-                      value={worktreeBase}
-                      onChange={(event) => setWorktreeBase(event.target.value)}
-                      className="w-20 rounded border border-(--tethys-hairline) bg-(--tethys-surface-card) px-1.5 py-0.5 text-(--tethys-text-primary)"
-                    />
-                  </label>
+                  </span>
+                  <input
+                    aria-label="Worktree base"
+                    value={worktreeBase}
+                    onChange={(event) => setWorktreeBase(event.target.value)}
+                    className="w-16 border-l border-(--tethys-hairline) bg-transparent px-2 text-(--tethys-text-primary) outline-none focus:bg-(--tethys-surface-hover)"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="flex items-center border-l border-(--tethys-hairline) px-1.5 text-(--tethys-text-muted)"
+                  >
+                    <ArrowRight className="size-3" />
+                  </span>
                   <input
                     aria-label="Worktree branch"
                     value={worktreeBranch}
                     placeholder={defaultBranch(workspace.name)}
                     onChange={(event) => setWorktreeBranch(event.target.value)}
-                    className="w-40 rounded border border-(--tethys-hairline) bg-(--tethys-surface-card) px-1.5 py-0.5 text-label-md text-(--tethys-text-primary)"
+                    className="w-44 border-l border-(--tethys-hairline) bg-transparent px-2 text-(--tethys-text-primary) outline-none placeholder:text-(--tethys-text-muted) focus:bg-(--tethys-surface-hover)"
                   />
-                </>
+                </div>
+              ) : (
+                uncommittedCount !== null &&
+                uncommittedCount > 0 && (
+                  <span className="inline-flex h-6 items-center gap-1 rounded-sm bg-(--tethys-status-warning-soft) px-2 font-mono text-mono-micro text-(--tethys-status-warning)">
+                    {uncommittedCount} uncommitted
+                  </span>
+                )
               )}
-              {checkoutInUse && (
-                <span className="basis-full text-label-sm text-(--tethys-status-warning)">
-                  Another thread uses this checkout. A new worktree keeps its
-                  changes separate.
-                </span>
+              {checkoutInUse && !newWorktree && (
+                <div
+                  role="note"
+                  className="flex basis-full items-center gap-sm rounded-md border border-(--tethys-hairline) bg-(--tethys-status-warning-soft) py-1.5 pr-1.5 pl-2.5 text-label-md text-(--tethys-text-secondary)"
+                >
+                  <Warning
+                    aria-hidden="true"
+                    className="size-3.5 shrink-0 text-(--tethys-status-warning)"
+                  />
+                  <span className="min-w-0 flex-1">
+                    Another thread uses this checkout. A worktree keeps this
+                    thread&apos;s changes separate.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleWorktreeChange(true)}
+                    className="focus-ring inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-label-md text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover)"
+                  >
+                    <BranchPlus aria-hidden="true" className="size-3.5" />
+                    Use a worktree
+                  </button>
+                </div>
               )}
-            </div>
+            </>
           ) : null}
 
           {trustedFolders.length > 1 && (
@@ -546,7 +564,8 @@ export function PromptCard({
                 onClick={() => setFoldersOpen((open) => !open)}
                 className={ADDITIONAL_PILL_CLASS}
               >
-                {"+"} Folder
+                <FolderPlus aria-hidden="true" className="size-3.5" />
+                Folder
               </button>
               <Popover
                 open={foldersOpen}
@@ -652,7 +671,7 @@ export function PromptCard({
         )}
 
         <div className="flex items-center justify-between gap-lg">
-          <div className="flex min-w-0 items-center gap-sm">
+          <div className="flex min-w-0 items-center gap-md">
             <AttachmentPicker
               providerName={selectedProvider?.name ?? "a selected Provider"}
               capabilities={{
@@ -688,7 +707,7 @@ export function PromptCard({
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-sm">
+          <div className="flex shrink-0 items-center gap-md">
             <ModelSelector
               providers={providerList}
               selectedProviderId={providerId}

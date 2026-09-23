@@ -110,3 +110,19 @@ describe("ComposerEditor chips", () => {
     expect(onSubmit).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("ComposerEditor density", () => {
+  it("gives the docked editor a one-line floor that grows with the prompt", () => {
+    render(<ComposerEditor density="docked" />);
+    const textbox = screen.getByRole("textbox", { name: "Prompt" });
+    expect(textbox.className).toContain("min-h-6");
+    expect(textbox.className).toContain("max-h-[40vh]");
+    expect(textbox.className).not.toContain("min-h-[72px]");
+  });
+
+  it("keeps a three-line floor on the hero editor", () => {
+    render(<ComposerEditor />);
+    const textbox = screen.getByRole("textbox", { name: "Prompt" });
+    expect(textbox.className).toContain("min-h-[72px]");
+  });
+});

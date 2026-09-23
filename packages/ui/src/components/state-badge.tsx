@@ -24,7 +24,7 @@ export function StateBadge({ status, label, className }: StateBadgeProps) {
       data-testid="state-badge"
       data-state={status}
       className={cn(
-        "inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full bg-(--tethys-surface-hover) px-2",
+        "inline-flex h-7 shrink-0 items-center gap-2 rounded-full bg-(--tethys-surface-hover) px-2.5",
         className,
       )}
     >

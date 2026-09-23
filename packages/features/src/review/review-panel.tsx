@@ -1,3 +1,4 @@
+import { ChevronDown } from "@nebutra/icons";
 import type {
   DiffFile,
   DiffFileDetail,
@@ -15,7 +16,11 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSessionState } from "../inspector/use-session-state";
 import { useReviewClient } from "./client-context";
 import { FileHeader } from "./file-header";
-import { defaultDiffSource, useDiffSummary } from "./use-review-diff";
+import {
+  defaultDiffSource,
+  useDiffRevision,
+  useDiffSummary,
+} from "./use-review-diff";
 
 export interface ReviewPanelProps {
   sessionId?: string;
@@ -83,8 +88,10 @@ export function ReviewPanel({
       ? { TurnStartWorktree: { thread_id: threadId, turn } }
       : { TurnStartEnd: { thread_id: threadId, turn } };
   }, [base, inProgress, scope, threadId, turn]);
+  const revision = useDiffRevision(sessionId);
   const { summary, loading } = useDiffSummary(
     gate.showDiff ? diffSource : null,
+    revision,
   );
   const scopeButtonRef = useRef<HTMLButtonElement>(null);
   const [scopeOpen, setScopeOpen] = useState(false);
@@ -190,7 +197,8 @@ export function ReviewPanel({
     );
   }
 
-  if (loading) {
+  // A refresh keeps the last list on screen; only the first load is blank.
+  if (loading && summary === null) {
     return null;
   }
 
@@ -311,7 +319,11 @@ export function ReviewPanel({
             aria-expanded={scopeOpen}
             onClick={() => setScopeOpen((open) => !open)}
           >
-            {scopeLabel} <span aria-hidden="true">▾</span>
+            {scopeLabel}
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3.5 text-(--tethys-text-muted)"
+            />
           </Button>
           <Popover
             open={scopeOpen}

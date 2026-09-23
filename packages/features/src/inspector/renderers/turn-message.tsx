@@ -111,7 +111,7 @@ export function TurnMessageRenderer({
       className={cn(
         "group relative w-full text-body-md text-(--tethys-text-primary)",
         isUser &&
-          "ml-auto max-w-[540px] rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-lg py-md",
+          "ml-auto max-w-[540px] rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-lg py-lg",
         isThought && "text-(--tethys-text-muted)",
         className,
       )}

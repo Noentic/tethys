@@ -2,7 +2,7 @@ import type { RestoreTarget } from "@tethys/bindings";
 import { Button, useInspectorControl } from "@tethys/ui";
 import { useMemo, useState } from "react";
 import { useReviewClient } from "../review/client-context";
-import { useDiffSummary } from "../review/use-review-diff";
+import { useDiffRevision, useDiffSummary } from "../review/use-review-diff";
 
 export function TurnReceipt({
   sessionId,
@@ -25,7 +25,8 @@ export function TurnReceipt({
     () => ({ TurnStartEnd: { thread_id: sessionId, turn } }),
     [sessionId, turn],
   );
-  const { summary } = useDiffSummary(canReview ? source : null);
+  const revision = useDiffRevision(sessionId);
+  const { summary } = useDiffSummary(canReview ? source : null, revision);
 
   if (!canReview || !summary || summary.files.length === 0) return null;
 

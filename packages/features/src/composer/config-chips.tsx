@@ -3,7 +3,7 @@
 //! other option live only in the full panel, so no option renders twice.
 
 import type { ConfigOption } from "@tethys/bindings";
-import { Chip } from "@tethys/ui";
+import { cn } from "@tethys/ui";
 import { useEffect, useState } from "react";
 import { ProviderCapabilityNotice } from "../providers/capability-notice";
 import { optionValues } from "../thread-new/session-config-panel";
@@ -57,7 +57,7 @@ export function ComposerConfigChips({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-center gap-sm">
       {chips.map((option) => {
         const current = local[option.id] ?? option.current_value;
         const display =
@@ -73,7 +73,7 @@ export function ComposerConfigChips({
           return (
             <label
               key={option.id}
-              className="flex items-center gap-2 text-label-sm text-(--tethys-text-muted)"
+              className="flex h-7 items-center gap-sm text-label-md text-(--tethys-text-muted)"
             >
               Faster
               <input
@@ -87,7 +87,7 @@ export function ComposerConfigChips({
                   const selected = levels[Number(event.target.value)];
                   if (selected) void change(option, selected.id);
                 }}
-                className="w-20 accent-(--tethys-accent-primary)"
+                className="w-24 accent-(--tethys-accent-toggle)"
               />
               Smarter
               <span className="sr-only">{display}</span>
@@ -96,8 +96,8 @@ export function ComposerConfigChips({
         }
         return (
           <div key={option.id} className="relative">
-            <Chip
-              interactive
+            <button
+              type="button"
               aria-haspopup="listbox"
               aria-expanded={openId === option.id}
               onClick={() => setOpenId(openId === option.id ? null : option.id)}
@@ -109,9 +109,15 @@ export function ComposerConfigChips({
                   setOpenId(null);
                 }
               }}
+              className={cn(
+                "inline-flex h-7 items-center gap-1.5 rounded-sm px-2 text-label-md text-(--tethys-text-secondary) transition-colors select-none",
+                "hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
+                openId === option.id &&
+                  "bg-(--tethys-surface-active) text-(--tethys-text-primary)",
+              )}
             >
               {display}
-            </Chip>
+            </button>
             <ConfigOptionPopover
               option={option}
               value={current}

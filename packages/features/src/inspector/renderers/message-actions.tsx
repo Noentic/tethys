@@ -1,3 +1,9 @@
+import {
+  Check,
+  Copy,
+  GitBranch,
+  RefreshCounterClockwise,
+} from "@nebutra/icons";
 import type { TurnMessageEntry } from "@tethys/state";
 import { cn, IconButton, Tooltip } from "@tethys/ui";
 import { useState } from "react";
@@ -56,18 +62,22 @@ export function MessageActions({
         label={copied ? "Copied" : "Copy"}
         onClick={copy}
       >
-        ⧉
+        {copied ? (
+          <Check aria-hidden="true" className="size-3.5" />
+        ) : (
+          <Copy aria-hidden="true" className="size-3.5" />
+        )}
       </IconButton>
       {canFork && (
         <Tooltip content={forkTooltip ?? "Fork from here"}>
           <IconButton size="compact" label="Fork from here" onClick={onFork}>
-            ⑂
+            <GitBranch aria-hidden="true" className="size-3.5" />
           </IconButton>
         </Tooltip>
       )}
       {showRetry && (
         <IconButton size="compact" label="Retry" onClick={onRetry}>
-          ↻
+          <RefreshCounterClockwise aria-hidden="true" className="size-3.5" />
         </IconButton>
       )}
     </div>

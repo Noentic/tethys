@@ -19,7 +19,7 @@ export const ActionIconButton = React.forwardRef<
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 select-none",
+        "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 select-none [&_svg]:size-[18px]",
         "focus-ring",
         "active:scale-95",
         ready

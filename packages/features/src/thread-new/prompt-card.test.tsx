@@ -218,7 +218,7 @@ describe("PromptCard", () => {
         workspace.id,
       ),
     );
-    expect(screen.getByRole("checkbox", { name: "New worktree" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "New worktree" })).toBeTruthy();
   });
 
   it("prepares the selected provider and gates send until the draft is ready", async () => {
@@ -262,7 +262,7 @@ describe("PromptCard", () => {
       />,
     );
     await selectClaude();
-    fireEvent.click(screen.getByRole("checkbox", { name: "New worktree" }));
+    fireEvent.click(screen.getByRole("radio", { name: "New worktree" }));
     await waitFor(() =>
       expect(sessionClient.thread.prepare).toHaveBeenLastCalledWith(
         expect.objectContaining({

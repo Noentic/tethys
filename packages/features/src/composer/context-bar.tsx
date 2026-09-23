@@ -2,6 +2,7 @@
 //! row of pills across the card's top edge. It replaces the retired 56px action
 //! bar, and keeps that bar's fold order.
 
+import { ChevronDown } from "@nebutra/icons";
 import type { ConfigOption } from "@tethys/bindings";
 import {
   CONTEXT_BAR_PRIORITY,
@@ -13,6 +14,7 @@ import {
 } from "@tethys/ui";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { providerEntry } from "../agents/provider-catalog";
 import { ProviderPendingCount } from "../providers/provider-popover";
 import { SessionConfigPanel } from "../thread-new/session-config-panel";
 
@@ -109,6 +111,8 @@ export function ContextBar({
   const width = useContentWidth(barRef);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const provider = providerEntry(providerName);
+  const providerLabel = provider?.name ?? providerName;
 
   const entries: BarEntry[] = [
     {
@@ -121,17 +125,28 @@ export function ContextBar({
               ref={providerAnchorRef}
               type="button"
               aria-label={
-                providerName
-                  ? `${providerName} provider and session configuration`
+                providerLabel
+                  ? `${providerLabel} provider and session configuration`
                   : "Provider and session configuration"
               }
               aria-haspopup="dialog"
               aria-expanded={configOpen}
               onClick={() => setConfigOpen((open) => !open)}
-              className="focus-ring inline-flex h-5 items-center gap-1 rounded-xs border border-(--tethys-hairline-strong) px-2 font-mono text-mono-micro text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover)"
+              className="focus-ring inline-flex h-7 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-primary) transition-colors hover:bg-(--tethys-surface-hover)"
             >
-              {providerName}
-              <span aria-hidden="true">{"\u2228"}</span>
+              {provider && (
+                <img
+                  src={provider.icon}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0"
+                />
+              )}
+              {providerLabel}
+              <ChevronDown
+                aria-hidden="true"
+                className="size-3.5 text-(--tethys-text-muted)"
+              />
             </button>
             <Popover
               open={configOpen}
@@ -204,7 +219,7 @@ export function ContextBar({
     <div
       ref={barRef}
       data-testid="context-bar"
-      className={cn("flex min-w-0 items-center gap-sm", className)}
+      className={cn("flex min-w-0 items-center gap-md", className)}
     >
       {rendered.map((entry) => (
         <span key={entry.id} className="flex shrink-0 items-center">
@@ -220,7 +235,7 @@ export function ContextBar({
             aria-haspopup="dialog"
             aria-expanded={overflowOpen}
             onClick={() => setOverflowOpen((open) => !open)}
-            className="focus-ring relative flex h-5 w-5 items-center justify-center rounded-xs border border-(--tethys-hairline) bg-(--tethys-surface-hover) font-mono text-mono-micro text-(--tethys-text-secondary)"
+            className="focus-ring relative flex h-7 w-7 items-center justify-center rounded-xs border border-(--tethys-hairline) bg-(--tethys-surface-hover) font-mono text-mono-micro text-(--tethys-text-secondary)"
           >
             •••
             {queueFolded && (

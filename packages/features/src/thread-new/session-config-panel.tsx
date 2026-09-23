@@ -104,7 +104,7 @@ export function SessionConfigPanel({
                       value={value.id}
                       checked={current === value.id}
                       onChange={() => onChange(option.id, value.id)}
-                      className="mt-0.5 accent-(--tethys-accent-primary)"
+                      className="mt-0.5 accent-(--tethys-accent-toggle)"
                     />
                     <span className="min-w-0">
                       <span className="block text-(--tethys-text-primary)">

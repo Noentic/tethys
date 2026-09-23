@@ -2,6 +2,7 @@ import type { ToolCallEntry } from "@tethys/state";
 import { Chip, cn, StatusDot } from "@tethys/ui";
 import { useId, useState } from "react";
 import { diffForTool, InlineFileDiff } from "./file-diff";
+import { DisclosureChevron, ToolKindIcon } from "./tool-kind-icon";
 import { ToolOriginTag } from "./tool-origin-tag";
 
 const STATUS_KEY: Record<ToolCallEntry["status"], string> = {
@@ -9,19 +10,6 @@ const STATUS_KEY: Record<ToolCallEntry["status"], string> = {
   Executing: "running",
   Completed: "healthy",
   Failed: "error",
-};
-
-const KIND_GLYPH: Record<string, string> = {
-  read: "▤",
-  edit: "✎",
-  delete: "␡",
-  move: "⇄",
-  search: "⌕",
-  execute: "▷",
-  think: "◌",
-  fetch: "↧",
-  switch_mode: "⇋",
-  other: "◆",
 };
 
 const OUTPUT_CAP = 1200;
@@ -68,10 +56,14 @@ export function ToolAccordionRenderer({
         className="flex w-full items-center gap-sm px-md py-sm text-left transition-colors hover:bg-(--tethys-surface-hover)"
       >
         <StatusDot status={STATUS_KEY[entry.status]} inline />
-        <span aria-hidden="true">
-          {KIND_GLYPH[entry.toolKind ?? "other"] ?? KIND_GLYPH.other}
-        </span>
-        <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+        <DisclosureChevron
+          expanded={expanded}
+          className="text-(--tethys-text-muted)"
+        />
+        <ToolKindIcon
+          kind={entry.toolKind}
+          className="text-(--tethys-text-secondary)"
+        />
         <span className="truncate text-label-md text-(--tethys-text-primary)">
           {entry.title}
         </span>

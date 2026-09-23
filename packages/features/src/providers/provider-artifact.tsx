@@ -1,6 +1,8 @@
+import { FileText, Image } from "@nebutra/icons";
 import type { BaseSessionEntry } from "@tethys/state";
 import { cn } from "@tethys/ui";
 import { useId, useState } from "react";
+import { DisclosureChevron } from "../inspector/renderers/tool-kind-icon";
 import { ProviderCapabilityNotice } from "./capability-notice";
 
 export type ProviderArtifactKind = "text" | "image" | (string & {});
@@ -32,10 +34,7 @@ function sizeLabel(artifact: ProviderArtifact): string {
   return "";
 }
 
-const KIND_GLYPH: Record<string, string> = {
-  text: "¶",
-  image: "▣",
-};
+const KIND_ICON = { text: FileText, image: Image } as const;
 
 /**
  * A Provider-emitted artifact rendered as a stage entry through
@@ -70,7 +69,11 @@ export function ProviderArtifactRenderer({
         onClick={() => setExpanded((value) => !value)}
         className="flex w-full items-center gap-sm text-left"
       >
-        <span aria-hidden="true">{KIND_GLYPH[artifact.kind] ?? "◆"}</span>
+        {(() => {
+          const Icon =
+            KIND_ICON[artifact.kind as keyof typeof KIND_ICON] ?? FileText;
+          return <Icon aria-hidden="true" className="size-3.5 shrink-0" />;
+        })()}
         <span className="flex-1 truncate text-label-md text-(--tethys-text-primary)">
           {artifact.title}
         </span>
@@ -79,7 +82,7 @@ export function ProviderArtifactRenderer({
             {size}
           </span>
         )}
-        <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+        <DisclosureChevron expanded={expanded} />
       </button>
 
       {expanded && (

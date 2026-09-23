@@ -1,5 +1,9 @@
 import { ChevronLeft, ChevronRight, Cross } from "@nebutra/icons";
-import { defaultDiffSource, useDiffSummary } from "@tethys/features";
+import {
+  defaultDiffSource,
+  useDiffRevision,
+  useDiffSummary,
+} from "@tethys/features";
 import {
   getAllInspectorSlots,
   IconButton,
@@ -54,7 +58,8 @@ export function InspectorPane({
     () => (sessionId ? defaultDiffSource(sessionId) : null),
     [sessionId],
   );
-  const { summary } = useDiffSummary(source);
+  const revision = useDiffRevision(sessionId ?? "");
+  const { summary } = useDiffSummary(source, revision);
 
   useEffect(() => {
     if (previousSessionId.current !== sessionId) {

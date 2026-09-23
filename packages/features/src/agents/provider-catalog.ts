@@ -90,6 +90,22 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   },
 ];
 
+/**
+ * The catalog entry for a provider id, or undefined for a provider the catalog
+ * doesn't know (a registry-only profile). Live profiles carry the registry id
+ * (`claude-acp`), fixtures carry the catalog id (`claude-code`); both resolve.
+ */
+export function providerEntry(id: string): ProviderCatalogEntry | undefined {
+  return PROVIDER_CATALOG.find(
+    (entry) => entry.id === id || entry.registryId === id,
+  );
+}
+
+/** The catalog icon for a provider id; see `providerEntry`. */
+export function providerIcon(id: string): string | undefined {
+  return providerEntry(id)?.icon;
+}
+
 /** The catalog entry that owns a profile, or null for an unrecognised profile. */
 export function catalogEntryForProfile<
   T extends { registry_ref: { id: string } | null },

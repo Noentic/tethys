@@ -154,9 +154,9 @@ export function AttachmentPicker({
         title="Attach files"
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
-        className="focus-ring inline-flex size-7 items-center justify-center rounded-md bg-(--tethys-surface-hover) text-(--tethys-text-muted) hover:text-(--tethys-text-primary) disabled:cursor-not-allowed disabled:opacity-50"
+        className="focus-ring inline-flex size-8 items-center justify-center rounded-md bg-(--tethys-surface-hover) text-(--tethys-text-muted) hover:text-(--tethys-text-primary) disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <Paperclip className="size-3.5" aria-hidden="true" />
+        <Paperclip className="size-4" aria-hidden="true" />
       </button>
       <input
         ref={inputRef}

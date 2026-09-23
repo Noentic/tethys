@@ -4,7 +4,11 @@ import {
 } from "@tethys/state";
 import { cn, useInspectorControl } from "@tethys/ui";
 import { useMemo } from "react";
-import { defaultDiffSource, useDiffSummary } from "./use-review-diff";
+import {
+  defaultDiffSource,
+  useDiffRevision,
+  useDiffSummary,
+} from "./use-review-diff";
 
 /**
  * DESIGN.md `prompt-card.contextBarFold` for the D6 diff-summary pill: between the
@@ -32,7 +36,8 @@ export function DiffSummaryPill({
   const gate = useWorkspaceReviewCapability(sessionId, capabilityFixture);
   const { open } = useInspectorControl();
   const source = useMemo(() => defaultDiffSource(sessionId), [sessionId]);
-  const { summary } = useDiffSummary(gate.showDiff ? source : null);
+  const revision = useDiffRevision(sessionId);
+  const { summary } = useDiffSummary(gate.showDiff ? source : null, revision);
 
   if (!gate.showDiff || summary === null || summary.files.length === 0) {
     return null;

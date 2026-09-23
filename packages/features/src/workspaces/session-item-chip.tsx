@@ -12,8 +12,21 @@ import {
   sessionStatusKey,
 } from "@tethys/state";
 import { cn, StatusDot, Tooltip } from "@tethys/ui";
+import { providerIcon } from "../agents/provider-catalog";
 
 export function ProviderGlyph({ providerId }: { providerId: string }) {
+  const icon = providerIcon(providerId);
+  if (icon) {
+    return (
+      <img
+        src={icon}
+        alt=""
+        aria-hidden="true"
+        data-testid="provider-glyph"
+        className="h-4 w-4 shrink-0"
+      />
+    );
+  }
   const initials =
     providerId
       .split(/[-_\s]+/)

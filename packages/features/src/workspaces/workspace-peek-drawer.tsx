@@ -5,6 +5,7 @@
 //! approval logic.
 
 import {
+  ChevronDown,
   Cross,
   FolderClosed,
   GitBranch,
@@ -217,7 +218,7 @@ export function WorkspacePeekDrawer({
                   ([provider, sessions]) => (
                     <div key={provider} className="flex flex-col">
                       <div className="flex h-7 items-center gap-1.5 px-3 text-label-md text-(--tethys-text-muted)">
-                        <span aria-hidden="true">▾</span>
+                        <ChevronDown aria-hidden="true" className="size-3.5" />
                         <span>{provider}</span>
                       </div>
                       {sessions.map((session) => (

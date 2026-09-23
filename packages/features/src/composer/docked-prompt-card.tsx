@@ -96,7 +96,7 @@ const PROMPT_PLACEHOLDER = "Ask Anything…";
 function RunningSpinner() {
   return (
     <svg
-      className="h-4 w-4 motion-safe:animate-spin"
+      className="h-[18px] w-[18px] motion-safe:animate-spin"
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
@@ -351,6 +351,7 @@ export function DockedPromptCard({
         )}
         <ComposerEditor
           ref={editorRef}
+          density="docked"
           sources={sources}
           placeholder={
             turnInFlight
@@ -389,7 +390,7 @@ export function DockedPromptCard({
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-sm">
+      <div className="flex items-center justify-between gap-md">
         <div className="flex min-w-0 items-center gap-md">
           <AttachmentPicker
             providerName={state.providerId}

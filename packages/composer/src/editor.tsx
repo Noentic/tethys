@@ -200,7 +200,17 @@ export interface ComposerEditorProps {
   onChange?: (plaintext: string) => void;
   onSubmit?: () => void;
   onControl?: (control: ComposerControl) => void;
+  /**
+   * `hero`: the New Thread card, a three-line floor. `docked`: the in-thread
+   * card, one line that grows with the prompt. Both cap at 40vh and scroll.
+   */
+  density?: "hero" | "docked";
 }
+
+const DENSITY_CLASS = {
+  hero: "min-h-[72px]",
+  docked: "min-h-6",
+} as const;
 
 /**
  * The `/ $ @` composer editor (`CMP-01..05`). Chips are inline atoms; the
@@ -218,6 +228,7 @@ export const ComposerEditor = React.forwardRef<
     onChange,
     onSubmit,
     onControl,
+    density = "hero",
   },
   ref,
 ) {
@@ -260,8 +271,7 @@ export const ComposerEditor = React.forwardRef<
     editable: !disabled,
     editorProps: {
       attributes: {
-        class:
-          "composer-editor min-h-[96px] px-1 text-body-md text-(--tethys-text-primary) outline-none",
+        class: `composer-editor ${DENSITY_CLASS[density]} max-h-[40vh] overflow-y-auto px-1 text-body-md text-(--tethys-text-primary) outline-none`,
         "data-placeholder": placeholder ?? "",
         role: "textbox",
         "aria-multiline": "true",

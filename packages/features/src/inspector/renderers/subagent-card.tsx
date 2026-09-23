@@ -3,6 +3,7 @@ import { cn, getEntryRenderer, StatusDot } from "@tethys/ui";
 import { useEffect, useId, useState } from "react";
 import type { ChildIndex } from "../nest-children";
 import { cardChildren } from "../nest-children";
+import { DisclosureChevron } from "./tool-kind-icon";
 import { ToolOriginTag } from "./tool-origin-tag";
 
 function awaiting(entry: SessionEntry): boolean {
@@ -72,7 +73,7 @@ export function SubagentCard({
         className="flex w-full items-center gap-sm px-md py-sm text-left transition-colors hover:bg-(--tethys-surface-hover)"
       >
         <StatusDot status={dotStatus} inline />
-        <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+        <DisclosureChevron expanded={expanded} />
         <span className="truncate text-label-md text-(--tethys-text-primary)">
           {entry.title}
         </span>

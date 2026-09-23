@@ -7,7 +7,10 @@ import {
   InspectorClientProvider,
 } from "../client-context";
 import { ElicitationCard } from "./elicitation-card";
-import { PermissionRequestCard } from "./permission-request-card";
+import {
+  optionVariant,
+  PermissionRequestCard,
+} from "./permission-request-card";
 
 function permissionEntry(
   partial: Partial<PermissionRequestEntry["request"]> = {},
@@ -91,10 +94,16 @@ describe("Interaction cards (M1.8 U9)", () => {
       ],
     });
     renderWithClient(<PermissionRequestCard entry={entry} />, client);
+    // The trailing digit is each button's number-key hint.
     const buttons = screen
       .getAllByRole("button")
       .map((button) => button.textContent);
-    expect(buttons).toEqual(["Alpha", "Beta", "Gamma", "Delta"]);
+    expect(buttons).toEqual(["Alpha1", "Beta2", "Gamma3", "Delta4"]);
+    expect(
+      screen
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-keyshortcuts")),
+    ).toEqual(["1", "2", "3", "4"]);
   });
 
   it("marks rejecting options destructive and sends the chosen option id", async () => {
@@ -174,5 +183,15 @@ describe("Interaction cards (M1.8 U9)", () => {
     expect(screen.getByText("example.com")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open in browser" })).toBeTruthy();
     expect(document.querySelector("iframe")).toBeNull();
+  });
+});
+
+describe("optionVariant", () => {
+  it("leads with allow-once, quiets a reject, and keeps the rest secondary", () => {
+    expect(optionVariant("allow_once")).toBe("primary");
+    expect(optionVariant("allow_always")).toBe("secondary");
+    expect(optionVariant("reject_once")).toBe("destructive");
+    expect(optionVariant("reject_always")).toBe("destructive");
+    expect(optionVariant(null)).toBe("secondary");
   });
 });

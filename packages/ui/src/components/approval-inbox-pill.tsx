@@ -27,7 +27,7 @@ export function ApprovalInboxPill({
       type="button"
       aria-label={`${label} (${count})`}
       className={cn(
-        "focus-ring inline-flex h-5 items-center gap-1.5 rounded-full px-2 font-mono text-mono-micro transition-colors duration-150 select-none",
+        "focus-ring inline-flex h-7 items-center gap-2 rounded-full px-2.5 font-mono text-mono-micro transition-colors duration-150 select-none",
         selected
           ? "border border-(--tethys-status-warning) bg-(--tethys-status-warning-soft) text-(--tethys-text-primary)"
           : "border border-transparent bg-(--tethys-surface-hover) text-(--tethys-text-secondary) hover:bg-(--tethys-surface-active) hover:text-(--tethys-text-primary)",

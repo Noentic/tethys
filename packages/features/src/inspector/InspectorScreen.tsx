@@ -160,7 +160,7 @@ export function InspectorScreen({
           />
         </div>
         {canDockComposer(client) && (
-          <div className="shrink-0">
+          <div className="shrink-0 pb-lg">
             <DockedPromptCard
               sessionId={sessionId}
               client={client}
