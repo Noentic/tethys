@@ -18,7 +18,7 @@ use tethys_schema::connection::{
 use tethys_schema::store::NewEvent;
 use tethys_schema::sync::{McpTransports, WorkspaceId};
 use tethys_schema::thread::{
-    ConfigOption, ContentBlock, CreateThread, EventEnvelope, MessageUpsert, Patch, Role,
+    ConfigOption, ContentBlock, CreateThread, Entry, EventEnvelope, MessageUpsert, Patch, Role,
     ThreadBootstrap, ThreadId, ThreadSessionView, ThreadSummary, TurnEventBody,
 };
 use tethys_store::{EventStore, ThreadRecord};
@@ -27,8 +27,8 @@ use tethys_thread::{
     AgentConnection, ConnectionError, EventOrigin, NewSession, ResumeSession, SessionId,
     ThreadMachine,
 };
-use tokio::sync::broadcast;
 use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::{broadcast, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::health::HealthRegistry;
@@ -781,7 +781,40 @@ impl ThreadSessions {
         })
     }
 
-    pub async fn prompt(&self, id: &ThreadId, blocks: Vec<ContentBlock>) -> Result<(), ApiError> {
+    /// The thread's working directory, read without reconnecting its Provider.
+    pub fn workdir(&self, id: &ThreadId) -> Result<String, ApiError> {
+        Ok(self.handle(id)?.inner.lock().summary().workdir)
+    }
+
+    /// User prompts recorded so far: the turn index the webview's reducer
+    /// derives from the same `MessageUpsert { role: User }` events.
+    pub fn user_turns(&self, id: &ThreadId) -> Result<u32, ApiError> {
+        let handle = self.handle(id)?;
+        let inner = handle.inner.lock();
+        let count = inner
+            .machine
+            .entries()
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry,
+                    Entry::Message {
+                        role: Role::User,
+                        ..
+                    }
+                )
+            })
+            .count();
+        Ok(u32::try_from(count).unwrap_or(u32::MAX))
+    }
+
+    /// Sends the prompt and returns once it is accepted; the receiver resolves
+    /// when the turn settles (completed, failed, or cancelled).
+    pub async fn prompt(
+        &self,
+        id: &ThreadId,
+        blocks: Vec<ContentBlock>,
+    ) -> Result<oneshot::Receiver<()>, ApiError> {
         let handle = self.handle(id)?;
         if handle.inner.lock().machine.state() == tethys_schema::thread::ThreadState::Archived {
             return Err(ApiError::Conflict(
@@ -831,6 +864,7 @@ impl ThreadSessions {
         let health = self.health.clone();
         let profile_id = handle.inner.lock().agent_profile_id.clone();
         let thread_store = event_store.clone();
+        let (settled_tx, settled_rx) = oneshot::channel();
         tokio::spawn(async move {
             let result = connection.prompt(&session, blocks).await;
             if let Some(timer) = task_handle.cancel_timer.lock().take() {
@@ -888,8 +922,9 @@ impl ThreadSessions {
                 )
                 .await;
             }
+            let _ = settled_tx.send(());
         });
-        Ok(())
+        Ok(settled_rx)
     }
 
     pub async fn set_config_option(

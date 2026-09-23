@@ -6,7 +6,7 @@ use tethys_schema::thread::{
     ContentBlock, CreateThread, ThreadBootstrap, ThreadId, ThreadIsolation, ThreadSessionView,
     ThreadSummary,
 };
-use tethys_schema::{sync::WorkspaceId, WorktreeSpec};
+use tethys_schema::{sync::WorkspaceId, CheckpointPhase, WorktreeSpec};
 
 use crate::Core;
 
@@ -53,7 +53,23 @@ impl ThreadApi for Core {
     }
 
     async fn thread_prompt(&self, id: ThreadId, blocks: Vec<ContentBlock>) -> Result<(), ApiError> {
-        self.sessions.prompt(&id, blocks).await
+        let checkpoint = self.open_turn_checkpoint(&id).await;
+        let settled = self.sessions.prompt(&id, blocks).await?;
+        if let Some((engine, thread, turn)) = checkpoint {
+            tokio::spawn(async move {
+                if settled.await.is_err() {
+                    return;
+                }
+                let result = tokio::task::spawn_blocking(move || {
+                    engine.checkpoint_create(&thread, turn, CheckpointPhase::End)
+                })
+                .await;
+                if let Ok(Err(error)) = result {
+                    tracing::warn!(turn, %error, "turn end checkpoint failed");
+                }
+            });
+        }
+        Ok(())
     }
 
     async fn thread_queue_list(&self, id: ThreadId) -> Result<Vec<QueuedPrompt>, ApiError> {

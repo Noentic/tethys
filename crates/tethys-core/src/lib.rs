@@ -377,10 +377,70 @@ impl Core {
         Ok(())
     }
 
+    /// The thread's git registration. A thread Core didn't create a worktree
+    /// for (one on the workspace's current checkout, or any thread after a
+    /// restart) registers on first use from its session's workdir.
     fn registered(&self, thread_id: &str) -> Result<RegisteredWorktree, ApiError> {
-        self.git.lock().get(thread_id).cloned().ok_or_else(|| {
+        if let Some(registered) = self.git.lock().get(thread_id).cloned() {
+            return Ok(registered);
+        }
+        self.register_checkout(thread_id)
+    }
+
+    fn register_checkout(&self, thread_id: &str) -> Result<RegisteredWorktree, ApiError> {
+        let workdir = self
+            .sessions
+            .workdir(&tethys_schema::thread::ThreadId::from(thread_id))
+            .map_err(|_| {
+                ApiError::Internal(format!("no worktree registered for thread {thread_id}"))
+            })?;
+        let config = git_registry::load_git_config(&workdir)?;
+        let options = tethys_git::GitOptions {
+            skip_untracked_binary_bytes: u64::from(config.skip_untracked_binary_bytes),
+        };
+        let mut registry = self.git.lock();
+        let engine = registry.engine(&workdir, options).map_err(map_git_error)?;
+        let repo = engine.repo();
+        let root = repo.worktree_root.display().to_string();
+        let info = tethys_schema::WorktreeInfo {
+            thread_id: thread_id.to_string(),
+            workspace_root: root.clone(),
+            path: root,
+            branch: repo.branch.clone(),
+            base: "HEAD".to_string(),
+            head: repo.head_oid.clone().unwrap_or_default(),
+            main_checkout: repo.is_main_worktree,
+            warnings: Vec::new(),
+            setup: None,
+        };
+        registry.register(info, engine, config);
+        registry.get(thread_id).cloned().ok_or_else(|| {
             ApiError::Internal(format!("no worktree registered for thread {thread_id}"))
         })
+    }
+
+    /// Writes the start checkpoint for the turn a prompt is about to open, and
+    /// returns what the end checkpoint needs. `None` for a thread without git:
+    /// checkpoints are a capability, never a precondition for prompting.
+    async fn open_turn_checkpoint(
+        &self,
+        thread_id: &tethys_schema::thread::ThreadId,
+    ) -> Option<(Arc<tethys_git::GitEngine>, String, u32)> {
+        let turn = self.sessions.user_turns(thread_id).ok()?.saturating_add(1);
+        let registered = self.registered(&thread_id.0).ok()?;
+        let engine = registered.engine.clone();
+        let thread = thread_id.0.clone();
+        let start_engine = engine.clone();
+        let start_thread = thread.clone();
+        if let Err(error) = blocking(move || {
+            start_engine.checkpoint_create(&start_thread, turn, CheckpointPhase::Start)
+        })
+        .await
+        {
+            tracing::warn!(thread = %thread, turn, %error, "turn start checkpoint failed");
+            return None;
+        }
+        Some((engine, thread, turn))
     }
 }
 

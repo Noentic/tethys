@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use futures::stream::StreamExt;
 use tethys_agent_servers::{ConnectionStore, LaunchSpec, StoreOptions};
-use tethys_api::{AgentApi, EventsApi, ThreadApi};
+use tethys_api::{AgentApi, EventsApi, GitApi, ThreadApi};
 use tethys_core::permission::DenyPermissionResolver;
 use tethys_core::thread_session::ThreadSessions;
 use tethys_core::Core;
@@ -39,6 +39,7 @@ fn main() {
         auth_required_session_updates_profile_auth_state().await;
         additional_directories_reach_the_session_and_stay_jailed().await;
         provider_sessions_paginate_with_a_cursor().await;
+        current_checkout_thread_gets_diffs_and_turn_checkpoints().await;
     });
     println!("thread_flows tests passed");
 }
@@ -616,5 +617,86 @@ async fn four_threads_across_two_workdirs_stay_isolated() {
             }
         }
         core.thread_delete(id.clone()).await.expect("delete");
+    }
+}
+
+/// A thread on the workspace's current checkout (no worktree) registers for
+/// git on first use, and each prompt brackets its turn with checkpoints.
+async fn current_checkout_thread_gets_diffs_and_turn_checkpoints() {
+    let core = build_core(Duration::from_secs(5));
+    let dir = workdir("current-checkout");
+    let _ = std::fs::remove_dir_all(dir.join(".git"));
+    init_git(&dir);
+    for args in [
+        &["config", "user.name", "Tethys Test"][..],
+        &["config", "user.email", "test@tethys.dev"][..],
+    ] {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&dir)
+            .status()
+            .expect("git config");
+        assert!(status.success());
+    }
+    std::fs::write(dir.join("README.md"), "one\n").expect("write readme");
+    let status = std::process::Command::new("git")
+        .args([
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "base",
+        ])
+        .current_dir(&dir)
+        .status()
+        .expect("git commit");
+    assert!(status.success());
+
+    let id = core
+        .thread_create(CreateThread {
+            workspace_id: "workspace".into(),
+            agent_profile_id: PROFILE_V1.into(),
+            workdir: dir.display().to_string(),
+            additional_directories: Vec::new(),
+            isolation: None,
+        })
+        .await
+        .expect("create thread")
+        .id;
+
+    let summary = core
+        .git_diff_summary(tethys_schema::DiffSource::HeadWorktree {
+            thread_id: id.to_string(),
+        })
+        .await
+        .expect("current-checkout thread registers on first diff");
+    assert!(summary.files.iter().any(|file| file.path == "README.md"));
+    let listed = core.git_worktree_list().await.expect("list");
+    let info = listed
+        .iter()
+        .find(|info| info.thread_id == id.to_string())
+        .expect("registered");
+    assert_eq!(info.branch, "main");
+
+    prompt(&core, &id, "hello").await;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let checkpoints = core
+            .git_checkpoint_list(id.to_string())
+            .await
+            .expect("checkpoints");
+        let turn_one: Vec<_> = checkpoints.iter().filter(|cp| cp.turn == 1).collect();
+        if turn_one.len() == 2 {
+            assert_eq!(turn_one[0].phase, tethys_schema::CheckpointPhase::Start);
+            assert_eq!(turn_one[1].phase, tethys_schema::CheckpointPhase::End);
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "turn 1 checkpoints never landed: {checkpoints:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
