@@ -1,3 +1,4 @@
+import type { ElicitationEntry, PermissionRequestEntry } from "@tethys/state";
 import { registerEntryRenderer } from "@tethys/ui";
 import { ElicitationCard } from "./elicitation-card";
 import { PermissionRequestCard } from "./permission-request-card";
@@ -9,8 +10,18 @@ import { PermissionRequestCard } from "./permission-request-card";
  * a Provider that used elicitation.
  */
 export function registerApprovalRenderers(): void {
-  registerEntryRenderer("permission_request", PermissionRequestCard);
-  registerEntryRenderer("elicitation", ElicitationCard);
+  registerEntryRenderer<PermissionRequestEntry>(
+    "permission_request",
+    ({ entry, className }) => (
+      <PermissionRequestCard entry={entry} compact className={className} />
+    ),
+  );
+  registerEntryRenderer<ElicitationEntry>(
+    "elicitation",
+    ({ entry, className }) => (
+      <ElicitationCard entry={entry} compact className={className} />
+    ),
+  );
 }
 
 registerApprovalRenderers();

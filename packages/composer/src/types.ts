@@ -3,7 +3,23 @@
 //! Downstream units depend on `EditorHandle` and the item/chip shapes here,
 //! not on TipTap directly, so the editor implementation stays swappable.
 
-export type ChipKind = "command" | "agent-command" | "skill" | "path";
+export type ChipKind =
+  | "command"
+  | "agent-command"
+  | "skill"
+  | "path"
+  | "review";
+export type ComposerControl =
+  | "model"
+  | "permissions"
+  | "config"
+  | "resume"
+  | "clear";
+
+export const COMPOSER_CONTROL_SHORTCUT_EVENT =
+  "tethys:composer-control-shortcut";
+export const COMPOSER_INSERT_CHIP_EVENT = "tethys:composer-insert-chip";
+export type ComposerControlShortcut = "mode" | "model" | "effort";
 
 /** A chip's UI metadata. `token` is the only part that reaches the prompt. */
 export interface EditorChip {
@@ -26,6 +42,8 @@ export interface ComposerItem {
   group?: string;
   label: string;
   detail?: string;
+  /** Tethys control opened instead of inserting this row as a chip. */
+  control?: ComposerControl;
   /** Search tokens the popup may match client-side. */
   keywords?: string[];
   chip: EditorChip;

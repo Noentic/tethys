@@ -271,6 +271,7 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
             agent_profile_id: install.profile_id.clone(),
             workdir: workspace.display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await
     {

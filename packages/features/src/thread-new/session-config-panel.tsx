@@ -87,7 +87,39 @@ export function SessionConfigPanel({
         const current = values[option.id] ?? option.current_value;
         return (
           <SchemaFieldGroup key={option.id} label={option.name}>
-            {isBoolean(option) ? (
+            {option.category === "model" && !isBoolean(option) ? (
+              <div
+                role="radiogroup"
+                aria-label={option.name}
+                className="flex flex-col gap-1"
+              >
+                {optionValues(option).map((value) => (
+                  <label
+                    key={value.id}
+                    className="flex cursor-pointer items-start gap-2 rounded-sm px-2 py-1.5 text-body-sm hover:bg-(--tethys-surface-hover)"
+                  >
+                    <input
+                      type="radio"
+                      name={option.id}
+                      value={value.id}
+                      checked={current === value.id}
+                      onChange={() => onChange(option.id, value.id)}
+                      className="mt-0.5 accent-(--tethys-accent-primary)"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-(--tethys-text-primary)">
+                        {value.name}
+                      </span>
+                      {value.description && (
+                        <span className="block text-label-sm text-(--tethys-text-muted)">
+                          {value.description}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : isBoolean(option) ? (
               <div className="flex items-center justify-between gap-2">
                 {option.description && (
                   <span className="text-body-sm text-(--tethys-text-muted)">

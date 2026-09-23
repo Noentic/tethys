@@ -466,6 +466,10 @@ What each surface reads and writes. Surface behaviour is specified in [pages-vie
 |---|---|---|
 | Selector provider column | `agent.connections.list`, registry profiles (`AGT‑01/02`), negotiated `initialize` result | — |
 | `session-config-panel` | prepared `ThreadBootstrap` plus later session config/mode updates; shape varies per session | `thread.setConfigOption` (narrowed by policy, `PRM‑04`) |
+| `branch-worktree-pill` | `workspace.capabilities`, current branch and uncommitted count, live threads holding the checkout, the workspace's remembered isolation choice | `thread.prepare { isolation }` (`git.worktree_create` in core for the worktree case) |
+| `mode-pill` | the `mode` option with adapter mode roles (`working` / `approval(level)`), the thread's `permission_mode`, workspace capabilities (PRM‑02 guard) | `thread.setConfigOption` (working mode), `thread.setPermissionMode` (approvals) |
+| `branch-bar` | `git.diff.summary` against base, branch / ahead state, `forge_cli` | `git.commit` (agent-drafted message), `git.merge` (V1), `git.push` (V1) |
+| `turn-receipt`, Changes tab | `git.diff.summary/file` at turn, thread-vs-base and uncommitted scopes (checkpoint refs, §10.3) | `checkpoint.restore`, `git.stage/unstage/discard`; line comments as prompt content |
 | Catalog cards / drawer | `workspace.list/status`, `workspace.capabilities` (§10.6), `thread.list` (Sessions grouped by Provider), `git.worktree.*`, `checkpoint.*`, diff summary | `thread.create` prepares `session/new` in the resolved worktree/plain root and returns `ThreadBootstrap`; `git.init` (upsell chip), `thread.fork` (V1) |
 | Workspace add / trust | trust store by resolved path + host id (mode, scope, timestamp) | `workspace.add` gated on trust grant; revoke removes the card (`TRU‑01`) |
 | Shell sessions / inspector | `thread.get` plus exclusive `events.subscribe {sinceSeq}`, materialized entries/turns, durable local transcript | `thread.prompt/queue.*/cancel`, capability-gated load/resume/close/delete |
@@ -478,8 +482,8 @@ What each surface reads and writes. Surface behaviour is specified in [pages-vie
 | Permission requests / inbox | `events` permission requests **including the Provider's `options` array**, `permission.rules.*` | `permission.respond` (selected option id), OS notify |
 | `elicitation-card` | `elicitation/create` request schema (Providers declaring `elicitation`) | elicitation response |
 | `usage-bar` | Session token usage as reported by the Provider (`MON‑03`; hidden when unreported) | — |
-| Diff / review | `git.diff.summary/file`, `checkpoint.*`, gated on `workspace.capabilities` | `git.stage/unstage/discard/commit` |
-| Composer `/ $ @` | `commands.list`, `search.files`, skill strategy | `commands.expand`, `thread.queue.*` |
+| Diff / review | `git.diff.summary/file`, `checkpoint.*`, gated on `workspace.capabilities` | `git.stage/unstage/discard` (commit starts only from `branch-bar`) |
+| Composer `/ $ @` | `commands.list`, Provider `CommandsAvailable` (with argument hints) and the adapter's Tethys-handled command map, `search.files` (thread root), `skills.list` with per-workspace enablement | `commands.expand`, `thread.queue.*` |
 | MCP config editor / skills | `mcp.registry/effective` (per Workspace), Provider `mcpCapabilities` + `projection_target`, `mcp.projection.*`, `skills.list` (global + workspace scope) | `mcp.projection.plan/apply/rollback` for the per-Provider file editor (§11.6); attach via `mcpServers` on `thread.create`; `skills.trust/enable`, `skills.import/update.*` |
 | Commands editor (Skills & Commands) | `commands.list(includeShadowed = true)`, `commands.read` (per scope) | `commands.write` (create/update one `.md`), `commands.delete` (`CMP‑07`) |
 | Profiles / monitor | `agent.profiles/registry/connections.*`, `agent.process_sample` (one process tree per Provider, polled every 2 s) | `agent.registry.install/update`, `connections.restart` (the Provider whose table was pressed), `agent.login` |
@@ -513,6 +517,7 @@ Mutations (worktree add/remove, commit, merge, rebase, push) use the **git CLI**
 
 ### 10.2 Worktrees
 
+- Created per thread only when the user opts in at thread start (WT‑01); otherwise the thread's root is the current checkout. `thread.prepare` carries `isolation: current | worktree { base, branch? }`.
 - Default path `~/.tethys/worktrees/<repo-id>/<slug>` (PD‑6), on branch `tethys/<slug>`; `<repo-id>` is a hash of the canonical common git dir, so all worktrees of one repository share it.
 - Bootstrap copies configured untracked globs, then runs the setup script through the supervisor-bound runner (headless until the terminal surface lands).
 - Heavy directories are symlinked only when the user opts in.

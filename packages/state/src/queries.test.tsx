@@ -48,6 +48,7 @@ const row: WorkspaceListItem = {
       title: "feature/x",
       state: "Running",
       agent_profile_id: "claude-code",
+      workdir: "/home/dev/acme-web",
     },
   ],
 };

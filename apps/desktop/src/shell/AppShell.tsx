@@ -1,7 +1,10 @@
 import { useStore } from "@tanstack/react-store";
 import { createClient } from "@tethys/client";
 import {
+  COMPOSER_CONTROL_SHORTCUT_EVENT,
+  type ComposerControlShortcut,
   isTurnComplete,
+  ProviderGlyph,
   pendingApprovalNotification,
   sendOsNotification,
   shouldNotify,
@@ -38,6 +41,7 @@ import { SessionsColumn } from "./SessionsColumn";
 import {
   computeShellLayout,
   INSPECTOR_COLLAPSED_WIDTH,
+  INSPECTOR_OVERLAY_BREAKPOINT,
   INSPECTOR_WIDTH,
   STAGE_MIN_WIDTH,
 } from "./shell-layout";
@@ -115,6 +119,11 @@ export function AppShell({
   const [inspectorOverlayOpen, setInspectorOverlayOpen] =
     useState<boolean>(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState<boolean>(false);
+  const [inspectorExpanded, setInspectorExpanded] = useState<boolean>(false);
+  const [inspectorTab, setInspectorTab] = useState<"overview" | "changes">(
+    "overview",
+  );
+  const [changesTurn, setChangesTurn] = useState<number | null>(null);
   const inspectorPanelRef =
     usePanelRef() as React.RefObject<PanelImperativeHandle | null>;
 
@@ -169,6 +178,20 @@ export function AppShell({
   useThreadsQuery();
   const sessionsMap = useStore(sessionsRegistryStore, (s) => s.sessions);
   const sessions = useMemo(() => Object.values(sessionsMap), [sessionsMap]);
+  const headerTabs = useMemo(
+    () =>
+      tabs.map((tab) => {
+        const session = sessionsMap[tab.id];
+        return session
+          ? {
+              ...tab,
+              title: session.title || tab.title,
+              icon: <ProviderGlyph providerId={session.providerId} />,
+            }
+          : tab;
+      }),
+    [sessionsMap, tabs],
+  );
 
   // Aggregate pending approval requests
   const approvalCount = useMemo(() => {
@@ -251,6 +274,66 @@ export function AppShell({
     }
     return undefined;
   }, [activeRoute]);
+
+  const previousActiveSessionId = useRef(activeSessionId);
+  useEffect(() => {
+    if (previousActiveSessionId.current !== activeSessionId) {
+      previousActiveSessionId.current = activeSessionId;
+      setInspectorTab("overview");
+      setInspectorExpanded(false);
+    }
+  }, [activeSessionId]);
+
+  const handleInspectorTabChange = useCallback(
+    (tab: "overview" | "changes") => {
+      setInspectorTab(tab);
+      if (tab === "changes") {
+        if (
+          windowWidth < INSPECTOR_OVERLAY_BREAKPOINT ||
+          windowWidth - 48 - STAGE_MIN_WIDTH < 480
+        ) {
+          setInspectorOverlayOpen(true);
+          setInspectorExpanded(false);
+        } else {
+          setInspectorOverlayOpen(false);
+          if (inspectorPanelRef.current?.isCollapsed()) {
+            inspectorPanelRef.current.expand();
+            setInspectorCollapsed(false);
+          }
+          setInspectorExpanded(true);
+        }
+      } else {
+        setInspectorExpanded(false);
+        if (windowWidth >= INSPECTOR_OVERLAY_BREAKPOINT) {
+          setInspectorOverlayOpen(false);
+        }
+      }
+    },
+    [inspectorPanelRef, windowWidth],
+  );
+
+  const toggleChanges = useCallback(() => {
+    if (activeView !== "thread") return;
+    const next = inspectorTab === "changes" ? "overview" : "changes";
+    if (next === "changes") setChangesTurn(null);
+    handleInspectorTabChange(next);
+  }, [activeView, handleInspectorTabChange, inspectorTab]);
+
+  const toggleInspectorExpanded = useCallback(() => {
+    const panel = inspectorPanelRef.current;
+    if (!panel) return;
+    const maximum = Math.max(
+      480,
+      Math.min(windowWidth * 0.5, windowWidth - 48 - STAGE_MIN_WIDTH),
+    );
+    const next = !inspectorExpanded;
+    try {
+      panel.resize(next ? maximum : INSPECTOR_WIDTH);
+      setInspectorExpanded(next);
+    } catch {
+      // The panel may not be mounted while the active view is changing.
+    }
+  }, [inspectorExpanded, inspectorPanelRef, windowWidth]);
 
   // Ensure tab exists when route changes
   useEffect(() => {
@@ -346,6 +429,16 @@ export function AppShell({
       onTogglePalette: () => setPaletteOpen((prev) => !prev),
       onToggleSidebar: () => setSessionsSidebarOpen((prev) => !prev),
       onToggleInspector: toggleInspector,
+      onToggleChanges: toggleChanges,
+      onOpenComposerControl: (control: ComposerControlShortcut) => {
+        if (activeView === "thread-new" || activeView === "thread") {
+          window.dispatchEvent(
+            new CustomEvent(COMPOSER_CONTROL_SHORTCUT_EVENT, {
+              detail: control,
+            }),
+          );
+        }
+      },
       onFocusTab: (tabIndex: number) => {
         if (tabIndex >= 0 && tabIndex < tabs.length) {
           handleSelectTab(tabs[tabIndex].id);
@@ -370,6 +463,8 @@ export function AppShell({
     handleSelectTab,
     handleCloseTab,
     toggleInspector,
+    toggleChanges,
+    activeView,
   ]);
 
   // Rail | Stage | Inspector. Sessions is never docked: it is a drawer that
@@ -382,6 +477,7 @@ export function AppShell({
     sessionsOpen: sessionsSidebarOpen,
   });
   const isOverlayInspector = layout.inspector === "overlay";
+  const closeInspectorOverlay = () => setInspectorOverlayOpen(false);
 
   // Shell-provided control for slot components: overlay at narrow widths,
   // expand the collapsed docked panel above the overlay breakpoint.
@@ -393,6 +489,10 @@ export function AppShell({
         inspectorPanelRef.current?.expand();
         setInspectorCollapsed(false);
       }
+    },
+    openChanges: (turn) => {
+      setChangesTurn(turn ?? null);
+      handleInspectorTabChange("changes");
     },
   };
 
@@ -410,7 +510,7 @@ export function AppShell({
       >
         {/* 1. Window Header (40px) */}
         <WindowHeader
-          tabs={tabs}
+          tabs={headerTabs}
           activeTabId={activeTabId}
           onSelectTab={handleSelectTab}
           onCloseTab={handleCloseTab}
@@ -461,7 +561,13 @@ export function AppShell({
                   panelRef={inspectorPanelRef}
                   defaultSize={INSPECTOR_WIDTH}
                   minSize={240}
-                  maxSize={500}
+                  maxSize={Math.max(
+                    480,
+                    Math.min(
+                      windowWidth * 0.5,
+                      windowWidth - 48 - STAGE_MIN_WIDTH,
+                    ),
+                  )}
                   collapsedSize={INSPECTOR_COLLAPSED_WIDTH}
                   collapsible
                   className="h-full"
@@ -471,6 +577,11 @@ export function AppShell({
                     status={currentSessionState?.status}
                     collapsed={inspectorCollapsed}
                     onToggleCollapse={toggleInspector}
+                    expanded={inspectorExpanded}
+                    onExpand={toggleInspectorExpanded}
+                    tab={inspectorTab}
+                    onTabChange={handleInspectorTabChange}
+                    changesTurn={changesTurn}
                   />
                 </Panel>
               </>
@@ -482,7 +593,7 @@ export function AppShell({
             takes no width from it, with scrim, focus trap and Esc. */}
         <Drawer
           open={isOverlayInspector && inspectorOverlayOpen}
-          onClose={() => setInspectorOverlayOpen(false)}
+          onClose={closeInspectorOverlay}
           bare
           label="Thread Inspector"
           side="right"
@@ -492,7 +603,10 @@ export function AppShell({
             sessionId={activeSessionId}
             status={currentSessionState?.status}
             isOverlay
-            onCloseOverlay={() => setInspectorOverlayOpen(false)}
+            onCloseOverlay={closeInspectorOverlay}
+            tab={inspectorTab}
+            onTabChange={handleInspectorTabChange}
+            changesTurn={changesTurn}
           />
         </Drawer>
 

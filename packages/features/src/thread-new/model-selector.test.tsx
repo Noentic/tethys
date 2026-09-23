@@ -38,10 +38,13 @@ describe("ModelSelector", () => {
     ).toBeTruthy();
   });
 
-  it("renders one schema-field-group per ConfigOption", () => {
+  it("shows model radios first and the remaining options on demand", () => {
     renderSelector();
     openPopover();
-    expect(screen.getByRole("combobox", { name: "Model" })).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "Model" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Sonnet" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Effort" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More options…" }));
     expect(screen.getByRole("combobox", { name: "Effort" })).toBeTruthy();
   });
 
@@ -56,9 +59,8 @@ describe("ModelSelector", () => {
     );
     renderSelector({ onConfigChange, configOptions });
     openPopover();
-    fireEvent.change(screen.getByRole("combobox", { name: "Model" }), {
-      target: { value: "claude-opus-x" },
-    });
+    fireEvent.click(screen.getByRole("radio", { name: "Opus" }));
+    fireEvent.click(screen.getByRole("button", { name: "More options…" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Effort" }), {
       target: { value: "high" },
     });

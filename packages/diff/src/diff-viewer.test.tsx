@@ -118,6 +118,15 @@ describe("DiffViewer (M1.9 U4)", () => {
     expect(deletion?.querySelector('[data-gutter="−"]')).toBeTruthy();
   });
 
+  it("reports the source line selected for a comment", () => {
+    const onCommentLine = vi.fn();
+    render(<DiffViewer detail={smallDetail} onCommentLine={onCommentLine} />);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Comment on line 2" })[0],
+    );
+    expect(onCommentLine).toHaveBeenCalledWith(2);
+  });
+
   it("paints a syntax token from both themes' colours, chosen in CSS, not in the worker", async () => {
     const highlight = vi.fn(async (text: string) => [
       [

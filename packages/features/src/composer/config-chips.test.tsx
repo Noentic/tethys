@@ -96,11 +96,15 @@ describe("ComposerConfigChips", () => {
         onSetOption={onSetOption}
       />,
     );
-    fireEvent.click(screen.getByText("Low"));
-    fireEvent.click(screen.getByRole("option", { name: "High" }));
+    fireEvent.change(
+      screen.getByRole("slider", { name: "thought_level effort" }),
+      {
+        target: { value: "1" },
+      },
+    );
     await waitFor(() =>
       expect(screen.getByTestId("provider-capability-notice")).toBeTruthy(),
     );
-    expect(screen.getByText("Low")).toBeTruthy();
+    expect(screen.getByRole("slider").getAttribute("value")).toBe("0");
   });
 });

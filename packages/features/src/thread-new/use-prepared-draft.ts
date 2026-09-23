@@ -3,7 +3,12 @@
 //! new-thread config panel renders the Provider's real options before the
 //! first prompt. Replacing either selection discards the unprompted draft.
 
-import type { ThreadBootstrap } from "@tethys/bindings";
+import type {
+  ThreadBootstrap,
+  ThreadIsolation,
+  PermissionMode,
+  WorkspaceCapabilities,
+} from "@tethys/bindings";
 import {
   isProviderSelectable,
   type ProviderConnection,
@@ -11,16 +16,23 @@ import {
 } from "@tethys/state";
 import { useEffect, useRef, useState } from "react";
 
+const CURRENT_ISOLATION: ThreadIsolation = { kind: "current" };
+
 /** The narrow `thread.*` slice preparing and discarding a draft needs. */
 export interface DraftSessionClient {
+  workspace?: {
+    initializeGit(workspaceId: string): Promise<WorkspaceCapabilities>;
+  };
   thread: {
     prepare(request: {
       workspace_id: string;
       agent_profile_id: string;
       workdir: string;
       additional_directories?: string[];
+      isolation?: ThreadIsolation;
     }): Promise<ThreadBootstrap>;
     delete(id: string): Promise<void>;
+    setPermissionMode?(id: string, mode: PermissionMode): Promise<void>;
   };
 }
 
@@ -54,6 +66,7 @@ export function usePreparedDraft(
   workspace: TrustedWorkspace | null,
   provider: ProviderConnection | null,
   additionalDirectories: TrustedWorkspace[] = [],
+  isolation: ThreadIsolation = CURRENT_ISOLATION,
 ): PreparedDraft {
   const [state, setState] = useState<Omit<PreparedDraft, "release" | "retry">>({
     status: "idle",
@@ -107,6 +120,7 @@ export function usePreparedDraft(
           workdir: workspacePath,
           additional_directories:
             additionalKey === "" ? [] : additionalKey.split("\u0000"),
+          isolation,
         });
         if (generation.current !== current) {
           void client.thread.delete(bootstrap.thread.id).catch(() => {});
@@ -130,6 +144,7 @@ export function usePreparedDraft(
     providerId,
     selectable,
     additionalKey,
+    isolation,
     retryTick,
   ]);
 

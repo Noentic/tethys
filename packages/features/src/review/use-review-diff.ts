@@ -13,28 +13,37 @@ export function useDiffSummary(source: DiffSource | null): {
   loading: boolean;
 } {
   const client = useReviewClient();
-  const [summary, setSummary] = useState<DiffSummary | null>(null);
+  const [result, setResult] = useState<{
+    source: DiffSource | null;
+    summary: DiffSummary | null;
+    loading: boolean;
+  }>({ source: null, summary: null, loading: false });
+  const current = result.source === source;
 
   useEffect(() => {
     if (source === null) {
-      setSummary(null);
+      setResult({ source: null, summary: null, loading: false });
       return;
     }
     let active = true;
+    setResult({ source, summary: null, loading: true });
     void client.git
       .diffSummary(source)
       .then((next) => {
-        if (active) setSummary(next);
+        if (active) setResult({ source, summary: next, loading: false });
       })
       .catch(() => {
-        if (active) setSummary(null);
+        if (active) setResult({ source, summary: null, loading: false });
       });
     return () => {
       active = false;
     };
   }, [client, source]);
 
-  return { summary, loading: source !== null && summary === null };
+  return {
+    summary: current ? result.summary : null,
+    loading: source !== null && (!current || result.loading),
+  };
 }
 
 /** The default review anchor: HEAD to the live worktree. */

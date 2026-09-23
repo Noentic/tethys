@@ -9,6 +9,7 @@ import type {
   ElicitationValue,
   Patch,
   PermissionMode,
+  PermissionSubject,
   PermOption,
   PermOutcome,
   PlanEntryPriority,
@@ -45,6 +46,7 @@ export interface PermissionRequestItem {
   reqId: string;
   title: string;
   description: string | null;
+  subject?: PermissionSubject | null;
   options: PermOption[];
   metadata?: string | null;
   resolution?: PermissionResolution;
@@ -137,6 +139,11 @@ export interface CheckpointEntry extends BaseSessionEntry {
   checkpointKind: CheckpointKind;
 }
 
+export interface TurnEndEntry extends BaseSessionEntry {
+  kind: "turn_end";
+  turn: number;
+}
+
 export interface HistoryDividerEntry extends BaseSessionEntry {
   kind: "history_divider";
   label: string;
@@ -173,6 +180,7 @@ export type SessionEntry =
   | TerminalEntry
   | FileWriteEntry
   | CheckpointEntry
+  | TurnEndEntry
   | HistoryDividerEntry
   | TurnNoticeEntry
   | GenericEntry;
@@ -359,6 +367,21 @@ export function turnNoticeForStopReason(
   return null;
 }
 
+function turnEndEntry(state: SessionState, seq: number): TurnEndEntry | null {
+  if (
+    state.turnCount === 0 ||
+    (state.status !== "running" && state.status !== "awaiting_approval")
+  ) {
+    return null;
+  }
+  return {
+    id: `turn-end-${seq}-${state.turnCount}`,
+    kind: "turn_end",
+    turn: state.turnCount,
+    timestamp: Date.now(),
+  };
+}
+
 /** Plain text form of one tool-call content item, for the tool entry body. */
 function toolContentText(item: ToolCallContent): string {
   if ("Text" in item && typeof item.Text === "string") return item.Text;
@@ -404,6 +427,8 @@ export function sessionReducer(
         if (notice) {
           nextLive = [...nextLive, notice];
         }
+        const turnEnd = turnEndEntry(state, currentSeq);
+        if (turnEnd) nextLive = [...nextLive, turnEnd];
       }
 
       return {
@@ -582,6 +607,7 @@ export function sessionReducer(
         reqId: req.req_id,
         title: req.title,
         description: req.description,
+        subject: req.subject,
         options: req.options,
         metadata: req.metadata,
       };
@@ -884,7 +910,9 @@ export function sessionReducer(
         summary: event.body.summary,
         timestamp: Date.now(),
       };
-      const nextLive = [...state.liveEntries, notice];
+      const nextLive: SessionEntry[] = [...state.liveEntries, notice];
+      const turnEnd = turnEndEntry(state, currentSeq);
+      if (turnEnd) nextLive.push(turnEnd);
       return {
         ...state,
         liveEntries: nextLive,

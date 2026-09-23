@@ -345,6 +345,7 @@ pub(crate) fn command(command: &acp1::AvailableCommand) -> AgentCommand {
         name: command.name.clone(),
         description: Some(command.description.clone()),
         input: command.input.as_ref().map(json_string),
+        tethys_control: None,
     }
 }
 

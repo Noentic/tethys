@@ -1,13 +1,22 @@
-import { render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import type { TurnEventBody } from "@tethys/bindings";
 import {
   clearAllSessionStoresForTesting,
   getOrCreateSessionStore,
   queryClient,
   queryKeys,
+  sessionReducer,
   workspaceCapabilityFixtures,
 } from "@tethys/state";
 import { clearRegistriesForTesting } from "@tethys/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { registerApprovalRenderers } from "../approvals/register";
 import type { InspectorClient } from "../client-context";
 import { InspectorScreen } from "./InspectorScreen";
 
@@ -43,12 +52,50 @@ describe("the docked composer in the thread view", () => {
   beforeEach(() => {
     clearAllSessionStoresForTesting();
     clearRegistriesForTesting();
+    registerApprovalRenderers();
     queryClient.clear();
   });
 
   it("mounts the docked prompt card when the client can prompt", () => {
     render(<InspectorScreen sessionId="s-docked-mount" client={fullClient} />);
     expect(screen.getByTestId("docked-prompt-card")).toBeDefined();
+  });
+
+  it("docks pending permission requests and answers them by number", async () => {
+    const sessionId = "s-request-dock";
+    const store = getOrCreateSessionStore(sessionId);
+    const request: TurnEventBody = {
+      type: "PermissionRequested",
+      body: {
+        req_id: "req-dock",
+        title: "Run command",
+        description: "Execute cargo check",
+        subject: { Command: { command: "cargo check" } },
+        options: [
+          { option_id: "allow-once", name: "Allow once", kind: "allow" },
+          { option_id: "reject", name: "Reject", kind: "reject" },
+        ],
+      },
+    };
+    act(() => {
+      store.setState((previous) => sessionReducer(previous, request, 1));
+    });
+
+    render(<InspectorScreen sessionId={sessionId} client={fullClient} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("request-dock")).toBeDefined(),
+    );
+    expect(screen.getAllByText("Waiting for you ↓")).toHaveLength(2);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Allow once" }), {
+      key: "1",
+    });
+    await waitFor(() =>
+      expect(baseClient.permission.respond).toHaveBeenCalledWith(
+        sessionId,
+        "req-dock",
+        "allow-once",
+      ),
+    );
   });
 
   it("says a thread it cannot open, instead of an empty transcript", async () => {

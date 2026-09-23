@@ -1,3 +1,4 @@
+export * from "./branch-bar";
 export * from "./client-context";
 export * from "./commit-box";
 export * from "./diff-summary-pill";

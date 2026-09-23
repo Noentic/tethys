@@ -109,7 +109,7 @@ Tethys maintains a published **vendor compliance matrix**: backend class × sign
 
 | ID | Requirement | Pri |
 |---|---|---|
-| WT‑01 | In a git‑initialized workspace with `isolation: worktree` (the default), each new thread gets its own git worktree and branch (naming template configurable); main‑checkout threads are allowed but flagged. Other workspaces: see §3.3.1 | P0 |
+| WT‑01 | In a git‑initialized workspace with `isolation: worktree` (the default), a new thread runs in the current checkout unless the user opts it into its own git worktree and branch (naming template configurable) when starting it. The choice is remembered per workspace. When another live thread already uses the current checkout, the composer recommends a worktree; it does not block. Other workspaces: see §3.3.1 | P0 |
 | WT‑02 | Worktree setup: copy chosen untracked files (such as `.env*`) and run an optional workspace setup script | P0 |
 | WT‑03 | In a git‑initialized workspace, a restore point is taken at the start and end of every turn; restoring is itself undoable. Works for every backend class. With no git there are no restore points, and the UI says so (§3.3.1) | P0 |
 | WT‑04 | Turn diff and cumulative diff (vs. base branch), in unified and split views, fast on large changes | P0 |
@@ -164,7 +164,7 @@ SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native conf
 | ID | Requirement | Pri |
 |---|---|---|
 | CMP‑01 | **`/` Tethys commands.** Plain markdown files with no frontmatter, in a global folder and a workspace folder; the filename is the command name; workspace overrides global. On send, the body replaces the command; any text after the command is appended, or fills an `{{args}}` placeholder if present (PD‑3). Bodies may contain `$` and `@` references, which resolve to plaintext references — never content | P0 |
-| CMP‑02 | **`/` agent commands.** Commands the agent advertises are listed separately and passed through unchanged; name clashes show as `/agent:name` | P0 |
+| CMP‑02 | **`/` agent commands.** Commands the agent advertises are listed in their own group under the agent's name and passed through unchanged. A name is qualified only when two sources collide. An agent command that duplicates a Tethys control is listed with that reason and opens the Tethys control | P0 |
 | CMP‑03 | **`$` skills.** Picking a skill guarantees it is used this turn. Tethys adds an explicit plaintext instruction naming the skill and pointing at its `SKILL.md`; the skill body is never inlined for any agent, so the sent turn is identical across capabilities. The reference is visible on the message | P0 |
 | CMP‑04 | **`@` tags.** Fast fuzzy search over files *and* folders in the thread's root (the worktree where one exists) (FFF). A tag sends a plaintext reference to the path — never its contents; the path's name, size, and MIME are shown on the message, not sent to the agent | P0 |
 | CMP‑05 | Prompts typed while an agent is working are queued, editable, and reorderable | P0 |
@@ -186,10 +186,10 @@ SYN‑03/SYN‑05 only project MCP blocks. SYN‑11 covers the whole native conf
 
 | ID | Requirement | Pri |
 |---|---|---|
-| UI‑01 | Four resizable regions as above, command palette (⌘K / Ctrl+K), full keyboard access | P0 |
+| UI‑01 | Three regions (rail, stage, side panel) with sessions on demand in a drawer, command palette (⌘K / Ctrl+K), full keyboard access | P0 |
 | UI‑02 | Thread states: *Idle, Running, Awaiting approval, Error, Interrupted, Suspended, Archived* | P0 |
 | UI‑03 | Global "waiting on you" inbox and OS notifications when a thread needs approval | P0 |
-| UI‑04 | Turn Inspector shows streamed messages, collapsible thoughts, live plan, tool calls (with inline diff or terminal), approvals, errors, and per‑turn actions: view diff, restore to before this turn | P0 |
+| UI‑04 | Turn Inspector shows streamed messages, collapsible thoughts, live plan, tool calls (with inline diff or terminal), approvals, errors, and per‑turn actions on the turn's receipt: view that turn's changes, restore to before this turn | P0 |
 | UI‑05 | Fork a thread from any turn (PD‑4) | P1 |
 
 ### 3.7 Monitoring and control

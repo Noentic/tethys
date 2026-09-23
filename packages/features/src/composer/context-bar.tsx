@@ -4,7 +4,6 @@
 
 import type { ConfigOption } from "@tethys/bindings";
 import {
-  Badge,
   CONTEXT_BAR_PRIORITY,
   cn,
   foldContextBar,
@@ -73,9 +72,7 @@ export function formatUsage(
 export interface ContextBarProps {
   sessionId: string;
   providerName: string;
-  /** The session's branch; absent for a folder with no git. */
-  branchName?: string;
-  /** A workspace with no git: the isolation pill reads `no git`, and there is no diff pill. */
+  /** A workspace with no git has no diff slot. */
   noGit?: boolean;
   configOptions: ConfigOption[];
   values: Record<string, string>;
@@ -98,7 +95,6 @@ interface BarEntry {
 export function ContextBar({
   sessionId,
   providerName,
-  branchName,
   noGit = false,
   configOptions,
   values,
@@ -143,13 +139,19 @@ export function ContextBar({
               anchorRef={barRef}
               className="bottom-full left-0 mb-2 w-80"
             >
-              <SessionConfigPanel
-                options={panelOptions(configOptions)}
-                values={values}
-                onChange={(optionId, value) =>
-                  void onSetOption(optionId, value)
-                }
-              />
+              <div className="flex flex-col gap-sm p-sm">
+                <p className="text-label-sm text-(--tethys-text-muted)">
+                  Provider is fixed for this thread — start a new thread to
+                  switch
+                </p>
+                <SessionConfigPanel
+                  options={panelOptions(configOptions)}
+                  values={values}
+                  onChange={(optionId, value) =>
+                    void onSetOption(optionId, value)
+                  }
+                />
+              </div>
             </Popover>
           </div>
           <ProviderPendingCount threadId={sessionId} />
@@ -159,7 +161,6 @@ export function ContextBar({
   ];
 
   for (const [id, entry] of getAllComposerContextSlots()) {
-    // No git means no diff to summarise: the pill is absent, not empty.
     if (id === "diff-summary" && noGit) continue;
     const Slot = entry.component;
     entries.push({
@@ -168,18 +169,6 @@ export function ContextBar({
       node: <Slot key={id} sessionId={sessionId} data={slotData?.[id]} />,
     });
   }
-
-  entries.push({
-    id: "isolation-pill",
-    priority: CONTEXT_BAR_PRIORITY["isolation-pill"],
-    node: branchName ? (
-      <Badge variant="outline">
-        <span>{branchName}</span>
-      </Badge>
-    ) : noGit ? (
-      <Badge variant="muted">no git</Badge>
-    ) : null,
-  });
 
   if (usageText) {
     entries.push({

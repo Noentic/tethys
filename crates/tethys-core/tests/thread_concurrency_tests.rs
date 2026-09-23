@@ -51,6 +51,7 @@ fn request(profile: &str, root: &Path) -> CreateThread {
         agent_profile_id: profile.to_string(),
         workdir: root.display().to_string(),
         additional_directories: Vec::new(),
+        isolation: None,
     }
 }
 

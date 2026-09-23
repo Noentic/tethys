@@ -141,24 +141,42 @@ fn commit_records_the_message_and_reports_nothing_when_clean() {
     let repo = TestRepo::init();
     repo.write("pkg/a.txt", "one\n");
     repo.commit("base");
+    let base_oid = repo.git(&["rev-parse", "HEAD"]).trim().to_string();
     let engine = repo.engine();
 
     repo.write("pkg/a.txt", "two\n");
     engine.stage(&["pkg/a.txt".to_string()]).expect("stage");
     let result = engine
-        .commit("thread change", None)
+        .commit("thread change", None, &base_oid)
         .expect("commit staged work");
     assert_eq!(result.oid.len(), 40);
     assert!(!result.summary.is_empty());
+    assert_eq!(result.ahead_of_base, 1);
 
     let subject = repo.git(&["log", "-1", "--format=%s"]);
     assert_eq!(subject.trim(), "thread change");
 
-    let error = engine.commit("nothing", None).expect_err("clean tree");
+    let error = engine
+        .commit("nothing", None, &base_oid)
+        .expect_err("clean tree");
     assert!(
         matches!(error, tethys_git::GitError::NothingToCommit),
         "got {error:?}"
     );
+}
+
+#[test]
+fn commit_counts_first_commit_from_an_empty_base() {
+    let repo = TestRepo::init();
+    let engine = repo.engine();
+    repo.write("pkg/a.txt", "first\n");
+    engine.stage(&["pkg/a.txt".to_string()]).expect("stage");
+
+    let result = engine
+        .commit("initial", None, "")
+        .expect("commit the initial tree");
+
+    assert_eq!(result.ahead_of_base, 1);
 }
 
 #[test]

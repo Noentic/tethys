@@ -86,9 +86,11 @@ fn extension_integration(
         initialize_meta: Default::default(),
         client_capabilities_meta: Default::default(),
         extension_methods: vec!["_fixture.dev/action".into()],
+        tethys_commands: Default::default(),
         extension_request_handler: handler,
         extension_notification_handler: None,
         session_update_handler: None,
+        config_options_handler: None,
         permission_metadata_handler: None,
         prompt_response_handler: None,
     }

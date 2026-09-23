@@ -94,6 +94,7 @@ pub(crate) fn sample_create_thread() -> CreateThread {
         agent_profile_id: "a1".into(),
         workdir: "/tmp".into(),
         additional_directories: Vec::new(),
+        isolation: None,
     }
 }
 

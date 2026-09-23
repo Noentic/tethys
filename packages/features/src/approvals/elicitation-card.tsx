@@ -42,9 +42,11 @@ function safeExternalUrl(url: string | null | undefined): string | null {
 export function ElicitationCard({
   entry,
   className,
+  compact = false,
 }: {
   entry: ElicitationEntry;
   className?: string;
+  compact?: boolean;
 }) {
   const context = useInspectorClient();
   const { request } = entry;
@@ -104,6 +106,18 @@ export function ElicitationCard({
   );
 
   if (entry.resolution) {
+    if (compact) {
+      return (
+        <div
+          data-entry-kind="elicitation"
+          data-resolved="true"
+          className="flex items-center gap-sm text-label-sm text-(--tethys-text-muted)"
+        >
+          <StatusDot status="idle" inline />
+          <span>Answered · {request.title}</span>
+        </div>
+      );
+    }
     return (
       <section
         data-entry-kind="elicitation"
@@ -124,6 +138,19 @@ export function ElicitationCard({
           {entry.resolution.outcome}
         </p>
       </section>
+    );
+  }
+
+  if (compact) {
+    return (
+      <div
+        data-entry-kind="elicitation"
+        data-pending="true"
+        className="flex items-center gap-sm text-label-sm text-(--tethys-status-warning)"
+      >
+        <StatusDot status="awaiting_approval" inline />
+        <span>Waiting for you ↓</span>
+      </div>
     );
   }
 

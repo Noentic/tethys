@@ -10,6 +10,10 @@ async fn workspace_defaults_return_unimplemented() {
         "workspace.add",
         api.workspace_add(sample_trust_grant()).await,
     );
+    assert_unimplemented(
+        "workspace.initialize_git",
+        api.workspace_initialize_git("w1".into()).await,
+    );
     assert_unimplemented("workspace.remove", api.workspace_remove("w1".into()).await);
     assert_unimplemented("workspace.settings_get", api.workspace_settings_get().await);
     assert_unimplemented("workspace.settings_set", api.workspace_settings_set().await);

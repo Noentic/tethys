@@ -28,6 +28,26 @@ function client(): ComposerClient {
         { relative_path: "src/main.rs", score: 0.5, is_dir: false },
       ]),
     },
+    skills: {
+      list: vi.fn().mockResolvedValue([
+        {
+          name: "find-docs",
+          scope: "workspace",
+          path: ".agents/skills/find-docs",
+          source: {
+            origin: "folder",
+            url: null,
+            repo: null,
+            reference: null,
+          },
+          enabled: true,
+          requires_trust: false,
+          trusted: true,
+          content_hash: "hash",
+          pinned_sha: null,
+        },
+      ]),
+    },
   };
 }
 
@@ -38,7 +58,7 @@ describe("commandSource", () => {
     const source = commandSource(client(), "w1");
     const items = await source("deploy");
     const tethys = items.find((item) => item.id === "command:deploy");
-    expect(tethys?.group).toBe("Tethys commands");
+    expect(tethys?.group).toBe("Your commands");
     expect(tethys?.chip.token).toBe("Deploy the app.");
   });
 
@@ -49,14 +69,35 @@ describe("commandSource", () => {
     const source = commandSource(client(), "w1", agents, "Fixture Agent");
     const items = await source("deploy");
     const agent = items.find((item) => item.id === "agent:deploy");
-    expect(agent?.group).toBe("Fixture Agent commands");
+    expect(agent?.group).toBe("✦ Fixture Agent");
+    expect(agent?.detail).toBe("Provider deploy");
     expect(agent?.chip.token).toBe("/agent:deploy");
     expect(items.find((item) => item.id === "command:deploy")).toBeDefined();
   });
 
   it("omits the provider group when there are no agent commands", async () => {
     const items = await commandSource(client(), "w1")("");
-    expect(items.every((item) => item.group === "Tethys commands")).toBe(true);
+    expect(items.some((item) => item.group === "Tethys")).toBe(true);
+    expect(items.some((item) => item.group === "Your commands")).toBe(true);
+    expect(items.some((item) => item.group?.startsWith("✦ "))).toBe(false);
+  });
+
+  it("uses bare Provider command names unless they collide", async () => {
+    const items = await commandSource(
+      client(),
+      "w1",
+      [{ name: "inspect", description: "Inspect", input: "<path>" }],
+      "Fixture Agent",
+    )("inspect");
+    expect(items.find((item) => item.id === "agent:inspect")?.label).toBe(
+      "/inspect",
+    );
+    expect(items.find((item) => item.id === "agent:inspect")?.detail).toBe(
+      "<path>",
+    );
+    expect(items.find((item) => item.id === "agent:inspect")?.chip.token).toBe(
+      "/inspect",
+    );
   });
 });
 
@@ -66,15 +107,36 @@ describe("agentCommandItems", () => {
       [{ name: "x", description: null, input: null }],
       "Fixture Agent",
     );
-    expect(items[0].group).toBe("Fixture Agent commands");
+    expect(items[0].group).toBe("✦ Fixture Agent");
+    expect(items[0].label).toBe("/x");
+  });
+
+  it("routes provider built-ins through their Tethys control", () => {
+    const [item] = agentCommandItems(
+      [
+        {
+          name: "model",
+          description: "Provider model command",
+          input: null,
+          tethys_control: "model",
+        },
+      ],
+      "Claude Code",
+      new Set(["model"]),
+    );
+
+    expect(item.label).toBe("/model");
+    expect(item.control).toBe("model");
+    expect(item.detail).toBe("Handled by Tethys → Model menu");
   });
 });
 
 describe("skillSource", () => {
   it("references the skill and never inlines the body", async () => {
-    const items = await skillSource()("commit");
+    const items = await skillSource(client(), "w1")("find");
     expect(items[0].chip.injectionMethod).toBe("referenced");
-    expect(items[0].chip.token).toBe("$commit");
+    expect(items[0].chip.token).toBe("$find-docs");
+    expect(items[0].chip.path).toBe(".agents/skills/find-docs");
   });
 });
 

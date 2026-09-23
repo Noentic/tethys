@@ -11,10 +11,9 @@ import { ContextBar, formatUsage } from "./context-bar";
 import { registerQueueCountSlot } from "./queue-count-slot";
 
 // The row's width budget, from the pure fold (packages/ui/src/context-bar-fold):
-// provider 170 + diff 110 + mode 80 + queue 90 + usage 70, plus the isolation
-// pill 120 and 24 of gaps. The stop control is in the card's lower bar, so it
+// provider 170 + diff 110 + mode 80 + queue 90 + usage 70 and 24 of gaps. The stop control is in the card's lower bar, so it
 // is not part of this row.
-const EVERYTHING_FITS = 664;
+const EVERYTHING_FITS = 544;
 
 let observerCallback: ResizeObserverCallback | null = null;
 
@@ -127,7 +126,6 @@ describe("context bar", () => {
       return render(
         <ContextBar
           {...baseProps}
-          branchName="feat/isolation"
           queueCount={2}
           usageText="12k"
           slotData={{ "queue-count": { count: 2 } }}
@@ -135,7 +133,7 @@ describe("context bar", () => {
       );
     }
 
-    it("folds usage, then the queue count, then the mode pill, never the isolation pill", () => {
+    it("folds usage, then the queue count, then mode while retaining the diff slot", () => {
       registerFullRow();
       renderFullRow();
 
@@ -143,22 +141,22 @@ describe("context bar", () => {
       expect(screen.getByText("12k")).toBeDefined();
       expect(screen.getByText("2 queued")).toBeDefined();
       expect(screen.getByTestId("mode-pill-fixture")).toBeDefined();
-      expect(screen.getByText("feat/isolation")).toBeDefined();
 
       setWidth(640);
-      expect(screen.queryByText("12k")).toBeNull();
+      expect(screen.getByText("12k")).toBeDefined();
       expect(screen.getByText("2 queued")).toBeDefined();
 
-      setWidth(600);
+      setWidth(500);
+      expect(screen.queryByText("12k")).toBeNull();
       expect(screen.queryByText("2 queued")).toBeNull();
       expect(screen.getByTestId("mode-pill-fixture")).toBeDefined();
 
-      setWidth(500);
+      setWidth(400);
       expect(screen.queryByTestId("mode-pill-fixture")).toBeNull();
+      expect(screen.queryByText("2 queued")).toBeNull();
       expect(screen.getByTestId("diff-pill-fixture")).toBeDefined();
 
       setWidth(0);
-      expect(screen.getByText("feat/isolation")).toBeDefined();
       const trigger = screen.getByRole("button", { name: /More:/ });
       for (const id of ["usage-bar", "queue-count", "mode", "diff-summary"]) {
         expect(trigger.getAttribute("aria-label")).toContain(id);
@@ -191,9 +189,9 @@ describe("context bar", () => {
         ModeFixture,
         CONTEXT_BAR_PRIORITY.mode,
       );
-      render(<ContextBar {...baseProps} branchName="main" />);
-      // provider 170 + mode 80 + vendor 80 + isolation 120 + gaps 24 = 474.
-      setWidth(473);
+      render(<ContextBar {...baseProps} />);
+      // provider 170 + mode 80 + vendor 80 + gaps 24 = 354.
+      setWidth(353);
       expect(screen.queryByTestId("diff-pill-fixture")).toBeNull();
       expect(screen.getByTestId("mode-pill-fixture")).toBeDefined();
     });
@@ -217,20 +215,14 @@ describe("context bar", () => {
     expect(screen.getByText("Mode for s-slot")).toBeDefined();
   });
 
-  describe("isolation pill", () => {
-    it("names the session's branch", () => {
-      render(<ContextBar {...baseProps} branchName="feat/x" />);
-      expect(screen.getByText("feat/x")).toBeDefined();
-    });
-
-    it("reads `no git` for a folder with no git, and shows no diff pill", () => {
+  describe("diff slot", () => {
+    it("hides the legacy diff slot when the workspace has no git", () => {
       registerComposerContextSlot(
         "diff-summary",
         DiffFixture,
         CONTEXT_BAR_PRIORITY["diff-summary"],
       );
       render(<ContextBar {...baseProps} noGit />);
-      expect(screen.getByText("no git")).toBeDefined();
       expect(screen.queryByTestId("diff-pill-fixture")).toBeNull();
     });
 
@@ -240,7 +232,7 @@ describe("context bar", () => {
         DiffFixture,
         CONTEXT_BAR_PRIORITY["diff-summary"],
       );
-      render(<ContextBar {...baseProps} branchName="main" />);
+      render(<ContextBar {...baseProps} />);
       expect(screen.getByTestId("diff-pill-fixture")).toBeDefined();
     });
   });
@@ -276,6 +268,11 @@ describe("context bar", () => {
         />,
       );
       fireEvent.click(screen.getByRole("button", { name: /claude-code/ }));
+      expect(
+        screen.getByText(
+          "Provider is fixed for this thread — start a new thread to switch",
+        ),
+      ).toBeDefined();
       fireEvent.change(screen.getByRole("combobox", { name: "Temperature" }), {
         target: { value: "b" },
       });

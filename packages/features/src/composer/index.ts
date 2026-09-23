@@ -1,3 +1,8 @@
+export {
+  COMPOSER_CONTROL_SHORTCUT_EVENT,
+  COMPOSER_INSERT_CHIP_EVENT,
+  type ComposerControlShortcut,
+} from "@tethys/composer";
 export * from "./attachments";
 export * from "./config-chips";
 export * from "./config-option-popover";

@@ -304,6 +304,7 @@ async fn run() {
             agent_profile_id: AGENT_ID.into(),
             workdir: workdir("thread").display().to_string(),
             additional_directories: vec!["extra".into()],
+            isolation: None,
         })
         .await
         .expect("thread from the pinned install");

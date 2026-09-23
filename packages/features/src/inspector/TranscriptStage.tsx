@@ -1,15 +1,17 @@
 import {
   type SessionEntry,
   selectTurnActionsVisible,
+  type TurnEndEntry,
   type ToolCallEntry,
 } from "@tethys/state";
-import { Button, cn, getEntryRenderer } from "@tethys/ui";
+import { cn, getEntryRenderer } from "@tethys/ui";
 import { ProviderCapabilityNotice } from "../providers/capability-notice";
-import { buildToolRun, isFileMutation, type ToolRun } from "./group-runs";
+import { buildToolRun, type ToolRun } from "./group-runs";
 import { indexChildren } from "./nest-children";
 import { SubagentCard } from "./renderers/subagent-card";
 import { ToolRunGroup } from "./renderers/tool-run-group";
 import { useToolCallDensity } from "./tool-call-density";
+import { TurnReceipt } from "./turn-receipt";
 
 type StageSegment =
   | { type: "entry"; entry: SessionEntry }
@@ -20,6 +22,14 @@ function isSubagentParent(entry: SessionEntry): entry is ToolCallEntry {
   return (
     entry.kind === "tool_call" &&
     (entry as ToolCallEntry).origin?.kind === "subagent"
+  );
+}
+
+function isTurnEndEntry(entry: SessionEntry): entry is TurnEndEntry {
+  return (
+    entry.kind === "turn_end" &&
+    "turn" in entry &&
+    typeof entry.turn === "number"
   );
 }
 
@@ -71,15 +81,13 @@ function segmentEntries(
 export function TranscriptStage({
   entries,
   capabilities,
-  onViewDiff,
-  onRestore,
+  sessionId,
   onOpenLocation,
   className,
 }: {
   entries: SessionEntry[];
   capabilities: import("@tethys/bindings").WorkspaceCapabilities | null;
-  onViewDiff?: (entry: SessionEntry) => void;
-  onRestore?: (entry: SessionEntry) => void;
+  sessionId?: string;
   onOpenLocation?: (path: string, line: number | null) => void;
   className?: string;
 }) {
@@ -87,22 +95,6 @@ export function TranscriptStage({
   const density = useToolCallDensity();
   const childIndex = indexChildren(entries);
   const segments = segmentEntries(entries, density);
-
-  const turnActions = (entry: SessionEntry) =>
-    isFileMutation(entry) && (actions.viewDiff || actions.restore) ? (
-      <div data-testid="turn-actions" className="mt-1 flex gap-sm pl-md">
-        {actions.viewDiff && (
-          <Button size="sm" variant="ghost" onClick={() => onViewDiff?.(entry)}>
-            View diff
-          </Button>
-        )}
-        {actions.restore && (
-          <Button size="sm" variant="ghost" onClick={() => onRestore?.(entry)}>
-            Restore
-          </Button>
-        )}
-      </div>
-    ) : null;
 
   return (
     <div
@@ -121,10 +113,6 @@ export function TranscriptStage({
               className="w-full max-w-[720px]"
             >
               <ToolRunGroup run={segment.run} onOpenLocation={onOpenLocation} />
-              {turnActions(
-                segment.run.members.find(isFileMutation) ??
-                  segment.run.members[0],
-              )}
             </div>
           );
         }
@@ -136,11 +124,26 @@ export function TranscriptStage({
               className="w-full max-w-[720px]"
             >
               <SubagentCard entry={segment.entry} index={childIndex} />
-              {turnActions(segment.entry)}
             </div>
           );
         }
         const entry = segment.entry;
+        if (isTurnEndEntry(entry)) {
+          return sessionId ? (
+            <div
+              key={entry.id}
+              data-entry-id={entry.id}
+              className="w-full max-w-[720px]"
+            >
+              <TurnReceipt
+                sessionId={sessionId}
+                turn={entry.turn}
+                canRestore={actions.restore}
+                canReview={actions.viewDiff}
+              />
+            </div>
+          ) : null;
+        }
         if (entry.kind === "plan") {
           return null;
         }
@@ -181,7 +184,6 @@ export function TranscriptStage({
               />
             )}
             <Renderer entry={entry} />
-            {turnActions(entry)}
           </div>
         );
       })}

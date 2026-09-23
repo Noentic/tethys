@@ -198,6 +198,7 @@ async fn run() {
             agent_profile_id: "audit".into(),
             workdir: workdir("thread").display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await
         .expect("thread")

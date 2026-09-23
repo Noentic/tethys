@@ -57,7 +57,7 @@ describe("Inspector composition (M1.7 U10)", () => {
     expect(screen.queryByTestId("turn-actions")).toBeNull();
   });
 
-  it("offers View diff and Restore when the capability allows", () => {
+  it("keeps diff and restore actions at the turn level", () => {
     const entries = [
       {
         id: "t1",
@@ -76,28 +76,8 @@ describe("Inspector composition (M1.7 U10)", () => {
         capabilities={workspaceCapabilityFixtures["git-remote"]}
       />,
     );
-    expect(screen.getByRole("button", { name: "View diff" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Restore" })).toBeTruthy();
-  });
-
-  it("does not offer file actions for non-mutating tools", () => {
-    render(
-      <TranscriptStage
-        entries={[
-          {
-            id: "t1",
-            kind: "tool_call" as const,
-            toolCallId: "t1",
-            title: "Run command",
-            status: "Completed" as const,
-            toolKind: "execute" as const,
-            locations: [],
-            timestamp: 1,
-          },
-        ]}
-        capabilities={workspaceCapabilityFixtures["git-remote"]}
-      />,
-    );
+    expect(screen.queryByRole("button", { name: "View diff" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
     expect(screen.queryByTestId("turn-actions")).toBeNull();
   });
 

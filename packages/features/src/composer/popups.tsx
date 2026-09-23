@@ -7,11 +7,19 @@
 
 import type {
   AgentCommand,
+  AgentCommandControl,
   CommandInfo,
+  DiffSource,
+  DiffSummary,
   ExpandedCommand,
   SearchItem,
+  SkillInfo,
 } from "@tethys/bindings";
-import type { ComposerItem, ComposerItemSource } from "@tethys/composer";
+import type {
+  ComposerControl,
+  ComposerItem,
+  ComposerItemSource,
+} from "@tethys/composer";
 
 /** The narrow client slice the popups need; `TethysClient` satisfies it. */
 export interface ComposerClient {
@@ -30,19 +38,38 @@ export interface ComposerClient {
       limit?: number,
     ): Promise<SearchItem[]>;
   };
+  skills?: {
+    list(workspaceId: string): Promise<SkillInfo[]>;
+  };
+  git?: {
+    diffSummary(source: DiffSource): Promise<DiffSummary>;
+  };
 }
 
-/** One candidate skill name (M1.11 replaces this fixture). */
-export interface SkillCandidate {
-  name: string;
-  path: string;
-}
+const TETHYS_CONTROLS = [
+  ["model", "Choose the model and effort", "model"],
+  ["permissions", "Change approval settings", "permissions"],
+  ["config", "Open thread configuration", "config"],
+  ["resume", "Resume a previous thread", "resume"],
+  ["clear", "Clear the composer", "clear"],
+] as const;
 
-export const skillCandidates: SkillCandidate[] = [
-  { name: "commit", path: "~/.tethys/skills/commit" },
-  { name: "review", path: "~/.tethys/skills/review" },
-  { name: "release-notes", path: "~/.tethys/skills/release-notes" },
-];
+const HANDLED_AGENT_CONTROLS: Record<
+  AgentCommandControl,
+  { control: ComposerControl; detail: string }
+> = {
+  model: { control: "model", detail: "Handled by Tethys → Model menu" },
+  permissions: {
+    control: "permissions",
+    detail: "Handled by Tethys → Approvals",
+  },
+  config: {
+    control: "config",
+    detail: "Handled by Tethys → Thread configuration",
+  },
+  resume: { control: "resume", detail: "Handled by Tethys → Resume" },
+  clear: { control: "clear", detail: "Handled by Tethys → Clear composer" },
+};
 
 function matches(query: string, ...fields: string[]): boolean {
   if (query.length === 0) return true;
@@ -51,6 +78,7 @@ function matches(query: string, ...fields: string[]): boolean {
 }
 
 const commandCache = new Map<string, Promise<ComposerItem[]>>();
+const skillCache = new Map<string, Promise<SkillInfo[]>>();
 
 async function expandCommands(
   client: ComposerClient,
@@ -77,7 +105,7 @@ async function expandCommands(
       }
       return {
         id: `command:${command.name}`,
-        group: "Tethys commands",
+        group: "Your commands",
         label: `/${command.name}`,
         keywords: [command.name, command.scope],
         chip: { kind: "command", name: command.name, token },
@@ -101,25 +129,43 @@ function loadCommands(
 /** Clears the per-workspace command cache (tests / workspace switch). */
 export function resetComposerCaches(): void {
   commandCache.clear();
+  skillCache.clear();
 }
 
 /** The Provider's advertised commands as `/agent:<name>` items. */
 export function agentCommandItems(
   commands: AgentCommand[],
   providerName: string,
+  reservedNames: ReadonlySet<string> = new Set(),
 ): ComposerItem[] {
-  return commands.map((command) => ({
-    id: `agent:${command.name}`,
-    group: `${providerName} commands`,
-    label: `/agent:${command.name}`,
-    detail: command.description ?? undefined,
-    keywords: [command.name],
-    chip: {
-      kind: "agent-command",
-      name: command.name,
-      token: `/agent:${command.name}`,
-    },
-  }));
+  const counts = new Map<string, number>();
+  for (const command of commands) {
+    counts.set(command.name, (counts.get(command.name) ?? 0) + 1);
+  }
+  return commands.map((command) => {
+    const handled = command.tethys_control
+      ? HANDLED_AGENT_CONTROLS[command.tethys_control]
+      : undefined;
+    const label = handled
+      ? `/${command.name}`
+      : reservedNames.has(command.name) || (counts.get(command.name) ?? 0) > 1
+        ? `/agent:${command.name}`
+        : `/${command.name}`;
+    return {
+      id: `agent:${command.name}`,
+      group: `✦ ${providerName}`,
+      label,
+      detail:
+        handled?.detail ?? command.input ?? command.description ?? undefined,
+      keywords: [command.name],
+      control: handled?.control,
+      chip: {
+        kind: "agent-command",
+        name: command.name,
+        token: label,
+      },
+    };
+  });
 }
 
 /**
@@ -134,29 +180,72 @@ export function commandSource(
 ): ComposerItemSource {
   return async (query) => {
     const [commands] = await Promise.all([loadCommands(client, workspaceId)]);
-    const agents = agentCommandItems(agentCommands, providerName);
-    return [...commands, ...agents].filter((item) =>
+    const reservedNames = new Set([
+      ...commands.map((command) => command.chip.name),
+      ...TETHYS_CONTROLS.map(([name]) => name),
+    ]);
+    const controls: ComposerItem[] = TETHYS_CONTROLS.map(
+      ([name, reason, control]) => ({
+        id: `tethys:${name}`,
+        group: "Tethys",
+        label: `/${name}`,
+        detail: reason,
+        keywords: [name],
+        control,
+        chip: { kind: "command", name, token: `/${name}` },
+      }),
+    );
+    const agents = agentCommandItems(
+      agentCommands,
+      providerName,
+      reservedNames,
+    );
+    const userCommands = commands.map((command) => ({
+      ...command,
+      group: "Your commands",
+    }));
+    return [...controls, ...agents, ...userCommands].filter((item) =>
       matches(query, item.label, ...(item.keywords ?? [])),
     );
   };
 }
 
-/** `$` source: candidate skills; chips reference, never inline (CMP-03). */
+function loadSkills(
+  client: ComposerClient,
+  workspaceId: string | undefined,
+): Promise<SkillInfo[]> {
+  if (!workspaceId || !client.skills) return Promise.resolve([]);
+  const cached = skillCache.get(workspaceId);
+  if (cached) return cached;
+  const pending = client.skills.list(workspaceId).catch(() => {
+    skillCache.delete(workspaceId);
+    return [];
+  });
+  skillCache.set(workspaceId, pending);
+  return pending;
+}
+
+/** `$` source: enabled, trusted skills from the workspace catalog. */
 export function skillSource(
-  candidates: SkillCandidate[] = skillCandidates,
+  client: ComposerClient,
+  workspaceId: string | undefined,
 ): ComposerItemSource {
-  return (query) =>
-    candidates
+  return async (query) =>
+    (await loadSkills(client, workspaceId))
+      .filter(
+        (skill) => skill.enabled && (!skill.requires_trust || skill.trusted),
+      )
       .filter((candidate) => matches(query, candidate.name))
-      .map((candidate) => ({
-        id: `skill:${candidate.name}`,
-        label: `$${candidate.name}`,
-        keywords: [candidate.name],
+      .map((skill) => ({
+        id: `skill:${skill.scope}:${skill.name}`,
+        group: "Skills",
+        label: `$${skill.name}`,
+        keywords: [skill.name],
         chip: {
           kind: "skill",
-          name: candidate.name,
-          token: `$${candidate.name}`,
-          path: candidate.path,
+          name: skill.name,
+          token: `$${skill.name}`,
+          path: skill.path,
           injectionMethod: "referenced",
         },
       }));

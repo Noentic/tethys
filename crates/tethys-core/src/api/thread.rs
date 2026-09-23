@@ -1,15 +1,42 @@
 //! `thread.*` implementations.
 
-use tethys_api::{ApiError, ThreadApi};
+use tethys_api::{ApiError, GitApi, ThreadApi};
 use tethys_schema::queue::QueuedPrompt;
 use tethys_schema::thread::{
-    ContentBlock, CreateThread, ThreadBootstrap, ThreadId, ThreadSessionView, ThreadSummary,
+    ContentBlock, CreateThread, ThreadBootstrap, ThreadId, ThreadIsolation, ThreadSessionView,
+    ThreadSummary,
 };
+use tethys_schema::{sync::WorkspaceId, WorktreeSpec};
 
 use crate::Core;
 
 impl ThreadApi for Core {
-    async fn thread_prepare(&self, request: CreateThread) -> Result<ThreadBootstrap, ApiError> {
+    async fn thread_prepare(&self, mut request: CreateThread) -> Result<ThreadBootstrap, ApiError> {
+        if let Some(ThreadIsolation::Worktree { base, branch }) = request.isolation.as_ref() {
+            let id = self.sessions.reserve_thread_id();
+            let info = self
+                .git_worktree_create(WorktreeSpec {
+                    thread_id: id.to_string(),
+                    workspace_id: WorkspaceId::new(&request.workspace_id),
+                    slug: id.to_string(),
+                    path: String::new(),
+                    branch: branch.clone().unwrap_or_default(),
+                    base: base.clone(),
+                    bootstrap_globs: Vec::new(),
+                    setup_script: None,
+                    main_checkout: false,
+                })
+                .await?;
+            request.workdir = info.path;
+            return match self.sessions.prepare_as(request, Some(id.clone())).await {
+                Ok(bootstrap) => Ok(bootstrap),
+                Err(error) => {
+                    let _ = self.git_worktree_remove(id.to_string(), false, false).await;
+                    Err(error)
+                }
+            };
+        }
+
         self.sessions.prepare(request).await
     }
 
@@ -129,7 +156,9 @@ impl ThreadApi for Core {
     }
 
     async fn thread_delete(&self, id: ThreadId) -> Result<(), ApiError> {
-        self.sessions.delete(&id).await
+        self.sessions.delete(&id).await?;
+        let _ = self.git_worktree_remove(id.to_string(), false, false).await;
+        Ok(())
     }
 
     async fn thread_set_permission_mode(

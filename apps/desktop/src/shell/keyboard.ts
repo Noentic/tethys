@@ -6,6 +6,8 @@ export interface ShortcutHandler {
   onOpenSettings?: () => void;
   onToggleSidebar?: () => void;
   onToggleInspector?: () => void;
+  onToggleChanges?: () => void;
+  onOpenComposerControl?: (control: "mode" | "model" | "effort") => void;
 }
 
 export type UnstackType = "popover" | "drawer" | "palette" | "dialog";
@@ -85,6 +87,22 @@ export function setupGlobalKeyboardMap(handlers: ShortcutHandler): () => void {
     }
 
     if (isMetaOrCtrl) {
+      if (e.shiftKey) {
+        const key = e.key.toLowerCase();
+        if (key === "d") {
+          e.preventDefault();
+          handlers.onToggleChanges?.();
+          return;
+        }
+        if (key === "m" || key === "i" || key === "e") {
+          e.preventDefault();
+          handlers.onOpenComposerControl?.(
+            key === "m" ? "mode" : key === "i" ? "model" : "effort",
+          );
+          return;
+        }
+      }
+
       if (e.key.toLowerCase() === "k") {
         e.preventDefault();
         handlers.onTogglePalette?.();

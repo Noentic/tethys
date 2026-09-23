@@ -615,6 +615,36 @@ describe("Inspector session model (M1.7 U5)", () => {
     expect((plans[0] as { steps: unknown[] }).steps).toHaveLength(3);
   });
 
+  it("places one turn-end marker after each completed user turn", () => {
+    let state = createInitialSessionState("s-turn", "p-1", "ws-1");
+    state = sessionReducer(state, {
+      type: "MessageUpsert",
+      body: {
+        message_id: "user-1",
+        role: "User",
+        content: { type: "Set", value: [{ Text: "Change a file" }] },
+      },
+    });
+    state = sessionReducer(state, {
+      type: "StateChanged",
+      body: { state: "Running" },
+    });
+    state = sessionReducer(state, {
+      type: "StateChanged",
+      body: { state: { Idle: { stop_reason: "EndTurn" } } },
+    });
+
+    expect(state.liveEntries.at(-1)).toMatchObject({
+      kind: "turn_end",
+      turn: 1,
+    });
+    state = sessionReducer(state, {
+      type: "StateChanged",
+      body: { state: { Idle: { stop_reason: "EndTurn" } } },
+    });
+    expect(state.liveEntries.filter((entry) => entry.kind === "turn_end")).toHaveLength(1);
+  });
+
   it("accumulates terminal output chunks in order", () => {
     let state = createInitialSessionState("s-1", "p-1", "ws-1");
     state = sessionReducer(state, {

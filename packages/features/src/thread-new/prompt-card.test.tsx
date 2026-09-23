@@ -4,6 +4,7 @@ import {
   noProviderFixtures,
   providerConnectionFixtures,
   trustedWorkspaceFixtures,
+  workspaceCapabilityFixtures,
 } from "@tethys/state";
 import { describe, expect, it, vi } from "vitest";
 import type { ComposerClient } from "../composer/popups";
@@ -65,6 +66,11 @@ function bootstrapFor(request: CreateThread): ThreadBootstrap {
 
 function session(): DraftSessionClient {
   return {
+    workspace: {
+      initializeGit: vi
+        .fn()
+        .mockResolvedValue(workspaceCapabilityFixtures["git-local"]),
+    },
     thread: {
       prepare: vi.fn(async (request) => bootstrapFor(request)),
       delete: vi.fn(async () => {}),
@@ -96,12 +102,14 @@ describe("PromptCard", () => {
         onStart={vi.fn()}
       />,
     );
-    expect(screen.queryByRole("combobox", { name: "Mode, Manual" })).toBeNull();
+    expect(
+      screen.queryByRole("combobox", { name: "Mode, Manual · Ask first" }),
+    ).toBeNull();
 
     await selectClaude();
     await waitFor(() =>
       expect(
-        screen.getByRole("combobox", { name: "Mode, Manual" }),
+        screen.getByRole("combobox", { name: "Mode, Manual · Ask first" }),
       ).toBeTruthy(),
     );
   });
@@ -122,11 +130,13 @@ describe("PromptCard", () => {
     await selectClaude();
     await waitFor(() =>
       expect(
-        screen.getByRole("combobox", { name: "Mode, Manual" }),
+        screen.getByRole("combobox", { name: "Mode, Manual · Ask first" }),
       ).toBeTruthy(),
     );
-    fireEvent.click(screen.getByRole("combobox", { name: "Mode, Manual" }));
-    fireEvent.click(screen.getByRole("option", { name: "Plan" }));
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Mode, Manual · Ask first" }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: /Plan/ }));
     fireEvent.click(submitButton());
     expect(onStart.mock.calls[0]?.[0].changedConfig).toMatchObject({
       mode: "plan",
@@ -189,6 +199,28 @@ describe("PromptCard", () => {
     expect(submitButton().hasAttribute("disabled")).toBe(true);
   });
 
+  it("offers Git initialization for a trusted no-git workspace", async () => {
+    const sessionClient = session();
+    const workspace = trustedWorkspaceFixtures[2];
+    render(
+      <PromptCard
+        client={client()}
+        session={sessionClient}
+        providers={providerConnectionFixtures}
+        workspaces={trustedWorkspaceFixtures}
+        initialWorkspace={workspace}
+        onStart={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Initialize git" }));
+    await waitFor(() =>
+      expect(sessionClient.workspace?.initializeGit).toHaveBeenCalledWith(
+        workspace.id,
+      ),
+    );
+    expect(screen.getByRole("checkbox", { name: "New worktree" })).toBeTruthy();
+  });
+
   it("prepares the selected provider and gates send until the draft is ready", async () => {
     const sessionClient = session();
     render(
@@ -208,9 +240,39 @@ describe("PromptCard", () => {
       agent_profile_id: "claude-code",
       workdir: trustedWorkspaceFixtures[0].path,
       additional_directories: [],
+      isolation: { kind: "current" },
     });
     await waitFor(() =>
       expect(submitButton().hasAttribute("disabled")).toBe(false),
+    );
+  });
+
+  it("re-prepares a draft after opting into a worktree", async () => {
+    const workspace = trustedWorkspaceFixtures[0];
+    window.localStorage.removeItem(`tethys:new-worktree:${workspace.id}`);
+    const sessionClient = session();
+    render(
+      <PromptCard
+        client={client()}
+        session={sessionClient}
+        providers={providerConnectionFixtures}
+        workspaces={trustedWorkspaceFixtures}
+        initialWorkspace={workspace}
+        onStart={vi.fn()}
+      />,
+    );
+    await selectClaude();
+    fireEvent.click(screen.getByRole("checkbox", { name: "New worktree" }));
+    await waitFor(() =>
+      expect(sessionClient.thread.prepare).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          isolation: {
+            kind: "worktree",
+            base: "HEAD",
+            branch: null,
+          },
+        }),
+      ),
     );
   });
 

@@ -6,7 +6,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import type { ConfigOption } from "@tethys/bindings";
-import type { EditorHandle } from "@tethys/composer";
+import {
+  COMPOSER_INSERT_CHIP_EVENT,
+  type EditorChip,
+  type EditorHandle,
+} from "@tethys/composer";
 import {
   cancelPhaseFixtures,
   clearAllSessionStoresForTesting,
@@ -148,6 +152,28 @@ describe("docked prompt card", () => {
     ]);
     expect(client.thread.queueAdd).not.toHaveBeenCalled();
     await waitFor(() => expect(editorRef.current?.isEmpty()).toBe(true));
+  });
+
+  it("inserts a review comment chip sent from Changes", async () => {
+    const { editorRef } = setup();
+    await screen.findByRole("textbox", { name: "Prompt" });
+    const chip: EditorChip = {
+      kind: "review",
+      name: "1 comment",
+      token: "Review comments:\n- src/a.ts:2 — Check this path",
+    };
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(COMPOSER_INSERT_CHIP_EVENT, { detail: chip }),
+      );
+    });
+
+    await waitFor(() =>
+      expect(editorRef.current?.serializeToPrompt()).toBe(chip.token),
+    );
+    expect(
+      document.querySelector('[data-composer-chip="review"]'),
+    ).toBeTruthy();
   });
 
   it("keeps the text and says so when the prompt is rejected", async () => {

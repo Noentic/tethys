@@ -1,14 +1,71 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { DiffFile, DiffFileDetail, DiffSummary } from "@tethys/bindings";
+import type {
+  DiffFile,
+  DiffFileDetail,
+  DiffSummary,
+  WorktreeInfo,
+} from "@tethys/bindings";
+import { COMPOSER_INSERT_CHIP_EVENT } from "@tethys/composer";
+import {
+  clearAllSessionStoresForTesting,
+  getOrCreateSessionStore,
+} from "@tethys/state";
 import {
   clearRegistriesForTesting,
   getAllComposerContextSlots,
   getAllInspectorSlots,
 } from "@tethys/ui";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { type ReviewClient, ReviewClientProvider } from "./client-context";
 import { registerReviewSlots } from "./register";
 import { ReviewPanel } from "./review-panel";
+
+const originalOffsetHeight = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "offsetHeight",
+);
+const originalOffsetWidth = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "offsetWidth",
+);
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.dataset.testid === "diff-scroll" ? 400 : 0;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.dataset.testid === "diff-scroll" ? 800 : 0;
+    },
+  });
+});
+afterAll(() => {
+  if (originalOffsetHeight) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetHeight",
+      originalOffsetHeight,
+    );
+  }
+  if (originalOffsetWidth) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetWidth",
+      originalOffsetWidth,
+    );
+  }
+});
 
 function diffFile(path: string, partial: Partial<DiffFile> = {}): DiffFile {
   return {
@@ -66,7 +123,11 @@ function fakeClient(overrides: Partial<ReviewClient["git"]> = {}): {
     stage: vi.fn().mockResolvedValue(undefined),
     unstage: vi.fn().mockResolvedValue(undefined),
     discard: vi.fn().mockResolvedValue(undefined),
-    commit: vi.fn().mockResolvedValue({ oid: "abc", summary: "done" }),
+    commit: vi.fn().mockResolvedValue({
+      oid: "abc",
+      summary: "done",
+      ahead_of_base: 1,
+    }),
     checkpointRestore: vi.fn().mockResolvedValue({
       restored_worktree_tree: "w",
       restored_index_tree: "i",
@@ -100,6 +161,10 @@ function renderPanel(
     | "git-no-restore"
     | "no-git" = "git-remote",
 ) {
+  getOrCreateSessionStore("t1").setState((state) => ({
+    ...state,
+    turnCount: 1,
+  }));
   return render(
     <ReviewClientProvider client={client}>
       <ReviewPanel sessionId="t1" capabilityFixture={capabilityFixture} />
@@ -109,6 +174,7 @@ function renderPanel(
 
 describe("ReviewPanel (M1.9 U7)", () => {
   beforeEach(() => {
+    clearAllSessionStoresForTesting();
     clearRegistriesForTesting();
   });
 
@@ -121,16 +187,11 @@ describe("ReviewPanel (M1.9 U7)", () => {
     expect(screen.queryByTestId("file-header")).toBeNull();
   });
 
-  it("git-no-restore: review and commit render, but no revert trigger", async () => {
+  it("renders review when worktree restore is unavailable", async () => {
     const { client } = fakeClient();
     renderPanel(client, "git-no-restore");
     await waitFor(() => expect(screen.getByTestId("file-header")).toBeTruthy());
-    expect(screen.getByTestId("commit-box")).toBeTruthy();
-    expect(
-      screen.queryByRole("button", {
-        name: "Restore worktree to before this turn",
-      }),
-    ).toBeNull();
+    expect(screen.queryByTestId("commit-box")).toBeNull();
   });
 
   it("stages a whole path, not a hunk ref", async () => {
@@ -157,35 +218,82 @@ describe("ReviewPanel (M1.9 U7)", () => {
     ]);
   });
 
-  it("drafts with the agent and commits the edited message", async () => {
+  it("keeps commit actions out of the Changes panel", async () => {
     const { client, git } = fakeClient();
     renderPanel(client);
-    await waitFor(() => expect(screen.getByTestId("commit-box")).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Draft with agent" }));
-    const textarea = (await screen.findByLabelText(
-      "Commit message",
-    )) as HTMLTextAreaElement;
-    await waitFor(() => expect(textarea.value).toBe("Draft: add review UI"));
-    fireEvent.change(textarea, { target: { value: "Final message" } });
-    fireEvent.click(screen.getByRole("button", { name: /Approve & Commit/ }));
+    await waitFor(() => expect(screen.getByTestId("file-header")).toBeTruthy());
+    expect(screen.queryByTestId("commit-box")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Commit/ })).toBeNull();
+    expect(git.commit).not.toHaveBeenCalled();
+  });
+
+  it("uses checkpoint refs for thread scope and HEAD for uncommitted changes", async () => {
+    const { client, git } = fakeClient();
+    const worktree: WorktreeInfo = {
+      thread_id: "t1",
+      workspace_root: "/workspace",
+      path: "/workspace/.worktrees/t1",
+      branch: "tethys/t1",
+      base: "main",
+      head: "abc",
+      main_checkout: false,
+      warnings: [],
+      setup: null,
+    };
+    git.worktreeList = vi.fn().mockResolvedValue([worktree]);
+    renderPanel(client);
+
+    fireEvent.click(
+      await screen.findByRole("combobox", { name: "Diff scope: This turn" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Thread vs main" }),
+    );
     await waitFor(() =>
-      expect(git.commit).toHaveBeenCalledWith("t1", "Final message"),
+      expect(git.diffSummary).toHaveBeenCalledWith({
+        BaseLatestEnd: { thread_id: "t1", base: "main" },
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Diff scope: Thread vs main" }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: "Uncommitted" }));
+    await waitFor(() =>
+      expect(git.diffSummary).toHaveBeenCalledWith({
+        HeadWorktree: { thread_id: "t1" },
+      }),
     );
   });
 
-  it("shows the restore trigger only when restore is available", async () => {
-    const { client, git } = fakeClient();
-    renderPanel(client, "git-remote");
-    await waitFor(() => expect(screen.getByTestId("commit-box")).toBeTruthy());
+  it("sends collected line comments as one composer chip", async () => {
+    const { client } = fakeClient();
+    const receiveChip = vi.fn();
+    window.addEventListener(COMPOSER_INSERT_CHIP_EVENT, receiveChip);
+    renderPanel(client);
+
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Restore worktree to before this turn",
-      }),
+      (
+        await screen.findAllByRole("button", {
+          name: "Comment on line 1",
+        })
+      )[0],
     );
-    expect(git.checkpointRestore).toHaveBeenCalledWith(
-      { Checkpoint: { thread_id: "t1", turn: 1, phase: "Start" } },
-      "Force",
-    );
+    fireEvent.change(await screen.findByLabelText("Comment on src/a.ts:1"), {
+      target: { value: "Check the retry path" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add comment" }));
+    expect(screen.getByText("1 comment")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send to agent" }));
+    const event = receiveChip.mock.calls[0]?.[0] as CustomEvent | undefined;
+    expect(event?.detail).toEqual({
+      kind: "review",
+      name: "1 comment",
+      token: "Review comments:\n- src/a.ts:1 — Check the retry path",
+    });
+    expect(screen.queryByTestId("review-comments")).toBeNull();
+    window.removeEventListener(COMPOSER_INSERT_CHIP_EVENT, receiveChip);
   });
 
   it("never shows a previous file's detail while another loads", async () => {
@@ -205,16 +313,15 @@ describe("ReviewPanel (M1.9 U7)", () => {
     });
     renderPanel(client);
     await waitFor(() =>
-      expect(screen.getAllByTestId("file-header")).toHaveLength(2),
+      expect(screen.getAllByTestId("file-header")).toHaveLength(1),
     );
-    fireEvent.click(screen.getByRole("button", { name: /src\/a\.ts/ }));
     await waitFor(() =>
       expect(screen.getByTestId("diff-viewer").getAttribute("aria-label")).toBe(
         "Diff for src/a.ts",
       ),
     );
     // While B is still loading, A's detail must not linger under B's header.
-    fireEvent.click(screen.getByRole("button", { name: /src\/b\.ts/ }));
+    fireEvent.click(screen.getByRole("button", { name: /b\.ts/ }));
     await waitFor(() => expect(screen.queryByTestId("diff-viewer")).toBeNull());
     resolveB(fileDetail("src/b.ts"));
     await waitFor(() =>
@@ -227,7 +334,7 @@ describe("ReviewPanel (M1.9 U7)", () => {
   it("renders no forge action in any fixture", async () => {
     const { client } = fakeClient();
     renderPanel(client);
-    await waitFor(() => expect(screen.getByTestId("commit-box")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("file-header")).toBeTruthy());
     for (const button of screen.getAllByRole("button")) {
       expect(button.textContent ?? "").not.toMatch(/push|pull request|merge/i);
     }
@@ -236,7 +343,7 @@ describe("ReviewPanel (M1.9 U7)", () => {
   it("registers the review slot through the inspector registry", () => {
     registerReviewSlots();
     expect(getAllInspectorSlots().map(([id]) => id)).toContain("review");
-    expect(getAllComposerContextSlots().map(([id]) => id)).toContain(
+    expect(getAllComposerContextSlots().map(([id]) => id)).not.toContain(
       "diff-summary",
     );
   });

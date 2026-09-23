@@ -24,6 +24,14 @@ pub trait WorkspaceApi: Send + Sync {
         async { Err(ApiError::Unimplemented("workspace.add")) }
     }
 
+    /// Initializes Git in an already trusted workspace without changing its trust grant.
+    fn workspace_initialize_git(
+        &self,
+        _workspace_id: WorkspaceId,
+    ) -> impl std::future::Future<Output = Result<WorkspaceCapabilities, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("workspace.initialize_git")) }
+    }
+
     fn workspace_remove(
         &self,
         _workspace_id: WorkspaceId,

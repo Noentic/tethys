@@ -188,6 +188,8 @@ pub struct HunkRef {
 pub struct CommitResult {
     pub oid: String,
     pub summary: String,
+    /// Number of commits between the thread's starting point and its current head.
+    pub ahead_of_base: u32,
 }
 
 /// How aggressively restore protects uncommitted state.

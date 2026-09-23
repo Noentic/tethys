@@ -54,6 +54,7 @@ pub fn run() {
             // workspace
             workspace_list,
             workspace_add,
+            workspace_initialize_git,
             workspace_remove,
             workspace_probe,
             workspace_settings_get,

@@ -7,7 +7,10 @@ export type AgentCommand = {
 	name: string,
 	description: string | null,
 	input: string | null,
+	tethys_control?: AgentCommandControl | null,
 };
+
+export type AgentCommandControl = "model" | "permissions" | "config" | "resume" | "clear";
 
 /**  Per-profile ACP compatibility preferences (architecture §12). */
 export type AgentCompat = {
@@ -243,6 +246,8 @@ export type CommandSource = {
 export type CommitResult = {
 	oid: string,
 	summary: string,
+	/**  Number of commits between the thread's starting point and its current head. */
+	ahead_of_base: number,
 };
 
 /**
@@ -355,6 +360,8 @@ export type CreateThread = {
 	 *  agent as ACP `additionalDirectories` (M1.17 R6).
 	 */
 	additional_directories?: string[],
+	/**  Where the thread runs (WT-01). Absent means the current checkout. */
+	isolation?: ThreadIsolation | null,
 };
 
 export type Decider = "User" | "Policy";
@@ -1057,6 +1064,13 @@ export type ThreadBootstrap = {
 /**  Stable thread identifier. */
 export type ThreadId = string;
 
+/**
+ *  Run target for a new thread: the workspace's own checkout (the default), or
+ *  a new worktree branched from `base`. `branch` empty or absent applies the
+ *  workspace's branch template.
+ */
+export type ThreadIsolation = { kind: "current" } | { kind: "worktree"; base: string; branch: string | null };
+
 /**  Thread identity and ordered session snapshot (`thread.get`). */
 export type ThreadSessionView = {
 	thread: ThreadSummary,
@@ -1313,6 +1327,7 @@ export type WorkspaceSessionSummary = {
 	agent_profile_id: string,
 	title: string,
 	state: ThreadState,
+	workdir: string,
 };
 
 /**  Whether a workspace's stored trust decision still matches its folder. */

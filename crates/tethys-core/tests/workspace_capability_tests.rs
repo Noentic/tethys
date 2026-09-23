@@ -156,3 +156,29 @@ async fn cache_re_reads_after_invalidation() {
     assert!(reread.restore);
     assert_eq!(reread.max_concurrent_sessions, None);
 }
+
+#[tokio::test]
+async fn initialize_git_refreshes_capabilities_for_the_trusted_workspace() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let home = tmp.path().join("home");
+    let root = tmp.path().join("folder");
+    std::fs::create_dir_all(&root).expect("folder");
+    let core = tethys_core::Core::open(&home).await.expect("Core::open");
+    let workspace = core
+        .workspace_add(TrustGrant {
+            path: root.display().to_string(),
+            permission_mode: PermissionMode::Supervised,
+            scope: TrustScope::Folder,
+            init_git: false,
+        })
+        .await
+        .expect("add");
+
+    let capabilities = core
+        .workspace_initialize_git(workspace.id.clone())
+        .await
+        .expect("initialize git");
+
+    assert_eq!(capabilities.vcs, Vcs::GitLocal);
+    assert_eq!(capabilities.max_concurrent_sessions, None);
+}

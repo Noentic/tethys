@@ -97,6 +97,8 @@ describe("trusted workspaces", () => {
       id: "w1",
       name: "w1",
       path: "/tmp/w1",
+      capabilities: workspaceCapabilityFixtures["git-local"],
+      sessions: [],
       vcs: { kind: "git-local" },
     });
   });

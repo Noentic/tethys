@@ -1,12 +1,15 @@
 //! Claude Agent ACP metadata supported by the existing Tethys surfaces.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::{json, Map, Value};
-use tethys_acp::client::{PermissionMetadataHandler, PromptResponseHandler, SessionUpdateHandler};
+use tethys_acp::client::{
+    ConfigOptionsHandler, PermissionMetadataHandler, PromptResponseHandler, SessionUpdateHandler,
+};
 use tethys_schema::thread::{
-    ConfigOption, Patch, PermissionRequested, SessionGoal, SessionInfo, ToolCallPatch,
-    ToolCallStatus, ToolKind, ToolOrigin, TurnEventBody,
+    AgentCommandControl, ConfigOption, Patch, PermissionRequested, SessionGoal, SessionInfo,
+    ToolCallPatch, ToolCallStatus, ToolKind, ToolOrigin, TurnEventBody,
 };
 
 use crate::provider_integration::ProviderIntegrationDescriptor;
@@ -32,7 +35,15 @@ pub fn descriptor() -> ProviderIntegrationDescriptor {
 
     ProviderIntegrationDescriptor {
         client_capabilities_meta,
+        tethys_commands: HashMap::from([
+            ("model".into(), AgentCommandControl::Model),
+            ("permissions".into(), AgentCommandControl::Permissions),
+            ("config".into(), AgentCommandControl::Config),
+            ("resume".into(), AgentCommandControl::Resume),
+            ("clear".into(), AgentCommandControl::Clear),
+        ]),
         handle_session_update: Some(Arc::new(map_session_update) as SessionUpdateHandler),
+        handle_config_options: Some(Arc::new(apply_initial_config_options) as ConfigOptionsHandler),
         handle_permission_metadata: Some(
             Arc::new(map_permission_metadata) as PermissionMetadataHandler
         ),
@@ -93,6 +104,12 @@ fn map_session_update(raw: &Value, events: &mut Vec<TurnEventBody>) -> Option<St
         _ => {}
     }
 
+    for event in events.iter_mut() {
+        if let TurnEventBody::ConfigOptionsChanged { options } = event {
+            apply_config_metadata(raw, options);
+        }
+    }
+
     let meta = provider_meta(raw);
     if let Some(meta) = meta {
         let metadata = serde_json::to_string(meta).ok();
@@ -104,9 +121,6 @@ fn map_session_update(raw: &Value, events: &mut Vec<TurnEventBody>) -> Option<St
                         patch.origin = Some(ToolOrigin::Subagent);
                         patch.parent_tool_call_id = Some(parent.to_string());
                     }
-                }
-                TurnEventBody::ConfigOptionsChanged { options } => {
-                    apply_config_metadata(raw, options);
                 }
                 TurnEventBody::SessionInfo(info) => apply_goal(meta, info),
                 _ => {}
@@ -174,10 +188,17 @@ fn apply_config_metadata(raw: &Value, options: &mut [ConfigOption]) {
         }) else {
             continue;
         };
-        let Some(meta) = provider_meta(raw_option) else {
-            continue;
-        };
-        option.metadata = serde_json::to_string(meta).ok();
+        let meta = provider_meta(raw_option).cloned();
+        if option.category.as_deref() == Some("mode") {
+            let metadata = crate::provider_integration::with_mode_roles(
+                REGISTRY_ID,
+                option,
+                meta.unwrap_or_else(|| json!({})),
+            );
+            option.metadata = serde_json::to_string(&metadata).ok();
+        } else if let Some(meta) = meta.as_ref() {
+            option.metadata = serde_json::to_string(meta).ok();
+        }
         let recommended = air_metadata(raw_option)
             .and_then(|air| air.get("recommendedValue"))
             .and_then(Value::as_str);
@@ -186,6 +207,29 @@ fn apply_config_metadata(raw: &Value, options: &mut [ConfigOption]) {
         {
             option.recommended_value = Some(recommended.to_string());
         }
+    }
+}
+
+fn apply_initial_config_options(options: &mut [ConfigOption]) {
+    for option in options {
+        if option.category.as_deref() != Some("mode") {
+            continue;
+        }
+        let metadata = option
+            .metadata
+            .as_deref()
+            .map(|raw| serde_json::from_str(raw).unwrap_or_else(|_| Value::String(raw.to_string())))
+            .unwrap_or_else(|| json!({}));
+        let metadata = crate::provider_integration::with_mode_roles(REGISTRY_ID, option, metadata);
+        option.metadata = serde_json::to_string(&metadata).ok();
+    }
+}
+
+pub(crate) fn approval_mode_level(mode_id: &str) -> Option<&'static str> {
+    match mode_id {
+        "acceptEdits" => Some("auto-edit"),
+        "bypassPermissions" => Some("yolo"),
+        _ => None,
     }
 }
 
@@ -336,6 +380,112 @@ mod tests {
             &failure[0],
             TurnEventBody::ProviderExtension(extension) if extension.params.contains("i1")
         ));
+    }
+
+    #[test]
+    fn marks_claude_approval_modes_and_defaults_other_modes_to_working() {
+        let mut events = vec![TurnEventBody::ConfigOptionsChanged {
+            options: vec![ConfigOption {
+                id: "mode".into(),
+                name: "Mode".into(),
+                description: None,
+                current_value: "plan".into(),
+                values: vec![
+                    "plan".into(),
+                    "acceptEdits".into(),
+                    "bypassPermissions".into(),
+                ],
+                category: Some("mode".into()),
+                kind: None,
+                value_options: vec![
+                    tethys_schema::thread::ConfigOptionValue {
+                        id: "plan".into(),
+                        name: "Plan".into(),
+                        description: None,
+                    },
+                    tethys_schema::thread::ConfigOptionValue {
+                        id: "acceptEdits".into(),
+                        name: "Accept edits".into(),
+                        description: None,
+                    },
+                    tethys_schema::thread::ConfigOptionValue {
+                        id: "bypassPermissions".into(),
+                        name: "Bypass permissions".into(),
+                        description: None,
+                    },
+                ],
+                recommended_value: None,
+                metadata: None,
+            }],
+        }];
+        let raw = json!({
+            "sessionUpdate": "config_option_update",
+            "configOptions": [{ "id": "mode" }]
+        });
+        let handler = descriptor().handle_session_update.expect("handler");
+        handler(&raw, &mut events);
+
+        let TurnEventBody::ConfigOptionsChanged { options } = &events[0] else {
+            panic!("config event")
+        };
+        let metadata: Value = serde_json::from_str(options[0].metadata.as_deref().unwrap_or("{}"))
+            .expect("mode metadata");
+        assert_eq!(
+            metadata["tethysModeRoles"]["acceptEdits"],
+            json!({ "kind": "approval", "level": "auto-edit" })
+        );
+        assert_eq!(
+            metadata["tethysModeRoles"]["bypassPermissions"],
+            json!({ "kind": "approval", "level": "yolo" })
+        );
+        assert_eq!(
+            metadata["tethysModeRoles"]["plan"],
+            json!({ "kind": "working" })
+        );
+    }
+
+    #[test]
+    fn annotates_modes_before_a_new_thread_is_prepared() {
+        let descriptor = descriptor();
+        let handler = descriptor
+            .handle_config_options
+            .expect("Claude config option handler");
+        let mut options = vec![ConfigOption {
+            id: "mode".into(),
+            name: "Mode".into(),
+            description: None,
+            current_value: "default".into(),
+            values: vec!["default".into(), "acceptEdits".into()],
+            category: Some("mode".into()),
+            kind: None,
+            value_options: vec![
+                tethys_schema::thread::ConfigOptionValue {
+                    id: "default".into(),
+                    name: "Default".into(),
+                    description: None,
+                },
+                tethys_schema::thread::ConfigOptionValue {
+                    id: "acceptEdits".into(),
+                    name: "Accept edits".into(),
+                    description: None,
+                },
+            ],
+            recommended_value: None,
+            metadata: None,
+        }];
+
+        handler(&mut options);
+
+        let metadata: Value = serde_json::from_str(options[0].metadata.as_deref().unwrap_or("{}"))
+            .expect("mode metadata");
+        assert_eq!(
+            metadata["tethysModeRoles"]["acceptEdits"],
+            json!({ "kind": "approval", "level": "auto-edit" })
+        );
+        assert_eq!(
+            metadata["tethysModeRoles"]["default"],
+            json!({ "kind": "working" })
+        );
     }
 
     #[test]

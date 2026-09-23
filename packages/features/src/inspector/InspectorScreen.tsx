@@ -2,9 +2,9 @@ import {
   getOrCreateSessionStore,
   hydrateSessionView,
   isSessionHydrated,
-  type SessionEntry,
   subscribeSessionStream,
   useSessionCapabilities,
+  useTrustedWorkspaces,
   type WorkspaceCapabilityFixture,
 } from "@tethys/state";
 import { cn } from "@tethys/ui";
@@ -15,6 +15,7 @@ import {
   InspectorClientProvider,
 } from "../client-context";
 import { DockedPromptCard } from "../composer/docked-prompt-card";
+import "../approvals/register";
 import {
   dequeueProviderExtension,
   enqueueProviderExtension,
@@ -48,6 +49,14 @@ export function InspectorScreen({
 }) {
   const state = useSessionState(sessionId);
   const capabilities = useSessionCapabilities(sessionId, capabilityFixture);
+  const workspaces = useTrustedWorkspaces();
+  const workspace = workspaces.find((item) => item.id === state.workspaceId);
+  const worktreeEnabled = Boolean(
+    capabilities &&
+      capabilities.vcs.kind !== "none" &&
+      workspace &&
+      state.workdir !== workspace.path,
+  );
   const [streamError, setStreamError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const providerAnchorRef = useRef<HTMLButtonElement>(null);
@@ -103,10 +112,6 @@ export function InspectorScreen({
     };
   }, [client, sessionId]);
 
-  const handleViewDiff = (_entry: SessionEntry) => {
-    // M1.9 owns the diff viewer; the entry point only opens the Inspector.
-  };
-
   const hasPending =
     state.pendingPermissions.length > 0 || state.pendingElicitations.length > 0;
   return (
@@ -140,7 +145,7 @@ export function InspectorScreen({
             <TranscriptStage
               entries={state.entries}
               capabilities={capabilities}
-              onViewDiff={handleViewDiff}
+              sessionId={sessionId}
               className="pb-lg"
             />
           </div>
@@ -160,6 +165,8 @@ export function InspectorScreen({
               sessionId={sessionId}
               client={client}
               noGit={capabilities?.vcs.kind === "none"}
+              worktreeEnabled={worktreeEnabled}
+              workspaceName={workspace?.name}
               providerAnchorRef={providerAnchorRef}
             />
             {client.thread.respondExtension && (

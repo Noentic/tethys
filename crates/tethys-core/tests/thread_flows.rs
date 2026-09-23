@@ -154,6 +154,7 @@ async fn create(core: &Core, profile: &str, name: &str) -> ThreadId {
         agent_profile_id: profile.into(),
         workdir: workdir(name).display().to_string(),
         additional_directories: Vec::new(),
+        isolation: None,
     })
     .await
     .expect("create thread")
@@ -245,6 +246,7 @@ async fn mode_and_config_changes_dispatch_and_cache() {
             agent_profile_id: PROFILE_V1.into(),
             workdir: workdir("mode-config").display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await
         .expect("prepare");
@@ -324,6 +326,7 @@ async fn auth_required_session_updates_profile_auth_state() {
             agent_profile_id: PROFILE_AUTH.into(),
             workdir: workdir("auth-required").display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await;
 
@@ -347,6 +350,7 @@ async fn additional_directories_reach_the_session_and_stay_jailed() {
             agent_profile_id: PROFILE_V1.into(),
             workdir: workdir("additional").display().to_string(),
             additional_directories: vec!["extra".into()],
+            isolation: None,
         })
         .await
         .expect("prepare");
@@ -506,6 +510,7 @@ async fn reconnect_without_load_starts_fresh_session_once() {
             agent_profile_id: PROFILE_NO_LOAD.into(),
             workdir: workdir("no-load").display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await
         .expect("prepare");

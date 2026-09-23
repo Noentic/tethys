@@ -42,7 +42,7 @@ export function DiffSummaryPill({
     <button
       type="button"
       data-testid="diff-summary-pill"
-      onClick={open}
+      onClick={() => open()}
       className={cn(
         "focus-ring inline-flex items-center gap-1.5 rounded-xs border border-(--tethys-hairline-strong) px-2 py-0.5 font-mono text-mono-micro text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)",
         className,

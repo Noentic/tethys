@@ -4,9 +4,17 @@
 import type {
   AgentCommand,
   ConfigOption,
+  PermissionMode,
   ThreadBootstrap,
+  ThreadIsolation,
 } from "@tethys/bindings";
-import { ComposerEditor, type EditorHandle } from "@tethys/composer";
+import {
+  COMPOSER_CONTROL_SHORTCUT_EVENT,
+  type ComposerControl,
+  type ComposerControlShortcut,
+  ComposerEditor,
+  type EditorHandle,
+} from "@tethys/composer";
 import {
   hasSelectableProvider,
   isProviderSelectable,
@@ -21,6 +29,7 @@ import {
   type ComposerAttachment,
   ComposerAttachmentChip,
 } from "../composer/attachments";
+import { ComposerConfigChips } from "../composer/config-chips";
 import {
   type ComposerClient,
   commandSource,
@@ -43,10 +52,45 @@ const UNRESOLVED_WORKSPACE_PLACEHOLDER = "Choose a folder to start a thread";
 const UNSELECTED_PROVIDER_PLACEHOLDER = "Choose a provider to start a thread";
 const PROMPT_PLACEHOLDER =
   "Ask Claude to edit files, run bash commands, or type / for commands…";
-const COMMANDS_GUIDE = "Type / for commands · @ for files · $ for skills";
+const WORKTREE_PREFERENCE = "tethys:new-worktree:";
+const PERMISSION_MODE_PREFERENCE = "tethys:permission-mode:";
+const CURRENT_ISOLATION: ThreadIsolation = { kind: "current" };
 // Pen `XrH5y / additional-folder pill`: matches the workspace pill.
 const ADDITIONAL_PILL_CLASS =
   "focus-ring flex h-[22px] items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 text-label-md text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+
+function worktreePreference(workspaceId: string | undefined): boolean {
+  if (!workspaceId || typeof localStorage === "undefined") return false;
+  try {
+    return localStorage.getItem(`${WORKTREE_PREFERENCE}${workspaceId}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function defaultBranch(name: string | undefined): string {
+  const slug = (name ?? "thread")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `tethys/${slug || "thread"}`;
+}
+
+function savedPermissionMode(
+  workspaceId: string | undefined,
+): PermissionMode | null {
+  if (!workspaceId || typeof localStorage === "undefined") return null;
+  try {
+    const value = localStorage.getItem(
+      `${PERMISSION_MODE_PREFERENCE}${workspaceId}`,
+    );
+    return value === "supervised" || value === "auto-edit" || value === "yolo"
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export interface PromptCardProps {
   client: ComposerClient;
@@ -59,6 +103,7 @@ export interface PromptCardProps {
   agentCommands?: AgentCommand[];
   /** Pending staged prompts; non-zero lets an empty editor still submit. */
   queuedCount?: number;
+  onResume?: () => void;
   disabled?: boolean;
   onStart: (input: {
     workspace: TrustedWorkspace;
@@ -122,18 +167,32 @@ export function PromptCard({
   initialWorkspace = null,
   agentCommands = [],
   queuedCount = 0,
+  onResume,
   disabled = false,
   onStart,
 }: PromptCardProps) {
   const editorRef = useRef<EditorHandle>(null);
+  const modeTriggerRef = useRef<HTMLButtonElement>(null);
+  const modelTriggerRef = useRef<HTMLButtonElement>(null);
   const [workspace, setWorkspace] = useState<TrustedWorkspace | null>(
     initialWorkspace,
+  );
+  const [newWorktree, setNewWorktree] = useState(() =>
+    worktreePreference(initialWorkspace?.id),
+  );
+  const [worktreeBase, setWorktreeBase] = useState("HEAD");
+  const [worktreeBranch, setWorktreeBranch] = useState("");
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>(
+    () => savedPermissionMode(initialWorkspace?.id) ?? "supervised",
   );
   const [providerId, setProviderId] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [promptText, setPromptText] = useState("");
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [gitInitError, setGitInitError] = useState<string | null>(null);
+  const [initializingGit, setInitializingGit] = useState(false);
+  const [uncommittedCount, setUncommittedCount] = useState<number | null>(null);
   const [extraRoots, setExtraRoots] = useState<TrustedWorkspace[]>([]);
   const [foldersOpen, setFoldersOpen] = useState(false);
   const foldersAnchorRef = useRef<HTMLButtonElement>(null);
@@ -145,23 +204,93 @@ export function PromptCard({
   useEffect(() => {
     if (workspace === null && initialWorkspace) {
       setWorkspace(initialWorkspace);
+      setNewWorktree(worktreePreference(initialWorkspace.id));
+      setWorktreeBranch("");
     }
   }, [initialWorkspace, workspace]);
+
+  useEffect(() => {
+    const handleShortcut = (event: Event) => {
+      const control = (event as CustomEvent<ComposerControlShortcut>).detail;
+      if (control === "mode") modeTriggerRef.current?.click();
+      else if (control === "model") modelTriggerRef.current?.click();
+      else {
+        document
+          .querySelector<HTMLInputElement>(
+            'input[type="range"][aria-label$=" effort"]',
+          )
+          ?.focus();
+      }
+    };
+    window.addEventListener(COMPOSER_CONTROL_SHORTCUT_EVENT, handleShortcut);
+    return () =>
+      window.removeEventListener(
+        COMPOSER_CONTROL_SHORTCUT_EVENT,
+        handleShortcut,
+      );
+  }, []);
 
   const selectedProvider =
     providerList.find((provider) => provider.id === providerId) ?? null;
   const anySelectable = hasSelectableProvider(providerList);
   const zeroProvider = !anySelectable;
 
+  const worktreeIsolation = useMemo<ThreadIsolation>(
+    () => ({
+      kind: "worktree",
+      base: worktreeBase,
+      branch: worktreeBranch.trim() || null,
+    }),
+    [worktreeBase, worktreeBranch],
+  );
+  const isolation =
+    newWorktree && workspace?.capabilities.vcs.kind !== "none"
+      ? worktreeIsolation
+      : CURRENT_ISOLATION;
   const draft = usePreparedDraft(
     session,
     workspace,
     selectedProvider,
     extraRoots,
+    isolation,
   );
   const draftOptions = draft.bootstrap?.config_options ?? [];
   const draftId = draft.bootstrap?.thread.id ?? null;
+  const draftReady = draft.status === "ready" && draft.bootstrap !== null;
   const modeOption = draftOptions.find((option) => option.category === "mode");
+
+  useEffect(() => {
+    setUncommittedCount(null);
+    if (
+      !draftId ||
+      !client.git ||
+      workspace?.capabilities.vcs.kind === "none"
+    ) {
+      return;
+    }
+    let active = true;
+    void client.git
+      .diffSummary({ HeadWorktree: { thread_id: draftId } })
+      .then((summary) => {
+        if (active) setUncommittedCount(summary.files.length);
+      })
+      .catch(() => {
+        if (active) setUncommittedCount(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [client.git, draftId, workspace?.capabilities.vcs.kind]);
+
+  useEffect(() => {
+    if (!draftReady || !draft.bootstrap || !draftId) return;
+    const saved = savedPermissionMode(workspace?.id);
+    const next = saved ?? draft.bootstrap.permission_mode;
+    setPermissionMode(next);
+    if (saved && saved !== draft.bootstrap.permission_mode) {
+      void session.thread.setPermissionMode?.(draftId, saved).catch(() => {});
+    }
+  }, [draftId, draftReady, draft.bootstrap, session, workspace?.id]);
 
   // A ready draft replaces the panel values; a new draft resets any edits made
   // against the previous Provider's options. Guarded render-time reset (React
@@ -184,13 +313,12 @@ export function PromptCard({
         agentCommands,
         selectedProvider?.name ?? "Agent",
       ),
-      skill: skillSource(),
+      skill: skillSource(client, workspace?.id),
       path: pathSource(client, workspace?.id),
     }),
     [client, workspace?.id, agentCommands, selectedProvider?.name],
   );
 
-  const draftReady = draft.status === "ready" && draft.bootstrap !== null;
   const submitDisabled =
     disabled ||
     workspace === null ||
@@ -234,6 +362,9 @@ export function PromptCard({
   };
 
   const trustedFolders = workspaces ?? [];
+  const checkoutInUse =
+    workspace?.sessions.some((thread) => thread.workdir === workspace.path) ??
+    false;
   const extraCandidates = trustedFolders.filter(
     (candidate) =>
       candidate.id !== workspace?.id &&
@@ -241,7 +372,75 @@ export function PromptCard({
   );
   const handleSelectWorkspace = (next: TrustedWorkspace) => {
     setWorkspace(next);
+    setNewWorktree(worktreePreference(next.id));
+    setWorktreeBranch("");
     setExtraRoots((roots) => roots.filter((root) => root.id !== next.id));
+  };
+  const handleWorktreeChange = (enabled: boolean) => {
+    setNewWorktree(enabled);
+    if (workspace) {
+      try {
+        localStorage.setItem(
+          `${WORKTREE_PREFERENCE}${workspace.id}`,
+          enabled ? "1" : "0",
+        );
+      } catch {
+        // Storage can be unavailable in private or restricted webviews.
+      }
+    }
+  };
+  const handlePermissionModeChange = (next: PermissionMode) => {
+    setPermissionMode(next);
+    if (draftId) {
+      void session.thread.setPermissionMode?.(draftId, next).catch(() => {});
+    }
+  };
+  const handleMakePermissionModeDefault = () => {
+    if (!workspace) return;
+    try {
+      localStorage.setItem(
+        `${PERMISSION_MODE_PREFERENCE}${workspace.id}`,
+        permissionMode,
+      );
+    } catch {
+      // Preference still applies to this thread when storage is unavailable.
+    }
+  };
+  const initializeGit = async () => {
+    if (!workspace || !session.workspace) return;
+    setGitInitError(null);
+    setInitializingGit(true);
+    try {
+      const capabilities = await session.workspace.initializeGit(workspace.id);
+      setWorkspace((current) =>
+        current?.id === workspace.id
+          ? { ...current, capabilities, vcs: capabilities.vcs }
+          : current,
+      );
+    } catch (error) {
+      setGitInitError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setInitializingGit(false);
+    }
+  };
+
+  const handleComposerControl = (control: ComposerControl) => {
+    switch (control) {
+      case "model":
+      case "config":
+        modelTriggerRef.current?.click();
+        break;
+      case "permissions":
+        modeTriggerRef.current?.click();
+        break;
+      case "clear":
+        editorRef.current?.clear();
+        setPromptText("");
+        break;
+      case "resume":
+        onResume?.();
+        break;
+    }
   };
 
   // One instruction, never three: the first missing precondition names itself
@@ -270,6 +469,71 @@ export function PromptCard({
             selected={workspace}
             onSelect={handleSelectWorkspace}
           />
+
+          {workspace?.capabilities.vcs.kind === "none" ? (
+            <div className="flex items-center gap-sm">
+              <span className="text-label-md text-(--tethys-text-muted)">
+                no git · edits apply in place
+              </span>
+              {session.workspace && (
+                <button
+                  type="button"
+                  className={ADDITIONAL_PILL_CLASS}
+                  disabled={initializingGit}
+                  onClick={() => void initializeGit()}
+                >
+                  {initializingGit ? "Initializing Git…" : "Initialize git"}
+                </button>
+              )}
+            </div>
+          ) : workspace ? (
+            <div className="flex flex-wrap items-center gap-sm">
+              <span className="text-label-md text-(--tethys-text-secondary)">
+                ⑂{" "}
+                {newWorktree
+                  ? worktreeBranch || defaultBranch(workspace.name)
+                  : "current checkout"}
+                {uncommittedCount !== null &&
+                  ` · ${uncommittedCount} uncommitted`}
+              </span>
+              <label className="flex items-center gap-xs text-label-md text-(--tethys-text-secondary)">
+                <input
+                  type="checkbox"
+                  checked={newWorktree}
+                  onChange={(event) =>
+                    handleWorktreeChange(event.target.checked)
+                  }
+                />
+                New worktree
+              </label>
+              {newWorktree && (
+                <>
+                  <label className="flex items-center gap-xs text-label-md text-(--tethys-text-muted)">
+                    from
+                    <input
+                      aria-label="Worktree base"
+                      value={worktreeBase}
+                      onChange={(event) => setWorktreeBase(event.target.value)}
+                      className="w-20 rounded border border-(--tethys-hairline) bg-(--tethys-surface-card) px-1.5 py-0.5 text-(--tethys-text-primary)"
+                    />
+                  </label>
+                  <input
+                    aria-label="Worktree branch"
+                    value={worktreeBranch}
+                    placeholder={defaultBranch(workspace.name)}
+                    onChange={(event) => setWorktreeBranch(event.target.value)}
+                    className="w-40 rounded border border-(--tethys-hairline) bg-(--tethys-surface-card) px-1.5 py-0.5 text-label-md text-(--tethys-text-primary)"
+                  />
+                </>
+              )}
+              {checkoutInUse && (
+                <span className="basis-full text-label-sm text-(--tethys-status-warning)">
+                  Another thread uses this checkout. A new worktree keeps its
+                  changes separate.
+                </span>
+              )}
+            </div>
+          ) : null}
 
           {trustedFolders.length > 1 && (
             <div className="relative flex items-center gap-xs">
@@ -329,34 +593,6 @@ export function PromptCard({
               ))}
             </div>
           )}
-
-          <ModelSelector
-            providers={providerList}
-            selectedProviderId={providerId}
-            onSelectProvider={handleSelectProvider}
-            values={values}
-            onConfigChange={(optionId, value) =>
-              setValues((prev) => ({ ...prev, [optionId]: value }))
-            }
-            configOptions={draftOptions}
-            draftStatus={draft.status}
-            draftError={draft.error}
-          />
-
-          {selectedProvider !== null &&
-            draftReady &&
-            modeOption !== undefined && (
-              <ModeSelector
-                options={draftOptions}
-                value={values[modeOption.id]}
-                onChange={(value) =>
-                  setValues((previous) => ({
-                    ...previous,
-                    [modeOption.id]: value,
-                  }))
-                }
-              />
-            )}
         </div>
 
         <div className="relative">
@@ -373,6 +609,7 @@ export function PromptCard({
             sources={sources}
             disabled={disabled}
             placeholder={placeholder}
+            onControl={handleComposerControl}
             onChange={setPromptText}
             onSubmit={submit}
           />
@@ -405,9 +642,17 @@ export function PromptCard({
             {submitError}
           </p>
         )}
+        {gitInitError !== null && (
+          <p
+            role="alert"
+            className="text-body-sm text-(--tethys-status-danger)"
+          >
+            Could not initialize Git: {gitInitError}
+          </p>
+        )}
 
         <div className="flex items-center justify-between gap-lg">
-          <div className="flex min-w-0 items-center gap-md">
+          <div className="flex min-w-0 items-center gap-sm">
             <AttachmentPicker
               providerName={selectedProvider?.name ?? "a selected Provider"}
               capabilities={{
@@ -420,12 +665,55 @@ export function PromptCard({
               }
               disabled={disabled || !selectedProvider}
             />
-            <span className="truncate font-mono text-mono-micro text-(--tethys-text-muted)">
-              {COMMANDS_GUIDE}
-            </span>
+            {selectedProvider !== null && draftReady && modeOption && (
+              <ModeSelector
+                options={draftOptions}
+                value={values[modeOption.id]}
+                permissionMode={permissionMode}
+                onPermissionModeChange={handlePermissionModeChange}
+                worktreeEnabled={
+                  newWorktree && workspace?.capabilities.vcs.kind !== "none"
+                }
+                providerName={selectedProvider.name}
+                workspaceName={workspace?.name}
+                onMakeDefault={handleMakePermissionModeDefault}
+                triggerRef={modeTriggerRef}
+                onChange={(value) =>
+                  setValues((previous) => ({
+                    ...previous,
+                    [modeOption.id]: value,
+                  }))
+                }
+              />
+            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-sm">
+            <ModelSelector
+              providers={providerList}
+              selectedProviderId={providerId}
+              onSelectProvider={handleSelectProvider}
+              values={values}
+              onConfigChange={(optionId, value) =>
+                setValues((prev) => ({ ...prev, [optionId]: value }))
+              }
+              configOptions={draftOptions}
+              draftStatus={draft.status}
+              draftError={draft.error}
+              triggerRef={modelTriggerRef}
+            />
+            {draftReady && selectedProvider && (
+              <ComposerConfigChips
+                options={draftOptions.filter(
+                  (option) => option.category === "thought_level",
+                )}
+                values={values}
+                providerName={selectedProvider.name}
+                onSetOption={async (optionId, value) => {
+                  setValues((previous) => ({ ...previous, [optionId]: value }));
+                }}
+              />
+            )}
             <kbd
               title="Command/Ctrl + Enter"
               className="font-mono text-mono-micro text-(--tethys-text-muted)"

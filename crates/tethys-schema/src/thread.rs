@@ -331,11 +331,24 @@ pub struct ConfigOption {
     pub metadata: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgentCommandControl {
+    Model,
+    Permissions,
+    Config,
+    Resume,
+    Clear,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct AgentCommand {
     pub name: String,
     pub description: Option<String>,
     pub input: Option<String>,
+    #[serde(default)]
+    #[specta(optional)]
+    pub tethys_control: Option<AgentCommandControl>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
@@ -590,6 +603,23 @@ pub struct CreateThread {
     #[serde(default)]
     #[specta(optional)]
     pub additional_directories: Vec<String>,
+    /// Where the thread runs (WT-01). Absent means the current checkout.
+    #[serde(default)]
+    #[specta(optional)]
+    pub isolation: Option<ThreadIsolation>,
+}
+
+/// Run target for a new thread: the workspace's own checkout (the default), or
+/// a new worktree branched from `base`. `branch` empty or absent applies the
+/// workspace's branch template.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ThreadIsolation {
+    Current,
+    Worktree {
+        base: String,
+        branch: Option<String>,
+    },
 }
 
 /// Thread row returned by `thread.create/list/get`.

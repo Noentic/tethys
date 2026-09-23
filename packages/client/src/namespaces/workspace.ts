@@ -15,6 +15,8 @@ export function workspaceNamespace(call: Call) {
     list: () => call<WorkspaceListItem[]>("workspace_list"),
     add: (request: TrustGrant) =>
       call<WorkspaceListItem>("workspace_add", { request }),
+    initializeGit: (workspaceId: string) =>
+      call<WorkspaceCapabilities>("workspace_initialize_git", { workspaceId }),
     remove: (workspaceId: string) =>
       call<void>("workspace_remove", { workspaceId }),
     /** Read-only VCS kind of a folder the user picked. */

@@ -13,6 +13,7 @@ import React, {
 import { CHIP_NODE, ComposerChip, chipInsertion } from "./chips";
 import { DocumentNode, ParagraphNode, TextNode } from "./nodes";
 import type {
+  ComposerControl,
   ComposerItem,
   ComposerSources,
   EditorChip,
@@ -31,10 +32,14 @@ interface PopupState {
   clientRect: (() => DOMRect | null) | null;
   command: (item: ComposerItem) => void;
   selectedIndex: number;
+  loading: boolean;
 }
 
 interface SuggestionRuntime {
   sourcesRef: React.MutableRefObject<ComposerSources>;
+  onControlRef: React.MutableRefObject<
+    ((control: ComposerControl) => void) | undefined
+  >;
   setPopup: (updater: (prev: PopupState | null) => PopupState | null) => void;
   keydownRef: React.MutableRefObject<
     ((event: KeyboardEvent) => boolean) | null
@@ -64,6 +69,11 @@ function suggestionExtension(
             return (await source(query, signal)).slice(0, 50);
           },
           command: ({ editor, range, props }) => {
+            if (props.control) {
+              editor.chain().focus().deleteRange(range).run();
+              runtime.onControlRef.current?.(props.control);
+              return;
+            }
             editor
               .chain()
               .focus()
@@ -80,6 +90,7 @@ function suggestionExtension(
                 clientRect: props.clientRect ?? null,
                 command: props.command,
                 selectedIndex: 0,
+                loading: props.loading,
               }));
             },
             onUpdate: (props: SuggestionProps<ComposerItem, ComposerItem>) => {
@@ -92,6 +103,7 @@ function suggestionExtension(
                       query: props.query,
                       clientRect: props.clientRect ?? null,
                       command: props.command,
+                      loading: props.loading,
                     }
                   : prev,
               );
@@ -187,6 +199,7 @@ export interface ComposerEditorProps {
   placeholder?: string;
   onChange?: (plaintext: string) => void;
   onSubmit?: () => void;
+  onControl?: (control: ComposerControl) => void;
 }
 
 /**
@@ -198,12 +211,21 @@ export const ComposerEditor = React.forwardRef<
   EditorHandle,
   ComposerEditorProps
 >(function ComposerEditor(
-  { sources = {}, disabled = false, placeholder, onChange, onSubmit },
+  {
+    sources = {},
+    disabled = false,
+    placeholder,
+    onChange,
+    onSubmit,
+    onControl,
+  },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sourcesRef = useRef<ComposerSources>(sources);
   sourcesRef.current = sources;
+  const onControlRef = useRef(onControl);
+  onControlRef.current = onControl;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onSubmitRef = useRef(onSubmit);
@@ -215,7 +237,7 @@ export const ComposerEditor = React.forwardRef<
   const keydownRef = useRef<((event: KeyboardEvent) => boolean) | null>(null);
 
   const runtime = useMemo<SuggestionRuntime>(
-    () => ({ sourcesRef, setPopup, keydownRef }),
+    () => ({ sourcesRef, onControlRef, setPopup, keydownRef }),
     [],
   );
 
@@ -336,7 +358,7 @@ export const ComposerEditor = React.forwardRef<
   return (
     <div ref={containerRef} className="relative w-full">
       <EditorContent editor={editor} />
-      {popup && popup.items.length > 0 && (
+      {popup && (
         <ComposerPopup
           popup={popup}
           container={containerRef.current}
@@ -393,62 +415,95 @@ function ComposerPopup({
 }) {
   const rect = popup.clientRect?.();
   const containerRect = container?.getBoundingClientRect();
+  const popupWidth = 400;
   const style: React.CSSProperties = {
-    left: rect && containerRect ? rect.left - containerRect.left : 0,
-    top: rect && containerRect ? rect.bottom - containerRect.top + 4 : 0,
+    left:
+      rect && containerRect && container
+        ? Math.max(
+            0,
+            Math.min(
+              rect.left - containerRect.left,
+              container.clientWidth - popupWidth,
+            ),
+          )
+        : 0,
+    top: rect && containerRect ? rect.top - containerRect.top : 0,
+    transform: "translateY(calc(-100% - 4px))",
   };
   const groups = groupItems(popup.items);
 
   return (
     <div
       data-testid="composer-popup"
-      role="listbox"
+      role="dialog"
       aria-label="Composer suggestions"
       style={style}
-      className="edge-lit absolute z-(--tethys-z-popover) max-h-72 w-72 overflow-y-auto rounded-md border border-(--tethys-hairline-strong) bg-(--tethys-surface-overlay) p-1"
+      className="edge-lit absolute z-(--tethys-z-popover) max-h-72 w-[400px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-md border border-(--tethys-hairline-strong) bg-(--tethys-surface-overlay) p-1"
     >
-      {groups.map(([group, items]) => (
-        // biome-ignore lint/a11y/useSemanticElements: popup groups are labelled listbox groups, not form fieldsets
-        <div
-          key={group ?? "__ungrouped"}
-          role="group"
-          aria-label={group ?? undefined}
+      {popup.loading ? (
+        <p
+          role="status"
+          className="px-3 py-2 text-body-sm text-(--tethys-text-muted)"
         >
-          {group && (
-            <div className="px-2 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider">
-              {group}
+          Loading…
+        </p>
+      ) : popup.items.length === 0 ? (
+        <p
+          role="status"
+          className="px-3 py-2 text-body-sm text-(--tethys-text-muted)"
+        >
+          No matches
+        </p>
+      ) : (
+        <div role="listbox" aria-label="Composer suggestions">
+          {groups.map(([group, items]) => (
+            // biome-ignore lint/a11y/useSemanticElements: popup groups are labelled listbox groups, not form fieldsets
+            <div
+              key={group ?? "__ungrouped"}
+              role="group"
+              aria-label={group ?? undefined}
+            >
+              {group && (
+                <div className="px-2 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider">
+                  {group}
+                </div>
+              )}
+              {items.map((item) => {
+                const index = popup.items.indexOf(item);
+                const selected = index === popup.selectedIndex;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    aria-description={item.control ? item.detail : undefined}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      onSelect(item);
+                    }}
+                    className={`flex min-h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-body-sm ${
+                      selected
+                        ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
+                        : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)"
+                    } ${item.control ? "opacity-60" : ""}`}
+                  >
+                    <span className="truncate">{item.label}</span>
+                    {item.detail && (
+                      <span className="ml-auto max-w-[62%] shrink-0 truncate text-right text-label-sm text-(--tethys-text-muted)">
+                        {item.detail}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          )}
-          {items.map((item) => {
-            const index = popup.items.indexOf(item);
-            const selected = index === popup.selectedIndex;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  onSelect(item);
-                }}
-                className={`flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-body-sm ${
-                  selected
-                    ? "bg-(--tethys-surface-active) text-(--tethys-text-primary)"
-                    : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)"
-                }`}
-              >
-                <span className="truncate">{item.label}</span>
-                {item.detail && (
-                  <span className="ml-auto shrink-0 font-mono text-mono-micro text-(--tethys-text-muted)">
-                    {item.detail}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          ))}
         </div>
-      ))}
+      )}
+      <footer className="border-t border-(--tethys-hairline) px-2 py-1 text-label-sm text-(--tethys-text-muted)">
+        ↑ ↓ Move · Enter Select · Esc Close
+      </footer>
     </div>
   );
 }

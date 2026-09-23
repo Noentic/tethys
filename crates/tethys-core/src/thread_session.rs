@@ -416,13 +416,23 @@ impl ThreadSessions {
     }
 
     pub async fn create(&self, request: CreateThread) -> Result<ThreadSummary, ApiError> {
-        self.create_with_visibility(request, false).await
+        self.create_with_visibility(request, false, None).await
+    }
+
+    /// Reserves the id the next prepared thread takes, so a worktree can be
+    /// registered under it before the session starts (`prepare_as`).
+    pub fn reserve_thread_id(&self) -> ThreadId {
+        ThreadId::new(format!(
+            "thread-{}",
+            self.next_thread_id.fetch_add(1, Ordering::Relaxed)
+        ))
     }
 
     async fn create_with_visibility(
         &self,
         request: CreateThread,
         prepared: bool,
+        reserved: Option<ThreadId>,
     ) -> Result<ThreadSummary, ApiError> {
         if !self.profiles.lock().contains_key(&request.agent_profile_id) {
             return Err(ApiError::NotFound(format!(
@@ -479,10 +489,7 @@ impl ThreadSessions {
                 });
             }
         }
-        let id = ThreadId::new(format!(
-            "thread-{}",
-            self.next_thread_id.fetch_add(1, Ordering::Relaxed)
-        ));
+        let id = reserved.unwrap_or_else(|| self.reserve_thread_id());
         let handle = ThreadHandle::new(ThreadInner {
             machine: ThreadMachine::new(id.clone()),
             workspace_id: request.workspace_id,
@@ -567,7 +574,16 @@ impl ThreadSessions {
 
     /// Connects and creates the ACP session before returning composer controls.
     pub async fn prepare(&self, request: CreateThread) -> Result<ThreadBootstrap, ApiError> {
-        let summary = self.create_with_visibility(request, true).await?;
+        self.prepare_as(request, None).await
+    }
+
+    /// `prepare` under an id from `reserve_thread_id`.
+    pub async fn prepare_as(
+        &self,
+        request: CreateThread,
+        reserved: Option<ThreadId>,
+    ) -> Result<ThreadBootstrap, ApiError> {
+        let summary = self.create_with_visibility(request, true, reserved).await?;
         let handle = self.handle(&summary.id)?;
         if let Err(error) = self.ensure_connection(&handle).await {
             let _ = self.delete(&summary.id).await;

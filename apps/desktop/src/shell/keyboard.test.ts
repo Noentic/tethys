@@ -147,3 +147,40 @@ describe("inspector toggle shortcut (d0-rc9)", () => {
     cleanup();
   });
 });
+
+describe("d0-rc12 surface shortcuts", () => {
+  it("toggles Changes with Cmd/Ctrl+Shift+D and routes composer controls", () => {
+    const handlers = {
+      onToggleChanges: vi.fn(),
+      onOpenComposerControl: vi.fn(),
+    };
+    const cleanup = setupGlobalKeyboardMap(handlers);
+
+    for (const [key, control] of [
+      ["m", "mode"],
+      ["i", "model"],
+      ["e", "effort"],
+    ] as const) {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key,
+          metaKey: true,
+          shiftKey: true,
+          cancelable: true,
+        }),
+      );
+      expect(handlers.onOpenComposerControl).toHaveBeenLastCalledWith(control);
+    }
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "D",
+        ctrlKey: true,
+        shiftKey: true,
+        cancelable: true,
+      }),
+    );
+    expect(handlers.onToggleChanges).toHaveBeenCalledTimes(1);
+
+    cleanup();
+  });
+});

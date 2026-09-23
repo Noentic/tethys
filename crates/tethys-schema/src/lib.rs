@@ -174,6 +174,7 @@ pub fn registered_types() -> Types {
         .register::<thread::ThreadId>()
         .register::<thread::ThreadState>()
         .register::<thread::CreateThread>()
+        .register::<thread::ThreadIsolation>()
         .register::<thread::ThreadBootstrap>()
         .register::<thread::ThreadSummary>()
         .register::<thread::ThreadSessionView>()

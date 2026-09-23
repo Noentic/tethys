@@ -30,9 +30,11 @@ function defaultsToNo(metadata?: string | null): boolean {
 export function PermissionRequestCard({
   entry,
   className,
+  compact = false,
 }: {
   entry: PermissionRequestEntry;
   className?: string;
+  compact?: boolean;
 }) {
   const context = useInspectorClient();
   const { request } = entry;
@@ -60,6 +62,25 @@ export function PermissionRequestCard({
       (option) => option.option_id === resolution.optionId,
     );
     const label = chosen?.name ?? resolution.outcome;
+    const command = request.subject?.Command?.command ?? null;
+    if (compact) {
+      return (
+        <div
+          data-entry-kind="permission_request"
+          data-resolved="true"
+          className="flex items-center gap-sm text-label-sm text-(--tethys-text-muted)"
+        >
+          <StatusDot
+            status={resolution.autoPicked ? "healthy" : "idle"}
+            inline
+          />
+          <span>
+            {label === "Allow once" ? "Allowed once" : label}
+            {command ? ` · ${command}` : ""}
+          </span>
+        </div>
+      );
+    }
     return (
       <section
         data-entry-kind="permission_request"
@@ -88,11 +109,33 @@ export function PermissionRequestCard({
     );
   }
 
+  if (compact) {
+    return (
+      <div
+        data-entry-kind="permission_request"
+        data-pending="true"
+        className="flex items-center gap-sm text-label-sm text-(--tethys-status-warning)"
+      >
+        <StatusDot status="awaiting_approval" inline />
+        <span>Waiting for you ↓</span>
+      </div>
+    );
+  }
+
   return (
     <section
       data-entry-kind="permission_request"
       data-pending="true"
       aria-label={`Permission requested: ${request.title}`}
+      onKeyDown={(event) => {
+        const index = Number.parseInt(event.key, 10);
+        if (Number.isNaN(index) || index < 1 || index > 9) return;
+        const option = request.options[index - 1];
+        if (option) {
+          event.preventDefault();
+          void respond(option.option_id);
+        }
+      }}
       className={cn(
         "rounded-md border border-(--tethys-hairline) border-l-2 border-l-(--tethys-status-warning) bg-(--tethys-status-warning-soft) p-md",
         className,
@@ -115,7 +158,7 @@ export function PermissionRequestCard({
         </p>
       )}
       <div className="mt-sm flex flex-wrap gap-sm">
-        {request.options.map((option) => (
+        {request.options.map((option, index) => (
           <Button
             key={option.option_id}
             size="sm"
@@ -123,6 +166,9 @@ export function PermissionRequestCard({
             disabled={pendingOption !== null}
             onClick={() => respond(option.option_id)}
           >
+            <span aria-hidden="true" className="mr-1 font-mono">
+              {index + 1}.
+            </span>
             {option.name}
           </Button>
         ))}

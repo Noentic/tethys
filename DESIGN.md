@@ -1,6 +1,7 @@
 ---
-version: d0-rc11
+version: d0-rc12
 changelog:
+  d0-rc12: "Accepted 23 Sep 2026. Composer and thread redesign (proposal: claude.ai/artifact/ML7Bm74AEEsZNV9dnov6B2). The prompt card reads where / what / how in both views: a new `branch-worktree-pill` puts branch and an opt-in `New worktree` checkbox in the New Thread where band (current checkout is the default, sticky per workspace; PRD WT‑01 amended), and a new `branch-bar` is its in-thread form, absorbing `isolation-pill` and `diff-summary-pill` and becoming the one home of `Commit…` (replacing `Approve & Commit`, which named a commit as an approval). `mode-pill` becomes the single Mode control with two sections, the Provider's working modes and Tethys's approvals, with Full auto behind its own `Enable` and disabled on the current checkout (PRM‑02). A new `request-dock` holds the pending permission or elicitation card above the composer, leaving an anchor row in the transcript. The Inspector becomes a `side-panel` with `Overview` (the old `thread-inspector`, minus its rollup band) and a resizable `changes-panel` (`layout.changes-min` 480px, up to half the window) with turn / thread / uncommitted scopes and batched line comments. A `turn-receipt` ends each turn that changed files, replacing the per-entry `View diff` / `Restore`. `composer-suggestion-popover` grows to 400px, opens above the caret and groups `/` by source; `composer-command-group` drops the always-on `/agent:` prefix for provenance headings and dims Provider built-ins Tethys handles itself. Interaction Patterns P4 and P8 are amended and P14–P18 added."
   d0-rc11: "Accepted 21 Sep 2026. Token ratification: the pen's values are ported into the contract, and the contrast gates, not the pen, now decide the final numbers. `text-muted` (`#71717a` in both themes) is retired as a text value because it measured 3.3-4.2:1 in dark and 3.8:1 on the light well against the contract's own 4.5:1 rule; it becomes `#8e8e98` / `#63636c` and is now under test on every surface. Dark `hairline-strong` (`#27272a`, 1.08:1 on `surface-overlay`) becomes `#3f3f46` / `#c2c2ca` and stops being a control stroke. Nine tokens the pen already used and the contract only referenced are defined: `border-control` (the input, textarea, toggle-track, radio and checkbox stroke, 3:1), the `text-on-sunken` family with `hairline-on-sunken` and `wash-on-sunken` (the previously dangling `*-on-sunken` reference), and `status-interrupted` / `status-suspended` / `status-archived` so those dots stop borrowing border tokens as fills. Two values differ from the pen because the gates rejected them: light `text-muted` / `text-on-sunken-muted` `#686871` measured 4.35:1 on the slate well and is `#63636c` (4.69:1), and light `status-archived` `#d4d4d8` measured 1.40:1 on panel and is `#c8c8cf` (1.58:1); the pen is updated to match. Dark `diff-removed` is `#ff8a84` (`signal-red-bright`), as d0-rc9 already said in the theme table; `manifest.ts` and `tokens.css` had kept the pre-soften `#fe6c66`. `tokens.test.ts` now reads the semantic names, CSS variables and both default themes from this front matter instead of a hand-copied list, and `design-refs.test.ts` fails on any `{...}` reference here that names nothing. Shell: the thread view is three regions, Rail | Stage | Inspector. The four-region diagram was never built (no Hub column exists in the pen or in code), and Sessions leaves the docked layout to become an on-demand overlay drawer, which closes the d0-rc5 open limitation: with the Inspector docked only at 1100px or wider, the Stage holds its 560px minimum at every width (48 + 560 + 360 = 968px). The 56px action bar is removed from the contract, not just deprecated in it: its controls live in the `prompt-card` context bar and lower bar, the fold order it carried moves to `prompt-card.contextBarFold`, and `layout.shell-actionbar`, `layout.shell-left`, `layout.shell-left-collapsed` and `breakpoints.sessions-icon` are deleted. `mode-pill` and `diff-summary-pill`, referenced since d0-rc5 and never defined, are defined. `sync-grid` and `session-topology-canvas` are marked deprecated-but-shipping instead of removed, because their replacements are not built; d0-rc5's 2-D grid roving applied only to `sync-grid` and is superseded by the `provider-tab` tablist (one tab stop, arrows, `Home` / `End`). State on content surfaces: the toast gains an icon and a left rule instead of a perimeter (`toast.stateTreatment`), the workspace card takes a wash and the `awaiting` ring with no rule (`workspace-card.attention`), the session row, drawer callout and trust-dialog callout follow the wash + 2px left rule grammar, and `provider-popover` finally carries the `pendingTreatment` d0-rc9 gave it in the contract, as a wash over its overlay surface."
   d0-rc10: "Accepted 21 Sep 2026. New Thread cold start. The canvas gains an explicit nothing-selected state, derived rather than invented: P6 already required a disabled control to name its fix, and §3 already required submit to stay disabled while the workspace pill was unresolved. What is new is the order — with several preconditions missing the composer names only the first, workspace → provider, so the empty state gives one instruction rather than three. `workspace-selector-pill` gains an `unresolved` state (source badge dropped, label `Choose a folder` — an instruction, not a status) and the prompt card drops its attachment-and-guide cluster when its input is disabled, because `/ for commands` is a lie against a dead textarea. Revisits M1.10's New Thread canvas. Also retires `motion.skeleton` (`d0-rc4`): it was documented at 1200ms and shipped as a `--motion-skeleton` variable, but no component ever read it — the skeleton has always run the 2000ms `motion.pulse`, which is now the single loading-loop token. Closing the gap this way rather than retiming the shipped animation keeps d0-rc9's calmer direction (breathe 2400ms > pulse 2000ms) and changes no rendered pixel."
   d0-rc9: "Accepted 21 Sep 2026. State colour and motion. State colour is split into two tiers: a saturated `status-*` tone for markers, labels and rules, and a new low-chroma `status-warning-soft` / `status-danger-soft` surface tier for cards, rows and rules. The pen's rebalanced signal palette is ratified into the contract (it had drifted: `DESIGN.md` still shipped `#f59e0b` / `#ef4444` / `#10b981` / `#38bdf8`, whose Default Light values failed AA as text at 2.9 / 4.4 / 3.4 / 3.7), with `status-warning` and `status-danger` softened one further notch in dark. `motion.breathe` replaces the 50%-opacity pulse for liveness: `running` and `awaiting` breathe at 2400ms / 3200ms on a new `status-dot` halo, and stopped, errored, interrupted, suspended, archived and idle states are deliberately static. State colour no longer paints a full perimeter: `permission-request-card` / `elicitation-card` / `provider-popover` trade `pendingBorder` for a `pendingTreatment` (hairline + soft tint + 2px left rule + breathing dot), matching `turn-notice.warningRule`. New `state-badge` and `thread-inspector` components; `diff-viewer` gains a two-colour stat."
@@ -299,6 +300,7 @@ layout:
   drawer-peek: 380px
   drawer-queue: 420px
   prompt-width: 820px
+  changes-min: 480px       # the Changes tab's minimum; it grows to 50% of the window, never leaving the Stage below stage-min
   stage-measure: 760px
   stage-min: 560px
   popover-selector: 560px
@@ -363,13 +365,29 @@ components:
   thread-inspector:
     backgroundColor: "{semantic.surface-panel}"
     borderLeft: "1px solid {semantic.hairline-structural}"
-    header: "40px row: `Thread Inspector` in {typography.heading-md} / {semantic.text-primary}, a {components.state-badge} naming the live state, and a `Collapse` ghost button with a chevron. The badge is the one place the panel's state is named in words, so collapsing can never hide *that* a request is pending"
-    rollup: "a {semantic.surface-overlay} band of four metrics — files modified, diff lines, commands executed, duration. Value in {typography.mono-micro} / {semantic.text-primary}, label beneath in {typography.mono-micro} / {semantic.text-muted}. The diff-lines metric is two-coloured: `+N` in {semantic.diff-added}, `−N` in {semantic.diff-removed} ({components.diff-viewer.statAdded} / .statRemoved). A metric the session did not report is omitted, never estimated (P9)"
-    sections: "the rollup band first, then the registered Inspector slots in order: `plan-panel`, `activity-ledger`, the `diff-viewer` where the workspace has git, and `Approve & Commit`. Sections are separated by a {semantic.hairline}, not by cards — the panel is one column, not a stack of boxes"
+    scope: "The `Overview` tab of {components.side-panel}. Its header is the side panel's header"
+    statusLine: "the first row: the {components.state-badge}, elapsed time and `Provider · model` in {typography.mono-micro} / {semantic.text-muted}"
+    rollup: "retired in d0-rc12. Its numbers now sit where they are acted on: the thread's diff stat in {components.branch-bar}, a turn's in {components.turn-receipt}, counts in {components.activity-ledger}"
+    sections: "the status line, then the registered Overview slots in order: `plan-panel`, `usage-bar`, `activity-ledger`, and Outputs (`provider-artifact` summaries). The diff and commit are not here: they are the Changes tab and the branch bar. Sections are separated by a {semantic.hairline}, not by cards — the panel is one column, not a stack of boxes"
     collapsed: "collapses to a 40px rail on {semantic.surface-panel} with the {semantic.hairline-structural} left edge, carrying the breathing `status-dot` and an expand chevron. `aria-expanded` on the toggle, `Ctrl/Cmd+I` toggles. A pending request is never *only* reachable here: the tab strip's {components.approval-inbox-pill} and the stage's inline card both keep it answerable (State Precedence rule 5)"
-    empty: "an idle session with nothing to report renders the header (badge `Idle`) and the ledger's `No tool calls yet`; the rollup band renders nothing rather than a row of zeroes, and no plan section and no diff section appear — an absent section is not rendered as an empty box (P6, P9). The panel never disappears: it says it has nothing yet rather than looking broken"
+    empty: "an idle session with nothing to report renders the header (badge `Idle`) and the ledger's `No tool calls yet`; no plan section and no outputs section appear — an absent section is not rendered as an empty box (P6, P9). The panel never disappears: it says it has nothing yet rather than looking broken"
     motion: "the header dot and any `status-dot` inside follow {motion.stateMotion}; the panel itself never animates on open or collapse beyond the shell's own drawer transition"
-    a11y: "a `region` labelled `Thread Inspector`; the rollup is a `list`; the collapse toggle is a `button` with `aria-expanded` and `aria-controls`"
+    a11y: "the `tabpanel` of the side panel's `Overview` tab; the collapse toggle is a `button` with `aria-expanded` and `aria-controls`"
+  side-panel:
+    backgroundColor: "{semantic.surface-panel}"
+    borderLeft: "1px solid {semantic.hairline-structural}"
+    header: "40px row: a `tablist` of `Overview` and `Changes N` (N, the changed-file count, in {typography.mono-micro} / {semantic.text-muted}; the Changes tab is absent without git), a {components.state-badge} naming the live state, `⤢` (expands Changes over the Stage at {stacking.drawer}; `Esc` returns) and a `Collapse` ghost button. The badge is the one place the panel's state is named in words, so collapsing can never hide *that* a request is pending"
+    width: "`Overview` {layout.shell-inspector}; `Changes` clamp({layout.changes-min}, 50%, viewport − {spacing.rail} − {layout.stage-min}), user-resizable within that range and remembered per window. Below {layout.changes-min} of available width Changes opens as an overlay; below {layout.breakpoints.inspector-overlay} the whole panel is an overlay drawer"
+    tabs: "{components.thread-inspector} (Overview) and {components.changes-panel} (Changes). `⌘⇧D` toggles Changes; `Ctrl/Cmd+I` collapses the panel"
+    collapsed: "{components.thread-inspector.collapsed}"
+    a11y: "a `region` labelled `Thread side panel`; tabs are `tab` / `tabpanel` with roving arrows"
+  changes-panel:
+    scope: "The `Changes` tab of {components.side-panel}, git only. The review surface: it shows and edits the diff but never commits — commit's one home is {components.branch-bar}"
+    toolbar: "a scope selector (`This turn` / `Thread (vs <base>)` / `Uncommitted`, a `listbox` popover) and a unified/split {components.segmented-control}, on a 36px row with a {semantic.hairline} bottom"
+    fileTree: "left column, 160px, per-file `+a −b` in two colours, folders collapsible; hidden when the panel is narrower than 640px, leaving a file select in the toolbar"
+    body: "{components.diff-viewer}, with per-file stage/unstage in the file header and per-hunk `Discard`"
+    comments: "clicking a line opens a one-line comment field under it; comments collect in a 36px footer, `N comments · Send to agent`, which attaches them to the composer as one chip (WT‑09). `Add to prompt` on a line selection makes an `@path:a-b` chip"
+    empty: "`No changes in this turn` (or `in this thread` / `uncommitted`) in {typography.body-sm} / {semantic.text-muted}; never a blank well"
   action-bar:
     deprecated: "Re-homed into `prompt-card` for thread execution views. The 56px bottom bar is removed to reduce vertical chrome and consolidate provider, mode, isolation, diff summary, and execution controls into the unified prompt card."
     legacyAlias: shell-actionbar
@@ -453,6 +471,7 @@ components:
     advance: "the grace timer, not a second click, moves `cancel_requested` to `grace_elapsed`; the backend supplies the deadline (see docs/pages-views-spec.md §4)"
     a11y: "one polite live-region announcement per phase change (`Cancelling`, `Force kill available`), never per tick"
   isolation-pill:
+    deprecated: "d0-rc12: in-thread, absorbed by {components.branch-bar}; before a thread exists, {components.branch-worktree-pill}. The `noGit` wording below carries over to both"
     height: 20px
     typography: "{typography.mono-micro}"
     rounded: "{rounded.xs}"
@@ -468,13 +487,16 @@ components:
     rounded: "{rounded.xs}"
     height: 20px
     padding: 0 6px
-    label: "`Mode · <current value name>`, for example `Mode · Manual`"
-    scope: "The one home of the ACP `mode` category (P5): a Provider's `mode` option is never a `composer-config-chip` and never a row in the `session-config-panel`. Sits in the `prompt-card` context bar"
-    absent: "a Provider that declares no `mode` option renders no pill, never a disabled one"
-    popover: "a `listbox` at `{stacking.popover}` opening upward from the pill, one row per value, the current value `aria-selected`"
+    label: "both axes, `<working mode> · <approval>`, for example `Plan · Ask first`; only the approval when the Provider declares no working mode"
+    scope: "The one home of how the agent may act (P5): the ACP `mode` category and Tethys's approval level for the thread. A Provider's `mode` option is never a `composer-config-chip` and never a row in the `session-config-panel`. Sits at the left of the prompt card's how band, in the New Thread canvas and in a thread alike"
+    absent: "never absent: a Provider that declares no `mode` option still has Approvals"
+    popover: "a 300px popover at `{stacking.popover}` opening upward, two sections under {typography.mono-micro} headings, rows numbered continuously so `1`–`9` pick one. **Working mode · <Provider>**: the Provider's non-permission modes as radio rows (name, then its consequence in {typography.body-sm} / {semantic.text-muted}). **Approvals · Tethys**: `Ask first` (Supervised) and `Auto-edit`. Below a {semantic.hairline} divider, `Full auto` with its own `Enable` button (Interaction Patterns P16) — disabled with `Full auto needs a new worktree` on the current checkout (PRM‑02). Footer caption `Applies to this thread · Make default for <workspace>` (P11)"
+    roles: "adapter metadata classifies each Provider mode id as `working` or `approval(level)`; an approval-role mode is never listed under Working mode. Tethys sets the narrowest Provider mode matching its own level, never a wider one (PRM‑04)"
+    shortcut: "`⌘⇧M`"
     priority: "folds at 40 (`prompt-card.contextBarFold`)"
-    a11y: "a `button` with `aria-haspopup=listbox` and `aria-expanded`"
+    a11y: "a `button` with `aria-haspopup=dialog` and `aria-expanded`; each section is a `radiogroup`"
   diff-summary-pill:
+    deprecated: "d0-rc12: absorbed by {components.branch-bar}, whose stat keeps this content rule. Kept defined so older references resolve"
     textColor: "{semantic.text-secondary}"
     typography: "{typography.mono-micro}"
     border: "1px solid {semantic.hairline-strong}"
@@ -482,7 +504,7 @@ components:
     rounded: "{rounded.xs}"
     padding: 2px 8px
     content: "`N files`, then `+a` in {semantic.diff-added} and `−b` in {semantic.diff-removed}, two colours as in `diff-viewer.stat`. Never a staged-hunk count: `git.stage` is path-level"
-    action: "opens the Inspector, where `Approve & Commit` lives, so the pill is the one pinned primary path to the decision (P8)"
+    action: "opened the Inspector; superseded by the branch bar's `Review`"
     absent: "not rendered without a git or review capability, nor while the session has no changed files: never an empty `0 files` pill"
     priority: "folds at 50 (`prompt-card.contextBarFold`)"
   shell-splitter:
@@ -601,25 +623,29 @@ components:
     rounded: "{rounded.2xl}"
     padding: "{spacing.lg}"
     width: "{layout.prompt-width}"
-    topContextPills: "collapsible context pills pinned across the top edge: git context (`isolation-pill`), provider/model selector pill with popover trigger (`model-selector-pill`), execution mode pill (`mode-pill`), and diff summary pill (`diff-summary-pill`)"
-    contextBarFold: "the context bar shares the card's content width and folds when its pills do not fit, lowest priority first: `usage-bar` 20, `queue-count` 30, `mode-pill` 40, `diff-summary-pill` 50, and the provider/config pill 60. `isolation-pill` (90) never folds, and neither does the stop control in the lower bar (100). A pill a Provider surface registers with no declared priority folds before all of them"
+    bands: "three bands top to bottom, separated by a {semantic.hairline} inset to the card's padding: **where** (New Thread: `workspace-selector-pill` + {components.branch-worktree-pill}; in a thread: {components.branch-bar}), **what** (the textarea), **how** (left: attach `+`, `mode-pill`; right: `model-selector-pill` or the Model `composer-config-chip`, the Effort chip, queue count, usage ring, `action-icon-button`). A where control never sits in the how band. In a thread, {components.request-dock} stacks above the card while a request is pending"
+    topContextPills: "retired in d0-rc12; see `bands`"
+    contextBarFold: "the how band folds when it does not fit, lowest priority first, into a 20px `•••` overflow: `usage-bar` 20, `queue-count` 30, the Effort chip 40, `mode-pill` 50, and the Model chip / provider pill 60. The `action-icon-button` / stop control (100) never folds. The branch bar folds on its own row: the isolation tag first, then `Review` (its `⌘⇧D` remains); the branch name and `Commit…` never fold. A slot a Provider surface registers with no declared priority folds before all of them"
     overflowTrigger: "a 20px `•••` button at the end of the context bar, `aria-haspopup=dialog`, opening a `popover` at `{stacking.popover}` that lists the folded items in the same order. When the folded set holds a non-empty `queue-count` the trigger carries the same `{semantic.status-warning}` dot the count does, so a pending queue is never hidden by narrowing the window"
-    composerGuide: "subtle command guide in input placeholder (`/ commands · @ files · $ skills`); pills removed from composer body"
+    composerGuide: "the placeholder alone teaches the sigils; there is no hint row under the input. `?` in the how band opens the shortcuts sheet"
     threadLowerBar: "docked in-thread composer's lower bar: mention triggers, attachment chips, and single dual-state `action-icon-button` on the right"
   composer-suggestion-popover:
     backgroundColor: "{semantic.surface-overlay}"
     border: "1px solid {semantic.hairline-strong}"
     edge: "{semantic.edge-highlight}"
     rounded: "{rounded.md}"
-    width: 320px
+    width: 400px
     maxHeight: 280px
     padding: "{spacing.sm}"
+    anchor: "the caret, opening above the composer; flips below only when there is no room above, so it never covers the text being typed"
     sigils:
-      files: "@ sigil — matches files & artifacts indexed via FFF"
-      skills: "$ sigil — matches skills catalog from ~/.agents/skills/"
-      commands: "/ sigil — matches built-in Tethys and agent commands"
-    header: "Title bar indicating detected context; single clean container without tab-splitting"
-    itemRow: "Keyboard-navigable list item with icon, title, description, and match highlighting"
+      files: "@ sigil — files and folders in the thread's root via FFF, with a recent/changed marker; `@path:a-b` line ranges"
+      skills: "$ sigil — the Settings / Skills catalog, each row with its `scope-badge` and `provenance-badge`"
+      commands: "/ sigil, at the start of a message only — grouped Tethys, then the Provider, then Your commands ({components.composer-command-group})"
+    header: "no title bar; group headings carry provenance"
+    itemRow: "Keyboard-navigable row: name in {typography.mono-code}, description in {typography.body-sm} / {semantic.text-muted}, and at the trailing edge the argument hint, scope badge or shortcut in {typography.mono-micro}; match highlighting"
+    dimRow: "an unavailable row stays listed at {semantic.text-muted} with its reason as the description (a Provider command Tethys handles, a skill this workspace does not allow, an image the Provider cannot take); it is focusable and choosing it opens the fix"
+    footer: "a {typography.mono-micro} key hint line: `↑↓ move · ↵ insert · Tab complete · Esc`"
   workspace-selector-pill:
     backgroundColor: "transparent"
     backgroundHover: "{semantic.surface-hover}"
@@ -749,6 +775,43 @@ components:
     removeSize: 16px
     scope: "An image or file the user attached in the composer, or that a message carries in the transcript. An image block renders a thumbnail chip that opens at up to `stage-measure`; a resource link renders a path chip. Attaching an image to a Provider that did not declare image prompts is refused at attach time with a `provider-capability-notice`, never dropped after send. Audio and embedded-resource blocks are not rendered in MVP; they show the same notice rather than a blank"
     a11y: "a `button` named by its file name; an image without alt text is announced by its file name; `remove` is a separate `button` with `aria-label`"
+  branch-worktree-pill:
+    height: 28px
+    typography: "{typography.label-md}; branch in {typography.mono-micro}"
+    rounded: "{rounded.sm}"
+    padding: 4px 8px
+    scope: "The New Thread where band's git control, beside `workspace-selector-pill`. Git only; absent under `isolation: plain`"
+    current: "default. Read-only: `⑂ <branch> · N uncommitted` in {semantic.text-secondary}, then a `New worktree` checkbox ({semantic.border-control} stroke). Tethys never checks out a branch in the user's own tree"
+    worktree: "checkbox on: the branch half becomes a base picker `from <base> ▾` whose popover previews an editable `tethys/<slug>`"
+    sticky: "the checkbox state is remembered per workspace"
+    noGit: "`no git · edits apply in place` on {semantic.surface-hover} / {semantic.text-muted}, with an `Initialize git` link and no checkbox"
+    sharedCheckoutNudge: "when another live thread holds the current checkout, a {typography.label-sm} line under the card in {semantic.status-warning}: `1 running thread is already editing this checkout · Use a new worktree`. Advisory, never a block"
+  branch-bar:
+    backgroundColor: "{semantic.surface-panel}"
+    border: "1px solid {semantic.hairline}"
+    rounded: "{rounded.md}"
+    height: 36px
+    padding: 0 12px
+    typography: "{typography.label-md}; branch and stat in {typography.mono-micro}"
+    scope: "The in-thread where band, git only: branch, isolation tag (`worktree` / `current checkout`, {components.composer-chip} geometry), the thread's stat against its base (`vs main +a −b`, two colours as `diff-viewer.stat`), then `Review` (ghost, opens {components.changes-panel}) and `Commit…` (secondary; primary once the thread has uncommitted changes and no turn is running)"
+    commit: "`Commit…` opens a 360px popover: the agent-drafted message (`Draft with agent`), the changed-file count and `Commit`; `Commit & push` only with `forge_cli`. The one place a commit starts (P8)"
+    committed: "after a commit: `✓ <sha> · N ahead of <base>` in {semantic.status-success}, with `Merge…` (WT‑07)"
+    noGit: "`no git · no revert` in {semantic.text-muted}, nothing else"
+    a11y: "a `toolbar` labelled `Branch`"
+  request-dock:
+    scope: "Holds the live {components.permission-request-card} or {components.elicitation-card} directly above the prompt card while a request is pending, so the decision is always in view (P15). It is not a new card style: the card keeps its own `pendingTreatment`"
+    gap: "{spacing.sm} above the card"
+    keys: "the Provider's options are numbered `1`–`N` in the Provider's order; the digits select while focus is in the composer or the dock"
+    queue: "more than one pending request shows `1 of N` in {typography.mono-micro} in the card header and steps in arrival order"
+    anchor: "the transcript keeps a one-line row where the request arose, `Waiting for you ↓` in {semantic.status-warning}, which becomes the record (`Allowed once · <command>`) in {semantic.text-muted} once answered"
+    focus: "never traps focus; `Tab` order is dock → branch bar → textarea"
+  turn-receipt:
+    backgroundColor: "{semantic.surface-nested}"
+    border: "1px solid {semantic.hairline}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.md}"
+    scope: "The last entry of a turn that changed files: `Changed N files +a −b` in {typography.label-md}, up to three file rows (path in {typography.mono-code}, stat) and `Show N more`, then `View changes` (opens {components.changes-panel} at this turn's scope) and `Revert turn` (only with `restore`). A turn that changed nothing has none"
+    reverted: "`Reverted · Undo` in {semantic.text-muted}; the file rows stay, struck through"
   composer-config-chip:
     backgroundColor: "transparent"
     backgroundHover: "{semantic.surface-hover}"
@@ -760,6 +823,8 @@ components:
     scope: "The category-aware Model and Effort controls in the docked composer's lower bar, taken from the Provider's session config options by `category`: `model` becomes the Model chip and `thought_level` the Effort chip. `mode` is not a chip: its one home is the `mode-pill` in the `prompt-card` context bar. `model_config` and every other select or boolean option live only in the full `session-config-panel` behind the Provider pill. Each category has exactly one home; a control is never rendered twice"
     absent: "a Provider that declares no option for a category renders no chip for it — never a disabled empty chip"
     label: "reads the current value; the option name is shown only when the value is ambiguous on its own (`Effort · High`, not bare `High`)"
+    orderedScale: "a `thought_level` option renders its popover as a stepped slider in the declared value order, labelled `Faster` and `Smarter` at the ends, the current value named beneath; any other option keeps the listbox"
+    shortcut: "`⌘⇧I` opens the Model chip (or `model-selector-popover` before a thread exists), `⌘⇧E` the Effort chip"
     timing: "a change is allowed while a turn is running and applies from the next turn; the popover states this in a one-line consequence caption (Interaction Patterns P11)"
     rejected: "if the Provider rejects a mid-session change, the chip reverts to its previous value and a `provider-capability-notice` says the Provider applies that option only when a session starts"
     a11y: "`combobox` semantics as `model-selector-pill`; the chip's accessible name is `<option name>, <value>`"
@@ -776,7 +841,10 @@ components:
     typography: "{typography.label-sm}"
     textColor: "{semantic.text-muted}"
     scope: "Gives a presentation to the grouping the composer `/` popup already requires — Tethys commands are 'listed apart from `/agent:name` commands the Provider advertises' (docs/pages-views-spec.md §4 `composer`), which the spec states but does not draw. Commands the Provider declares through its connection's available-commands list render as a separate group under a heading naming the Provider, after the Tethys commands, so a Provider command is never mistaken for one Tethys resolves itself. The rows reuse the popup's existing item row (`composer-suggestion-popover.itemRow`); only the group heading is new. Not a second popup, and not the Settings `command-row`"
-    clash: "a Provider command whose name collides with a Tethys command renders as `/agent:name`, existing clash rule"
+    heading: "the group heading is the provenance: `Tethys`, the Provider's glyph and name, or `Your commands` with a scope badge. Rows under it show plain `/name`"
+    clash: "only when two sources share a name does each render qualified (`/claude:review`); there is no always-on `/agent:` prefix"
+    handledByTethys: "a Provider built-in that duplicates a Tethys control (adapter metadata `{name → tethys-action}`) renders as a `dimRow` reading `Handled by Tethys → <control>`; choosing it opens that control"
+    loading: "before the session is prepared the Provider group shows one skeleton row, `Loading <Provider> commands…`; a Provider that declares none has no group"
     a11y: "the group is a `group` with `aria-label` naming the Provider inside the existing `listbox`"
   turn-message:
     backgroundColor: "transparent"
@@ -896,7 +964,7 @@ components:
     rounded: "{rounded.md}"
     typography: "{typography.mono-code}"
     syntax: "syntax colours follow the active theme and are never a fixed dark palette on a light well. Each token carries a colour for both themes and the stylesheet picks one, so a theme swap repaints without re-highlighting (the hot-swap budget in `theming.hotSwap`). Every token clears 4.5:1 against `{semantic.surface-sunken}` of its own theme, by construction: a palette colour that misses is moved along its own hue until it clears (`packages/diff/src/highlight/shiki.ts`). No bundled light theme clears it on the slate well, which is why the light palette is derived rather than picked"
-    stat: "{typography.mono-micro}. `+N` and `−N` are two colours, never one: `+N` in {semantic.diff-added}, `−N` in {semantic.diff-removed}. Rendered in the file header beside the path and in the {components.thread-inspector} rollup band. A single-coloured stat makes the reader parse the sign to tell the sides apart; the {components.diff-summary-pill} already splits them and is the precedent"
+    stat: "{typography.mono-micro}. `+N` and `−N` are two colours, never one: `+N` in {semantic.diff-added}, `−N` in {semantic.diff-removed}. Rendered in the file header beside the path, on a file operation's action row, in the {components.turn-receipt} and in the {components.branch-bar} (P17). A single-coloured stat makes the reader parse the sign to tell the sides apart"
     statAdded: "{semantic.diff-added}"
     statRemoved: "{semantic.diff-removed}"
     addedFill: "{semantic.diff-added} at 16%"
@@ -1273,7 +1341,7 @@ Four resizable regions (`UI-01`). Widths and breakpoints are the `layout:` token
 * **Rail** `{spacing.rail}`: `nav-rail`, `20px` icons on `36px` targets. There is no docked Hub column: Workspaces is a view rendered on the Stage.
 * **Sessions** `{layout.shell-threads}`: not a docked region. `sessions-column` renders inside an overlay drawer at `{stacking.drawer}` (Level 3) over the Stage with a `{semantic.overlay-scrim}` at `{stacking.drawer-scrim}`, opened from the titlebar Sessions toggle, dismissed by `Esc`, a scrim click or choosing a session, with focus trapped inside and restored to the toggle.
 * **Stage**: flex, never narrower than `{layout.stage-min}`; text holds to `{layout.stage-measure}`. The Stage itself has no overlay mode. The `prompt-card` docks at its foot, centered, at `min({layout.prompt-width}, 100% - 96px)`, with a floating `{layout.popover-selector}` variant inside the peek and queue drawers.
-* **Inspector** `{layout.shell-inspector}`: docked at `{layout.breakpoints.inspector-overlay}` and wider, and an overlay drawer below it. **Overlay mode is the Inspector's, and only the Inspector's:** it renders at `{stacking.drawer}` (Level 3) over the Stage with a `{semantic.overlay-scrim}` at `{stacking.drawer-scrim}`, is opened from the `diff-summary-pill` in the prompt card's context bar or from the tab strip, and dismisses on `Esc` or scrim click. Docked, it collapses to a 40px rail that keeps the session's `status-dot`. **The Stage invariant:** the docked layout needs `48 + 560 + 360 = 968px`, which is below the 1100px threshold, so whenever the Inspector is docked the Stage holds `{layout.stage-min}` with 132px to spare. `d0-rc5` left this open because a docked Sessions column and a Hub column also claimed width; with neither, no collapse ladder is needed. The arithmetic is enforced in `apps/desktop/src/shell/shell-layout.test.ts`.
+* **Side panel** (`Overview` `{layout.shell-inspector}`, `Changes` up to 50%, `{components.side-panel}`): docked at `{layout.breakpoints.inspector-overlay}` and wider, and an overlay drawer below it. **Overlay mode is the Inspector's, and only the Inspector's:** it renders at `{stacking.drawer}` (Level 3) over the Stage with a `{semantic.overlay-scrim}` at `{stacking.drawer-scrim}`, is opened from the branch bar's `Review`, a turn receipt's `View changes`, `⌘⇧D` or the tab strip, and dismisses on `Esc` or scrim click. Docked, it collapses to a 40px rail that keeps the session's `status-dot`. **The Stage invariant:** the docked layout needs `48 + 560 + 360 = 968px`, which is below the 1100px threshold, so whenever the Inspector is docked the Stage holds `{layout.stage-min}` with 132px to spare. The Changes tab keeps the invariant by construction: its width is clamped to `viewport − 48 − 560`, and below `{layout.changes-min}` of room it opens as an overlay instead. `d0-rc5` left this open because a docked Sessions column and a Hub column also claimed width; with neither, no collapse ladder is needed. The arithmetic is enforced in `apps/desktop/src/shell/shell-layout.test.ts`.
 * **Splitters** are `shell-splitter`; **palette** is `command-palette`, Level 4.
 
 ## Elevation & Depth
@@ -1351,16 +1419,21 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 | P1 | **Collapse execution, keep the summary.** Tool calls, thoughts, finished plan steps and unmodified diff context default to a one-line summary with depth one disclosure away. Anything that failed or asks the user opens itself | `tool-run-group`, `tool-accordion`, `thought-block`, `plan-panel.stepDone`, `diff-viewer.collapsedContext` | Observed, Documented | `tool-run-group` new; rest existing |
 | P2 | **Status is a sentence, not a colour.** Every non-healthy state carries its reason in words in the same row: the dot says *that*, the words say *what* and how to fix it | `provider-row` status subtext, `health-badge`, `turn-notice`, `tool-accordion` `Failed`, `provider-capability-notice`, `working-indicator` | Observed | Existing rule for Providers; extended to the transcript |
 | P3 | **Enabled-but-unreachable is not disabled.** Toggle and health are independent axes: a row switched on with a red dot reads as a fault; a row switched off by policy is dimmed and its reason is worded as a choice | `provider-row`, `toggle-switch` | Observed | M1.12 verifies with two fixture rows |
-| P4 | **Git context rides with the composer.** Branch and diff stat sit next to the input, never in a separate tab | `isolation-pill`, diff-summary pill | Observed | Decided (option a) |
+| P4 | **Git context rides with the composer.** Branch, isolation and the thread's diff stat sit next to the input, never in a separate tab | `branch-worktree-pill`, `branch-bar` | Observed | Amended d0-rc12 |
 | P5 | **Controls that change agent behaviour sit beside the input**, not two clicks away in Settings. One home per control | `composer-config-chip`, prompt-card mode and context pills | Observed | New |
 | P6 | **The empty or disabled state names the fix.** The disabled control says what is missing and where to fix it | `prompt-card`, `model-selector-pill` zero-provider, `workspace-selector-pill` unresolved, `session-config-panel`, `code-editor-well` empty state, `activity-ledger`, `turn-notice` `connection-lost` | Observed | Existing; extended |
 | P7 | **Decisions are asked, not buried in prose.** A real fork is a numbered choice with an escape hatch (`Other`) and a way to decline (`Skip`). *Adapted:* ACP's option type has a value and a title but no description, so the card renders the title and the property's help text and never invents a trade-off line | `elicitation-card`, `permission-request-card` | Observed | Extended |
-| P8 | **One primary action, pinned where the next click goes.** *Adapted:* `Approve & Commit` stays in the Inspector (decided); the pill that opens it is what is pinned | diff-summary pill, prompt submit, `turn-notice` single action | Observed | Decided |
+| P8 | **One primary action, pinned where the next click goes.** `Commit…` lives in the always-visible branch bar, never in a panel that can be collapsed or pushed off-screen; review (Changes) and approval (request dock) are separate words for separate acts | `branch-bar`, prompt submit, `turn-notice` single action | Observed | Amended d0-rc12 (supersedes option a) |
 | P9 | **Zero reports zero honestly.** A metric that was reported as zero renders `0`; one that was not reported is hidden or says so. Never sample data, never an estimate | `usage-bar`, `activity-ledger`, `code-editor-well` empty state | Observed | New wording |
 | P10 | **Two indexes over one history.** The transcript answers "what happened, in order"; the ledger answers "what did this session touch, by kind". Neither replaces the other | `activity-ledger` beside the Stage; the study's Progress and Outputs blocks already map to `plan-panel` and `provider-artifact` | Observed | New |
 | P11 | **A setting states its consequence in a sentence**, under the control, not in a tooltip: `Applies from the next turn`, `Applies to new sessions` | `composer-config-chip` caption, Settings rows | Observed | New |
 | P12 | **Where before what.** The run target is chosen at the start of a session and stays visible | `workspace-selector-pill`, `isolation-pill`, hub `Local` / `Remote` | Observed | Existing |
 | P13 | **Capabilities are sourced inventory.** Skills, Providers, MCP servers and commands show provenance (`folder` / `archive` / `git-hub` / `lockfile` for skills; `native file` / `imported` for MCP; `user` / `imported` for commands) and a status cell that is either a fact or an action, never both | `skill-row`, `command-row`, `provider-row`, `mcp-server-form` | Observed | Existing; M1.11 verified the cell rule on the retired matrix |
+| P14 | **Where, what, how.** The composer reads as three bands in that order — run target, request, agent behaviour — and a control never sits in another's band | `prompt-card.bands` | Documented (Claude Code Desktop) | New d0-rc12 |
+| P15 | **The consent moment is where the eyes are.** A pending request docks above the composer with numbered options; the transcript keeps an anchor, not the only copy | `request-dock` | Observed | New d0-rc12 |
+| P16 | **Risk takes a second step.** The most permissive mode is an `Enable` action outside the list, and is unavailable where its guard (PRM‑02) does not hold, with the reason stated | `mode-pill` | Observed | New d0-rc12 |
+| P17 | **One stat, three scopes.** `+a −b` appears on the action row, the turn receipt and the branch bar, each beside the action of its scope; never re-added by hand, never estimated | `tool-accordion` row, `turn-receipt`, `branch-bar` | Observed | New d0-rc12 |
+| P18 | **Provenance over prefixes.** A command or skill shows its source as a group heading and badge; a qualified name appears only on a real collision, and an unavailable item stays listed with its reason | `composer-command-group`, `composer-suggestion-popover.dimRow` | Observed | New d0-rc12 |
 
 **Considered, not adopted** — recorded so nobody re-proposes them without new evidence:
 
@@ -1373,7 +1446,7 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 
 ## Accessibility & Keyboard Map
 
-* **axe-core gates (`M1.6`)**: every surface passes contrast (theming rules), `aria` roles for custom controls (pill `combobox`, popover `listbox/option`, drawer/dialog `dialog`, tabs `tablist/tab`, switch `switch`, stepper `spinbutton`, splitter `separator`, permission-mode radios `radiogroup`, plan steps `list` with `aria-current` on the in-progress step, `usage-bar` `img` with an `aria-label` reading the usage figure, workspace cards, the MCP config editor `textbox` and its `tree` toggle, the command body editor's `Markdown | Preview` toggle, the `skill-row` / `command-row` `listbox` / `skill-detail` / `command-editor` `region`, and the `thread-inspector` `region` with its rollup `list` and its collapse `button` carrying `aria-expanded`), visible focus on all pointer targets, hit targets per Iconography.
+* **axe-core gates (`M1.6`)**: every surface passes contrast (theming rules), `aria` roles for custom controls (pill `combobox`, popover `listbox/option`, drawer/dialog `dialog`, tabs `tablist/tab`, switch `switch`, stepper `spinbutton`, splitter `separator`, permission-mode radios `radiogroup`, plan steps `list` with `aria-current` on the in-progress step, `usage-bar` `img` with an `aria-label` reading the usage figure, workspace cards, the MCP config editor `textbox` and its `tree` toggle, the command body editor's `Markdown | Preview` toggle, the `skill-row` / `command-row` `listbox` / `skill-detail` / `command-editor` `region`, and the `side-panel` `region` with its `Overview` / `Changes` `tablist` and its collapse `button` carrying `aria-expanded`, the `mode-pill` `radiogroup`s, the `branch-bar` `toolbar`), visible focus on all pointer targets, hit targets per Iconography.
 * **Transcript semantics**: the stage is a `role="log"` region whose live announcements are **off** while streaming — a chunk is never announced. A separate polite announcer speaks only: turn complete, a new permission or elicitation request, and `turn-notice` of severity warning or above (assertive for `error` and `connection-lost`). The streaming message sets `aria-busy` until its turn ends. `tool-run-group`, `thought-block`, `subagent-card` and `tool-accordion` are `button`s with `aria-expanded`; `message-actions` is a `toolbar`; `activity-ledger` is a `list` of expandable rows; `jump-to-latest` announces itself once when it appears, not on each count change.
 * **Focus trap + restore**: drawers, palette, `workspace-trust-dialog`, `login-dialog`, terminal sheet and `provider-popover` trap `Tab` while open and restore to invoker on `Esc`/close. It is one behaviour (`useFocusTrap`), not one copy per surface: each trap registers at its `stacking` tier and only the topmost answers a key, so a dialog opened over a drawer wraps and closes on its own and returns focus into the drawer. A surface that traps focus never opens over a lower trap and waits instead (`provider-popover.focus`); it asks the same registry. Unstack order is derived from `stacking`, topmost first: popover → palette → sheet → dialog → drawer. Toasts and tooltips take no focus and are not in the order. A trap never opens over another trap: a `provider-popover` request that arrives while a dialog or sheet is open waits in the Provider's pending list. Inline `permission-request-card` and `elicitation-card` do **not** trap focus — they live in the stage flow and are reachable by roving tabindex, so a pending request never blocks reading the transcript.
 * **Roving tabindex**: one `tabindex=0` per column/list/tab-strip; arrows move, `Home/End` jump. The stage's entries are one such list: `↑` / `↓` move between entries, `Enter` / `Space` toggle the focused group, block or card, and `End` scrolls to the tail and re-pins it.
@@ -1387,7 +1460,11 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 | `Ctrl/Cmd+T` | New Thread tab |
 | `Ctrl/Cmd+W` | Close focused tab (guard dirty state) |
 | `Delete` | On a focused tab: close it (never the pinned Workspaces tab). The tab's close button is a pointer affordance hidden from the accessibility tree, since a `tablist` may own only tabs |
-| `Ctrl/Cmd+I` | Toggle the docked Inspector (collapse to the rail / expand) |
+| `Ctrl/Cmd+I` | Toggle the docked side panel (collapse to the rail / expand) |
+| `Ctrl/Cmd+Shift+D` | Open or close the Changes tab |
+| `Ctrl/Cmd+Shift+M` / `+I` / `+E` | Open the Mode / Model / Effort popover |
+| `1`–`9` | In an open Mode, Model or Effort popover, or with a request in the dock: pick that row or option |
+| `Ctrl+O` | Cycle transcript density (Summary / Normal / Verbose) for this thread |
 | `Ctrl/Cmd+B` | Toggle the Sessions drawer (the same control as the titlebar toggle) |
 | `Ctrl/Cmd+,` | Open Settings |
 | `Enter/Space` | Open/confirm focused control |

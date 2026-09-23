@@ -45,6 +45,7 @@ impl WorkspaceApi for Core {
                     agent_profile_id: thread.agent_profile_id,
                     title: thread.title,
                     state: thread.state,
+                    workdir: thread.workdir,
                 })
                 .collect();
             items.push(WorkspaceListItem {
@@ -145,6 +146,42 @@ impl WorkspaceApi for Core {
             trust: WorkspaceTrustState::Trusted,
             sessions: Vec::new(),
         })
+    }
+
+    async fn workspace_initialize_git(
+        &self,
+        workspace_id: WorkspaceId,
+    ) -> Result<tethys_schema::WorkspaceCapabilities, ApiError> {
+        let root = self.workspace_roots.root(&workspace_id).await?;
+        let probe = root.clone();
+        let is_plain = tokio::task::spawn_blocking(move || {
+            matches!(capability::vcs_for_root(&probe), Vcs::None)
+        })
+        .await
+        .map_err(|error| ApiError::Internal(format!("git check task failed: {error}")))?;
+        if is_plain {
+            tokio::task::spawn_blocking(move || {
+                std::process::Command::new("git")
+                    .args(["init", "-q"])
+                    .current_dir(root)
+                    .output()
+            })
+            .await
+            .map_err(|error| ApiError::Internal(format!("git init task failed: {error}")))?
+            .map_err(|error| ApiError::Internal(format!("git init failed: {error}")))
+            .and_then(|output| {
+                if output.status.success() {
+                    Ok(())
+                } else {
+                    Err(ApiError::Internal(format!(
+                        "git init failed: {}",
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    )))
+                }
+            })?;
+        }
+        self.invalidate_capabilities(workspace_id.as_str());
+        self.resolve_capabilities(&workspace_id).await
     }
 
     async fn workspace_remove(&self, workspace_id: WorkspaceId) -> Result<(), ApiError> {

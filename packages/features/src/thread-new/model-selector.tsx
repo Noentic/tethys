@@ -18,7 +18,7 @@ import {
   ProtocolPill,
   StatusDot,
 } from "@tethys/ui";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { optionValues, SessionConfigPanel } from "./session-config-panel";
 import type { PreparedDraftStatus } from "./use-prepared-draft";
 
@@ -73,6 +73,7 @@ export interface ModelSelectorProps {
   draftError?: string | null;
   /** Called after Esc / selection close, so the caller can restore focus. */
   onClosed?: () => void;
+  triggerRef?: RefObject<HTMLButtonElement | null>;
 }
 
 export function ModelSelector({
@@ -85,11 +86,14 @@ export function ModelSelector({
   draftStatus = "idle",
   draftError = null,
   onClosed,
+  triggerRef,
 }: ModelSelectorProps) {
   const providers = useProviderConnections(providersProp);
   const [open, setOpen] = useState(false);
   const [column, setColumn] = useState<"providers" | "config">("providers");
-  const anchorRef = useRef<HTMLButtonElement>(null);
+  const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
+  const localAnchorRef = useRef<HTMLButtonElement>(null);
+  const anchorRef = triggerRef ?? localAnchorRef;
 
   const anySelectable = hasSelectableProvider(providers);
   const selected =
@@ -100,6 +104,10 @@ export function ModelSelector({
   const panelOptions = configOptions.filter(
     (option) => option.category !== "mode",
   );
+  const modelOption = panelOptions.find(
+    (option) => option.category === "model",
+  );
+  const moreOptions = panelOptions.filter((option) => option !== modelOption);
 
   useEffect(() => {
     if (open && !anySelectable) {
@@ -110,6 +118,7 @@ export function ModelSelector({
   const close = () => {
     setOpen(false);
     setColumn("providers");
+    setMoreOptionsOpen(false);
     onClosed?.();
   };
 
@@ -216,6 +225,7 @@ export function ModelSelector({
                 onSelect={(item) => {
                   onSelectProvider(item.value);
                   setColumn("config");
+                  setMoreOptionsOpen(false);
                 }}
               />
             )}
@@ -246,6 +256,35 @@ export function ModelSelector({
                   >
                     {draftError}
                   </p>
+                ) : modelOption ? (
+                  <>
+                    <SessionConfigPanel
+                      options={[modelOption]}
+                      values={values}
+                      onChange={onConfigChange}
+                    />
+                    {moreOptions.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          aria-expanded={moreOptionsOpen}
+                          onClick={() =>
+                            setMoreOptionsOpen((previous) => !previous)
+                          }
+                          className="focus-ring self-start rounded-sm px-2 py-1 text-label-md text-(--tethys-accent-focus) hover:bg-(--tethys-surface-hover)"
+                        >
+                          {moreOptionsOpen ? "Fewer options" : "More options…"}
+                        </button>
+                        {moreOptionsOpen && (
+                          <SessionConfigPanel
+                            options={moreOptions}
+                            values={values}
+                            onChange={onConfigChange}
+                          />
+                        )}
+                      </>
+                    )}
+                  </>
                 ) : (
                   <SessionConfigPanel
                     options={panelOptions}

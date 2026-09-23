@@ -26,8 +26,8 @@ use tethys_schema::agents::{AuthMethodShape, AuthMethodView, LoginTerminalOutput
 use tethys_schema::connection::{AcpProtocol, AgentInfo, NormalizedCapabilities};
 use tethys_schema::sync::{McpTransports, RegistryValue, SessionServer, TransportKind};
 use tethys_schema::thread::{
-    ConfigOption, ContentBlock, PermOutcome, PermissionRequested, Role, ToolCallContent,
-    TurnEventBody,
+    AgentCommandControl, ConfigOption, ContentBlock, PermOutcome, PermissionRequested, Role,
+    ToolCallContent, TurnEventBody,
 };
 use tethys_thread::{
     AgentConnection, ConnectionError, ConnectionEvent, ElicitationResolver, EventStream,
@@ -53,6 +53,9 @@ pub type ExtensionNotificationHandler = Arc<dyn Fn(&str, &serde_json::Value) + S
 /// id so the shared client can route later child updates to the root thread.
 pub type SessionUpdateHandler =
     Arc<dyn Fn(&serde_json::Value, &mut Vec<TurnEventBody>) -> Option<String> + Send + Sync>;
+
+/// Enriches normalized configuration options returned by session setup.
+pub type ConfigOptionsHandler = Arc<dyn Fn(&mut [ConfigOption]) + Send + Sync>;
 
 /// Adds negotiated request metadata to the standard permission presentation.
 pub type PermissionMetadataHandler =
@@ -104,9 +107,11 @@ pub struct AcpProviderIntegration {
     pub initialize_meta: serde_json::Map<String, serde_json::Value>,
     pub client_capabilities_meta: serde_json::Map<String, serde_json::Value>,
     pub extension_methods: Vec<String>,
+    pub tethys_commands: HashMap<String, AgentCommandControl>,
     pub extension_request_handler: Option<ExtensionRequestHandler>,
     pub extension_notification_handler: Option<ExtensionNotificationHandler>,
     pub session_update_handler: Option<SessionUpdateHandler>,
+    pub config_options_handler: Option<ConfigOptionsHandler>,
     pub permission_metadata_handler: Option<PermissionMetadataHandler>,
     pub prompt_response_handler: Option<PromptResponseHandler>,
 }
@@ -156,10 +161,12 @@ struct Shared {
     subagent_roots: Mutex<HashMap<String, String>>,
     terminals: TerminalHost,
     provider_id: String,
+    tethys_commands: HashMap<String, AgentCommandControl>,
     extension_methods: HashSet<String>,
     extension_request_handler: Option<ExtensionRequestHandler>,
     extension_notification_handler: Option<ExtensionNotificationHandler>,
     session_update_handler: Option<SessionUpdateHandler>,
+    config_options_handler: Option<ConfigOptionsHandler>,
     permission_metadata_handler: Option<PermissionMetadataHandler>,
     prompt_response_handler: Option<PromptResponseHandler>,
     extension_seq: AtomicU32,
@@ -209,6 +216,11 @@ impl Shared {
                 .as_ref()
                 .map(|integration| integration.id.clone())
                 .unwrap_or_else(|| "custom-acp".to_string()),
+            tethys_commands: options
+                .integration
+                .as_ref()
+                .map(|integration| integration.tethys_commands.clone())
+                .unwrap_or_default(),
             extension_methods: options
                 .integration
                 .as_ref()
@@ -226,6 +238,10 @@ impl Shared {
                 .integration
                 .as_ref()
                 .and_then(|integration| integration.session_update_handler.clone()),
+            config_options_handler: options
+                .integration
+                .as_ref()
+                .and_then(|integration| integration.config_options_handler.clone()),
             permission_metadata_handler: options
                 .integration
                 .as_ref()
@@ -259,6 +275,12 @@ impl Shared {
             let _ = channel.tx.send(event);
         } else {
             channel.buffer.push(event);
+        }
+    }
+
+    fn enrich_config_options(&self, options: &mut [ConfigOption]) {
+        if let Some(handler) = &self.config_options_handler {
+            handler(options);
         }
     }
 
@@ -709,6 +731,13 @@ impl Shared {
             .session_update_handler
             .as_ref()
             .and_then(|handler| handler(raw_update, events));
+        for event in events.iter_mut() {
+            if let TurnEventBody::CommandsAvailable { commands } = event {
+                for command in commands {
+                    command.tethys_control = self.tethys_commands.get(&command.name).copied();
+                }
+            }
+        }
 
         if is_subagent_session {
             nest_subagent_events(session_id, events);
@@ -1943,13 +1972,10 @@ impl AgentConnection for AcpConnection {
                 self.shared.register(&id.0);
                 self.shared
                     .set_session_roots(&id.0, cwd, additional_directories);
-                Ok(SessionHandle {
-                    id,
-                    config_options: v1_session_config(
-                        response.modes.as_ref(),
-                        response.config_options.as_ref(),
-                    ),
-                })
+                let mut config_options =
+                    v1_session_config(response.modes.as_ref(), response.config_options.as_ref());
+                self.shared.enrich_config_options(&mut config_options);
+                Ok(SessionHandle { id, config_options })
             }
             #[cfg(feature = "acp-v2")]
             Wire::V2(connection) => {
@@ -1971,14 +1997,13 @@ impl AgentConnection for AcpConnection {
                 self.shared.register(&id.0);
                 self.shared
                     .set_session_roots(&id.0, cwd, additional_directories);
-                Ok(SessionHandle {
-                    id,
-                    config_options: response
-                        .config_options
-                        .iter()
-                        .map(crate::map_v2::config_option)
-                        .collect(),
-                })
+                let mut config_options = response
+                    .config_options
+                    .iter()
+                    .map(crate::map_v2::config_option)
+                    .collect::<Vec<_>>();
+                self.shared.enrich_config_options(&mut config_options);
+                Ok(SessionHandle { id, config_options })
             }
         }
     }
@@ -2012,12 +2037,14 @@ impl AgentConnection for AcpConnection {
                             cwd.clone(),
                             additional_directories.clone(),
                         );
+                        let mut config_options = v1_session_config(
+                            response.modes.as_ref(),
+                            response.config_options.as_ref(),
+                        );
+                        self.shared.enrich_config_options(&mut config_options);
                         SessionHandle {
                             id: request.session_id.clone(),
-                            config_options: v1_session_config(
-                                response.modes.as_ref(),
-                                response.config_options.as_ref(),
-                            ),
+                            config_options,
                         }
                     })
                 }
@@ -2061,12 +2088,14 @@ impl AgentConnection for AcpConnection {
                             cwd.clone(),
                             additional_directories.clone(),
                         );
+                        let mut config_options = v1_session_config(
+                            response.modes.as_ref(),
+                            response.config_options.as_ref(),
+                        );
+                        self.shared.enrich_config_options(&mut config_options);
                         SessionHandle {
                             id: request.session_id.clone(),
-                            config_options: v1_session_config(
-                                response.modes.as_ref(),
-                                response.config_options.as_ref(),
-                            ),
+                            config_options,
                         }
                     })
                 }
@@ -2099,13 +2128,15 @@ impl AgentConnection for AcpConnection {
                             cwd.clone(),
                             additional_directories.clone(),
                         );
+                        let mut config_options = response
+                            .config_options
+                            .iter()
+                            .map(crate::map_v2::config_option)
+                            .collect::<Vec<_>>();
+                        self.shared.enrich_config_options(&mut config_options);
                         SessionHandle {
                             id: request.session_id.clone(),
-                            config_options: response
-                                .config_options
-                                .iter()
-                                .map(crate::map_v2::config_option)
-                                .collect(),
+                            config_options,
                         }
                     })
                 }
@@ -3032,6 +3063,58 @@ mod tests {
     }
 
     #[test]
+    fn marks_provider_commands_handled_by_tethys() {
+        struct TestPermissionResolver;
+
+        #[async_trait]
+        impl PermissionResolver for TestPermissionResolver {
+            async fn resolve(
+                &self,
+                _session: &SessionId,
+                _request: PermissionRequested,
+            ) -> PermissionDecision {
+                PermissionDecision {
+                    outcome: PermOutcome::Approved,
+                    option_id: None,
+                    decided_by: tethys_schema::thread::Decider::Policy,
+                }
+            }
+        }
+
+        let mut options = AcpConnectOptions::new(AcpProtocol::V1, Arc::new(TestPermissionResolver));
+        options.integration = Some(AcpProviderIntegration {
+            id: "fixture".into(),
+            initialize_meta: Default::default(),
+            client_capabilities_meta: Default::default(),
+            extension_methods: vec![],
+            tethys_commands: HashMap::from([("model".into(), AgentCommandControl::Model)]),
+            extension_request_handler: None,
+            extension_notification_handler: None,
+            session_update_handler: None,
+            config_options_handler: None,
+            permission_metadata_handler: None,
+            prompt_response_handler: None,
+        });
+        let shared = Shared::new(&options);
+        let mut events = vec![TurnEventBody::CommandsAvailable {
+            commands: vec![tethys_schema::thread::AgentCommand {
+                name: "model".into(),
+                description: Some("Provider model command".into()),
+                input: None,
+                tethys_control: None,
+            }],
+        }];
+
+        shared.process_session_update("thread", &json!({}), &mut events);
+
+        assert!(matches!(
+            &events[0],
+            TurnEventBody::CommandsAvailable { commands }
+                if commands[0].tethys_control == Some(AgentCommandControl::Model)
+        ));
+    }
+
+    #[test]
     fn routes_subagent_updates_into_the_root_transcript() {
         use tethys_schema::thread::{MessageChunk, ToolCallPatch, ToolCallStatus, ToolOrigin};
 
@@ -3058,6 +3141,7 @@ mod tests {
             initialize_meta: Default::default(),
             client_capabilities_meta: Default::default(),
             extension_methods: vec![],
+            tethys_commands: Default::default(),
             extension_request_handler: None,
             extension_notification_handler: None,
             session_update_handler: Some(Arc::new(|raw, events| {
@@ -3075,6 +3159,7 @@ mod tests {
                     None
                 }
             })),
+            config_options_handler: None,
             permission_metadata_handler: None,
             prompt_response_handler: None,
         });

@@ -31,6 +31,19 @@ pub async fn workspace_add(
         .map_err(|e| e.to_string())
 }
 
+/// `workspace.initialize_git` — initialize VCS without changing the trust grant.
+#[tauri::command]
+#[specta::specta]
+pub async fn workspace_initialize_git(
+    state: State<'_, CoreState>,
+    workspace_id: WorkspaceId,
+) -> Result<WorkspaceCapabilities, String> {
+    state
+        .workspace_initialize_git(workspace_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// `workspace.remove` — revoke trust (the card leaves the catalog).
 #[tauri::command]
 #[specta::specta]

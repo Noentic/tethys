@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { InspectorPane } from "./InspectorPane";
 
@@ -24,6 +24,19 @@ describe("InspectorPane header and collapse (d0-rc9)", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     toggle.click();
     expect(onToggleCollapse).toHaveBeenCalledTimes(1);
+  });
+
+  it("switches between Overview and Changes and exposes the expand action", async () => {
+    const onExpand = vi.fn();
+    render(<InspectorPane onExpand={onExpand} />);
+    expect(screen.getByRole("tabpanel", { name: "Overview" })).toBeDefined();
+    fireEvent.click(screen.getByRole("tab", { name: "Changes 0" }));
+    expect(screen.getByRole("tabpanel", { name: "Changes" })).toBeDefined();
+    await waitFor(() =>
+      expect(screen.getByTestId("review-hidden")).toBeDefined(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand side panel" }));
+    expect(onExpand).toHaveBeenCalledTimes(1);
   });
 
   it("collapses to a rail that keeps the breathing marker visible", () => {

@@ -4,9 +4,11 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::{Map, Value};
 use tethys_acp::client::{
-    AcpProviderIntegration, ExtensionNotificationHandler, ExtensionRequestHandler,
-    PermissionMetadataHandler, PromptResponseHandler, SessionUpdateHandler,
+    AcpProviderIntegration, ConfigOptionsHandler, ExtensionNotificationHandler,
+    ExtensionRequestHandler, PermissionMetadataHandler, PromptResponseHandler,
+    SessionUpdateHandler,
 };
+use tethys_schema::thread::{AgentCommandControl, ConfigOption};
 
 /// A Provider's optional ACP surface. Providers supply handlers only when the
 /// shared UI responder cannot answer a claimed method (M1.17 AD3).
@@ -15,11 +17,14 @@ pub struct ProviderIntegrationDescriptor {
     pub initialize_meta: Map<String, Value>,
     pub client_capabilities_meta: Map<String, Value>,
     pub extension_methods: Vec<String>,
+    /// Provider commands whose behavior is already provided by a Tethys control.
+    pub tethys_commands: HashMap<String, AgentCommandControl>,
     /// Answers claimed requests immediately; `None` responses reach the UI.
     pub handle_extension_request: Option<ExtensionRequestHandler>,
     /// Observes claimed notifications; the normalized event still emits.
     pub handle_extension_notification: Option<ExtensionNotificationHandler>,
     pub handle_session_update: Option<SessionUpdateHandler>,
+    pub handle_config_options: Option<ConfigOptionsHandler>,
     pub handle_permission_metadata: Option<PermissionMetadataHandler>,
     pub handle_prompt_response: Option<PromptResponseHandler>,
 }
@@ -30,6 +35,7 @@ impl std::fmt::Debug for ProviderIntegrationDescriptor {
             .field("initialize_meta", &self.initialize_meta)
             .field("client_capabilities_meta", &self.client_capabilities_meta)
             .field("extension_methods", &self.extension_methods)
+            .field("tethys_commands", &self.tethys_commands)
             .field(
                 "handle_extension_request",
                 &self.handle_extension_request.is_some(),
@@ -41,6 +47,10 @@ impl std::fmt::Debug for ProviderIntegrationDescriptor {
             .field(
                 "handle_session_update",
                 &self.handle_session_update.is_some(),
+            )
+            .field(
+                "handle_config_options",
+                &self.handle_config_options.is_some(),
             )
             .field(
                 "handle_permission_metadata",
@@ -57,6 +67,31 @@ impl std::fmt::Debug for ProviderIntegrationDescriptor {
 #[derive(Debug, Clone, Default)]
 pub struct ProviderIntegrationRegistry {
     descriptors: HashMap<String, ProviderIntegrationDescriptor>,
+}
+
+/// Appends normalized roles for ACP mode values to the Provider metadata.
+/// Unknown values stay working modes so a new Provider option remains usable.
+pub(crate) fn with_mode_roles(provider_id: &str, option: &ConfigOption, metadata: Value) -> Value {
+    let mut object = match metadata {
+        Value::Object(object) => object,
+        value => Map::from_iter([("provider".into(), value)]),
+    };
+    let roles = option
+        .value_options
+        .iter()
+        .map(|value| {
+            let level = (provider_id == crate::providers::claude_code::REGISTRY_ID)
+                .then(|| crate::providers::claude_code::approval_mode_level(&value.id))
+                .flatten();
+            let role = level.map_or_else(
+                || serde_json::json!({ "kind": "working" }),
+                |level| serde_json::json!({ "kind": "approval", "level": level }),
+            );
+            (value.id.clone(), role)
+        })
+        .collect();
+    object.insert("tethysModeRoles".into(), Value::Object(roles));
+    Value::Object(object)
 }
 
 impl ProviderIntegrationRegistry {
@@ -114,12 +149,17 @@ impl ProviderIntegrationRegistry {
             extension_methods: descriptor
                 .map(|value| value.extension_methods.clone())
                 .unwrap_or_default(),
+            tethys_commands: descriptor
+                .map(|value| value.tethys_commands.clone())
+                .unwrap_or_default(),
             extension_request_handler: descriptor
                 .and_then(|value| value.handle_extension_request.clone()),
             extension_notification_handler: descriptor
                 .and_then(|value| value.handle_extension_notification.clone()),
             session_update_handler: descriptor
                 .and_then(|value| value.handle_session_update.clone()),
+            config_options_handler: descriptor
+                .and_then(|value| value.handle_config_options.clone()),
             permission_metadata_handler: descriptor
                 .and_then(|value| value.handle_permission_metadata.clone()),
             prompt_response_handler: descriptor
@@ -188,5 +228,13 @@ mod tests {
         assert!(descriptor.handle_session_update.is_some());
         assert!(descriptor.handle_permission_metadata.is_some());
         assert!(descriptor.handle_prompt_response.is_some());
+        assert_eq!(
+            descriptor.tethys_commands.get("model"),
+            Some(&AgentCommandControl::Model)
+        );
+        assert_eq!(
+            descriptor.tethys_commands.get("clear"),
+            Some(&AgentCommandControl::Clear)
+        );
     }
 }

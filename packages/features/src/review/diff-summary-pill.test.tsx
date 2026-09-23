@@ -106,8 +106,8 @@ describe("DiffSummaryPill (M1.9 U8)", () => {
     );
     expect(spec).not.toContain("Needs a decision before M1.9");
     expect(spec).toContain(
-      "Decided — commit/diff visibility from the composer",
+      "Decided — commit lives in the branch bar (supersedes option a, 23 Sep 2026).",
     );
-    expect(spec).toContain("option a");
+    expect(spec).toContain("the diff moves to a resizable `Changes` tab");
   });
 });

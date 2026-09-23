@@ -63,6 +63,37 @@ export function ComposerConfigChips({
         const display =
           optionValues(option).find((value) => value.id === current)?.name ??
           current;
+        const levels =
+          option.category === "thought_level" ? optionValues(option) : [];
+        if (levels.length > 1) {
+          const index = Math.max(
+            0,
+            levels.findIndex((value) => value.id === current),
+          );
+          return (
+            <label
+              key={option.id}
+              className="flex items-center gap-2 text-label-sm text-(--tethys-text-muted)"
+            >
+              Faster
+              <input
+                aria-label={`${option.name} effort`}
+                type="range"
+                min={0}
+                max={levels.length - 1}
+                step={1}
+                value={index}
+                onChange={(event) => {
+                  const selected = levels[Number(event.target.value)];
+                  if (selected) void change(option, selected.id);
+                }}
+                className="w-20 accent-(--tethys-accent-primary)"
+              />
+              Smarter
+              <span className="sr-only">{display}</span>
+            </label>
+          );
+        }
         return (
           <div key={option.id} className="relative">
             <Chip

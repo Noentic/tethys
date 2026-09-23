@@ -62,6 +62,7 @@ export function ThreadNewScreen({
         workspaces={trusted}
         initialWorkspace={preselected}
         agentCommands={agentCommands}
+        onResume={() => navigate("/workspaces")}
         onStart={(input) =>
           startSession(
             client,

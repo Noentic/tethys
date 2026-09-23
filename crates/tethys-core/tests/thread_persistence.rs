@@ -45,6 +45,7 @@ async fn committed_thread_rehydrates_identity_and_history() {
             agent_profile_id: profile_id.clone(),
             workdir: root.display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await
         .expect("create thread");

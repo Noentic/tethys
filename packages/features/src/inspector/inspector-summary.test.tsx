@@ -75,7 +75,11 @@ function fakeClient(diffSummary: DiffSummary | null): ReviewClient {
       stage: async () => {},
       unstage: async () => {},
       discard: async () => {},
-      commit: async () => ({ oid: "abc", summary: "done" }),
+      commit: async () => ({
+        oid: "abc",
+        summary: "done",
+        ahead_of_base: 1,
+      }),
       checkpointRestore: async () => ({
         restored_worktree_tree: "w",
         restored_index_tree: "i",

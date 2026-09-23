@@ -200,6 +200,7 @@ impl GitApi for Core {
         message: String,
     ) -> Result<CommitResult, ApiError> {
         let registered = self.registered(&thread_id)?;
-        blocking(move || registered.engine.commit(&message, None)).await
+        let base_oid = registered.info.head.clone();
+        blocking(move || registered.engine.commit(&message, None, &base_oid)).await
     }
 }

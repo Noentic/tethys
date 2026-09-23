@@ -8,6 +8,7 @@ import type {
   RestoreOutcome,
   RestorePolicy,
   RestoreTarget,
+  WorktreeInfo,
 } from "@tethys/bindings";
 import { createClient } from "@tethys/client";
 import { createContext, type ReactNode, useContext } from "react";
@@ -20,6 +21,7 @@ import { createContext, type ReactNode, useContext } from "react";
 export interface ReviewClient {
   git: {
     diffSummary(source: DiffSource): Promise<DiffSummary>;
+    worktreeList?(): Promise<WorktreeInfo[]>;
     diffFile(source: DiffSource, path: string): Promise<DiffFileDetail>;
     stage(threadId: string, paths: string[]): Promise<void>;
     unstage(threadId: string, paths: string[]): Promise<void>;

@@ -33,6 +33,7 @@ export interface DiffViewerProps {
   detail: DiffFileDetail;
   mode?: DiffViewMode;
   onModeChange?: (mode: DiffViewMode) => void;
+  onCommentLine?: (line: number) => void;
   /** Called by the `Load file` affordance on a collapsed file. */
   onLoadFile?: () => void;
   /** Injected for tests; defaults to the worker-backed highlighter. */
@@ -212,14 +213,41 @@ function Gutter({ cell }: { cell: DiffCell }) {
   );
 }
 
+function LineNumber({
+  line,
+  onCommentLine,
+}: {
+  line: number | null;
+  onCommentLine?: (line: number) => void;
+}) {
+  const className =
+    "w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)";
+  if (line === null) return <span className={className} aria-hidden="true" />;
+  return onCommentLine ? (
+    <button
+      type="button"
+      aria-label={`Comment on line ${line}`}
+      title={`Comment on line ${line}`}
+      onClick={() => onCommentLine(line)}
+      className={`${className} focus-ring rounded-xs hover:text-(--tethys-text-on-sunken)`}
+    >
+      {line}
+    </button>
+  ) : (
+    <span className={className}>{line}</span>
+  );
+}
+
 function UnifiedRow({
   row,
   highlight,
   getWordSpans,
+  onCommentLine,
 }: {
   row: DiffRow;
   highlight: Map<string, HighlightSpan[]>;
   getWordSpans: (cell: DiffCell) => WordSpan[];
+  onCommentLine?: (line: number) => void;
 }) {
   const cell = row.cell;
   if (!cell) return null;
@@ -234,12 +262,11 @@ function UnifiedRow({
       data-row-kind={row.kind}
       className={`flex h-6 items-center gap-2 px-2 font-mono text-mono-code ${fill ?? ""}`}
     >
-      <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)">
-        {cell.oldLine ?? ""}
-      </span>
-      <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)">
-        {cell.newLine ?? ""}
-      </span>
+      <LineNumber
+        line={cell.oldLine}
+        onCommentLine={cell.newLine === null ? onCommentLine : undefined}
+      />
+      <LineNumber line={cell.newLine} onCommentLine={onCommentLine} />
       <Gutter cell={cell} />
       <CellText
         cell={cell}
@@ -254,10 +281,12 @@ function SplitRow({
   row,
   highlight,
   getWordSpans,
+  onCommentLine,
 }: {
   row: DiffRow;
   highlight: Map<string, HighlightSpan[]>;
   getWordSpans: (cell: DiffCell) => WordSpan[];
+  onCommentLine?: (line: number) => void;
 }) {
   const leftFill =
     row.left?.kind === "Deletion"
@@ -279,9 +308,10 @@ function SplitRow({
       <div
         className={`flex w-1/2 items-center gap-2 border-r border-(--tethys-hairline-on-sunken) px-2 ${leftFill ?? ""}`}
       >
-        <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)">
-          {row.left?.oldLine ?? row.left?.newLine ?? ""}
-        </span>
+        <LineNumber
+          line={row.left?.oldLine ?? row.left?.newLine ?? null}
+          onCommentLine={onCommentLine}
+        />
         {row.left ? <Gutter cell={row.left} /> : null}
         {row.left ? (
           <CellText
@@ -292,9 +322,10 @@ function SplitRow({
         ) : null}
       </div>
       <div className={`flex w-1/2 items-center gap-2 px-2 ${rightFill ?? ""}`}>
-        <span className="w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)">
-          {row.right?.newLine ?? row.right?.oldLine ?? ""}
-        </span>
+        <LineNumber
+          line={row.right?.newLine ?? row.right?.oldLine ?? null}
+          onCommentLine={onCommentLine}
+        />
         {row.right ? <Gutter cell={row.right} /> : null}
         {row.right ? (
           <CellText
@@ -312,6 +343,7 @@ export function DiffViewer({
   detail,
   mode: controlledMode,
   onModeChange,
+  onCommentLine,
   onLoadFile,
   highlighter,
   rowHeight = DEFAULT_ROW_HEIGHT,
@@ -532,12 +564,14 @@ export function DiffViewer({
                       row={row}
                       highlight={highlight}
                       getWordSpans={getWordSpans}
+                      onCommentLine={onCommentLine}
                     />
                   ) : (
                     <UnifiedRow
                       row={row}
                       highlight={highlight}
                       getWordSpans={getWordSpans}
+                      onCommentLine={onCommentLine}
                     />
                   )}
                 </div>

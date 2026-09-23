@@ -61,6 +61,14 @@ describe("three-region shell", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("labels a thread tab with its live title and Provider glyph", () => {
+    seedSession("s1", "Fix auth bug");
+    render(<AppShell activeRoute="/thread/s1" />);
+
+    const tab = screen.getByRole("tab", { name: "Fix auth bug" });
+    expect(within(tab).getByTestId("provider-glyph")).toBeDefined();
+  });
+
   it("renders no action bar: no footer, and the composer is the card in the Stage", () => {
     seedSession("s1", "Fix auth bug");
     render(<AppShell activeRoute="/thread/s1" />);
@@ -138,6 +146,31 @@ describe("three-region shell", () => {
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens Changes in the Inspector overlay below the docked breakpoint", async () => {
+    setWindowWidth(1040);
+    seedSession("s1", "Fix auth bug");
+    function OpenChanges() {
+      const { openChanges } = useInspectorControl();
+      return (
+        <button type="button" onClick={() => openChanges?.()}>
+          open changes
+        </button>
+      );
+    }
+    render(
+      <AppShell activeRoute="/thread/s1">
+        <OpenChanges />
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "open changes" }));
+
+    const overlay = screen.getByRole("dialog", { name: "Thread Inspector" });
+    expect(within(overlay).getByRole("tab", { name: /Changes/ })).toBeDefined();
+    await within(overlay).findByText("No changes to review");
+    expect(screen.getAllByTestId("inspector-pane-shell")).toHaveLength(1);
   });
 
   it("mounts each registered Inspector slot exactly once", () => {

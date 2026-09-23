@@ -102,6 +102,7 @@ async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
             agent_profile_id: profile_id.clone(),
             workdir: worktree.display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await
         .expect("create worktree thread");
@@ -124,6 +125,7 @@ async fn git_thread_in_worktree_receives_uncommitted_workspace_root_registry() {
             agent_profile_id: profile_id,
             workdir: ws_root.display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await
         .expect("create plain thread");
@@ -194,6 +196,7 @@ async fn resume_and_recovery_spawn_carry_workspace_root_servers() {
             agent_profile_id: profile_id,
             workdir: worktree.display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await
         .expect("create thread");
@@ -259,6 +262,7 @@ async fn connection_with_no_negotiated_capabilities_yields_capabilities_not_nego
             agent_profile_id: profile_id,
             workdir: ws_root.display().to_string(),
             additional_directories: Vec::new(),
+            isolation: None,
         })
         .await
         .expect("create thread");

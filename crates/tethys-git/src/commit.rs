@@ -6,7 +6,12 @@ use crate::error::{GitError, GitResult};
 use crate::repo::GitRepo;
 
 /// Commits staged changes (or the given paths) with a caller-supplied message.
-pub fn commit(repo: &GitRepo, message: &str, paths: Option<&[String]>) -> GitResult<CommitResult> {
+pub fn commit(
+    repo: &GitRepo,
+    message: &str,
+    paths: Option<&[String]>,
+    base_oid: &str,
+) -> GitResult<CommitResult> {
     if message.trim().is_empty() {
         return Err(GitError::InvalidArgument(
             "commit message is required".to_string(),
@@ -36,8 +41,18 @@ pub fn commit(repo: &GitRepo, message: &str, paths: Option<&[String]>) -> GitRes
     let summary = repo
         .git_str(&["show", "--shortstat", "--format=", "HEAD"])
         .unwrap_or_default();
+    let ahead_count = if base_oid.is_empty() {
+        repo.git_str(&["rev-list", "--count", "HEAD"])?
+    } else {
+        let range = format!("{base_oid}..HEAD");
+        repo.git_str(&["rev-list", "--count", &range])?
+    };
+    let ahead_of_base = ahead_count.parse::<u32>().map_err(|_| {
+        GitError::InvalidArgument("git returned an invalid ahead count".to_string())
+    })?;
     Ok(CommitResult {
         oid,
         summary: summary.trim().to_string(),
+        ahead_of_base,
     })
 }

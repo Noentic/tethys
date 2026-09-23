@@ -3,7 +3,12 @@
 //! Live source is the trust-filtered `workspace.list`, read through
 //! `useWorkspacesQuery`. The fixtures below are test doubles only.
 
-import type { Vcs, WorkspaceListItem } from "@tethys/bindings";
+import type {
+  Vcs,
+  WorkspaceCapabilities,
+  WorkspaceListItem,
+  WorkspaceSessionSummary,
+} from "@tethys/bindings";
 import { useWorkspaceOptions } from "./queries";
 
 /** One workspace the trust store admits for starting a thread. */
@@ -12,6 +17,8 @@ export interface TrustedWorkspace {
   name: string;
   /** Absolute root; the resolved `cwd` for `thread.create`. */
   path: string;
+  capabilities: WorkspaceCapabilities;
+  sessions: WorkspaceSessionSummary[];
   vcs: Vcs;
 }
 
@@ -20,18 +27,36 @@ export const trustedWorkspaceFixtures: TrustedWorkspace[] = [
     id: "tethys",
     name: "tethys",
     path: "~/Code/tethys",
+    capabilities: {
+      vcs: { kind: "git-remote", host: "github" },
+      restore: true,
+      max_concurrent_sessions: null,
+    },
+    sessions: [],
     vcs: { kind: "git-remote", host: "github" },
   },
   {
     id: "notes",
     name: "notes",
     path: "~/Documents/notes",
+    capabilities: {
+      vcs: { kind: "git-local" },
+      restore: true,
+      max_concurrent_sessions: null,
+    },
+    sessions: [],
     vcs: { kind: "git-local" },
   },
   {
     id: "scratch",
     name: "scratch",
     path: "~/scratch",
+    capabilities: {
+      vcs: { kind: "none" },
+      restore: false,
+      max_concurrent_sessions: 1,
+    },
+    sessions: [],
     vcs: { kind: "none" },
   },
 ];
@@ -45,6 +70,8 @@ export function toTrustedWorkspace(item: WorkspaceListItem): TrustedWorkspace {
     id: item.id,
     name: item.name,
     path: item.path,
+    capabilities: item.capabilities,
+    sessions: item.sessions,
     vcs: item.capabilities.vcs,
   };
 }

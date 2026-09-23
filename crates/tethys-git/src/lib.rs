@@ -192,9 +192,14 @@ impl GitEngine {
         )
     }
 
-    /// Commits staged work on the thread branch.
-    pub fn commit(&self, message: &str, paths: Option<&[String]>) -> GitResult<CommitResult> {
+    /// Commits staged work and counts commits since the thread's starting head.
+    pub fn commit(
+        &self,
+        message: &str,
+        paths: Option<&[String]>,
+        base_oid: &str,
+    ) -> GitResult<CommitResult> {
         let _guard = self.mutation.lock();
-        commit::commit(&self.repo, message, paths)
+        commit::commit(&self.repo, message, paths, base_oid)
     }
 }

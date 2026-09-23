@@ -19,6 +19,8 @@ export function chipPrefix(kind: ChipKind): string {
       return "$";
     case "path":
       return "@";
+    case "review":
+      return "✎";
   }
 }
 

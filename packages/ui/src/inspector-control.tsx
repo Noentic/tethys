@@ -4,9 +4,11 @@ import { createContext, useContext } from "react";
 export interface InspectorControl {
   /** Opens the Inspector: the overlay at narrow widths, or expands a docked panel. */
   open: () => void;
+  /** Opens the Inspector directly on Changes. */
+  openChanges?: (turn?: number) => void;
 }
 
-const noopControl: InspectorControl = { open: () => {} };
+const noopControl: InspectorControl = { open: () => {}, openChanges: () => {} };
 
 const InspectorControlContext = createContext<InspectorControl>(noopControl);
 

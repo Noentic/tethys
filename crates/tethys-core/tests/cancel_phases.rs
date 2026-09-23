@@ -81,6 +81,7 @@ async fn create(core: &Core, name: &str) -> ThreadId {
         agent_profile_id: PROFILE.into(),
         workdir: workdir(name).display().to_string(),
         additional_directories: Vec::new(),
+        isolation: None,
     })
     .await
     .expect("create thread")

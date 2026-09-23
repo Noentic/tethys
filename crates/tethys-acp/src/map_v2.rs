@@ -295,6 +295,7 @@ fn command(command: &acp2::AvailableCommand) -> AgentCommand {
         name: command.name.clone(),
         description: Some(command.description.clone()),
         input: command.input.as_ref().map(json_string),
+        tethys_control: None,
     }
 }
 

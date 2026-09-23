@@ -65,4 +65,5 @@ pub struct WorkspaceSessionSummary {
     pub agent_profile_id: String,
     pub title: String,
     pub state: ThreadState,
+    pub workdir: String,
 }
