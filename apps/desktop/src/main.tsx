@@ -15,9 +15,13 @@ import {
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
-import { hydrateSessionView, queryClient } from "@tethys/state";
+import {
+  hydrateSessionView,
+  isSessionHydrated,
+  queryClient,
+} from "@tethys/state";
 import React from "react";
-import ReactDOM from "react-dom/client";
+import ReactDOM, { type Root } from "react-dom/client";
 import { client } from "./client";
 import { SettingsLayout } from "./routes/settings";
 import { SettingsGeneralView } from "./routes/settings.general";
@@ -25,7 +29,7 @@ import { SettingsKeybindingsView } from "./routes/settings.keybindings";
 import { SettingsMcpView } from "./routes/settings.mcp";
 import { SettingsProvidersView } from "./routes/settings.providers";
 import { SettingsSkillsView } from "./routes/settings.skills";
-import { ThreadView } from "./routes/thread.$id";
+import { ThreadOpeningView, ThreadView } from "./routes/thread.$id";
 import { ThreadNewView } from "./routes/thread.new";
 import { WorkspacesView } from "./routes/workspaces";
 import { AppShell } from "./shell/AppShell";
@@ -79,10 +83,18 @@ const threadNewRoute = createRoute({
 // Thread by ID. The loader hydrates the shared session store (identity,
 // history, config, capabilities) before the Inspector's first dependent
 // render; the Inspector effect only subscribes when it is already hydrated.
+// A revisited thread is already in the shared store, so it commits without a
+// round trip. ACP bootstrap can take seconds, so the route renders
+// `ThreadOpeningView` while the loader waits.
 const threadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/thread/$id",
+  pendingMs: 150,
+  pendingComponent: ThreadOpeningView,
   loader: async ({ params }) => {
+    if (isSessionHydrated(params.id)) {
+      return null;
+    }
     try {
       const view = await client.thread.get(params.id);
       hydrateSessionView(view);
@@ -201,9 +213,21 @@ declare module "@tanstack/react-router" {
   }
 }
 
-const rootElement = document.getElementById("root");
+type RootedContainer = HTMLElement & { __tethysRoot?: Root };
+
+const rootElement = document.getElementById("root") as RootedContainer | null;
 if (rootElement !== null) {
-  ReactDOM.createRoot(rootElement).render(
+  // The dev entry is HMR self-accepting, so a re-executed module must reuse
+  // the root: a second `createRoot` appends a second application to `#root`.
+  let root = rootElement.__tethysRoot;
+  if (root === undefined) {
+    // A root left by a previous module execution has no marker: drop its DOM
+    // so the repaired entry starts from one application.
+    rootElement.replaceChildren();
+    root = ReactDOM.createRoot(rootElement);
+    rootElement.__tethysRoot = root;
+  }
+  root.render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
