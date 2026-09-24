@@ -1,9 +1,9 @@
 //! `workspace-card` (DESIGN.md; pen `Workspace Card` sfBB1 / `No VCS` n2coW).
 //!
 //! Header: name, source glyph, favorite star, attention mark. Meta row: thread
-//! count (or `Local folder · no VCS`). Body: up to three session rows (dot,
-//! name, diff, turn) and a `+N more threads` row; a no-VCS folder swaps the
-//! cluster for the `Initialize git` chip and the plain-mode hint.
+//! count (or `Local folder · no VCS`). Body: up to three session rows (provider
+//! glyph, dot, name, diff, turn) and a `+N more threads` row; a no-VCS folder
+//! swaps the cluster for the `Initialize git` chip and the plain-mode hint.
 //!
 //! A value the backend did not report is omitted, never estimated (P9): the
 //! per-session glyph, turn tag and diff render only when the wire carries them.
@@ -27,6 +27,8 @@ import {
   workspaceNeedsAttention,
 } from "@tethys/state";
 import { Card, cn } from "@tethys/ui";
+import { ProviderGlyph } from "./session-item-chip";
+import { isKnownProvider } from "./session-item-row";
 
 export interface WorkspaceCardProps {
   workspace: CatalogWorkspace;
@@ -76,6 +78,9 @@ function ThreadRow({
       className="focus-ring flex h-6 w-full shrink-0 items-center justify-between gap-sm rounded-xs bg-(--tethys-surface-hover) px-2 text-left transition-colors hover:bg-(--tethys-surface-active)"
     >
       <span className="flex min-w-0 items-center gap-1.5">
+        {isKnownProvider(session.providerId) && (
+          <ProviderGlyph providerId={session.providerId} />
+        )}
         {(active || awaiting) && (
           <span
             aria-hidden="true"

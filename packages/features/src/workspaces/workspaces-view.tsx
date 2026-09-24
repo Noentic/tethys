@@ -366,7 +366,7 @@ export function WorkspacesView({
       {/* Pen `ObHEA / D23gzb`: one 32px top bar, no second band. */}
       <section
         aria-label="Workspaces toolbar"
-        className="flex h-8 shrink-0 items-center gap-md px-2xl pt-2xl"
+        className="flex shrink-0 items-center gap-md px-2xl pt-2xl"
       >
         <h1 className="shrink-0 text-heading-lg text-(--tethys-text-primary)">
           Workspaces
@@ -462,7 +462,7 @@ export function WorkspacesView({
 
       <main
         aria-label="Workspace Catalog"
-        className="flex-1 overflow-y-auto px-2xl pt-5 pb-2xl"
+        className="flex-1 overflow-y-auto px-2xl pt-2xl pb-2xl"
       >
         <h2 className="sr-only">Workspace List</h2>
         {visible.length === 0 ? (

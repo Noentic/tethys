@@ -117,6 +117,22 @@ describe("workspace-card", () => {
     expect(screen.getByRole("button", { name: "Pin tethys" })).toBeTruthy();
   });
 
+  it("leads each thread row with the provider glyph, hiding the unknown placeholder", () => {
+    const { rerender } = render(
+      <WorkspaceCard workspace={workspace({ sessions: [running] })} />,
+    );
+    expect(screen.queryByTestId("provider-glyph")).toBeNull();
+
+    rerender(
+      <WorkspaceCard
+        workspace={workspace({
+          sessions: [{ ...running, providerId: "codex" }],
+        })}
+      />,
+    );
+    expect(screen.getByTestId("provider-glyph")).toBeTruthy();
+  });
+
   it("opens a session row and the card body separately", () => {
     const onOpenThread = vi.fn();
     const onOpen = vi.fn();

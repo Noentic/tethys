@@ -568,6 +568,7 @@ components:
     rounded: "{rounded.lg}"
     padding: "{spacing.lg}"
     height: 220px
+    threadRow: "up to three; each row leads with `ProviderGlyph` (the {components.model-selector-pill.providerMark} logo, hidden while the wire reports no provider), then the state `status-dot`, branch name, diff stat and turn count"
     attention: "while a session in the workspace is awaiting approval the card takes a {semantic.status-warning-soft} wash over its own tone and the header `status-dot` renders as the `awaiting` ring, breathing. It has no left rule: the 2px left bar already means `selected` on this card (`workspace-card-selected`), so attention is carried by the wash and the ring alone. Attention and selection coexist without colliding (State Precedence 3): a selected card in attention shows the accent bar, the wash and the ring"
   workspace-card-hover:
     backgroundColor: "{semantic.surface-card-hover}"
