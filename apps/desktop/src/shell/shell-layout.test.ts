@@ -2,6 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  CHANGES_MIN_WIDTH,
+  changesFitDocked,
+  changesWidth,
   computeShellLayout,
   DOCKED_MIN_WIDTH,
   INSPECTOR_COLLAPSED_WIDTH,
@@ -120,5 +123,29 @@ describe("shell layout constants match DESIGN.md", () => {
     expect(px(/^ {2}stage-min: (\d+)px/m)).toBe(STAGE_MIN_WIDTH);
     expect(px(/^ {2}shell-inspector: (\d+)px/m)).toBe(INSPECTOR_WIDTH);
     expect(px(/inspector-overlay: (\d+)px/)).toBe(INSPECTOR_OVERLAY_BREAKPOINT);
+  });
+});
+
+describe("Changes tab width", () => {
+  it("takes half a wide window", () => {
+    expect(changesWidth(1920)).toBe(960);
+  });
+
+  it("never drops below its readable minimum while it fits", () => {
+    expect(changesWidth(1280)).toBeGreaterThanOrEqual(CHANGES_MIN_WIDTH);
+  });
+
+  it("never takes the Stage below its minimum", () => {
+    for (const width of [1100, 1200, 1440, 2560]) {
+      expect(width - RAIL_WIDTH - changesWidth(width)).toBeGreaterThanOrEqual(
+        STAGE_MIN_WIDTH,
+      );
+    }
+  });
+
+  it("overlays instead of docking when it cannot reach its minimum", () => {
+    expect(changesFitDocked(1000)).toBe(false);
+    expect(changesFitDocked(1090)).toBe(false);
+    expect(changesFitDocked(1440)).toBe(true);
   });
 });

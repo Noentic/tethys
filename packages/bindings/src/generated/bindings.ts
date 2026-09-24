@@ -575,6 +575,12 @@ export type EventEnvelope = {
 	thread_id: ThreadId,
 	seq: number,
 	event: TurnEventBody,
+	/**
+	 *  When Core recorded the event, in Unix milliseconds. A replayed event
+	 *  carries its stored time, so durations (a thought, a tool call) read the
+	 *  same after a restart as they did live.
+	 */
+	at_ms?: number | null,
 };
 
 /**  The result of expanding a `/` command: the plaintext prompt plus UI metadata. */

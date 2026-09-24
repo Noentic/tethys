@@ -81,6 +81,11 @@ export interface TurnMessageEntry extends BaseSessionEntry {
   attachments?: ContentBlock[];
   /** True while the message is still streaming (toolbar hidden, aria-busy). */
   streaming?: boolean;
+  /**
+   * When the message stopped streaming. With `timestamp` it gives a thought
+   * its duration (`Thought for 14s`).
+   */
+  endedAt?: number;
 }
 
 export interface ToolCallEntry extends BaseSessionEntry {
@@ -97,6 +102,19 @@ export interface ToolCallEntry extends BaseSessionEntry {
   metadata?: string | null;
   asyncTaskId?: string | null;
   diffStats?: Record<string, DiffStatistics>;
+  /**
+   * File changes the call reported as ACP diff content, one per path, kept
+   * structured so the transcript can draw the diff rather than print it.
+   */
+  diffs?: ToolDiff[];
+  /** Terminals the call ran in, so its output can be tailed and opened. */
+  terminalIds?: string[];
+}
+
+/** One file a tool call changed, as a unified patch of hunks. */
+export interface ToolDiff {
+  path: string;
+  patch: string;
 }
 
 export interface PermissionRequestEntry extends BaseSessionEntry {
@@ -388,16 +406,24 @@ function turnEndEntry(state: SessionState, seq: number): TurnEndEntry | null {
   };
 }
 
-/** Plain text form of one tool-call content item, for the tool entry body. */
+/**
+ * Text a content item adds to the tool's output. A diff and a terminal are not
+ * text: they are kept structured on the entry (`diffs`, `terminalIds`).
+ */
 function toolContentText(item: ToolCallContent): string {
   if ("Text" in item && typeof item.Text === "string") return item.Text;
-  if ("Diff" in item && item.Diff) return item.Diff.patch;
-  if ("Terminal" in item && item.Terminal) {
-    return `[terminal ${item.Terminal.terminal_id}]`;
-  }
   if ("Unknown" in item && typeof item.Unknown === "string")
     return item.Unknown;
   return "";
+}
+
+function terminalContent(item: ToolCallContent): string | null {
+  return "Terminal" in item && item.Terminal ? item.Terminal.terminal_id : null;
+}
+
+/** A later diff for the same path replaces the earlier one. */
+function withDiff(diffs: ToolDiff[] | undefined, next: ToolDiff): ToolDiff[] {
+  return [...(diffs ?? []).filter((diff) => diff.path !== next.path), next];
 }
 
 function diffContent(item: ToolCallContent): {
@@ -413,13 +439,30 @@ function diffContent(item: ToolCallContent): {
   };
 }
 
+/**
+ * A thought ends when the agent moves on to anything else: the next message or
+ * tool call closes it, so its duration is the thinking, not the whole turn.
+ */
+function closeThoughts(entries: SessionEntry[], now: number): SessionEntry[] {
+  return entries.map((entry) =>
+    entry.kind === "turn_message" &&
+    (entry as TurnMessageEntry).role === "Thought" &&
+    (entry as TurnMessageEntry).streaming
+      ? { ...(entry as TurnMessageEntry), streaming: false, endedAt: now }
+      : entry,
+  );
+}
+
 export function sessionReducer(
   state: SessionState,
   event: TurnEventBody,
   seq?: number,
+  /** When Core recorded the event (`EventEnvelope.at_ms`); now when absent. */
+  at?: number | null,
 ): SessionState {
   const currentSeq =
     typeof seq === "number" ? Math.max(state.seq, seq) : state.seq;
+  const now = typeof at === "number" && at > 0 ? at : Date.now();
 
   switch (event.type) {
     case "StateChanged": {
@@ -439,7 +482,7 @@ export function sessionReducer(
         newCancellation = "idle";
         nextLive = state.liveEntries.map((entry) =>
           entry.kind === "turn_message" && (entry as TurnMessageEntry).streaming
-            ? { ...(entry as TurnMessageEntry), streaming: false }
+            ? { ...(entry as TurnMessageEntry), streaming: false, endedAt: now }
             : entry,
         );
         const notice = turnNoticeForStopReason(bindingState.Idle.stop_reason);
@@ -496,9 +539,14 @@ export function sessionReducer(
               ? nonTextAttachments(msg.content.value)
               : [],
           streaming: role !== "User",
-          timestamp: Date.now(),
+          timestamp: now,
         };
-        nextLive = [...state.liveEntries, newEntry];
+        nextLive = [
+          ...(newEntry.role === "Thought"
+            ? state.liveEntries
+            : closeThoughts(state.liveEntries, now)),
+          newEntry,
+        ];
       }
 
       const isUser = role === "User";
@@ -544,9 +592,14 @@ export function sessionReducer(
               ? []
               : [chunk.block],
           streaming: chunk.role !== "User",
-          timestamp: Date.now(),
+          timestamp: now,
         };
-        nextLive = [...state.liveEntries, newEntry];
+        nextLive = [
+          ...(newEntry.role === "Thought"
+            ? state.liveEntries
+            : closeThoughts(state.liveEntries, now)),
+          newEntry,
+        ];
       }
 
       return {
@@ -609,9 +662,9 @@ export function sessionReducer(
           output: patch.output,
           metadata: patch.metadata,
           asyncTaskId: patch.async_task_id,
-          timestamp: Date.now(),
+          timestamp: now,
         };
-        nextLive = [...state.liveEntries, newEntry];
+        nextLive = [...closeThoughts(state.liveEntries, now), newEntry];
       }
 
       return {
@@ -637,7 +690,7 @@ export function sessionReducer(
         id: `perm-${req.req_id}`,
         kind: "permission_request",
         request: permItem,
-        timestamp: Date.now(),
+        timestamp: now,
       };
 
       const nextLive = [...state.liveEntries, permEntry];
@@ -666,7 +719,7 @@ export function sessionReducer(
         decidedBy: decided_by,
         optionId: option_id ?? null,
         policy: isAuto ? "workspace-trust-policy" : undefined,
-        timestamp: Date.now(),
+        timestamp: now,
       };
 
       const nextResolved = {
@@ -728,7 +781,7 @@ export function sessionReducer(
           kind: "plan",
           planId: plan_id,
           steps,
-          timestamp: Date.now(),
+          timestamp: now,
         };
         nextLive = [...state.liveEntries, entry];
       }
@@ -760,7 +813,7 @@ export function sessionReducer(
           kind: "terminal",
           terminalId: terminal_id,
           output: patch.type === "Set" ? (patch.value ?? "") : "",
-          timestamp: Date.now(),
+          timestamp: now,
         };
         nextLive = [...state.liveEntries, entry];
       }
@@ -790,7 +843,7 @@ export function sessionReducer(
           kind: "terminal",
           terminalId: terminal_id,
           output: bytes,
-          timestamp: Date.now(),
+          timestamp: now,
         };
         nextLive = [...state.liveEntries, entry];
       }
@@ -810,7 +863,7 @@ export function sessionReducer(
         before: event.body.before,
         after: event.body.after,
         via: event.body.via,
-        timestamp: Date.now(),
+        timestamp: now,
       };
       const nextLive = [...state.liveEntries, entry];
       return {
@@ -827,7 +880,7 @@ export function sessionReducer(
         kind: "checkpoint",
         oid: event.body.oid,
         checkpointKind: event.body.kind,
-        timestamp: Date.now(),
+        timestamp: now,
       };
       const nextLive = [...state.liveEntries, entry];
       return {
@@ -846,7 +899,7 @@ export function sessionReducer(
         kind: "elicitation",
         reqId: request.req_id,
         request,
-        timestamp: Date.now(),
+        timestamp: now,
       };
       const nextLive = [...state.liveEntries, entry];
       const nextPending = [
@@ -870,7 +923,7 @@ export function sessionReducer(
       const resolution: ElicitationResolution = {
         outcome,
         values: values ?? {},
-        timestamp: Date.now(),
+        timestamp: now,
       };
       const nextPending = state.pendingElicitations.filter(
         (pending) => pending.reqId !== req_id,
@@ -899,7 +952,7 @@ export function sessionReducer(
           : `provider-extension-notification-${currentSeq}`,
         kind: "provider_extension",
         data: event.body,
-        timestamp: Date.now(),
+        timestamp: now,
       };
       const nextLive = [...state.liveEntries, entry];
       return {
@@ -929,7 +982,7 @@ export function sessionReducer(
         noticeKind: "compaction",
         message: "Context compacted.",
         summary: event.body.summary,
-        timestamp: Date.now(),
+        timestamp: now,
       };
       const nextLive: SessionEntry[] = [...state.liveEntries, notice];
       const turnEnd = turnEndEntry(state, currentSeq);
@@ -980,12 +1033,12 @@ export function sessionReducer(
 
     case "Error": {
       const notice: TurnNoticeEntry = {
-        id: `turn-notice-error-${Date.now()}`,
+        id: `turn-notice-error-${now}`,
         kind: "turn_notice",
         noticeKind: "error",
         message: event.body.message,
         retryable: event.body.retryable,
-        timestamp: Date.now(),
+        timestamp: now,
       };
       const nextLive = [...state.liveEntries, notice];
       return {
@@ -1024,7 +1077,18 @@ export function sessionReducer(
       const { tool_call_id, item } = event.body;
       const chunk = toolContentText(item);
       const diff = diffContent(item);
-      if (chunk.length === 0 && !diff?.stats && !diff?.metadata) {
+      const terminalId = terminalContent(item);
+      const patch =
+        "Diff" in item && item.Diff && item.Diff.patch.length > 0
+          ? { path: item.Diff.path, patch: item.Diff.patch }
+          : null;
+      if (
+        chunk.length === 0 &&
+        !diff?.stats &&
+        !diff?.metadata &&
+        !patch &&
+        !terminalId
+      ) {
         return { ...state, seq: currentSeq };
       }
       const existingIndex = state.liveEntries.findIndex(
@@ -1042,10 +1106,12 @@ export function sessionReducer(
           parentToolCallId: null,
           locations: [],
           input: null,
-          output: chunk,
+          output: chunk.length > 0 ? chunk : null,
           metadata: diff?.metadata,
           diffStats: diff?.stats ? { [diff.path]: diff.stats } : {},
-          timestamp: Date.now(),
+          diffs: patch ? [patch] : undefined,
+          terminalIds: terminalId ? [terminalId] : undefined,
+          timestamp: now,
         };
         const nextLive = [...state.liveEntries, entry];
         return {
@@ -1063,6 +1129,11 @@ export function sessionReducer(
         diffStats: diff?.stats
           ? { ...existing.diffStats, [diff.path]: diff.stats }
           : existing.diffStats,
+        diffs: patch ? withDiff(existing.diffs, patch) : existing.diffs,
+        terminalIds:
+          terminalId && !existing.terminalIds?.includes(terminalId)
+            ? [...(existing.terminalIds ?? []), terminalId]
+            : existing.terminalIds,
         output: chunk
           ? existing.output && existing.output.length > 0
             ? `${existing.output}${chunk}`
@@ -1082,7 +1153,7 @@ export function sessionReducer(
         id: `unknown-${currentSeq}`,
         kind: "unknown",
         data: { raw: event.body.raw },
-        timestamp: Date.now(),
+        timestamp: now,
       };
       const nextLive = [...state.liveEntries, entry];
       return {

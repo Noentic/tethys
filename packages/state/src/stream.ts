@@ -16,6 +16,8 @@ export interface StreamEventEnvelope {
   sessionId: string;
   seq: number;
   event: TurnEventBody;
+  /** When Core recorded the event, in Unix ms (`EventEnvelope.at_ms`). */
+  at_ms?: number | null;
 }
 
 export type RafScheduler = (callback: (time: number) => void) => number;
@@ -112,7 +114,7 @@ export class SessionStreamManager {
       let state: SessionState = this.sessionStore.state;
       for (const env of eventsToApply) {
         if (env.seq > this.highestSeq) {
-          state = sessionReducer(state, env.event, env.seq);
+          state = sessionReducer(state, env.event, env.seq, env.at_ms);
           this.highestSeq = env.seq;
         }
       }
@@ -176,7 +178,7 @@ export function hydrateSessionView(view: ThreadSessionView): SessionStore {
       thread.workdir,
     );
     for (const event of [...view.events].sort((a, b) => a.seq - b.seq)) {
-      state = sessionReducer(state, event.event, event.seq);
+      state = sessionReducer(state, event.event, event.seq, event.at_ms);
     }
     state = {
       ...state,
@@ -232,7 +234,12 @@ export function subscribeSessionStream(
     entry.source = source;
     void source
       .subscribe(sessionId, manager.getSinceSeq(), (event) => {
-        manager.pushEvent({ sessionId, seq: event.seq, event: event.event });
+        manager.pushEvent({
+          sessionId,
+          seq: event.seq,
+          event: event.event,
+          at_ms: event.at_ms,
+        });
         onEvent(event);
       })
       .catch(onError);

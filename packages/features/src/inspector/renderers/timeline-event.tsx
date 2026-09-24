@@ -1,6 +1,6 @@
+import { detailFromTexts, FileDiffCard } from "@tethys/diff";
 import type { CheckpointEntry, FileWriteEntry } from "@tethys/state";
 import { cn } from "@tethys/ui";
-import { diffForFileWrite, InlineFileDiff } from "./file-diff";
 
 function checkpointLabel(kind: CheckpointEntry["checkpointKind"]): string {
   if (kind === "TurnStart") return "turn start";
@@ -17,25 +17,23 @@ export function TimelineEventRenderer({
   className?: string;
 }) {
   if (entry.kind === "file_write") {
+    const detail = detailFromTexts(entry.path, entry.before ?? "", entry.after);
+    const verb = entry.before === null ? "Created" : "Changed";
+    const source = entry.via === "AcpFs" ? "ACP" : "watcher";
     return (
       <div
         data-entry-kind="file_write"
-        className={cn(
-          "w-full rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested)",
-          className,
-        )}
+        className={cn("w-full min-w-0", className)}
+        title={`${verb} through ${source}`}
       >
-        <div className="flex items-center gap-sm px-md py-sm text-label-sm text-(--tethys-text-muted)">
-          <span aria-hidden="true">✎</span>
-          <span>Changed</span>
-          <span className="font-mono text-mono-micro text-(--tethys-text-secondary)">
-            {entry.path}
-          </span>
-          <span>· {entry.via === "AcpFs" ? "ACP" : "watcher"}</span>
-        </div>
-        <div className="border-t border-(--tethys-hairline) p-sm">
-          <InlineFileDiff diff={diffForFileWrite(entry)} showPath={false} />
-        </div>
+        {detail ? (
+          <FileDiffCard detail={detail} verb={verb} />
+        ) : (
+          <p className="text-label-sm text-(--tethys-text-muted)">
+            {verb} <span className="font-mono">{entry.path}</span> · no line
+            changes
+          </p>
+        )}
       </div>
     );
   }

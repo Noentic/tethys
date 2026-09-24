@@ -650,6 +650,11 @@ pub struct EventEnvelope {
     pub thread_id: ThreadId,
     pub seq: u32,
     pub event: TurnEventBody,
+    /// When Core recorded the event, in Unix milliseconds. A replayed event
+    /// carries its stored time, so durations (a thought, a tool call) read the
+    /// same after a restart as they did live.
+    #[serde(default)]
+    pub at_ms: f64,
 }
 
 /// Materialized thread entry (architecture §12 `entries` table): the latest

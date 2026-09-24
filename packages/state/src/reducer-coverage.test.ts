@@ -6,6 +6,7 @@ import {
   type SessionEntry,
   sessionReducer,
   type ToolCallEntry,
+  type TurnMessageEntry,
 } from "./reducers";
 
 function entry(id: string, entries: SessionEntry[]): SessionEntry | undefined {
@@ -221,7 +222,30 @@ describe("stable update coverage", () => {
         "src/main.rs": { added: 3, removed: 1 },
       });
       expect(tool.metadata).toBe('{"source":"codex"}');
+      // The patch stays a diff, never text appended to the output.
+      expect(tool.diffs).toEqual([
+        { path: "src/main.rs", patch: "@@ -1 +1 @@" },
+      ]);
+      expect(tool.output ?? null).toBeNull();
     }
+  });
+
+  it("remembers the terminal a tool call ran in", () => {
+    let state = createInitialSessionState("s-1", "p-1", "ws-1");
+    state = sessionReducer(
+      state,
+      {
+        type: "ToolCallContentChunk",
+        body: {
+          tool_call_id: "run",
+          item: { Terminal: { terminal_id: "t-1" } },
+        },
+      },
+      1,
+    );
+    const tool = entry("run", state.liveEntries);
+    expect(isToolCall(tool) && tool.terminalIds).toEqual(["t-1"]);
+    expect(isToolCall(tool) && tool.output).toBeNull();
   });
 
   it("keeps an unknown update inspectable instead of dropping it", () => {
@@ -237,5 +261,40 @@ describe("stable update coverage", () => {
     expect(generic).toBeDefined();
     expect(JSON.stringify(generic?.data)).toContain("future");
     expect(state.seq).toBe(7);
+  });
+});
+
+describe("thought timing", () => {
+  const thoughtChunk = (text: string) => ({
+    type: "MessageChunk" as const,
+    body: {
+      message_id: "thought-1",
+      role: "Thought" as const,
+      block: { Text: text },
+    },
+  });
+
+  it("dates a thought from Core's event time and ends it when the agent moves on", () => {
+    let state = createInitialSessionState("s-1", "p-1", "ws-1");
+    state = sessionReducer(state, thoughtChunk("weighing"), 1, 1_000);
+    state = sessionReducer(
+      state,
+      {
+        type: "MessageChunk",
+        body: {
+          message_id: "reply-1",
+          role: "Agent",
+          block: { Text: "Done." },
+        },
+      },
+      2,
+      15_000,
+    );
+    const thought = entry("thought-1", state.liveEntries) as
+      | TurnMessageEntry
+      | undefined;
+    expect(thought?.timestamp).toBe(1_000);
+    expect(thought?.streaming).toBe(false);
+    expect(thought?.endedAt).toBe(15_000);
   });
 });

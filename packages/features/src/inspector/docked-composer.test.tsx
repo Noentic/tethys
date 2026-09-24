@@ -125,7 +125,7 @@ describe("the docked composer in the thread view", () => {
     const screenRoot = screen.getByTestId("inspector-screen");
     expect(screenRoot.className).toContain("flex-col");
     expect(screenRoot.lastElementChild).toBe(
-      screen.getByTestId("docked-prompt-card").parentElement,
+      screen.getByTestId("docked-composer").parentElement,
     );
   });
 

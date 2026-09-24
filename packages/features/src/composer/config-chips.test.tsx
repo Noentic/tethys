@@ -96,6 +96,7 @@ describe("ComposerConfigChips", () => {
         onSetOption={onSetOption}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /^thought_level,/ }));
     fireEvent.change(
       screen.getByRole("slider", { name: "thought_level effort" }),
       {

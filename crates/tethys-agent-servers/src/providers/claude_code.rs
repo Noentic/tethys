@@ -122,6 +122,8 @@ fn map_session_update(
                     if let Some(parent) = claude_parent_tool(meta) {
                         patch.origin = Some(ToolOrigin::Subagent);
                         patch.parent_tool_call_id = Some(parent.to_string());
+                    } else if let Some(origin) = claude_tool_origin(meta, patch.input.as_deref()) {
+                        patch.origin = Some(origin);
                     }
                 }
                 TurnEventBody::SessionInfo(info) => apply_goal(meta, info),
@@ -228,14 +230,6 @@ fn apply_initial_config_options(options: &mut [ConfigOption]) {
     }
 }
 
-pub(crate) fn approval_mode_level(mode_id: &str) -> Option<&'static str> {
-    match mode_id {
-        "acceptEdits" => Some("auto-edit"),
-        "bypassPermissions" => Some("yolo"),
-        _ => None,
-    }
-}
-
 fn apply_goal(meta: &Value, info: &mut SessionInfo) {
     if let Some(goal) = meta.get("goal") {
         info.goal = goal_patch(goal);
@@ -273,6 +267,30 @@ fn parse_goal(value: &Value) -> Option<SessionGoal> {
         }),
         metadata: serde_json::to_string(value).unwrap_or_else(|_| "{}".into()),
     })
+}
+
+/// Where a Claude tool call came from, read from the tool's own name rather
+/// than its display title (DESIGN.md `tool-origin-tag`): Claude names an MCP
+/// tool `mcp__<server>__<tool>` and runs a skill through its `Skill` tool.
+fn claude_tool_origin(meta: &Value, input: Option<&str>) -> Option<ToolOrigin> {
+    let name = meta.get("claudeCode")?.get("toolName")?.as_str()?;
+    if let Some(rest) = name.strip_prefix("mcp__") {
+        let server = rest
+            .split("__")
+            .next()
+            .filter(|server| !server.is_empty())?;
+        return Some(ToolOrigin::Mcp {
+            server: server.to_string(),
+        });
+    }
+    if name == "Skill" {
+        let input: Value = serde_json::from_str(input?).ok()?;
+        let skill = string_field(&input, &["skill", "command", "name"])?;
+        return Some(ToolOrigin::Skill {
+            name: skill.trim_start_matches('/').to_string(),
+        });
+    }
+    None
 }
 
 fn claude_parent_tool(meta: &Value) -> Option<&str> {
@@ -487,8 +505,65 @@ mod tests {
         );
         assert_eq!(
             metadata["tethysModeRoles"]["default"],
-            json!({ "kind": "working" })
+            json!({ "kind": "approval", "level": "supervised" })
         );
+    }
+
+    fn tool_upsert(input: Option<&str>) -> Vec<TurnEventBody> {
+        vec![TurnEventBody::ToolCallUpsert {
+            tool_call_id: "t1".into(),
+            patch: ToolCallPatch {
+                input: input.map(str::to_string),
+                ..Default::default()
+            },
+        }]
+    }
+
+    fn origin_of(events: &[TurnEventBody]) -> Option<ToolOrigin> {
+        match &events[0] {
+            TurnEventBody::ToolCallUpsert { patch, .. } => patch.origin.clone(),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn names_the_mcp_server_and_skill_behind_a_tool_call() {
+        let handler = descriptor().session_update_handler.expect("handler");
+
+        let mut events = tool_upsert(None);
+        handler(
+            "session",
+            None,
+            &json!({"_meta": {"claudeCode": {"toolName": "mcp__github__create_issue"}}}),
+            &mut events,
+        );
+        assert_eq!(
+            origin_of(&events),
+            Some(ToolOrigin::Mcp {
+                server: "github".into()
+            })
+        );
+
+        let mut events = tool_upsert(Some(r#"{"skill":"pdf"}"#));
+        handler(
+            "session",
+            None,
+            &json!({"_meta": {"claudeCode": {"toolName": "Skill"}}}),
+            &mut events,
+        );
+        assert_eq!(
+            origin_of(&events),
+            Some(ToolOrigin::Skill { name: "pdf".into() })
+        );
+
+        let mut events = tool_upsert(None);
+        handler(
+            "session",
+            None,
+            &json!({"_meta": {"claudeCode": {"toolName": "Edit"}}}),
+            &mut events,
+        );
+        assert_eq!(origin_of(&events), None);
     }
 
     #[test]

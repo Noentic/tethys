@@ -39,8 +39,11 @@ import { setupGlobalKeyboardMap } from "./keyboard";
 import { notificationsEnabled } from "./notification-preference";
 import { SessionsColumn } from "./SessionsColumn";
 import {
+  changesFitDocked,
+  changesWidth,
   computeShellLayout,
   INSPECTOR_COLLAPSED_WIDTH,
+  INSPECTOR_MIN_WIDTH,
   INSPECTOR_OVERLAY_BREAKPOINT,
   INSPECTOR_WIDTH,
   STAGE_MIN_WIDTH,
@@ -295,29 +298,40 @@ export function AppShell({
   const handleInspectorTabChange = useCallback(
     (tab: "overview" | "changes") => {
       setInspectorTab(tab);
+      const panel = inspectorPanelRef.current;
       if (tab === "changes") {
-        if (
-          windowWidth < INSPECTOR_OVERLAY_BREAKPOINT ||
-          windowWidth - 48 - STAGE_MIN_WIDTH < 480
-        ) {
+        if (!changesFitDocked(windowWidth)) {
           setInspectorOverlayOpen(true);
           setInspectorExpanded(false);
         } else {
           setInspectorOverlayOpen(false);
-          if (inspectorPanelRef.current?.isCollapsed()) {
-            inspectorPanelRef.current.expand();
+          if (panel?.isCollapsed()) {
+            panel.expand();
             setInspectorCollapsed(false);
+          }
+          // The tab takes its own width; a diff at the Overview's 360px clips.
+          try {
+            panel?.resize(changesWidth(windowWidth));
+          } catch {
+            // The panel may not be mounted while the active view is changing.
           }
           setInspectorExpanded(true);
         }
       } else {
+        if (inspectorExpanded) {
+          try {
+            panel?.resize(INSPECTOR_WIDTH);
+          } catch {
+            // As above.
+          }
+        }
         setInspectorExpanded(false);
         if (windowWidth >= INSPECTOR_OVERLAY_BREAKPOINT) {
           setInspectorOverlayOpen(false);
         }
       }
     },
-    [inspectorPanelRef, windowWidth],
+    [inspectorExpanded, inspectorPanelRef, windowWidth],
   );
 
   const toggleChanges = useCallback(() => {
@@ -330,13 +344,9 @@ export function AppShell({
   const toggleInspectorExpanded = useCallback(() => {
     const panel = inspectorPanelRef.current;
     if (!panel) return;
-    const maximum = Math.max(
-      480,
-      Math.min(windowWidth * 0.5, windowWidth - 48 - STAGE_MIN_WIDTH),
-    );
     const next = !inspectorExpanded;
     try {
-      panel.resize(next ? maximum : INSPECTOR_WIDTH);
+      panel.resize(next ? changesWidth(windowWidth) : INSPECTOR_WIDTH);
       setInspectorExpanded(next);
     } catch {
       // The panel may not be mounted while the active view is changing.
@@ -573,14 +583,8 @@ export function AppShell({
                   id="shell-inspector"
                   panelRef={inspectorPanelRef}
                   defaultSize={INSPECTOR_WIDTH}
-                  minSize={240}
-                  maxSize={Math.max(
-                    480,
-                    Math.min(
-                      windowWidth * 0.5,
-                      windowWidth - 48 - STAGE_MIN_WIDTH,
-                    ),
-                  )}
+                  minSize={INSPECTOR_MIN_WIDTH}
+                  maxSize={changesWidth(windowWidth)}
                   collapsedSize={INSPECTOR_COLLAPSED_WIDTH}
                   collapsible
                   className="h-full"
@@ -610,7 +614,11 @@ export function AppShell({
           bare
           label="Thread Inspector"
           side="right"
-          width="w-(--layout-shell-inspector)"
+          width={
+            inspectorTab === "changes"
+              ? "w-[min(640px,calc(100vw-48px))]"
+              : "w-[min(var(--layout-shell-inspector),calc(100vw-48px))]"
+          }
         >
           <InspectorPane
             sessionId={activeSessionId}

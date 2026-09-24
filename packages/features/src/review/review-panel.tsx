@@ -329,7 +329,7 @@ export function ReviewPanel({
             open={scopeOpen}
             onClose={() => setScopeOpen(false)}
             anchorRef={scopeButtonRef}
-            className="top-full left-0 mt-1 w-56"
+            className="w-56"
           >
             <div role="listbox" aria-label="Diff scope" className="p-1">
               {(
@@ -442,24 +442,10 @@ export function ReviewPanel({
                   />
                   {detail !== null && detail.path === file.path && (
                     <>
-                      <div
-                        data-testid="hunk-actions"
-                        className="flex flex-wrap gap-1"
-                      >
-                        {detail.hunks.map((hunk, index) => (
-                          <Button
-                            key={`${file.path}:${hunk.old_start}:${hunk.new_start}`}
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => discardHunk(file.path, index)}
-                          >
-                            Discard hunk {index + 1}
-                          </Button>
-                        ))}
-                      </div>
                       <DiffViewer
                         detail={detail}
-                        className="max-h-80"
+                        className="max-h-[max(20rem,60vh)]"
+                        onDiscardHunk={(index) => discardHunk(file.path, index)}
                         onCommentLine={(line) => {
                           setLineComment({ path: file.path, line });
                           setCommentDraft("");

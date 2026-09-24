@@ -285,5 +285,36 @@ describe("context bar", () => {
       expect(anchor.current?.textContent).toContain("Claude Code");
       expect(anchor.current?.getAttribute("aria-haspopup")).toBe("dialog");
     });
+
+    it("does not fold queue-count or show trigger when queue count is 0", () => {
+      registerQueueCountSlot();
+      render(
+        <ContextBar
+          {...baseProps}
+          queueCount={0}
+          slotData={{ "queue-count": { count: 0 } }}
+        />,
+      );
+      // Provider needs 170. Width 200 is plenty for provider alone, but would fold queue-count if present (170+90=260 > 200).
+      setWidth(200);
+      expect(screen.queryByRole("button", { name: /More:/ })).toBeNull();
+    });
+
+    it("omits mode from fold when provider declares no mode options in slotData", () => {
+      registerComposerContextSlot(
+        "mode",
+        ModeFixture,
+        CONTEXT_BAR_PRIORITY.mode,
+      );
+      render(
+        <ContextBar
+          {...baseProps}
+          slotData={{ mode: { options: [] } }}
+        />,
+      );
+      // Provider needs 170. If mode was present (170+80=250), width 200 would fold mode.
+      setWidth(200);
+      expect(screen.queryByRole("button", { name: /More:/ })).toBeNull();
+    });
   });
 });

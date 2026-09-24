@@ -1,7 +1,7 @@
 //! `prompt-card` (DESIGN.md; spec §3) — the new-thread composer with the
 //! three-precondition submit gate.
 
-import { ArrowRight, BranchPlus, FolderPlus, Warning } from "@nebutra/icons";
+import { BranchPlus, Warning } from "@nebutra/icons";
 import type {
   AgentCommand,
   ConfigOption,
@@ -23,7 +23,7 @@ import {
   type TrustedWorkspace,
   useProviderConnections,
 } from "@tethys/state";
-import { ActionIconButton, Chip, Listbox, Popover } from "@tethys/ui";
+import { ActionIconButton } from "@tethys/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AttachmentPicker,
@@ -38,6 +38,7 @@ import {
   skillSource,
 } from "../composer/popups";
 import { promptContentBlocks } from "../composer/prompt-blocks";
+import { AdditionalFolders, WHERE_PILL_CLASS } from "./additional-folders";
 import { IsolationToggle } from "./isolation-toggle";
 import { ModeSelector } from "./mode-selector";
 import { ModelSelector } from "./model-selector";
@@ -47,6 +48,7 @@ import {
   usePreparedDraft,
 } from "./use-prepared-draft";
 import { WorkspaceSelector } from "./workspace-selector";
+import { WorktreeFields } from "./worktree-fields";
 
 const ZERO_PROVIDER_PLACEHOLDER =
   "Connect a provider in Settings to send a message";
@@ -57,9 +59,6 @@ const PROMPT_PLACEHOLDER =
 const WORKTREE_PREFERENCE = "tethys:new-worktree:";
 const PERMISSION_MODE_PREFERENCE = "tethys:permission-mode:";
 const CURRENT_ISOLATION: ThreadIsolation = { kind: "current" };
-// Pen `XrH5y / additional-folder pill`: matches the workspace pill.
-const ADDITIONAL_PILL_CLASS =
-  "focus-ring flex h-7 items-center gap-1.5 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-muted) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 
 function worktreePreference(workspaceId: string | undefined): boolean {
   if (!workspaceId || typeof localStorage === "undefined") return false;
@@ -196,8 +195,6 @@ export function PromptCard({
   const [initializingGit, setInitializingGit] = useState(false);
   const [uncommittedCount, setUncommittedCount] = useState<number | null>(null);
   const [extraRoots, setExtraRoots] = useState<TrustedWorkspace[]>([]);
-  const [foldersOpen, setFoldersOpen] = useState(false);
-  const foldersAnchorRef = useRef<HTMLButtonElement>(null);
 
   const providerList = useProviderConnections(providers);
 
@@ -218,10 +215,8 @@ export function PromptCard({
       else if (control === "model") modelTriggerRef.current?.click();
       else {
         document
-          .querySelector<HTMLInputElement>(
-            'input[type="range"][aria-label$=" effort"]',
-          )
-          ?.focus();
+          .querySelector<HTMLButtonElement>('[data-composer-control="effort"]')
+          ?.click();
       }
     };
     window.addEventListener(COMPOSER_CONTROL_SHORTCUT_EVENT, handleShortcut);
@@ -480,7 +475,7 @@ export function PromptCard({
               {session.workspace && (
                 <button
                   type="button"
-                  className={ADDITIONAL_PILL_CLASS}
+                  className={WHERE_PILL_CLASS}
                   disabled={initializingGit}
                   onClick={() => void initializeGit()}
                 >
@@ -495,34 +490,17 @@ export function PromptCard({
                 onChange={handleWorktreeChange}
               />
               {newWorktree ? (
-                <div className="inline-flex h-7 items-stretch overflow-hidden rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) font-mono text-mono-micro">
-                  <span className="flex items-center px-2 text-(--tethys-text-muted)">
-                    from
-                  </span>
-                  <input
-                    aria-label="Worktree base"
-                    value={worktreeBase}
-                    onChange={(event) => setWorktreeBase(event.target.value)}
-                    className="w-16 border-l border-(--tethys-hairline) bg-transparent px-2 text-(--tethys-text-primary) outline-none focus:bg-(--tethys-surface-hover)"
-                  />
-                  <span
-                    aria-hidden="true"
-                    className="flex items-center border-l border-(--tethys-hairline) px-1.5 text-(--tethys-text-muted)"
-                  >
-                    <ArrowRight className="size-3" />
-                  </span>
-                  <input
-                    aria-label="Worktree branch"
-                    value={worktreeBranch}
-                    placeholder={defaultBranch(workspace.name)}
-                    onChange={(event) => setWorktreeBranch(event.target.value)}
-                    className="w-44 border-l border-(--tethys-hairline) bg-transparent px-2 text-(--tethys-text-primary) outline-none placeholder:text-(--tethys-text-muted) focus:bg-(--tethys-surface-hover)"
-                  />
-                </div>
+                <WorktreeFields
+                  base={worktreeBase}
+                  branch={worktreeBranch}
+                  branchPlaceholder={defaultBranch(workspace.name)}
+                  onBaseChange={setWorktreeBase}
+                  onBranchChange={setWorktreeBranch}
+                />
               ) : (
                 uncommittedCount !== null &&
                 uncommittedCount > 0 && (
-                  <span className="inline-flex h-6 items-center gap-1 rounded-sm bg-(--tethys-status-warning-soft) px-2 font-mono text-mono-micro text-(--tethys-status-warning)">
+                  <span className="inline-flex min-h-6 shrink-0 items-center gap-1 rounded-sm bg-(--tethys-status-warning-soft) px-2 font-mono text-mono-micro text-(--tethys-status-warning)">
                     {uncommittedCount} uncommitted
                   </span>
                 )
@@ -543,7 +521,7 @@ export function PromptCard({
                   <button
                     type="button"
                     onClick={() => handleWorktreeChange(true)}
-                    className="focus-ring inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-label-md text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover)"
+                    className="focus-ring inline-flex min-h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-label-md text-(--tethys-text-primary) hover:bg-(--tethys-surface-hover)"
                   >
                     <BranchPlus aria-hidden="true" className="size-3.5" />
                     Use a worktree
@@ -554,63 +532,11 @@ export function PromptCard({
           ) : null}
 
           {trustedFolders.length > 1 && (
-            <div className="relative flex items-center gap-xs">
-              <button
-                ref={foldersAnchorRef}
-                type="button"
-                aria-haspopup="listbox"
-                aria-expanded={foldersOpen}
-                aria-label="Additional folders"
-                onClick={() => setFoldersOpen((open) => !open)}
-                className={ADDITIONAL_PILL_CLASS}
-              >
-                <FolderPlus aria-hidden="true" className="size-3.5" />
-                Folder
-              </button>
-              <Popover
-                open={foldersOpen}
-                onClose={() => setFoldersOpen(false)}
-                anchorRef={foldersAnchorRef}
-                className="top-full left-0 mt-1.5"
-              >
-                <div className="w-72">
-                  <div className="px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider">
-                    Additional Trusted Folders
-                  </div>
-                  {extraCandidates.length === 0 ? (
-                    <p className="px-3 py-2 text-body-sm text-(--tethys-text-muted)">
-                      No further trusted folders.
-                    </p>
-                  ) : (
-                    <Listbox
-                      label="Additional trusted folders"
-                      items={extraCandidates.map((candidate) => ({
-                        id: candidate.id,
-                        value: candidate,
-                        label: candidate.name,
-                        sublabel: candidate.path,
-                      }))}
-                      onSelect={(item) => {
-                        setExtraRoots((roots) => [...roots, item.value]);
-                        setFoldersOpen(false);
-                      }}
-                    />
-                  )}
-                </div>
-              </Popover>
-              {extraRoots.map((root) => (
-                <Chip
-                  key={root.id}
-                  onRemove={() =>
-                    setExtraRoots((roots) =>
-                      roots.filter((candidate) => candidate.id !== root.id),
-                    )
-                  }
-                >
-                  {root.name}
-                </Chip>
-              ))}
-            </div>
+            <AdditionalFolders
+              candidates={extraCandidates}
+              roots={extraRoots}
+              onChange={setExtraRoots}
+            />
           )}
         </div>
 
@@ -670,8 +596,8 @@ export function PromptCard({
           </p>
         )}
 
-        <div className="flex items-center justify-between gap-lg">
-          <div className="flex min-w-0 items-center gap-md">
+        <div className="flex items-center justify-between gap-md">
+          <div className="flex min-w-0 shrink-0 items-center gap-md">
             <AttachmentPicker
               providerName={selectedProvider?.name ?? "a selected Provider"}
               capabilities={{
@@ -707,7 +633,7 @@ export function PromptCard({
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-md">
+          <div className="flex min-w-0 items-center justify-end gap-md">
             <ModelSelector
               providers={providerList}
               selectedProviderId={providerId}
@@ -735,7 +661,7 @@ export function PromptCard({
             )}
             <kbd
               title="Command/Ctrl + Enter"
-              className="font-mono text-mono-micro text-(--tethys-text-muted)"
+              className="shrink-0 font-mono text-mono-micro text-(--tethys-text-muted)"
             >
               ⌘↩
             </kbd>

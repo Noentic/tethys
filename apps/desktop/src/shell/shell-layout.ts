@@ -9,6 +9,10 @@
 export const RAIL_WIDTH = 48;
 export const STAGE_MIN_WIDTH = 560;
 export const INSPECTOR_WIDTH = 360;
+/** Below this the Inspector's rows cannot hold a label and its value. */
+export const INSPECTOR_MIN_WIDTH = 320;
+/** The Changes tab's floor: a diff narrower than this cannot be read. */
+export const CHANGES_MIN_WIDTH = 480;
 export const INSPECTOR_COLLAPSED_WIDTH = 40;
 export const INSPECTOR_OVERLAY_BREAKPOINT = 1100;
 
@@ -59,4 +63,25 @@ export function computeShellLayout({
     sessions,
     stageWidth: remaining - INSPECTOR_WIDTH,
   };
+}
+
+/**
+ * The docked Changes tab's width (DESIGN.md `side-panel.width`):
+ * clamp(changes-min, 50% of the window, window − rail − stage-min). The upper
+ * bound keeps the Stage at its minimum, so it wins when the two disagree.
+ */
+export function changesWidth(windowWidth: number): number {
+  const room = windowWidth - RAIL_WIDTH - STAGE_MIN_WIDTH;
+  return Math.max(
+    INSPECTOR_MIN_WIDTH,
+    Math.min(Math.max(CHANGES_MIN_WIDTH, windowWidth * 0.5), room),
+  );
+}
+
+/** Whether a docked Changes tab fits beside the Stage; otherwise it overlays. */
+export function changesFitDocked(windowWidth: number): boolean {
+  return (
+    windowWidth >= INSPECTOR_OVERLAY_BREAKPOINT &&
+    windowWidth - RAIL_WIDTH - STAGE_MIN_WIDTH >= CHANGES_MIN_WIDTH
+  );
 }

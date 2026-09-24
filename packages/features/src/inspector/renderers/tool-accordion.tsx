@@ -1,9 +1,18 @@
+import { DiffStat } from "@tethys/diff";
 import type { ToolCallEntry } from "@tethys/state";
-import { Button, Chip, cn, StatusDot } from "@tethys/ui";
-import { useEffect, useId, useState } from "react";
+import {
+  Button,
+  Chip,
+  cn,
+  StatusDot,
+  TruncatedText,
+  useInspectorControl,
+} from "@tethys/ui";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useInspectorClient } from "../../client-context";
+import { toolDiffs, toolHeadline } from "../tool-view";
 import { useSessionState } from "../use-session-state";
-import { diffForTool, InlineFileDiff } from "./file-diff";
+import { ToolBody } from "./tool-bodies";
 import { DisclosureChevron, ToolKindIcon } from "./tool-kind-icon";
 import { ToolOriginTag } from "./tool-origin-tag";
 
@@ -15,13 +24,40 @@ const STATUS_KEY: Record<ToolCallEntry["status"], string> = {
   Cancelled: "idle",
 };
 
-const OUTPUT_CAP = 1200;
 const LOCATION_CAP = 3;
+const FILE_KINDS = ["edit", "delete", "move"];
+
+/** `+a −b` across every file the call changed, from its diffs or its stats. */
+function callStat(
+  entry: ToolCallEntry,
+  diffs: ReturnType<typeof toolDiffs>,
+): { additions: number; deletions: number } | null {
+  if (diffs.length > 0) {
+    return diffs.reduce(
+      (sum, diff) => ({
+        additions: sum.additions + diff.additions,
+        deletions: sum.deletions + diff.deletions,
+      }),
+      { additions: 0, deletions: 0 },
+    );
+  }
+  const stats = Object.values(entry.diffStats ?? {});
+  if (stats.length === 0) return null;
+  return stats.reduce(
+    (sum, stat) => ({
+      additions: sum.additions + stat.added,
+      deletions: sum.deletions + stat.removed,
+    }),
+    { additions: 0, deletions: 0 },
+  );
+}
 
 /**
- * A collapsible tool-call card, patched in place as the call updates. The kind
- * glyph is decoration; the title carries the meaning. A failed call writes the
- * word `Failed` beside the dot so failure is never colour alone.
+ * A tool call as one card, patched in place as the call updates (DESIGN.md
+ * `tool-accordion`). The header names the act and its object — `Edited
+ * README.md +3 −1`, `Ran pnpm test` — and the body is shaped by the kind of
+ * work (`ToolBody`). A failed call writes `Failed` beside the dot, so failure
+ * is never colour alone; a failed or waiting call opens itself.
  */
 export function ToolAccordionRenderer({
   entry,
@@ -32,8 +68,11 @@ export function ToolAccordionRenderer({
   className?: string;
   onOpenLocation?: (path: string, line: number | null) => void;
 }) {
-  const diff = diffForTool(entry);
+  const diffs = useMemo(() => toolDiffs(entry), [entry]);
+  const headline = toolHeadline(entry);
+  const stat = callStat(entry, diffs);
   const inspector = useInspectorClient();
+  const { openChanges } = useInspectorControl();
   const session = useSessionState(inspector?.threadId ?? "");
   const canStop = Boolean(
     entry.asyncTaskId &&
@@ -43,14 +82,15 @@ export function ToolAccordionRenderer({
   const [expanded, setExpanded] = useState(
     entry.status === "Failed" ||
       entry.status === "Pending" ||
-      diff !== null ||
+      diffs.length > 0 ||
       canStop,
   );
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState<string | null>(null);
   const regionId = useId();
-  const output = entry.output ?? "";
-  const capped = output.length > OUTPUT_CAP;
+  // A file edit names its file in the header and its diff; chips would repeat it.
+  const showLocations =
+    entry.locations.length > 0 && !FILE_KINDS.includes(entry.toolKind ?? "");
   const shownLocations = entry.locations.slice(0, LOCATION_CAP);
   const moreLocations = entry.locations.length - shownLocations.length;
 
@@ -79,8 +119,9 @@ export function ToolAccordionRenderer({
     <div
       data-entry-kind="tool_call"
       data-tool-call-id={entry.toolCallId}
+      data-tool-kind={entry.toolKind ?? "other"}
       className={cn(
-        "rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested)",
+        "min-w-0 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested)",
         className,
       )}
     >
@@ -89,50 +130,51 @@ export function ToolAccordionRenderer({
         aria-expanded={expanded}
         aria-controls={regionId}
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center gap-sm px-md py-sm text-left transition-colors hover:bg-(--tethys-surface-hover)"
+        className="focus-ring-inset flex min-h-9 w-full min-w-0 items-center gap-sm rounded-md px-md py-1.5 text-left transition-colors hover:bg-(--tethys-surface-hover)"
       >
         <StatusDot status={STATUS_KEY[entry.status]} inline />
         <DisclosureChevron
           expanded={expanded}
-          className="text-(--tethys-text-muted)"
+          className="shrink-0 text-(--tethys-text-muted)"
         />
         <ToolKindIcon
           kind={entry.toolKind}
-          className="text-(--tethys-text-secondary)"
+          className="shrink-0 text-(--tethys-text-secondary)"
         />
-        <span className="truncate text-label-md text-(--tethys-text-primary)">
-          {entry.title}
-        </span>
+        {headline.verb && (
+          <span className="shrink-0 text-label-md text-(--tethys-text-secondary)">
+            {headline.verb}
+          </span>
+        )}
+        <TruncatedText
+          text={headline.subject}
+          className={cn(
+            "text-(--tethys-text-primary)",
+            headline.mono ? "font-mono text-mono-code" : "text-label-md",
+          )}
+        />
         <ToolOriginTag origin={entry.origin} />
         {entry.status === "Failed" && (
-          <span className="text-label-sm text-(--tethys-status-danger)">
+          <span className="shrink-0 text-label-sm text-(--tethys-status-danger)">
             Failed
           </span>
         )}
         {entry.status === "Cancelled" && (
-          <span className="text-label-sm text-(--tethys-text-muted)">
+          <span className="shrink-0 text-label-sm text-(--tethys-text-muted)">
             Stopped
           </span>
         )}
-        {entry.locations.length > 0 && (
-          <span className="ml-auto font-mono text-mono-micro text-(--tethys-text-muted)">
-            {entry.locations.length} file
-            {entry.locations.length === 1 ? "" : "s"}
+        {stat && (
+          <span
+            role="img"
+            aria-label={`${stat.additions} lines added, ${stat.deletions} lines removed`}
+            className="ml-auto"
+          >
+            <DiffStat additions={stat.additions} deletions={stat.deletions} />
           </span>
         )}
-        {Object.entries(entry.diffStats ?? {}).map(([path, stats]) => (
-          <span
-            key={path}
-            role="img"
-            title={path || "File diff"}
-            aria-label={`${path || "File diff"}: ${stats.added} lines added, ${stats.removed} lines removed`}
-            className="ml-auto font-mono text-mono-micro text-(--tethys-text-muted)"
-          >
-            +{stats.added} −{stats.removed}
-          </span>
-        ))}
       </button>
-      {entry.locations.length > 0 && (
+      {showLocations && (
         <div className="flex flex-wrap gap-1 px-md pb-sm">
           {shownLocations.map((location) => (
             <Chip
@@ -140,9 +182,15 @@ export function ToolAccordionRenderer({
               interactive
               onClick={() => onOpenLocation?.(location.path, location.line)}
             >
-              {location.line === null
-                ? location.path
-                : `${location.path}:${location.line}`}
+              <TruncatedText
+                mode="path"
+                className="max-w-64"
+                text={
+                  location.line === null
+                    ? location.path
+                    : `${location.path}:${location.line}`
+                }
+              />
             </Chip>
           ))}
           {moreLocations > 0 && <Chip>+{moreLocations}</Chip>}
@@ -151,11 +199,10 @@ export function ToolAccordionRenderer({
       {expanded && (
         <div
           id={regionId}
-          className="border-t border-(--tethys-hairline) px-md py-sm"
+          className="flex flex-col gap-sm border-t border-(--tethys-hairline) px-md py-sm"
         >
-          <InlineFileDiff diff={diff} />
           {canStop && (
-            <div className="mb-sm flex items-center gap-sm">
+            <div className="flex items-center gap-sm">
               <Button
                 size="sm"
                 variant="secondary"
@@ -174,39 +221,11 @@ export function ToolAccordionRenderer({
               )}
             </div>
           )}
-          {entry.input && (
-            <pre
-              className={cn(
-                "overflow-x-auto font-mono text-mono-code text-(--tethys-text-secondary)",
-                diff && "mt-sm",
-              )}
-            >
-              {entry.input}
-            </pre>
-          )}
-          {output && (
-            <pre className="mt-sm max-h-64 overflow-auto rounded-sm bg-(--tethys-surface-sunken) p-sm font-mono text-mono-code text-(--tethys-text-on-sunken-secondary)">
-              {capped ? output.slice(0, OUTPUT_CAP) : output}
-            </pre>
-          )}
-          {capped && (
-            <button
-              type="button"
-              className="mt-1 text-label-sm text-(--tethys-text-muted) underline"
-            >
-              View full
-            </button>
-          )}
-          {entry.metadata && (
-            <details className="mt-sm rounded-sm border border-(--tethys-hairline) px-sm py-xs">
-              <summary className="cursor-pointer text-label-sm text-(--tethys-text-muted)">
-                Provider metadata
-              </summary>
-              <pre className="mt-xs max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-mono-micro text-(--tethys-text-muted)">
-                {entry.metadata}
-              </pre>
-            </details>
-          )}
+          <ToolBody
+            entry={entry}
+            diffs={diffs}
+            onOpenChanges={openChanges ? () => openChanges() : undefined}
+          />
         </div>
       )}
     </div>

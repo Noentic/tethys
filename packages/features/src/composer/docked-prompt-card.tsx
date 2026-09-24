@@ -3,6 +3,7 @@
 //! staged-prompt list, and a lower bar with the Model and Effort chips and the
 //! one action button. It owns what the retired 56px action bar used to slot in.
 
+import { GitBranch } from "@nebutra/icons";
 import type {
   ContentBlock,
   ProviderControl,
@@ -24,7 +25,7 @@ import {
   getOrCreateSessionStore,
   type PromptQueueClient,
 } from "@tethys/state";
-import { ActionIconButton, Button, cn, StopControl } from "@tethys/ui";
+import { ActionIconButton, Button, cn, StopControl, Tooltip } from "@tethys/ui";
 import type React from "react";
 import {
   useCallback,
@@ -105,27 +106,6 @@ export interface DockedPromptCardProps {
 const TURN_IN_FLIGHT = ["running", "awaiting_approval"];
 const PROMPT_PLACEHOLDER = "Ask Anything…";
 
-function RunningSpinner() {
-  return (
-    <svg
-      className="h-[18px] w-[18px] motion-safe:animate-spin"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-        stroke="currentColor"
-        strokeWidth="3"
-        opacity="0.25"
-      />
-      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" />
-    </svg>
-  );
-}
-
 export function DockedPromptCard({
   sessionId,
   client,
@@ -176,10 +156,8 @@ export function DockedPromptCard({
       else if (control === "model") providerTriggerRef?.current?.click();
       else {
         document
-          .querySelector<HTMLInputElement>(
-            'input[type="range"][aria-label$=" effort"]',
-          )
-          ?.focus();
+          .querySelector<HTMLButtonElement>('[data-composer-control="effort"]')
+          ?.click();
       }
     };
     window.addEventListener(COMPOSER_CONTROL_SHORTCUT_EVENT, handleShortcut);
@@ -326,13 +304,19 @@ export function DockedPromptCard({
     }
   };
 
+  const usageFraction =
+    state.usage?.context_size && state.usage.context_size > 0
+      ? state.usage.total_tokens / state.usage.context_size
+      : undefined;
+  const canFork = Boolean(state.capabilities?.session_fork && onFork);
+
   return (
-    // prompt-card: Level 3 surface, lit top edge, 2xl radius, and a width that
-    // yields to the window: min(prompt-width, 100% - 96px).
+    // The composer stack: the pending request and the branch strip dock above
+    // the card, outside it, so the card itself holds only what and how.
     <div
-      data-testid="docked-prompt-card"
+      data-testid="docked-composer"
       className={cn(
-        "edge-lit mx-auto flex w-[min(var(--layout-prompt-width),calc(100%_-_96px))] flex-col gap-md rounded-2xl border border-(--tethys-hairline-strong) bg-(--tethys-surface-elevated) p-lg transition-colors focus-within:border-(--tethys-text-muted)",
+        "mx-auto flex w-[min(var(--layout-prompt-width),calc(100%_-_96px))] flex-col gap-sm",
         className,
       )}
     >
@@ -344,95 +328,97 @@ export function DockedPromptCard({
         worktree={worktreeEnabled}
         noGit={noGit}
         turnRunning={turnInFlight}
+        trailing={
+          canFork ? (
+            <Tooltip content="Fork this session into a new thread">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={turnInFlight}
+                onClick={onFork}
+                aria-label="Fork session"
+              >
+                <GitBranch aria-hidden="true" className="size-3.5" />
+                <span className="hidden @md:inline">Fork</span>
+              </Button>
+            </Tooltip>
+          ) : undefined
+        }
       />
 
-      <ContextBar
-        sessionId={sessionId}
-        providerName={state.providerId}
-        configOptions={state.configOptions}
-        values={values}
-        onSetOption={setOption}
-        queueCount={queueCount}
-        usageText={state.usage ? formatUsage(state.usage) : undefined}
-        slotData={slotData}
-        providerAnchorRef={providerAnchorRef}
-      />
+      {/* prompt-card: Level 3 surface, lit top edge, 2xl radius. */}
+      <div
+        data-testid="docked-prompt-card"
+        className="edge-lit flex flex-col gap-md rounded-2xl border border-(--tethys-hairline-strong) bg-(--tethys-surface-elevated) px-lg pt-md pb-sm transition-colors focus-within:border-(--tethys-text-muted)"
+      >
+        <PromptQueue client={client} threadId={sessionId} store={queueStore} />
 
-      <PromptQueue client={client} threadId={sessionId} store={queueStore} />
-
-      <div className="relative">
-        {!hasText && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 px-1 text-body-md text-(--tethys-text-muted)"
-          >
-            {turnInFlight
-              ? "Queue a follow-up…  (Ctrl/Cmd+Enter)"
-              : PROMPT_PLACEHOLDER}
-          </span>
-        )}
-        <ComposerEditor
-          ref={editorRef}
-          density="docked"
-          sources={sources}
-          placeholder={
-            turnInFlight
-              ? "Queue a follow-up…  (Ctrl/Cmd+Enter)"
-              : PROMPT_PLACEHOLDER
-          }
-          onChange={(text) => setHasText(text.trim().length > 0)}
-          onControl={handleComposerControl}
-          onSubmit={() => void submit()}
-        />
-      </div>
-
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-sm" data-testid="prompt-attachments">
-          {attachments.map((attachment) => (
-            <ComposerAttachmentChip
-              key={attachment.id}
-              attachment={attachment}
-              onRemove={() =>
-                setAttachments((current) =>
-                  current.filter((item) => item.id !== attachment.id),
-                )
-              }
-            />
-          ))}
-        </div>
-      )}
-
-      {sendError && (
-        <p
-          role="alert"
-          title={sendError}
-          className="text-label-sm text-(--tethys-status-danger)"
-        >
-          The prompt could not be sent.
-        </p>
-      )}
-
-      {client.thread.providerControl && (
-        <ProviderControls
-          sessionId={sessionId}
-          goal={state.goal}
-          capabilities={state.capabilities?.provider_extensions}
-          send={sendProviderControl}
-        />
-      )}
-
-      <div className="flex items-center justify-between gap-md">
-        <div className="flex min-w-0 items-center gap-md">
-          {state.capabilities?.session_fork && onFork && (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={turnInFlight}
-              onClick={onFork}
+        <div className="relative">
+          {!hasText && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 truncate px-1 text-body-md text-(--tethys-text-muted)"
             >
-              Fork session
-            </Button>
+              {turnInFlight
+                ? "Queue a follow-up…  (Ctrl/Cmd+Enter)"
+                : PROMPT_PLACEHOLDER}
+            </span>
           )}
+          <ComposerEditor
+            ref={editorRef}
+            density="docked"
+            sources={sources}
+            placeholder={
+              turnInFlight
+                ? "Queue a follow-up…  (Ctrl/Cmd+Enter)"
+                : PROMPT_PLACEHOLDER
+            }
+            onChange={(text) => setHasText(text.trim().length > 0)}
+            onControl={handleComposerControl}
+            onSubmit={() => void submit()}
+          />
+        </div>
+
+        {attachments.length > 0 && (
+          <div
+            className="flex flex-wrap gap-sm"
+            data-testid="prompt-attachments"
+          >
+            {attachments.map((attachment) => (
+              <ComposerAttachmentChip
+                key={attachment.id}
+                attachment={attachment}
+                onRemove={() =>
+                  setAttachments((current) =>
+                    current.filter((item) => item.id !== attachment.id),
+                  )
+                }
+              />
+            ))}
+          </div>
+        )}
+
+        {sendError && (
+          <p
+            role="alert"
+            title={sendError}
+            className="text-label-sm text-(--tethys-status-danger)"
+          >
+            The prompt could not be sent.
+          </p>
+        )}
+
+        {client.thread.providerControl && (
+          <ProviderControls
+            sessionId={sessionId}
+            goal={state.goal}
+            capabilities={state.capabilities?.provider_extensions}
+            send={sendProviderControl}
+          />
+        )}
+
+        {/* The how band: attach, then how the agent works, then what runs it. */}
+        <div className="flex min-w-0 items-center gap-sm">
           <AttachmentPicker
             providerName={state.providerId}
             capabilities={{
@@ -445,38 +431,52 @@ export function DockedPromptCard({
               setAttachments((current) => [...current, attachment])
             }
           />
+          <ContextBar
+            className="flex-1"
+            showProviderPill={false}
+            sessionId={sessionId}
+            providerName={state.providerId}
+            configOptions={state.configOptions}
+            values={values}
+            onSetOption={setOption}
+            queueCount={queueCount}
+            usageText={state.usage ? formatUsage(state.usage) : undefined}
+            usageFraction={usageFraction}
+            slotData={slotData}
+            providerAnchorRef={providerAnchorRef}
+          />
           <ComposerConfigChips
             options={state.configOptions}
             values={values}
             providerName={state.providerId}
             onSetOption={setOption}
+            providerAnchorRef={providerAnchorRef}
+            sessionId={sessionId}
           />
-        </div>
 
-        {stopping ? (
-          <StopControl
-            phase={state.cancellationState}
-            graceDeadline={state.graceDeadline}
-            onStop={() => void client.thread.cancel(sessionId)}
-          />
-        ) : turnInFlight ? (
-          <ActionIconButton
-            label="Stop prompt"
-            ready
-            onClick={() => void client.thread.cancel(sessionId)}
-          >
-            <RunningSpinner />
-          </ActionIconButton>
-        ) : (
-          <ActionIconButton
-            label="Send prompt"
-            ready={hasPrompt}
-            disabled={!hasPrompt}
-            onClick={() => void submit()}
-          >
-            <span aria-hidden="true">{"↑"}</span>
-          </ActionIconButton>
-        )}
+          {stopping ? (
+            <StopControl
+              phase={state.cancellationState}
+              graceDeadline={state.graceDeadline}
+              onStop={() => void client.thread.cancel(sessionId)}
+            />
+          ) : (
+            <ActionIconButton
+              className="shrink-0"
+              label={turnInFlight ? "Stop prompt" : "Send prompt"}
+              running={turnInFlight}
+              ready={turnInFlight || hasPrompt}
+              disabled={!turnInFlight && !hasPrompt}
+              onClick={() =>
+                turnInFlight
+                  ? void client.thread.cancel(sessionId)
+                  : void submit()
+              }
+            >
+              <span aria-hidden="true">{"↑"}</span>
+            </ActionIconButton>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,29 +1,10 @@
-import { cn } from "@tethys/ui";
-import { useEffect, useId, useState } from "react";
-import type { ToolRun } from "../group-runs";
+import { DiffStat } from "@tethys/diff";
+import { ActivityOrb, cn, TruncatedText } from "@tethys/ui";
+import { useEffect, useId, useMemo, useState } from "react";
+import { isFileMutation, type ToolRun } from "../group-runs";
+import { toolDiffs, toolHeadline } from "../tool-view";
 import { ToolAccordionRenderer } from "./tool-accordion";
 import { DisclosureChevron } from "./tool-kind-icon";
-
-function Spinner() {
-  return (
-    <svg
-      className="h-4 w-4 motion-safe:animate-spin text-(--tethys-text-muted)"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-        stroke="currentColor"
-        strokeWidth="3"
-        opacity="0.25"
-      />
-      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" />
-    </svg>
-  );
-}
 
 /**
  * Collapses a run of consecutive tool calls into one summary row (DESIGN.md
@@ -42,6 +23,29 @@ export function ToolRunGroup({
 }) {
   const [expanded, setExpanded] = useState(run.hasFailure || run.hasAwaiting);
   const regionId = useId();
+  // The run's edits carry their size on the summary row (P17), so a large
+  // change is visible without opening the run.
+  const stat = useMemo(() => {
+    const diffs = run.members.filter(isFileMutation).flatMap(toolDiffs);
+    if (diffs.length === 0) return null;
+    return diffs.reduce(
+      (sum, diff) => ({
+        additions: sum.additions + diff.additions,
+        deletions: sum.deletions + diff.deletions,
+      }),
+      { additions: 0, deletions: 0 },
+    );
+  }, [run.members]);
+  const inFlight = run.members.find(
+    (member) => member.status === "Executing" || member.status === "Pending",
+  );
+  const inFlightHeadline = inFlight ? toolHeadline(inFlight) : null;
+  const label =
+    run.isLive && inFlightHeadline
+      ? [inFlightHeadline.verb, inFlightHeadline.subject]
+          .filter(Boolean)
+          .join(" ")
+      : run.summary;
 
   useEffect(() => {
     if (run.hasFailure || run.hasAwaiting) {
@@ -69,15 +73,18 @@ export function ToolRunGroup({
         aria-controls={regionId}
         aria-busy={run.isLive || undefined}
         onClick={toggle}
-        className="flex h-7 w-full items-center gap-sm rounded-sm px-2 text-left text-body-sm text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover)"
+        className="focus-ring-inset flex min-h-7 w-full min-w-0 items-center gap-sm rounded-sm px-2 text-left text-body-sm text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover)"
       >
-        {run.isLive && <Spinner />}
-        <span className="truncate">
-          {run.isLive && run.inFlightTitle ? run.inFlightTitle : run.summary}
-        </span>
+        {run.isLive && (
+          <ActivityOrb size={14} className="text-(--tethys-text-muted)" />
+        )}
+        <TruncatedText text={label} />
+        {stat && (
+          <DiffStat additions={stat.additions} deletions={stat.deletions} />
+        )}
         <DisclosureChevron
           expanded={expanded}
-          className="ml-auto text-(--tethys-text-muted)"
+          className="ml-auto shrink-0 text-(--tethys-text-muted)"
         />
       </button>
       {expanded && (

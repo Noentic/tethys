@@ -11,7 +11,15 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { DiffFileDetail } from "@tethys/bindings";
 import { SegmentedControl } from "@tethys/ui";
+import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  HunkHeaderRow,
+  rowCells,
+  SplitRow,
+  UnifiedRow,
+  useWordSpans,
+} from "./diff-rows";
 import {
   createDiffHighlighter,
   type DiffHighlighter,
@@ -24,10 +32,31 @@ import {
   type DiffViewMode,
   resolveAnchorIndex,
 } from "./row-model";
-import { diffWordSpans, type WordSpan } from "./word-diff";
 
 const DEFAULT_ROW_HEIGHT = 24;
 const OVERSCAN = 10;
+/**
+ * Below this width a split view leaves each side too narrow to read, so the
+ * viewer stays unified and says why (DESIGN.md `diff-viewer.splitMinWidth`).
+ */
+export const SPLIT_MIN_WIDTH = 560;
+/** Line numbers, gutter glyph, gaps and padding of a unified row, in px. */
+const UNIFIED_CHROME_PX = 140;
+
+function useWidth(ref: React.RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(Number.POSITIVE_INFINITY);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect.width;
+      if (typeof next === "number" && next > 0) setWidth(next);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return width;
+}
 
 export interface DiffViewerProps {
   detail: DiffFileDetail;
@@ -36,18 +65,12 @@ export interface DiffViewerProps {
   onCommentLine?: (line: number) => void;
   /** Called by the `Load file` affordance on a collapsed file. */
   onLoadFile?: () => void;
+  /** Discards one hunk (0-based); its `Discard` sits on the hunk's `@@` row. */
+  onDiscardHunk?: (hunkIndex: number) => void;
   /** Injected for tests; defaults to the worker-backed highlighter. */
   highlighter?: DiffHighlighter;
   rowHeight?: number;
   className?: string;
-}
-
-function rowCells(row: DiffRow): DiffCell[] {
-  const cells: DiffCell[] = [];
-  if (row.cell) cells.push(row.cell);
-  if (row.left) cells.push(row.left);
-  if (row.right && row.right !== row.left) cells.push(row.right);
-  return cells;
 }
 
 function isChangedRow(row: DiffRow): boolean {
@@ -100,257 +123,21 @@ export function topVisibleAnchor(
   return null;
 }
 
-interface Segment {
-  start: number;
-  end: number;
-  syntax?: Pick<HighlightSpan, "light" | "dark">;
-  changed: boolean;
-}
-
-/** Intersect syntax tokens with word-diff spans into one render segmentation. */
-function buildSegments(
-  length: number,
-  highlight: HighlightSpan[] | undefined,
-  wordSpans: WordSpan[],
-): Segment[] {
-  const boundaries = new Set<number>([0, length]);
-  for (const span of highlight ?? []) {
-    if (span.start >= 0 && span.end <= length) {
-      boundaries.add(span.start);
-      boundaries.add(span.end);
-    }
-  }
-  for (const span of wordSpans) {
-    boundaries.add(span.start);
-    boundaries.add(span.end);
-  }
-  const points = [...boundaries].sort((a, b) => a - b);
-  const segments: Segment[] = [];
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const start = points[index];
-    const end = points[index + 1];
-    if (end <= start) continue;
-    const syntax = highlight?.find(
-      (span) => span.start <= start && span.end >= end,
-    );
-    const changed = wordSpans.some(
-      (span) => span.start <= start && span.end >= end,
-    );
-    segments.push({ start, end, syntax, changed });
-  }
-  return segments;
-}
-
-/**
- * Both themes' colours ride on the token as custom properties; the
- * `syntax-token` utility picks one by the active theme, in CSS. A theme swap
- * therefore repaints without another highlight request.
- */
-function syntaxColors(
-  syntax: Pick<HighlightSpan, "light" | "dark"> | undefined,
-): React.CSSProperties | undefined {
-  if (syntax === undefined || (syntax.light === "" && syntax.dark === "")) {
-    return undefined;
-  }
-  return {
-    ...(syntax.light !== "" && { "--syntax-light": syntax.light }),
-    ...(syntax.dark !== "" && { "--syntax-dark": syntax.dark }),
-  } as React.CSSProperties;
-}
-
-function CellText({
-  cell,
-  highlight,
-  wordSpans,
-}: {
-  cell: DiffCell;
-  highlight: HighlightSpan[] | undefined;
-  wordSpans: WordSpan[];
-}) {
-  const fill =
-    cell.kind === "Addition"
-      ? "bg-diff-added/32"
-      : cell.kind === "Deletion"
-        ? "bg-diff-removed/32"
-        : undefined;
-  const segments = buildSegments(cell.text.length, highlight, wordSpans);
-  return (
-    <span className="whitespace-pre">
-      {segments.map((segment) => {
-        const colors = syntaxColors(segment.syntax);
-        return (
-          <span
-            key={`${segment.start}-${segment.end}`}
-            style={colors}
-            className={
-              [colors ? "syntax-token" : "", segment.changed ? fill : ""]
-                .filter(Boolean)
-                .join(" ") || undefined
-            }
-          >
-            {cell.text.slice(segment.start, segment.end)}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
-
-function Gutter({ cell }: { cell: DiffCell }) {
-  if (cell.gutter === null) {
-    return <span className="w-3 shrink-0" aria-hidden="true" />;
-  }
-  return (
-    <span
-      data-gutter={cell.gutter}
-      aria-hidden="true"
-      className={`w-3 shrink-0 text-center ${
-        cell.gutter === "+" ? "text-diff-added" : "text-diff-removed"
-      }`}
-    >
-      {cell.gutter}
-    </span>
-  );
-}
-
-function LineNumber({
-  line,
-  onCommentLine,
-}: {
-  line: number | null;
-  onCommentLine?: (line: number) => void;
-}) {
-  const className =
-    "w-10 shrink-0 text-right text-mono-micro text-(--tethys-text-on-sunken-muted)";
-  if (line === null) return <span className={className} aria-hidden="true" />;
-  return onCommentLine ? (
-    <button
-      type="button"
-      aria-label={`Comment on line ${line}`}
-      title={`Comment on line ${line}`}
-      onClick={() => onCommentLine(line)}
-      className={`${className} focus-ring rounded-xs hover:text-(--tethys-text-on-sunken)`}
-    >
-      {line}
-    </button>
-  ) : (
-    <span className={className}>{line}</span>
-  );
-}
-
-function UnifiedRow({
-  row,
-  highlight,
-  getWordSpans,
-  onCommentLine,
-}: {
-  row: DiffRow;
-  highlight: Map<string, HighlightSpan[]>;
-  getWordSpans: (cell: DiffCell) => WordSpan[];
-  onCommentLine?: (line: number) => void;
-}) {
-  const cell = row.cell;
-  if (!cell) return null;
-  const fill =
-    row.kind === "addition"
-      ? "bg-diff-added/16"
-      : row.kind === "deletion"
-        ? "bg-diff-removed/16"
-        : undefined;
-  return (
-    <div
-      data-row-kind={row.kind}
-      className={`flex h-6 items-center gap-2 px-2 font-mono text-mono-code ${fill ?? ""}`}
-    >
-      <LineNumber
-        line={cell.oldLine}
-        onCommentLine={cell.newLine === null ? onCommentLine : undefined}
-      />
-      <LineNumber line={cell.newLine} onCommentLine={onCommentLine} />
-      <Gutter cell={cell} />
-      <CellText
-        cell={cell}
-        highlight={highlight.get(cell.anchorId)}
-        wordSpans={getWordSpans(cell)}
-      />
-    </div>
-  );
-}
-
-function SplitRow({
-  row,
-  highlight,
-  getWordSpans,
-  onCommentLine,
-}: {
-  row: DiffRow;
-  highlight: Map<string, HighlightSpan[]>;
-  getWordSpans: (cell: DiffCell) => WordSpan[];
-  onCommentLine?: (line: number) => void;
-}) {
-  const leftFill =
-    row.left?.kind === "Deletion"
-      ? "bg-diff-removed/16"
-      : row.left?.kind === "Addition"
-        ? "bg-diff-added/16"
-        : undefined;
-  const rightFill =
-    row.right?.kind === "Addition"
-      ? "bg-diff-added/16"
-      : row.right?.kind === "Deletion"
-        ? "bg-diff-removed/16"
-        : undefined;
-  return (
-    <div
-      data-row-kind="pair"
-      className="flex h-6 items-stretch font-mono text-mono-code"
-    >
-      <div
-        className={`flex w-1/2 items-center gap-2 border-r border-(--tethys-hairline-on-sunken) px-2 ${leftFill ?? ""}`}
-      >
-        <LineNumber
-          line={row.left?.oldLine ?? row.left?.newLine ?? null}
-          onCommentLine={onCommentLine}
-        />
-        {row.left ? <Gutter cell={row.left} /> : null}
-        {row.left ? (
-          <CellText
-            cell={row.left}
-            highlight={highlight.get(row.left.anchorId)}
-            wordSpans={getWordSpans(row.left)}
-          />
-        ) : null}
-      </div>
-      <div className={`flex w-1/2 items-center gap-2 px-2 ${rightFill ?? ""}`}>
-        <LineNumber
-          line={row.right?.newLine ?? row.right?.oldLine ?? null}
-          onCommentLine={onCommentLine}
-        />
-        {row.right ? <Gutter cell={row.right} /> : null}
-        {row.right ? (
-          <CellText
-            cell={row.right}
-            highlight={highlight.get(row.right.anchorId)}
-            wordSpans={getWordSpans(row.right)}
-          />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export function DiffViewer({
   detail,
   mode: controlledMode,
   onModeChange,
   onCommentLine,
   onLoadFile,
+  onDiscardHunk,
   highlighter,
   rowHeight = DEFAULT_ROW_HEIGHT,
   className,
 }: DiffViewerProps) {
   const [internalMode, setInternalMode] = useState<DiffViewMode>("unified");
-  const mode = controlledMode ?? internalMode;
+  const sectionRef = useRef<HTMLElement>(null);
+  const splitFits = useWidth(sectionRef) >= SPLIT_MIN_WIDTH;
+  const mode = splitFits ? (controlledMode ?? internalMode) : "unified";
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingAnchor = useRef<string | null>(null);
   const [highlight, setHighlight] = useState<Map<string, HighlightSpan[]>>(
@@ -364,6 +151,16 @@ export function DiffViewer({
   const activeHighlighter = highlighter ?? highlighterRef.current;
 
   const rows = useMemo(() => buildDiffRows(detail, mode), [detail, mode]);
+  // A unified row is as wide as the longest line, so its fill and edge bar run
+  // the full scroll width instead of stopping at the viewport's edge.
+  const longestLine = useMemo(
+    () =>
+      rows.reduce(
+        (longest, row) => Math.max(longest, row.cell?.text.length ?? 0),
+        0,
+      ),
+    [rows],
+  );
 
   const cellIndex = useMemo(() => {
     const index = new Map<string, DiffCell>();
@@ -375,32 +172,7 @@ export function DiffViewer({
     return index;
   }, [rows]);
 
-  // Word spans are computed lazily for visible cells only (M1.9 U2), cached by
-  // the pair so scrolling back to a line does not re-run the LCS.
-  const wordCache = useRef(new Map<string, WordSpan[]>());
-  const getWordSpans = (cell: DiffCell): WordSpan[] => {
-    if (cell.facingAnchorId === null) {
-      return [];
-    }
-    const key = `${cell.anchorId}->${cell.facingAnchorId}`;
-    const cached = wordCache.current.get(key);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const facing = cellIndex.get(cell.facingAnchorId);
-    if (facing === undefined) {
-      return [];
-    }
-    // Diff old→new so the returned spans index into this cell's own text: a
-    // deletion is the old side, an addition is the new side.
-    const isDeletion = cell.kind === "Deletion";
-    const { oldSpans, newSpans } = isDeletion
-      ? diffWordSpans(cell.text, facing.text)
-      : diffWordSpans(facing.text, cell.text);
-    const spans = isDeletion ? oldSpans : newSpans;
-    wordCache.current.set(key, spans);
-    return spans;
-  };
+  const getWordSpans = useWordSpans(cellIndex);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -487,20 +259,35 @@ export function DiffViewer({
 
   return (
     <section
+      ref={sectionRef}
       data-testid="diff-viewer"
       data-mode={mode}
       aria-label={`Diff for ${detail.path}`}
       className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) font-mono text-mono-code text-(--tethys-text-on-sunken) ${className ?? ""}`}
     >
       <header className="flex shrink-0 items-center justify-between border-b border-(--tethys-hairline) bg-(--tethys-surface-panel) px-2 py-1">
-        <span className="truncate text-mono-micro text-(--tethys-text-muted)">
+        <span
+          title={detail.path}
+          className="min-w-0 truncate text-mono-micro text-(--tethys-text-muted)"
+        >
           {detail.path}
         </span>
         <SegmentedControl
           size="sm"
+          className="shrink-0"
           options={[
             { value: "unified", label: "Unified" },
-            { value: "split", label: "Split" },
+            {
+              value: "split",
+              label: (
+                <span
+                  title={splitFits ? undefined : "Widen the panel to split"}
+                >
+                  Split
+                </span>
+              ),
+              disabled: !splitFits,
+            },
           ]}
           value={mode}
           onChange={(value) => changeMode(value as DiffViewMode)}
@@ -536,7 +323,10 @@ export function DiffViewer({
           <div
             style={{
               height: `${virtualizer.getTotalSize()}px`,
-              width: "100%",
+              width:
+                mode === "unified"
+                  ? `max(100%, calc(${longestLine}ch + ${UNIFIED_CHROME_PX}px))`
+                  : "100%",
               position: "relative",
             }}
           >
@@ -556,9 +346,15 @@ export function DiffViewer({
                   }}
                 >
                   {row.kind === "hunk-header" && row.header ? (
-                    <div className="flex h-6 items-center bg-(--tethys-wash-on-sunken) px-2 text-mono-micro text-(--tethys-text-on-sunken-muted)">
-                      {`@@ -${row.header.oldStart},${row.header.oldLines} +${row.header.newStart},${row.header.newLines} @@`}
-                    </div>
+                    <HunkHeaderRow
+                      header={row.header}
+                      hunkNumber={(row.hunkIndex ?? 0) + 1}
+                      onDiscard={
+                        onDiscardHunk && row.hunkIndex !== null
+                          ? () => onDiscardHunk(row.hunkIndex as number)
+                          : undefined
+                      }
+                    />
                   ) : mode === "split" ? (
                     <SplitRow
                       row={row}

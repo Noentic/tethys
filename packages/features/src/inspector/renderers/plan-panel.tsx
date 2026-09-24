@@ -1,5 +1,6 @@
+import { Check } from "@nebutra/icons";
 import type { PlanEntry, PlanStep } from "@tethys/state";
-import { cn } from "@tethys/ui";
+import { ActivityOrb, cn } from "@tethys/ui";
 import { useSessionState } from "../use-session-state";
 
 const STATUS_LABEL: Record<PlanStep["status"], string> = {
@@ -7,6 +8,111 @@ const STATUS_LABEL: Record<PlanStep["status"], string> = {
   InProgress: "In progress",
   Completed: "Complete",
 };
+
+function StepMarker({ status }: { status: PlanStep["status"] }) {
+  if (status === "Completed") {
+    return (
+      <Check
+        aria-hidden="true"
+        className="size-3.5 text-(--tethys-status-success)"
+      />
+    );
+  }
+  if (status === "InProgress") {
+    return <ActivityOrb size={14} className="text-(--tethys-agent-active)" />;
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="size-3 rounded-full border-[1.5px] border-(--tethys-border-control)"
+    />
+  );
+}
+
+/**
+ * The agent's plan as task rows (DESIGN.md `task-row`): a done step folds to a
+ * muted check and its title, the step in progress keeps full weight beside the
+ * activity orb, and each row names its status in words for assistive tech.
+ */
+export function TaskList({
+  steps,
+  className,
+}: {
+  steps: PlanStep[];
+  className?: string;
+}) {
+  return (
+    <ol className={cn("flex flex-col gap-0.5", className)}>
+      {steps.map((step) => (
+        <li
+          key={step.content}
+          aria-current={step.status === "InProgress" ? "step" : undefined}
+          className={cn(
+            "flex min-h-6 items-start gap-sm text-body-sm",
+            step.status === "Completed" && "text-(--tethys-text-muted)",
+            step.status === "InProgress" &&
+              "font-medium text-(--tethys-text-primary)",
+            step.status === "Pending" && "text-(--tethys-text-secondary)",
+          )}
+        >
+          <span className="flex size-5 shrink-0 items-center justify-center">
+            <StepMarker status={step.status} />
+          </span>
+          <span className="sr-only">{STATUS_LABEL[step.status]}:</span>
+          <span className="min-w-0 pt-px">{step.content}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** `3/5` as a thin bar under the plan's heading. */
+function PlanProgress({ done, total }: { done: number; total: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="h-1 w-16 overflow-hidden rounded-full bg-(--tethys-surface-active)"
+    >
+      <span
+        className="block h-full rounded-full bg-(--tethys-text-muted) transition-[width] duration-200"
+        style={{ width: `${total === 0 ? 0 : (done / total) * 100}%` }}
+      />
+    </span>
+  );
+}
+
+/**
+ * A plan where it arose in the transcript: the same task rows as the
+ * Inspector's plan panel, so the reader sees progress without leaving the log.
+ */
+export function PlanCardRenderer({
+  entry,
+  className,
+}: {
+  entry: PlanEntry;
+  className?: string;
+}) {
+  if (entry.steps.length === 0) return null;
+  const done = entry.steps.filter((step) => step.status === "Completed").length;
+  return (
+    <section
+      data-entry-kind="plan"
+      aria-label="Plan"
+      className={cn(
+        "flex flex-col gap-sm rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested) px-md py-sm",
+        className,
+      )}
+    >
+      <header className="flex items-center gap-sm text-label-sm text-(--tethys-text-muted)">
+        <span>
+          Plan · {done}/{entry.steps.length}
+        </span>
+        <PlanProgress done={done} total={entry.steps.length} />
+      </header>
+      <TaskList steps={entry.steps} />
+    </section>
+  );
+}
 
 /**
  * The live plan panel. Mounted through `registerInspectorSlot`, which hands it
@@ -86,30 +192,13 @@ export function PlanPanel({
       )}
       {steps.length > 0 && (
         <>
-          <header className="mb-sm text-label-sm text-(--tethys-text-muted)">
-            Plan · {complete}/{steps.length} complete
+          <header className="mb-sm flex items-center gap-sm text-label-sm text-(--tethys-text-muted)">
+            <span>
+              Plan · {complete}/{steps.length} complete
+            </span>
+            <PlanProgress done={complete} total={steps.length} />
           </header>
-          <ul className="flex flex-col gap-1">
-            {steps.map((step) => (
-              <li
-                key={step.content}
-                aria-current={step.status === "InProgress" ? "step" : undefined}
-                className={cn(
-                  "flex items-start gap-sm text-body-sm",
-                  step.status === "Completed" &&
-                    "text-(--tethys-text-muted) line-through",
-                  step.status === "InProgress" &&
-                    "font-medium text-(--tethys-text-primary)",
-                  step.status === "Pending" && "text-(--tethys-text-secondary)",
-                )}
-              >
-                <span className="font-mono text-mono-micro text-(--tethys-text-muted)">
-                  {STATUS_LABEL[step.status]}
-                </span>
-                <span>{step.content}</span>
-              </li>
-            ))}
-          </ul>
+          <TaskList steps={steps} />
         </>
       )}
     </section>

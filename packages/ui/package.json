@@ -35,7 +35,9 @@
   },
   "dependencies": {
     "@nebutra/icons": "^2.0.0",
+    "@radix-ui/react-popover": "^1.1.23",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "tailwind-merge": "^3.7.0"
   }
 }

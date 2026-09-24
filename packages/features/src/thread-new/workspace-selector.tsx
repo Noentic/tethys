@@ -6,12 +6,19 @@
 
 import { ChevronDown } from "@nebutra/icons";
 import { type TrustedWorkspace, useTrustedWorkspaces } from "@tethys/state";
-import { Listbox, Popover, Tooltip, WorkspaceSourceBadge } from "@tethys/ui";
+import {
+  cn,
+  Listbox,
+  Popover,
+  Tooltip,
+  TruncatedText,
+  WorkspaceSourceBadge,
+} from "@tethys/ui";
 import { useRef, useState } from "react";
 
 // workspace-selector-pill (DESIGN.md): 28px, surface-card, md radius, hairline.
 const PILL_CLASS =
-  "focus-ring flex h-7 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+  "focus-ring flex min-h-7 max-w-full min-w-0 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 
 export interface WorkspaceSelectorProps {
   workspaces?: TrustedWorkspace[];
@@ -58,15 +65,15 @@ export function WorkspaceSelector({
         glyphOnly
         className="pointer-events-none size-3.5"
       />
-      <span
-        className={
+      <TruncatedText
+        text={selected?.name ?? "Choose a folder"}
+        className={cn(
+          "max-w-56",
           selected
             ? "text-(--tethys-text-primary)"
-            : "text-(--tethys-text-muted)"
-        }
-      >
-        {selected?.name ?? "Choose a folder"}
-      </span>
+            : "text-(--tethys-text-muted)",
+        )}
+      />
       <ChevronDown
         aria-hidden="true"
         className="size-3.5 shrink-0 text-(--tethys-text-muted)"
@@ -75,7 +82,7 @@ export function WorkspaceSelector({
   );
 
   return (
-    <div className="relative self-start">
+    <div className="relative min-w-0 self-start">
       {selected ? (
         <Tooltip
           content={
@@ -88,13 +95,8 @@ export function WorkspaceSelector({
         pill
       )}
 
-      <Popover
-        open={open}
-        onClose={close}
-        anchorRef={anchorRef}
-        className="top-full left-0 mt-1.5"
-      >
-        <div className="w-72">
+      <Popover open={open} onClose={close} anchorRef={anchorRef}>
+        <div className="w-[min(360px,calc(100vw-16px))]">
           <div className="px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider">
             Trusted Workspaces
           </div>
@@ -105,12 +107,13 @@ export function WorkspaceSelector({
           ) : (
             <Listbox
               label="Trusted workspaces"
+              sublabelPlacement="below"
               selectedId={selected?.id}
               items={workspaces.map((workspace) => ({
                 id: workspace.id,
                 value: workspace,
                 label: workspace.name,
-                sublabel: workspace.path,
+                sublabel: <TruncatedText mode="path" text={workspace.path} />,
               }))}
               onSelect={(item) => {
                 onSelect(item.value);

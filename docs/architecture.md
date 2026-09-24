@@ -368,6 +368,8 @@ pub enum TurnEventBody {
 | `ConfigOption` | `category` (`mode`, `model`, `model_config`, `thought_level`, or a vendor string), a select/boolean kind, and for each value its id, display name and optional description in place of the bare id | routes Model and Effort to their composer chips and everything else to the full panel; a boolean option needs a switch. Only the value id survives `config_option` today, so a Model chip would read `claude-sonnet-…` rather than the name the Provider supplied |
 | `UsageSnapshot` | context window `size` and cost currency, and `total_tokens` documented as what it is | `usage-bar` is `used ÷ size`; without `size` it can only show a number. The `usage_update` mapper stores ACP's `used` (tokens currently in context) in `total_tokens` and leaves input and output at 0, so the field is not the cumulative total its name suggests |
 | `StopReason` | `MaxTurnRequests` | one of ACP's five stop reasons is missing; `turn-notice` covers each |
+| `EventEnvelope.at_ms` | the Unix ms Core recorded the event at (live: at emit; replay: the stored `events.created_at`); `serde(default)` | a thought's `Thought for 14s`, tool elapsed times, and the working indicator read durations from Core's clock, so a reopened thread shows the same times it showed live |
+| `ToolCallPatch.origin` from the adapter | the Claude adapter reads `_meta.claudeCode.toolName`: `mcp__<server>__<tool>` → `Mcp { server }`, `Skill` → `Skill { name }` from its input | the `tool-origin-tag`; the webview never infers origin from a title |
 | `TurnEventBody` | an appended `Compaction` variant | the `Context compacted` divider. A Provider sends it only if the Client advertised the compaction capability, which M1.17 decides |
 
 `ProviderExtension` (above) is the other appended variant. Old payloads without the new fields still deserialize; the mock Provider carries a fixture for each addition.
@@ -404,6 +406,16 @@ no leases for grace period → Draining → Terminated
 ### 7.6 Permission engine
 
 Rules match on tool kind, command and `cwd` (from `command` subjects), path globs (from tool‑call locations), MCP server, and profile. Outcomes map to the agent's options. Agent config options such as `mode` sit inside Tethys policy: Tethys may reject what the agent's mode allows, never the reverse. Unknown outcomes are never treated as approval. Every decision is logged with its decider.
+
+A Provider mode that is really a permission preset carries an approval role in its `ConfigOption.metadata.tethysModeRoles`, written by the adapter (`provider_integration::approval_mode_level`), so the composer never lists it as a working mode and sets the widest preset that is still no wider than Tethys's level:
+
+| Provider | Supervised (`Ask first`) | Auto-edit | YOLO (`Full auto`) | Working modes |
+|---|---|---|---|---|
+| Claude Code | `default` | `acceptEdits` | `bypassPermissions` | `plan` |
+| Codex | `read-only` | `auto` | `full-access` | — |
+| OpenCode | — | — | — | `build`, `plan` |
+
+Where a Provider declares no preset at a level, Tethys leaves its mode alone and answers `session/request_permission` itself under its own policy.
 
 ### 7.7 Tethys‑hosted MCP server (optional, P1)
 

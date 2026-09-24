@@ -1,6 +1,7 @@
 ---
-version: d0-rc12
+version: d0-rc13
 changelog:
+  d0-rc13: "Accepted 25 Sep 2026. Thread surface overhaul. Floating surfaces become a real `popover` primitive (Radix, portalled, flips and shifts inside the window, never taller or wider than the room it has), so nothing clips at any zoom or type size; controls hold a minimum height instead of a fixed one and every single-line label truncates with its full value as the tooltip (`truncated-text`). Long lists are searchable (P19): the model list in `model-selector-popover` and the Model chip's `config-option-popover` is a `searchable-listbox` at a fixed height. The Effort chip opens the new `reasoning-effort` slider. The running `action-icon-button` shows the new `activity-orb`, which also replaces the spinner in `tool-run-group`, `working-indicator` and the loading states. The branch bar leaves the card and docks as a strip directly above it, with `Fork` at its end (P4 amended: adjacent, not inside). Tool calls read by kind (P20): `tool-accordion` names the act and its object and takes a body per kind, a file edit is a `file-diff-card`, and raw payloads sit behind `Raw`. `thought-block` shimmers while streaming and folds to `Thought for Ns`. `diff-viewer` gains edge bars (solid added, hatched removed), full-width fills, inline hunk `Discard`, and a split minimum width. The side panel gains `layout.inspector-min`, and the Changes tab resizes to its own width. Motion gains `shimmer`, `orb` and `collapse`. The typography front matter is reconciled with the shipped ramp."
   d0-rc12: "Accepted 23 Sep 2026. Composer and thread redesign (proposal: claude.ai/artifact/ML7Bm74AEEsZNV9dnov6B2). The prompt card reads where / what / how in both views: a new `branch-worktree-pill` puts branch and an opt-in `New worktree` checkbox in the New Thread where band (current checkout is the default, sticky per workspace; PRD WT‑01 amended), and a new `branch-bar` is its in-thread form, absorbing `isolation-pill` and `diff-summary-pill` and becoming the one home of `Commit…` (replacing `Approve & Commit`, which named a commit as an approval). `mode-pill` becomes the single Mode control with two sections, the Provider's working modes and Tethys's approvals, with Full auto behind its own `Enable` and disabled on the current checkout (PRM‑02). A new `request-dock` holds the pending permission or elicitation card above the composer, leaving an anchor row in the transcript. The Inspector becomes a `side-panel` with `Overview` (the old `thread-inspector`, minus its rollup band) and a resizable `changes-panel` (`layout.changes-min` 480px, up to half the window) with turn / thread / uncommitted scopes and batched line comments. A `turn-receipt` ends each turn that changed files, replacing the per-entry `View diff` / `Restore`. `composer-suggestion-popover` grows to 400px, opens above the caret and groups `/` by source; `composer-command-group` drops the always-on `/agent:` prefix for provenance headings and dims Provider built-ins Tethys handles itself. Interaction Patterns P4 and P8 are amended and P14–P18 added."
   d0-rc11: "Accepted 21 Sep 2026. Token ratification: the pen's values are ported into the contract, and the contrast gates, not the pen, now decide the final numbers. `text-muted` (`#71717a` in both themes) is retired as a text value because it measured 3.3-4.2:1 in dark and 3.8:1 on the light well against the contract's own 4.5:1 rule; it becomes `#8e8e98` / `#63636c` and is now under test on every surface. Dark `hairline-strong` (`#27272a`, 1.08:1 on `surface-overlay`) becomes `#3f3f46` / `#c2c2ca` and stops being a control stroke. Nine tokens the pen already used and the contract only referenced are defined: `border-control` (the input, textarea, toggle-track, radio and checkbox stroke, 3:1), the `text-on-sunken` family with `hairline-on-sunken` and `wash-on-sunken` (the previously dangling `*-on-sunken` reference), and `status-interrupted` / `status-suspended` / `status-archived` so those dots stop borrowing border tokens as fills. Two values differ from the pen because the gates rejected them: light `text-muted` / `text-on-sunken-muted` `#686871` measured 4.35:1 on the slate well and is `#63636c` (4.69:1), and light `status-archived` `#d4d4d8` measured 1.40:1 on panel and is `#c8c8cf` (1.58:1); the pen is updated to match. Dark `diff-removed` is `#ff8a84` (`signal-red-bright`), as d0-rc9 already said in the theme table; `manifest.ts` and `tokens.css` had kept the pre-soften `#fe6c66`. `tokens.test.ts` now reads the semantic names, CSS variables and both default themes from this front matter instead of a hand-copied list, and `design-refs.test.ts` fails on any `{...}` reference here that names nothing. Shell: the thread view is three regions, Rail | Stage | Inspector. The four-region diagram was never built (no Hub column exists in the pen or in code), and Sessions leaves the docked layout to become an on-demand overlay drawer, which closes the d0-rc5 open limitation: with the Inspector docked only at 1100px or wider, the Stage holds its 560px minimum at every width (48 + 560 + 360 = 968px). The 56px action bar is removed from the contract, not just deprecated in it: its controls live in the `prompt-card` context bar and lower bar, the fold order it carried moves to `prompt-card.contextBarFold`, and `layout.shell-actionbar`, `layout.shell-left`, `layout.shell-left-collapsed` and `breakpoints.sessions-icon` are deleted. `mode-pill` and `diff-summary-pill`, referenced since d0-rc5 and never defined, are defined. `sync-grid` and `session-topology-canvas` are marked deprecated-but-shipping instead of removed, because their replacements are not built; d0-rc5's 2-D grid roving applied only to `sync-grid` and is superseded by the `provider-tab` tablist (one tab stop, arrows, `Home` / `End`). State on content surfaces: the toast gains an icon and a left rule instead of a perimeter (`toast.stateTreatment`), the workspace card takes a wash and the `awaiting` ring with no rule (`workspace-card.attention`), the session row, drawer callout and trust-dialog callout follow the wash + 2px left rule grammar, and `provider-popover` finally carries the `pendingTreatment` d0-rc9 gave it in the contract, as a wash over its overlay surface."
   d0-rc10: "Accepted 21 Sep 2026. New Thread cold start. The canvas gains an explicit nothing-selected state, derived rather than invented: P6 already required a disabled control to name its fix, and §3 already required submit to stay disabled while the workspace pill was unresolved. What is new is the order — with several preconditions missing the composer names only the first, workspace → provider, so the empty state gives one instruction rather than three. `workspace-selector-pill` gains an `unresolved` state (source badge dropped, label `Choose a folder` — an instruction, not a status) and the prompt card drops its attachment-and-guide cluster when its input is disabled, because `/ for commands` is a lie against a dead textarea. Revisits M1.10's New Thread canvas. Also retires `motion.skeleton` (`d0-rc4`): it was documented at 1200ms and shipped as a `--motion-skeleton` variable, but no component ever read it — the skeleton has always run the 2000ms `motion.pulse`, which is now the single loading-loop token. Closing the gap this way rather than retiming the shipped animation keeps d0-rc9's calmer direction (breathe 2400ms > pulse 2000ms) and changes no rendered pixel."
@@ -224,13 +225,13 @@ typography:
     letterSpacing: -0.025em
   heading-lg:
     fontFamily: Geist Sans
-    fontSize: 20px
+    fontSize: 22px
     fontWeight: 600
     lineHeight: 1.4
     letterSpacing: -0.015em
   heading-md:
     fontFamily: Geist Sans
-    fontSize: 15px
+    fontSize: 16px
     fontWeight: 600
     lineHeight: 1.4
     letterSpacing: -0.01em
@@ -242,34 +243,34 @@ typography:
     letterSpacing: -0.005em
   body-sm:
     fontFamily: Geist Sans
-    fontSize: 13px
+    fontSize: 14px
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: 0
   label-md:
     fontFamily: Geist Sans
-    fontSize: 12px
+    fontSize: 13px
     fontWeight: 500
     lineHeight: 1.4
     letterSpacing: 0
   label-sm:
     fontFamily: Geist Sans
-    fontSize: 11px
+    fontSize: 12px
     fontWeight: 500
     lineHeight: 1.3
     letterSpacing: 0.01em
   mono-code:
     fontFamily: Geist Mono
-    fontSize: 12px
+    fontSize: 13px
     fontWeight: 400
     lineHeight: 1.5
     letterSpacing: 0
   mono-micro:
     fontFamily: Geist Mono
-    fontSize: 11px
+    fontSize: 12px
     fontWeight: 500
     lineHeight: 1.3
-    letterSpacing: 0.02em
+    letterSpacing: 0.01em
 
 rounded:
   none: 0px
@@ -294,6 +295,7 @@ spacing:
 layout:
   shell-threads: 280px      # the Sessions drawer's width
   shell-inspector: 360px
+  inspector-min: 320px      # below this the Inspector's rows cannot hold a label and its value
   splitter-hit: 6px
   palette-width: 600px
   palette-height: 400px
@@ -304,6 +306,7 @@ layout:
   stage-measure: 760px
   stage-min: 560px
   popover-selector: 560px
+  popover-list-height: 360px  # a searchable list's fixed height; it never exceeds 60vh
   breakpoints: { inspector-overlay: 1100px }
 
 # Paint order. Higher paints above lower. The Esc unstack order (Accessibility & Keyboard Map)
@@ -330,8 +333,14 @@ motion:
   breathe: { duration: 2400ms, easing: "cubic-bezier(0.4, 0, 0.6, 1)", opacityLow: 45% }
   breatheAwaiting: 3200ms
   rules: "accordion/splitter fast; drawer/palette base; thumb slide fast; content fade after 100ms; no layout shift"
-  stateMotion: "`breathe` is the one animation that encodes liveness, and only `running` and `awaiting` use it: `running` at {motion.breathe.duration}, `awaiting` at {motion.breatheAwaiting} so waiting reads as slower than busy. `healthy`, `error`/`failed`, `interrupted`, `suspended`, `archived`, `idle` and `auth_required` are static — a state that has stopped must not keep pulsing, and a fact is not liveness. Motion is the third channel after hue and shape, never the only one"
-  reducedMotion: "under prefers-reduced-motion: reduce, every looping animation (breathe, pulse, spinner) is suspended to a static frame; no state may depend on motion alone (see Universal State Matrix / State Precedence)"
+  stateMotion: "`breathe` is the one animation that encodes liveness, and only `running` and `awaiting` use it: `running` at {motion.breathe.duration}, `awaiting` at {motion.breatheAwaiting} so waiting reads as slower than busy. `healthy`, `error`/`failed`, `interrupted`, `suspended`, `archived`, `idle` and `auth_required` are static — a state that has stopped must not keep pulsing, and a fact is not liveness. Motion is the third channel after hue and shape, never the only one. {motion.shimmer} (a streaming thought) and {motion.orb} (work in flight) are the other two liveness loops; each stops the moment what it reports stops"
+  reducedMotion: "under prefers-reduced-motion: reduce, every looping animation (breathe, pulse, shimmer, orb) is suspended to a static frame; no state may depend on motion alone (see Universal State Matrix / State Precedence)"
+  shimmer: { duration: 2250ms, easing: "cubic-bezier(0.25, 0.1, 0.25, 1)" }
+  shimmerScope: "a lighter band sweeping through muted text that is still streaming (`thought-block` `Thinking…`). A liveness loop, so it stops when streaming stops and follows `reducedMotion`; the resting frame is the plain muted label"
+  orb: { duration: 1500ms, easing: "cubic-bezier(0.66, 0, 0.34, 1)" }
+  orbScope: "the `activity-orb` lattice sweep. The one looping indicator for work in flight (a running turn, a live tool run, a loading view), replacing the spinner; `breathe` stays the liveness channel of the `status-dot`"
+  collapse: { duration: 320ms, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+  collapseScope: "single-shot: a block fading into the transcript, a disclosure opening (grid rows 0fr ↔ 1fr), a value label swapping in. Kept under reduced motion only where it carries no loop"
 
 icons:
   set: "Geist Icons"
@@ -377,7 +386,8 @@ components:
     backgroundColor: "{semantic.surface-panel}"
     borderLeft: "1px solid {semantic.hairline-structural}"
     header: "40px row: a `tablist` of `Overview` and `Changes N` (N, the changed-file count, in {typography.mono-micro} / {semantic.text-muted}; the Changes tab is absent without git), a {components.state-badge} naming the live state, `⤢` (expands Changes over the Stage at {stacking.drawer}; `Esc` returns) and a `Collapse` ghost button. The badge is the one place the panel's state is named in words, so collapsing can never hide *that* a request is pending"
-    width: "`Overview` {layout.shell-inspector}; `Changes` clamp({layout.changes-min}, 50%, viewport − {spacing.rail} − {layout.stage-min}), user-resizable within that range and remembered per window. Below {layout.changes-min} of available width Changes opens as an overlay; below {layout.breakpoints.inspector-overlay} the whole panel is an overlay drawer"
+    width: "`Overview` {layout.shell-inspector}; `Changes` clamp({layout.changes-min}, 50%, viewport − {spacing.rail} − {layout.stage-min}), and opening the tab resizes the panel to it (returning to Overview restores {layout.shell-inspector}). User-resizable from {layout.inspector-min} up to the Changes width. Below {layout.changes-min} of available width Changes opens as an overlay; below {layout.breakpoints.inspector-overlay} the whole panel is an overlay drawer"
+    reviewHeader: "the file header is a container: below its small width the status word hides, below its medium width `Discard file` reads `Discard`; the path truncates keeping its last segment"
     tabs: "{components.thread-inspector} (Overview) and {components.changes-panel} (Changes). `⌘⇧D` toggles Changes; `Ctrl/Cmd+I` collapses the panel"
     collapsed: "{components.thread-inspector.collapsed}"
     a11y: "a `region` labelled `Thread side panel`; tabs are `tab` / `tabpanel` with roving arrows"
@@ -406,6 +416,20 @@ components:
     rounded: "{rounded.xs}"
     padding: 4px 8px
     typography: "{typography.mono-micro}"
+  popover:
+    backgroundColor: "{semantic.surface-overlay}"
+    border: "1px solid {semantic.hairline-strong}"
+    edge: "{semantic.edge-highlight}"
+    rounded: "{rounded.md}"
+    padding: 4px
+    stacking: "{stacking.popover}"
+    placement: "anchored to its trigger by `side` (`top` for anything in the bottom-docked composer) and `align`, 6px away. It portals to the document body, so no scroll container or card clips it, flips to the opposite side when the window has no room, and shifts along the edge to keep 8px clear of it"
+    size: "never wider or taller than the room the window leaves on its side (Radix `--radix-popover-content-available-*`); a caller's width is `min(<width>, 100vw − 16px)` and a long body scrolls inside. Nothing a popover holds is ever cut off at a larger zoom or type size"
+    dismiss: "`Esc` or a press outside it; a press on its own trigger toggles it rather than closing and reopening it. Focus stays where it was unless the popover's first job is typing (a searchable list takes focus)"
+    scope: "The one floating surface: `model-selector-popover`, `config-option-popover`, `mode-pill`, the context-bar overflow, `branch-bar.commit`, the workspace and folder pickers and the Changes scope all use it"
+  truncated-text:
+    scope: "The rule for every single-line label in a pill, chip, row or header (provider, model, mode, branch, workspace, path): it takes the room its row gives it (`min-w-0`), ends in an ellipsis, and carries the full value as its tooltip. A control's height is a minimum (`min-h-*`), never a fixed box, so a larger type size grows the control instead of clipping its text"
+    pathMode: "a path keeps its last segment whole and clips the directories before it, so `…/nebeng-api/README.md` stays recognisable"
   tab-bar:
     backgroundColor: "{semantic.surface-rail}"
     height: "{spacing.titlebar}"
@@ -623,7 +647,7 @@ components:
     rounded: "{rounded.2xl}"
     padding: "{spacing.lg}"
     width: "{layout.prompt-width}"
-    bands: "three bands top to bottom, separated by a {semantic.hairline} inset to the card's padding: **where** (New Thread: `workspace-selector-pill` + {components.branch-worktree-pill}; in a thread: {components.branch-bar}), **what** (the textarea), **how** (left: attach `+`, `mode-pill`; right: `model-selector-pill` or the Model `composer-config-chip`, the Effort chip, queue count, usage ring, `action-icon-button`). A where control never sits in the how band. In a thread, {components.request-dock} stacks above the card while a request is pending"
+    bands: "three bands top to bottom, separated by a {semantic.hairline} inset to the card's padding: **where** (New Thread: `workspace-selector-pill` + {components.branch-worktree-pill} inside the card; in a thread: {components.branch-bar} docked above the card, outside it), **what** (the textarea), **how** (left: attach `+`, the provider pill and `mode-pill`, usage ring; right: the Model `composer-config-chip`, the Effort chip, `action-icon-button`). A where control never sits in the how band. In a thread, {components.request-dock} and then {components.branch-bar} stack above the card"
     topContextPills: "retired in d0-rc12; see `bands`"
     contextBarFold: "the how band folds when it does not fit, lowest priority first, into a 20px `•••` overflow: `usage-bar` 20, `queue-count` 30, the Effort chip 40, `mode-pill` 50, and the Model chip / provider pill 60. The `action-icon-button` / stop control (100) never folds. The branch bar folds on its own row: the isolation tag first, then `Review` (its `⌘⇧D` remains); the branch name and `Commit…` never fold. A slot a Provider surface registers with no declared priority folds before all of them"
     overflowTrigger: "a 20px `•••` button at the end of the context bar, `aria-haspopup=dialog`, opening a `popover` at `{stacking.popover}` that lists the folded items in the same order. When the folded set holds a non-empty `queue-count` the trigger carries the same `{semantic.status-warning}` dot the count does, so a pending queue is never hidden by narrowing the window"
@@ -673,8 +697,10 @@ components:
     edge: "{semantic.edge-highlight}"
     rounded: "{rounded.md}"
     width: "{layout.popover-selector}"
-    providerColumnWidth: 200px
-    configPanelWidth: "the remainder of {layout.popover-selector} after providerColumnWidth, the panel's 1px borderLeft and the popover's own 1px borders (about 357px) — not a second fixed width, which overdraws the total by 3px"
+    providerColumnWidth: "fluid: 38% of the popover, at least 144px and at most 200px; a provider's name truncates and its protocol pill sits on a second line"
+    configPanelWidth: "the remainder of the popover after providerColumnWidth"
+    size: "`min({layout.popover-selector}, 100vw − 16px)` wide and `min(420px, 60vh)` tall; it never runs off the window ({components.popover})"
+    modelList: "the `model` option is a {components.searchable-listbox} filling the column, with `More options…` below it; the search takes focus when the column opens"
   session-config-panel:
     backgroundColor: "transparent"
     borderLeft: "1px solid {semantic.hairline}"
@@ -690,7 +716,14 @@ components:
     rounded: "{rounded.full}"
     size: 40px
     iconSize: 18px
-    dualState: "Single action trigger in prompt card. When idle/ready, renders send arrow icon with backgroundReady; when thread is running, morphs to stop/square icon (Geist stop icon) which triggers the protocol cancellation ladder"
+    dualState: "Single action trigger in prompt card. When idle/ready, renders the send arrow with backgroundReady. While the turn runs it takes backgroundRunning with the running border and shows the {components.activity-orb}; on hover and keyboard focus the orb gives way to the stop square its press acts on, which starts the protocol cancellation ladder. The orb never hides that the button stops the turn: its accessible name is `Stop prompt` throughout"
+  activity-orb:
+    size: 18px
+    color: "currentColor — {semantic.text-primary} on the action button, {semantic.text-muted} in a run row"
+    anatomy: "a 3×3 lattice of dots, one-sixth of the box each; a broad band crosses it on the diagonal ({motion.orb}), each diagonal lagging the last so the sweep is continuous (variant S2 of the aicss.dev orbs, re-authored in tokens)"
+    rest: "the static frame is every dot at 60% ink, legible as 'in progress' without motion; it holds under prefers-reduced-motion and on an unfocused window"
+    scope: "Work in flight: the running {components.action-icon-button}, a live {components.tool-run-group}, the {components.working-indicator}, the in-progress {components.task-row}, and loading states (`Loading thread…`, `Preparing the session…`). It is not a status: a turn's state is still the {components.status-dot} and its words"
+    a11y: "decorative (`aria-hidden`) beside a text label; given a label only where it stands alone"
   composer-chip:
     backgroundColor: "{semantic.surface-hover}"
     textColor: "{semantic.text-secondary}"
@@ -726,6 +759,7 @@ components:
     onClose: "closing the dialog, by any route (success, cancel, Esc, expiry), triggers an immediate provider health re-check — docs/pages-views-spec.md §5.2"
     agentAuth: "agent-auth method only (the Provider runs its own OAuth and opens the browser): a `{typography.body-sm}` / {semantic.text-muted} line `Waiting for {Provider} to finish sign-in…` and a `Cancel` action. No code field and no countdown — the agent, not Tethys, holds the flow, and Tethys shows nothing it could read as a credential"
   permission-request-card:
+    preview: "What the request would allow, shown above its options: a file request shows the waiting edit as a {components.file-diff-card} (matched to the pending call on that file; nothing is shown when no call matches, never a guessed diff), a command request shows `$ <command>` in a sunken well"
     backgroundColor: "{semantic.surface-card}"
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.md}"
@@ -808,6 +842,9 @@ components:
     height: 36px
     padding: 0 12px
     typography: "{typography.label-md}; stat in {typography.mono-micro}"
+    placement: "a strip docked directly above the prompt card, outside its border, at the card's width, {spacing.sm} above it (P4 amended d0-rc13: adjacent to the input, not inside it). It stays visible whenever the composer is, so P8 holds"
+    trailing: "session actions that are not git sit at the strip's end: `Fork` (ghost, `GitBranch` icon, the session-fork capability) — never in the card's how band"
+    responsive: "the strip is a container: below its medium width `Review` and `Fork` drop their labels to icon buttons, and below its large width the `checkout · vs HEAD` tag hides; the branch name truncates, and `Commit…` never folds"
     scope: "The in-thread where band, git only: the branch as a 24px mono chip (`GitBranch` icon + the checkout's real branch, read from `git.worktreeList` for worktree and current-checkout threads alike), a muted `checkout · vs HEAD` / `worktree · vs <base>` tag, the thread's stat as a clickable `N files +a −b` pill that opens {components.changes-panel} (hidden at zero files, never `+0 −0`), then `Review` (ghost, `FileText` icon) and `Commit…` (secondary, `GitCommit` icon; primary once the thread has uncommitted changes and no turn is running)"
     freshness: "the stat and the Changes count refetch whenever a file-writing tool call settles or a turn stops, and keep the last answer on screen while they do"
     commit: "`Commit…` opens a 360px popover: the agent-drafted message (`Draft with agent`), the changed-file count and `Commit`; `Commit & push` only with `forge_cli`. The one place a commit starts (P8)"
@@ -839,7 +876,7 @@ components:
     scope: "The category-aware Model and Effort controls in the docked composer's lower bar, taken from the Provider's session config options by `category`: `model` becomes the Model chip and `thought_level` the Effort chip. `mode` is not a chip: its one home is the `mode-pill` in the `prompt-card` context bar. `model_config` and every other select or boolean option live only in the full `session-config-panel` behind the Provider pill. Each category has exactly one home; a control is never rendered twice"
     absent: "a Provider that declares no option for a category renders no chip for it — never a disabled empty chip"
     label: "reads the current value; the option name is shown only when the value is ambiguous on its own (`Effort · High`, not bare `High`)"
-    orderedScale: "a `thought_level` option renders its popover as a stepped slider in the declared value order, labelled `Faster` and `Smarter` at the ends, the current value named beneath; any other option keeps the listbox"
+    orderedScale: "a `thought_level` option is a chip reading `Effort · <level>` whose popover is the {components.reasoning-effort} slider in the declared value order; any other option keeps the listbox"
     shortcut: "`⌘⇧I` opens the Model chip (or `model-selector-popover` before a thread exists), `⌘⇧E` the Effort chip"
     timing: "a change is allowed while a turn is running and applies from the next turn; the popover states this in a one-line consequence caption (Interaction Patterns P11)"
     rejected: "if the Provider rejects a mid-session change, the chip reverts to its previous value and a `provider-capability-notice` says the Provider applies that option only when a session starts"
@@ -853,6 +890,22 @@ components:
     width: 240px
     stacking: "{stacking.popover}"
     scope: "The small popover behind a `composer-config-chip`: a `listbox` for a select option (the option's own description as a second `{typography.body-sm}` / {semantic.text-muted} line where the Provider supplies one), a `switch` for a boolean. Anchored above the chip because the composer is bottom-docked; flips below only if space requires. `Enter` selects and returns focus to the composer textarea, `Esc` closes. It is not the two-column `model-selector-popover`, which is Provider choice plus the full schema"
+    model: "the `model` category is a {components.searchable-listbox} at a fixed height of {layout.popover-list-height} (at most 60vh), 320px wide: the search is pinned on top and the list scrolls under it, so the popover's size never depends on how many models a Provider routes to"
+    effort: "an ordered `thought_level` option is the {components.reasoning-effort} slider, not a list"
+  searchable-listbox:
+    search: "a 36px field pinned at the top, `MagnifyingGlass` icon, placeholder `Search <option>s…`, on a {semantic.hairline} bottom rule; it takes focus when the list opens"
+    rows: "name in {typography.body-sm}, the Provider's description as a second {typography.label-sm} / {semantic.text-muted} line clamped to two lines, a check on the current value; the current row is scrolled into view on open"
+    groups: "values the Provider names `<route>/<model>` (`OpenCode Zen/Big Pickle`) group under a {typography.mono-micro} / {semantic.text-muted} heading per route and show the model name alone"
+    filter: "fuzzy over name, description and group; `↑` `↓` move, `Enter` picks, `Esc` closes. No match reads `No <option> matches “<query>”`, never a blank list (P6)"
+    scope: "Any list long enough to scroll (P19): the model list first; the workspace and folder pickers may adopt it as their lists grow"
+  reasoning-effort:
+    width: 224px
+    track: "a 20px capsule on {semantic.surface-hover} with a {semantic.hairline} edge; the fill up to the current level in {semantic.surface-active}"
+    ticks: "a 1px × 8px tick per level, {semantic.text-muted} up to the current level and {semantic.hairline-strong} beyond it"
+    thumb: "16px disc in {semantic.text-primary} with a {semantic.hairline-strong} edge; it snaps to a tick and slides at {motion.fast}"
+    labels: "`Faster` and `Smarter` at the ends in {typography.label-sm} / {semantic.text-muted}, the current level named between them in {semantic.text-primary}; while dragging, a {typography.mono-micro} label over the thumb reads `<model> · <level>`"
+    color: "monochrome: a level is not a state, so no accent (Styling & Token Rules)"
+    a11y: "a native range input carries the value (`slider`, `aria-valuetext` = the level name), so arrows, Home/End and assistive tech work unchanged; its name ends in ` effort`"
   composer-command-group:
     typography: "{typography.label-sm}"
     textColor: "{semantic.text-muted}"
@@ -890,11 +943,10 @@ components:
     overflow: "long lines scroll horizontally and never soft-wrap by default; blocks past the same cap as `tool-accordion` streamed content collapse with `Show all N lines`"
     a11y: "a `region` labelled `<language> code`; the copy button is reachable in tab order"
   thought-block:
-    backgroundColor: "{semantic.surface-panel}"
-    border: "1px solid {semantic.hairline}"
-    rounded: "{rounded.sm}"
-    padding: 8px 12px
-    label: "while streaming `Thinking…` with the elapsed seconds and a one-line truncated preview of the latest thought; once the turn ends it collapses to `Thought for 14s ›`. Expansion is the user's: streaming never re-expands a block the user collapsed"
+    backgroundColor: "transparent"
+    body: "the reasoning in {typography.body-sm} / {semantic.text-muted} behind a 2px {semantic.hairline-strong} left rule; no card, so reasoning reads as quieter than the reply"
+    label: "while streaming, `Thinking…` in {motion.shimmer} with the elapsed seconds ticking beside it, and the body open in a window capped at 176px that follows the newest reasoning behind a top fade. The thought ends when the agent moves on (its next message or tool call), and folds to `Thought for 14s ⌄`, timed from Core's event times so a reopened thread reads the same. Opening or closing is the user's: after they toggle it, streaming never changes it back"
+    motion: "the block fades in and folds with {motion.collapse}; the shimmer stops with the stream"
     a11y: "a `button` with `aria-expanded`"
   tool-accordion:
     backgroundColor: "{semantic.surface-nested}"
@@ -905,7 +957,16 @@ components:
     content: "renders each tool-content item: text and image blocks; a diff as a compact excerpt on `diff-viewer` tokens with `View diff` where the workspace has git; a terminal as an inline sunken well tailing the output with an `Open terminal` action to `terminal-sheet`"
     locations: "`path:line` chips (`composer-chip` tokens) under the header, at most three and then `+N`. Activating one opens the Inspector diff for that path when the turn changed it, otherwise copies the path"
     origin: "a `tool-origin-tag` after the title where the call did not come from the Provider's built-in tools"
-    expansion: "collapsed by default. A `failed` call and a call awaiting permission open themselves; after that the user's own toggle wins and streaming updates never reset it"
+    expansion: "collapsed by default. A `failed` call, a call awaiting permission and a file edit with a diff open themselves; after that the user's own toggle wins and streaming updates never reset it"
+    headline: "the header names the act and its object, in the call's tense: `Editing` / `Edited README.md`, `Running` / `Ran pnpm test`, `Read app.ts:40`, `Searched TODO`, `Fetched <url>`; the object in {typography.mono-code}, truncating. Where the payload names no object, the Provider's own title. A file operation carries its `+a −b` at the row's end (P17)"
+    bodies: "{components.tool-card}"
+  tool-card:
+    scope: "The body of a {components.tool-accordion}, one shape per kind of work (P20). Payload fields are read under every spelling a Provider uses (`file_path` / `filePath` / `path`, `old_string` / `oldString` / `oldText`); nothing is invented when none is present"
+    edit: "`edit`, `delete`, `move`: a {components.file-diff-card} per changed file, from the Provider's ACP diff content first, then a patch in its output (OpenCode `metadata.diff`), then the before and after text in its input; a write with only new content reads as an all-added file"
+    execute: "a sunken well with `$ <command>` and, when reported, `exit <code>` ({semantic.status-danger} when non-zero), then the output's last 12 lines with `Show all N lines`"
+    read: "`read`, `search`, `fetch`: the result in a sunken well, tailing the same way; a `search` names its query in the header"
+    other: "anything else, an MCP tool or a Provider's own: `Arguments` and `Result` as formatted JSON, with the {components.tool-origin-tag} in the header"
+    raw: "every formatted body ends with a `Raw` disclosure holding the payload exactly as the Provider sent it; raw JSON is never the default view"
   tool-origin-tag:
     backgroundColor: "{semantic.surface-hover}"
     textColor: "{semantic.text-muted}"
@@ -923,7 +984,8 @@ components:
     padding: 4px 8px
     height: 28px
     scope: "Collapses a run of consecutive tool calls into one summary row, so a 30-call turn is not 30 rows (Interaction Patterns P1). Reads `Read 3 files · ran 2 commands ›`: counts by tool kind (read → files, execute → commands, edit/delete/move → edits, search → searches, fetch → fetches, anything else → tool calls), in first-seen order, the first three kinds and then `+N more`. A run is a maximal sequence of tool-call entries; any message, plan, notice, permission or elicitation entry ends it"
-    live: "while any member is pending or executing the row shows a 16px spinner and the in-flight call's title, and the counts update in place with no layout shift"
+    live: "while any member is pending or executing the row shows a 14px {components.activity-orb} and the in-flight call's headline (`Running pnpm test`), and the counts update in place with no layout shift"
+    stat: "a run with file edits carries their combined `+a −b` on the row (P17)"
     expand: "expanding lists the member `tool-accordion`s, each still individually collapsible. A run containing a failed call or a call awaiting permission renders expanded with only those members open, and does not collapse while a member awaits: something that asks the user is never made unreachable (State Precedence rule 5)"
     density: "Settings / General `Tool call density`: `Summary` (default) groups as above; `Full` renders every call as its own `tool-accordion` with no groups"
     a11y: "a `button` with `aria-expanded` and `aria-controls` on the member list; the summary sentence is its accessible name; an in-flight run sets `aria-busy`"
@@ -939,7 +1001,7 @@ components:
     textColor: "{semantic.text-muted}"
     typography: "{typography.mono-micro}"
     height: 20px
-    scope: "The turn is running: one row at the transcript tail, `Working · 14s`, with the running `status-dot` and, while a tool is in flight, that tool's title. It is the only 'the agent is alive' signal in the stage, so it is not a `thought-block` (content) or a spinner on one call. Removed when the turn reaches a stop reason; replaced by a `turn-notice` when that stop reason is not a normal end of turn"
+    scope: "The turn is running: one row at the transcript tail, `Working · 14s`, with the {components.activity-orb} and, while a tool is in flight, that tool's headline. It is the only 'the agent is alive' signal in the stage, so it is not a `thought-block` (content) or a spinner on one call. Removed when the turn reaches a stop reason; replaced by a `turn-notice` when that stop reason is not a normal end of turn"
     quiet: "after an idle threshold with no event the row appends `No activity for m:ss` in muted text — a fact, not an error; `Stop` stays the affordance. The threshold is an implementation constant recorded in the results doc"
     motion: "the elapsed time updates as text once per second; under reduced motion the dot is static and the text still updates, so nothing depends on motion"
   turn-notice:
@@ -973,6 +1035,15 @@ components:
     stepActive: "{semantic.accent-agent-active}"
     stepComplete: "{semantic.status-success}"
     stepDone: "a completed step collapses to a muted check and its title; only the in-progress step keeps full weight (Interaction Patterns P1)"
+    steps: "{components.task-row}"
+    progress: "the heading `Plan · 3/5 complete` carries a 64px × 4px bar filled to the share done"
+    transcript: "the plan also renders where it arose in the transcript, as a compact {semantic.surface-nested} card of the same task rows (`Plan · 3/5`), so progress is visible without the Inspector"
+  task-row:
+    height: 24px
+    typography: "{typography.body-sm}"
+    marker: "a 20px slot: `Check` in {semantic.status-success} when complete, the {components.activity-orb} in {semantic.accent-agent-active} while in progress, a 12px ring in {semantic.border-control} when pending"
+    text: "complete {semantic.text-muted}; in progress {semantic.text-primary} at weight 500; pending {semantic.text-secondary}"
+    a11y: "an ordered list; the in-progress row carries `aria-current=step`, and each row names its status in words for assistive tech"
   diff-viewer:
     backgroundColor: "{semantic.surface-sunken}"
     border: "1px solid {semantic.hairline-on-sunken}"
@@ -991,7 +1062,19 @@ components:
     lineNumber: "{typography.mono-micro} in {semantic.text-on-sunken-muted}"
     hunkHeader: "{semantic.wash-on-sunken} fill, {typography.mono-micro}, {semantic.text-on-sunken-muted}"
     collapsedContext: "one hunk-header-style row reading `N unmodified lines`, expandable in place; unchanged context never competes with the edit"
+    changeBar: "a 3px bar at a changed line's leading edge: solid {semantic.diff-added} for an addition, hatched {semantic.diff-removed} for a deletion, so the two differ by shape as well as hue"
+    width: "a row is as wide as the file's longest line, so fills and bars run the full scroll width; in split each side clips its own text and never runs into the other"
+    splitMinWidth: "below 560px of viewer width `Split` is disabled with `Widen the panel to split`, and the view stays unified"
+    hunkActions: "a hunk's `Discard` sits at the end of its `@@` row in {semantic.status-danger}, beside what it discards"
+  file-diff-card:
+    backgroundColor: "{semantic.surface-sunken}"
+    border: "1px solid {semantic.hairline-on-sunken}"
+    rounded: "{rounded.md}"
+    header: "a 32px row: the act (`Edited`, `Created`, `Changed`) in {typography.label-md}, the path (truncating, last segment kept) in {typography.mono-micro}, the file's `+a −b`, and `Open in Changes` where the workspace has git"
+    body: "the {components.diff-viewer} rows — both line-number gutters, the gutter glyph and the change bar — unvirtualized, first 40 rows, then `Show N more lines`; syntax colour follows the viewer's rule"
+    scope: "A file change in the transcript: a {components.tool-card} edit, a `file_write` entry, and the edit a {components.permission-request-card} would allow"
   usage-bar:
+    scope: "The docked composer's one home for usage: a ring filled to the share of the context window in use when the Provider reports both sides, its exact figures as the tooltip and accessible name; the figures as {typography.mono-micro} text when it reports only counts"
     size: 16px
     trackColor: "{semantic.hairline-strong}"
     fillColor: "{semantic.text-muted}"
@@ -1339,7 +1422,7 @@ The interface relies exclusively on **Geist Sans** for UI hierarchy, **Geist Mon
 * **Windows**: native caption buttons right-aligned; reserve `140px` in `tab-bar`; Tethys tabs end before caption; hover uses `{semantic.surface-hover}`, never OS blue.
 * **Linux**: header-bar fallback with in-app minimize/maximize/close (`16px` Geist, `32px` targets).
 * **Active vs. inactive**: unfocused window dims `surface-*` to `60%` opacity treatment via `tauri-plugin-window-state`, suspends the accent breathe animation, keeps hairlines at full opacity for structure. Focus returns prior accent state.
-* **Reduced motion**: `prefers-reduced-motion: reduce` suspends every looping animation — `{motion.breathe}`, `{motion.pulse}` and the button/loading spinner — to a static frame, exactly as an unfocused window does. Single-shot transitions (`fast`/`base`) stay. No state may rely on motion alone: `running` vs `awaiting` differ by shape (disc vs ring) as well as hue, and `Stop`'s pending phase shows its remaining grace as a static fill plus text (see `stop-control`).
+* **Reduced motion**: `prefers-reduced-motion: reduce` suspends every looping animation — `{motion.breathe}`, `{motion.pulse}`, `{motion.shimmer}` and the `{motion.orb}` sweep — to a static frame, exactly as an unfocused window does. Single-shot transitions (`fast`/`base`) stay. No state may rely on motion alone: `running` vs `awaiting` differ by shape (disc vs ring) as well as hue, and `Stop`'s pending phase shows its remaining grace as a static fill plus text (see `stop-control`).
 * **IME**: composition underline `{semantic.text-secondary}`, caret `{semantic.accent-focus}`; candidate window follows textarea caret; no layout shift during composition.
 * **Clipboard / DnD**: paste plain → text; paste rich/file-drop on composer → `@`-chip conversion with `mono-micro` hint (`Pasted file → @path`); directory drop on catalog → `Add workspace` affordance; denied drop shows `status-danger` ring on target only.
 
@@ -1398,7 +1481,7 @@ Every interactive component implements these 7 states + loading/empty with ident
 | `selected` | bg `{semantic.surface-active}` + left `2px` `{semantic.accent-focus}` bar (lists and cards, e.g. `workspace-card-selected`) or filled pill (segmented items, `tab-item`) |
 | `disabled` | `40%` opacity, no pointer events, `aria-disabled`; skeleton text stays `{semantic.text-muted}` |
 | `destructive` | border/text `{semantic.status-danger}`; hover fill `status-danger` at `12%` + `{semantic.text-inverse}` in dark / danger text in light |
-| `loading` | skeleton pulse `{semantic.surface-hover}`↔`{semantic.surface-active}` `{motion.pulse}` + `16px` Geist spinner in `{semantic.text-muted}` |
+| `loading` | skeleton pulse `{semantic.surface-hover}`↔`{semantic.surface-active}` `{motion.pulse}` + a `16px` `activity-orb` in `{semantic.text-muted}` beside the words for what is loading |
 | `empty` | `24px` hero Geist icon in `{semantic.text-muted}` + `body-sm` muted copy + primary action button |
 
 Apply to: pill, popover cells, cards, chips/rows, session rows, provider rows, provider tabs, toggle, stepper, splitter, palette rows, tab items, message/plan/tool/tool-run-group/subagent/notice/permission/elicitation/diff/skill-row/command-row/mcp-server-form/profile/process/onboarding/trust-dialog/login-dialog/keybinding, composer config chips, attachment chips and activity-ledger rows below. Destructive appears on: discard hunk, delete thread/workspace, revoke trust, a Provider option whose kind rejects, the `SIGKILL` end of the cancellation ladder, rollback destructive confirm, delete command.
@@ -1437,7 +1520,7 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 | P1 | **Collapse execution, keep the summary.** Tool calls, thoughts, finished plan steps and unmodified diff context default to a one-line summary with depth one disclosure away. Anything that failed or asks the user opens itself | `tool-run-group`, `tool-accordion`, `thought-block`, `plan-panel.stepDone`, `diff-viewer.collapsedContext` | Observed, Documented | `tool-run-group` new; rest existing |
 | P2 | **Status is a sentence, not a colour.** Every non-healthy state carries its reason in words in the same row: the dot says *that*, the words say *what* and how to fix it | `provider-row` status subtext, `health-badge`, `turn-notice`, `tool-accordion` `Failed`, `provider-capability-notice`, `working-indicator` | Observed | Existing rule for Providers; extended to the transcript |
 | P3 | **Enabled-but-unreachable is not disabled.** Toggle and health are independent axes: a row switched on with a red dot reads as a fault; a row switched off by policy is dimmed and its reason is worded as a choice | `provider-row`, `toggle-switch` | Observed | M1.12 verifies with two fixture rows |
-| P4 | **Git context rides with the composer.** Branch, isolation and the thread's diff stat sit next to the input, never in a separate tab | `branch-worktree-pill`, `branch-bar` | Observed | Amended d0-rc12 |
+| P4 | **Git context rides with the composer.** Branch, isolation and the thread's diff stat sit next to the input, never in a separate tab. *Next to* means adjacent: in a thread the branch bar docks directly above the card, outside it, so the card holds only what and how | `branch-worktree-pill`, `branch-bar` | Observed | Amended d0-rc13 |
 | P5 | **Controls that change agent behaviour sit beside the input**, not two clicks away in Settings. One home per control | `composer-config-chip`, prompt-card mode and context pills | Observed | New |
 | P6 | **The empty or disabled state names the fix.** The disabled control says what is missing and where to fix it | `prompt-card`, `model-selector-pill` zero-provider, `workspace-selector-pill` unresolved, `session-config-panel`, `code-editor-well` empty state, `activity-ledger`, `turn-notice` `connection-lost` | Observed | Existing; extended |
 | P7 | **Decisions are asked, not buried in prose.** A real fork is a numbered choice with an escape hatch (`Other`) and a way to decline (`Skip`). *Adapted:* ACP's option type has a value and a title but no description, so the card renders the title and the property's help text and never invents a trade-off line | `elicitation-card`, `permission-request-card` | Observed | Extended |
@@ -1451,6 +1534,8 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 | P15 | **The consent moment is where the eyes are.** A pending request docks above the composer with numbered options; the transcript keeps an anchor, not the only copy | `request-dock` | Observed | New d0-rc12 |
 | P16 | **Risk takes a second step.** The most permissive mode is an `Enable` action outside the list, and is unavailable where its guard (PRM‑02) does not hold, with the reason stated | `mode-pill` | Observed | New d0-rc12 |
 | P17 | **One stat, three scopes.** `+a −b` appears on the action row, the turn receipt and the branch bar, each beside the action of its scope; never re-added by hand, never estimated | `tool-accordion` row, `turn-receipt`, `branch-bar` | Observed | New d0-rc12 |
+| P19 | **Long lists are searched, not scrolled.** A list that can outgrow its popover (a Provider routing to hundreds of models) is a `searchable-listbox` at a fixed height, the search focused on open; the popover's size never depends on the list's length | `searchable-listbox`, `model-selector-popover`, `config-option-popover` | Observed (Claude Code Desktop model menu, beautifului prompt bar) | New d0-rc13 |
+| P20 | **Every kind of work has its own shape.** A tool call names its act and object, and its body is what that work produced: an edit is its diff, a command is its command and output, an MCP call is its arguments and result. Raw payloads are one disclosure away, never the default | `tool-accordion`, `tool-card`, `file-diff-card` | Observed (Claude Code Desktop action rows) | New d0-rc13 |
 | P18 | **Provenance over prefixes.** A command or skill shows its source as a group heading and badge; a qualified name appears only on a real collision, and an unavailable item stays listed with its reason | `composer-command-group`, `composer-suggestion-popover.dimRow` | Observed | New d0-rc12 |
 
 **Considered, not adopted** — recorded so nobody re-proposes them without new evidence:
@@ -1515,6 +1600,8 @@ Visual and token rules. Behavioural guardrails (permissions, cancellation, MCP, 
 * Group by kind in the ledger and by order in the transcript; never merge the two into one list (P10).
 * Put a control in exactly one place; a config category has one home.
 * Put a state on the smallest shape that carries it — the marker, the label, a 2px left rule, or a ≤14% `status-*-soft` wash — and let motion carry liveness.
+* Give a control a minimum height and let its label truncate with a tooltip, so a larger type size or zoom grows the control instead of clipping it.
+* Float every popover through the `popover` primitive, so it flips and shifts to stay inside the window.
 
 ### Don't
 * Don't use colorful background fills on cards; all cards must remain on `{semantic.surface-card}`.
@@ -1524,6 +1611,8 @@ Visual and token rules. Behavioural guardrails (permissions, cancellation, MCP, 
 * Don't show a status dot without its reason in words in the same row (P2).
 * Don't infer a tool call's origin (MCP server, skill, subagent) from its title in the webview; render the `origin` field or nothing.
 * Don't wrap a content surface in a state colour. A saturated perimeter around a card, panel or row is the loudest possible report and the least informative; use the marker, a 2px left rule, or a `status-*-soft` wash. A compact control (≤28px chip/pill/badge, an input on error, a `destructive` button) is the exception — there the border is the control's shape.
+* Don't show a tool call's raw JSON as its body; show what the work produced and keep the payload behind `Raw` (P20).
+* Don't use a spinner for work in flight; use the `activity-orb`.
 * Don't animate a state that has stopped. Only `running` and `awaiting` breathe (`{motion.stateMotion}`); `error`, `interrupted`, `suspended`, `archived`, `idle` and `auth_required` are static, because motion reads as *still working*.
 * Don't put a `status-dot` on a large area at full opacity as its only state carrier; the dot is small by design and the words in the same row do the rest (P2).
 * Don't announce streamed chunks to assistive technology, and don't move the viewport while the user is reading (`jump-to-latest`).

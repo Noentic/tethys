@@ -6,6 +6,22 @@ use serde_json::{Map, Value};
 use tethys_acp::client::AcpProviderIntegration;
 use tethys_schema::thread::ConfigOption;
 
+/// The Tethys approval level a Provider mode stands for, when the mode is
+/// really a permission preset rather than a way of working (PRM-04). Tethys
+/// hides these from Working mode and sets the narrowest one that matches its
+/// own level; a mode that is not listed here stays a working mode.
+fn approval_mode_level(provider_id: &str, mode_id: &str) -> Option<&'static str> {
+    match (provider_id, mode_id) {
+        (crate::providers::claude_code::REGISTRY_ID, "default") => Some("supervised"),
+        (crate::providers::claude_code::REGISTRY_ID, "acceptEdits") => Some("auto-edit"),
+        (crate::providers::claude_code::REGISTRY_ID, "bypassPermissions") => Some("yolo"),
+        (crate::providers::codex::REGISTRY_ID, "read-only") => Some("supervised"),
+        (crate::providers::codex::REGISTRY_ID, "auto") => Some("auto-edit"),
+        (crate::providers::codex::REGISTRY_ID, "full-access") => Some("yolo"),
+        _ => None,
+    }
+}
+
 /// Appends normalized roles for ACP mode values to Provider metadata.
 /// Unknown values stay working modes so a new Provider option remains usable.
 pub(crate) fn with_mode_roles(provider_id: &str, option: &ConfigOption, metadata: Value) -> Value {
@@ -17,9 +33,7 @@ pub(crate) fn with_mode_roles(provider_id: &str, option: &ConfigOption, metadata
         .value_options
         .iter()
         .map(|value| {
-            let level = (provider_id == crate::providers::claude_code::REGISTRY_ID)
-                .then(|| crate::providers::claude_code::approval_mode_level(&value.id))
-                .flatten();
+            let level = approval_mode_level(provider_id, &value.id);
             let role = level.map_or_else(
                 || serde_json::json!({ "kind": "working" }),
                 |level| serde_json::json!({ "kind": "approval", "level": level }),
@@ -133,6 +147,80 @@ mod tests {
             ..Default::default()
         };
         assert!(registry.register(standard).is_err());
+    }
+
+    fn mode_option(ids: &[&str]) -> ConfigOption {
+        ConfigOption {
+            id: "mode".into(),
+            name: "Mode".into(),
+            description: None,
+            current_value: ids[0].into(),
+            values: ids.iter().map(|id| (*id).into()).collect(),
+            category: Some("mode".into()),
+            kind: None,
+            value_options: ids
+                .iter()
+                .map(|id| tethys_schema::thread::ConfigOptionValue {
+                    id: (*id).into(),
+                    name: (*id).into(),
+                    description: None,
+                })
+                .collect(),
+            recommended_value: None,
+            metadata: None,
+        }
+    }
+
+    fn roles(provider_id: &str, ids: &[&str]) -> Value {
+        with_mode_roles(provider_id, &mode_option(ids), Value::Null)["tethysModeRoles"].clone()
+    }
+
+    #[test]
+    fn classifies_every_claude_permission_preset_as_an_approval_level() {
+        let roles = roles(
+            crate::providers::claude_code::REGISTRY_ID,
+            &["default", "acceptEdits", "plan", "bypassPermissions"],
+        );
+        assert_eq!(
+            roles["default"],
+            serde_json::json!({ "kind": "approval", "level": "supervised" })
+        );
+        assert_eq!(
+            roles["acceptEdits"],
+            serde_json::json!({ "kind": "approval", "level": "auto-edit" })
+        );
+        assert_eq!(
+            roles["bypassPermissions"],
+            serde_json::json!({ "kind": "approval", "level": "yolo" })
+        );
+        assert_eq!(roles["plan"], serde_json::json!({ "kind": "working" }));
+    }
+
+    #[test]
+    fn keeps_codex_approval_presets_out_of_working_mode() {
+        let roles = roles(
+            crate::providers::codex::REGISTRY_ID,
+            &["read-only", "auto", "full-access"],
+        );
+        assert_eq!(
+            roles["read-only"],
+            serde_json::json!({ "kind": "approval", "level": "supervised" })
+        );
+        assert_eq!(
+            roles["auto"],
+            serde_json::json!({ "kind": "approval", "level": "auto-edit" })
+        );
+        assert_eq!(
+            roles["full-access"],
+            serde_json::json!({ "kind": "approval", "level": "yolo" })
+        );
+    }
+
+    #[test]
+    fn leaves_opencode_modes_as_working_modes() {
+        let roles = roles(crate::providers::opencode::REGISTRY_ID, &["build", "plan"]);
+        assert_eq!(roles["build"], serde_json::json!({ "kind": "working" }));
+        assert_eq!(roles["plan"], serde_json::json!({ "kind": "working" }));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 export * from "./components/action-icon-button";
+export * from "./components/activity-orb";
 export * from "./components/approval-inbox-pill";
 export * from "./components/badge";
 // Components
@@ -15,8 +16,10 @@ export * from "./components/modal-dialog";
 export * from "./components/page-header";
 export * from "./components/popover";
 export * from "./components/protocol-pill";
+export * from "./components/reasoning-effort";
 export * from "./components/row";
 export * from "./components/schema-field-group";
+export * from "./components/searchable-listbox";
 export * from "./components/segmented-control";
 export * from "./components/select";
 export * from "./components/session-group-header";
@@ -32,6 +35,7 @@ export * from "./components/textarea";
 export * from "./components/toast";
 export * from "./components/toggle-switch";
 export * from "./components/tooltip";
+export * from "./components/truncated-text";
 export * from "./components/underline-tabs";
 export * from "./components/workspace-source-badge";
 export * from "./context-bar-fold";

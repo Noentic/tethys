@@ -310,12 +310,29 @@ fn map_prompt_response(raw: &Value) -> Vec<TurnEventBody> {
         .collect()
 }
 
+/// Codex's reasoning effort option id, sent without an ACP category by agents
+/// that predate `thought_level`; it is the same ordered effort scale.
+const REASONING_EFFORT_ID: &str = "reasoning_effort";
+
 fn apply_config_options(options: &mut [ConfigOption]) {
     for option in options {
+        if option.category.is_none() && option.id == REASONING_EFFORT_ID {
+            option.category = Some("thought_level".into());
+        }
         let metadata = option
             .metadata
             .as_deref()
             .and_then(|raw| serde_json::from_str::<Value>(raw).ok());
+        if option.category.as_deref() == Some("mode") {
+            let roles = crate::provider_integration::with_mode_roles(
+                REGISTRY_ID,
+                option,
+                metadata
+                    .clone()
+                    .unwrap_or_else(|| Value::Object(Default::default())),
+            );
+            option.metadata = serde_json::to_string(&roles).ok();
+        }
         let recommended = metadata
             .as_ref()
             .and_then(|meta| meta.get("jetbrains"))
@@ -563,6 +580,7 @@ mod tests {
         }];
         apply_config_options(&mut options);
         assert_eq!(options[0].recommended_value.as_deref(), Some("high"));
+        assert_eq!(options[0].category.as_deref(), Some("thought_level"));
 
         let mut permission = PermissionRequested {
             req_id: "r1".into(),

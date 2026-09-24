@@ -1,6 +1,7 @@
 import { FileText, GitBranch, GitCommit } from "@nebutra/icons";
 import type { DiffSource, WorktreeInfo } from "@tethys/bindings";
-import { Badge, Button, Popover, useInspectorControl } from "@tethys/ui";
+import { Badge, Button, cn, Popover, useInspectorControl } from "@tethys/ui";
+import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReviewClient } from "./client-context";
 import { CommitBox } from "./commit-box";
@@ -16,8 +17,15 @@ export interface BranchBarProps {
   worktree?: boolean;
   noGit?: boolean;
   turnRunning?: boolean;
+  /** Session actions that sit at the strip's end, such as `Fork`. */
+  trailing?: React.ReactNode;
   className?: string;
 }
+
+// branch-bar (DESIGN.md): a strip docked above the prompt card, outside it, so
+// git context stays beside the input without crowding the input itself.
+const STRIP_CLASS =
+  "@container flex min-h-9 min-w-0 items-center gap-sm rounded-lg border border-(--tethys-hairline) bg-(--tethys-surface-panel) py-1 pr-1 pl-2";
 
 /** Git context and the only entry point for committing a thread's changes. */
 export function BranchBar({
@@ -26,6 +34,7 @@ export function BranchBar({
   worktree = false,
   noGit = false,
   turnRunning = false,
+  trailing,
   className,
 }: BranchBarProps) {
   const client = useReviewClient();
@@ -96,9 +105,12 @@ export function BranchBar({
         role="toolbar"
         aria-label="Branch actions"
         data-testid="branch-bar"
-        className={className}
+        className={cn(STRIP_CLASS, className)}
       >
         <Badge variant="muted">no git · no revert</Badge>
+        {trailing && (
+          <span className="ml-auto flex shrink-0 items-center">{trailing}</span>
+        )}
       </div>
     );
   }
@@ -108,11 +120,11 @@ export function BranchBar({
       role="toolbar"
       aria-label="Branch actions"
       data-testid="branch-bar"
-      className={`flex min-w-0 flex-wrap items-center gap-md ${className ?? ""}`}
+      className={cn(STRIP_CLASS, className)}
     >
       <span
         title={branch ?? undefined}
-        className="inline-flex h-6 min-w-0 max-w-64 items-center gap-1.5 rounded-sm border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 font-mono text-mono-micro text-(--tethys-text-primary)"
+        className="inline-flex min-h-6 min-w-0 max-w-48 shrink items-center gap-1.5 rounded-sm border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2 font-mono text-mono-micro text-(--tethys-text-primary)"
       >
         <GitBranch
           aria-hidden="true"
@@ -120,7 +132,7 @@ export function BranchBar({
         />
         <span className="truncate">{branch ?? "detached"}</span>
       </span>
-      <span className="text-label-sm text-(--tethys-text-muted)">
+      <span className="hidden shrink-0 text-label-sm text-(--tethys-text-muted) @lg:inline">
         {worktree ? "worktree" : "checkout"} · vs{" "}
         <span className="font-mono">{worktree ? base : "HEAD"}</span>
       </span>
@@ -129,27 +141,28 @@ export function BranchBar({
           type="button"
           aria-label={`${summary.files.length} changed file${summary.files.length === 1 ? "" : "s"}: review`}
           onClick={() => (openChanges ?? open)()}
-          className="focus-ring inline-flex h-6 items-center gap-1.5 rounded-sm px-1.5 font-mono text-mono-micro transition-colors hover:bg-(--tethys-surface-hover)"
+          className="focus-ring inline-flex min-h-6 shrink-0 items-center gap-1.5 rounded-sm px-1.5 font-mono text-mono-micro whitespace-nowrap transition-colors hover:bg-(--tethys-surface-hover)"
         >
-          <span className="text-(--tethys-text-secondary)">
+          <span className="hidden text-(--tethys-text-secondary) @sm:inline">
             {summary.files.length} file{summary.files.length === 1 ? "" : "s"}
           </span>
           <span className="text-diff-added">+{summary.additions}</span>
           <span className="text-diff-removed">−{summary.deletions}</span>
         </button>
       )}
-      <span className="ml-auto flex items-center gap-sm">
+      <span className="ml-auto flex shrink-0 items-center gap-xs">
         <Button
           size="sm"
           variant="ghost"
+          aria-label="Review"
           onClick={() => (openChanges ?? open)()}
         >
           <FileText aria-hidden="true" className="size-3.5" />
-          Review
+          <span className="hidden @md:inline">Review</span>
         </Button>
         {committed ? (
           <>
-            <span className="font-mono text-mono-micro text-(--tethys-status-success)">
+            <span className="truncate font-mono text-mono-micro text-(--tethys-status-success)">
               ✓ {committed.oid} · {committed.aheadOfBase} ahead of {base}
             </span>
             <Button
@@ -179,7 +192,9 @@ export function BranchBar({
               open={commitOpen}
               onClose={() => setCommitOpen(false)}
               anchorRef={commitButtonRef}
-              className="bottom-full right-0 mb-2 w-80"
+              side="top"
+              align="end"
+              className="w-80"
             >
               {summary && (
                 <div className="p-sm">
@@ -194,6 +209,7 @@ export function BranchBar({
             </Popover>
           </div>
         )}
+        {trailing}
       </span>
     </div>
   );

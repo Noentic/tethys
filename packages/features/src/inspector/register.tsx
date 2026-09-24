@@ -4,7 +4,7 @@ import { registerClaudeCodeProviderUi } from "../providers/claude-code";
 import { ProviderArtifactRenderer } from "../providers/provider-artifact";
 import { ActivityLedger } from "./activity-ledger";
 import { InspectorSummary } from "./inspector-summary";
-import { PlanPanel } from "./renderers/plan-panel";
+import { PlanCardRenderer, PlanPanel } from "./renderers/plan-panel";
 import { TerminalEntryRenderer } from "./renderers/terminal-entry";
 import { ThoughtBlockRenderer } from "./renderers/thought-block";
 import { TimelineEventRenderer } from "./renderers/timeline-event";
@@ -29,9 +29,9 @@ function TurnMessageRendererEntry({
  * Composition seam: registers every transcript renderer at module scope, so
  * importing `InspectorScreen` is sufficient and no shell file is edited.
  *
- * The plan and the activity ledger are presented in the Inspector
- * (`registerInspectorSlot`), so their stage entries render nothing rather than
- * falling to `UnknownEntryRenderer`.
+ * The plan renders twice by design: as a compact task card where it arose in
+ * the transcript, and as the Inspector's live plan panel. The activity ledger
+ * is Inspector-only (`registerInspectorSlot`).
  */
 export function registerInspectorRenderers(): void {
   registerEntryRenderer("turn_message", TurnMessageRendererEntry);
@@ -42,7 +42,7 @@ export function registerInspectorRenderers(): void {
   registerEntryRenderer("turn_notice", TurnNoticeRenderer);
   registerEntryRenderer("provider_artifact", ProviderArtifactRenderer);
   registerClaudeCodeProviderUi();
-  registerEntryRenderer("plan", () => null);
+  registerEntryRenderer("plan", PlanCardRenderer);
   // The rollup band is the first section: it summarises the whole session, and
   // everything below it is the detail behind one of its numbers.
   registerInspectorSlot("summary", InspectorSummary);

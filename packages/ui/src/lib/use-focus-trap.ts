@@ -73,20 +73,29 @@ export function useFocusTrap({
     if (!isActive) {
       return;
     }
-    const container = containerRef.current;
     const previous = document.activeElement as HTMLElement | null;
     const trap: ActiveTrap = { tier: STACKING_SCALE[tier] };
     active.push(trap);
     notify();
 
+    // Read the container on use, not once: a portalled surface (the Radix
+    // popover) mounts its content a commit after this effect runs.
     const focusables = () =>
       Array.from(
-        container?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [],
+        containerRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [],
       ).filter((element) => !element.hasAttribute("disabled"));
-    if (initialFocus === "first") {
-      focusables()[0]?.focus();
+    const focusInitial = () => {
+      if (initialFocus === "first") {
+        focusables()[0]?.focus();
+      } else {
+        containerRef.current?.focus();
+      }
+    };
+    let frame: number | undefined;
+    if (containerRef.current) {
+      focusInitial();
     } else {
-      container?.focus();
+      frame = requestAnimationFrame(focusInitial);
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -121,6 +130,7 @@ export function useFocusTrap({
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
+      if (frame !== undefined) cancelAnimationFrame(frame);
       active.splice(active.indexOf(trap), 1);
       notify();
       previous?.focus?.();

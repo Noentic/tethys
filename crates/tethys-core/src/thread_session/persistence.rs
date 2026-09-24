@@ -73,6 +73,7 @@ impl ThreadSessions {
                     thread_id: record.summary.id.clone(),
                     seq,
                     event: body,
+                    at_ms: stored.created_at as f64,
                 });
             }
             match record.summary.state {
@@ -401,6 +402,7 @@ pub(super) async fn append_event(
             thread_id,
             seq,
             event: body,
+            at_ms: now_ms(),
         };
         inner.events.push(envelope.clone());
         envelope
@@ -443,4 +445,12 @@ pub(super) async fn persist_thread_state(
         .save_thread(record)
         .await
         .map_err(|error| ApiError::Internal(error.to_string()))
+}
+
+/// Unix milliseconds for a live event's `at_ms`.
+fn now_ms() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as f64)
+        .unwrap_or(0.0)
 }

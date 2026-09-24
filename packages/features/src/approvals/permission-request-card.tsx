@@ -1,12 +1,49 @@
 import { Pencil, ShieldCheck, Terminal } from "@nebutra/icons";
+import { FileDiffCard } from "@tethys/diff";
 import type {
   PermissionRequestEntry,
   PermissionRequestItem,
+  SessionEntry,
+  ToolCallEntry,
 } from "@tethys/state";
 import { Button, cn, StatusDot } from "@tethys/ui";
 import type React from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useInspectorClient } from "../client-context";
+import { toolDiffs, toolPath } from "../inspector/tool-view";
+import { useSessionState } from "../inspector/use-session-state";
+
+const FILE_KINDS = ["edit", "delete", "move"];
+
+/**
+ * The edit a file permission asks about. ACP's request names the file but not
+ * its tool call, so the card reads the call that is waiting on this file.
+ * Nothing is shown when no waiting call matches: a guessed diff would be worse
+ * than none.
+ */
+export function pendingEditFor(
+  request: PermissionRequestItem,
+  entries: SessionEntry[],
+): ToolCallEntry | null {
+  const path = request.subject?.File?.path;
+  if (!path) return null;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry?.kind !== "tool_call") continue;
+    const call = entry as ToolCallEntry;
+    if (
+      call.status !== "Pending" ||
+      !FILE_KINDS.includes(call.toolKind ?? "")
+    ) {
+      continue;
+    }
+    const callPath = toolPath(call);
+    if (callPath === path || (callPath && path.endsWith(`/${callPath}`))) {
+      return call;
+    }
+  }
+  return null;
+}
 
 function rejects(kind: string | null | undefined): boolean {
   return kind?.startsWith("reject") ?? false;
@@ -54,6 +91,24 @@ function defaultsToNo(metadata?: string | null): boolean {
   } catch {
     return false;
   }
+}
+
+/** The diff a file permission would allow, when its waiting call has one. */
+function PendingEditPreview({ request }: { request: PermissionRequestItem }) {
+  const context = useInspectorClient();
+  const session = useSessionState(context?.threadId ?? "");
+  const diffs = useMemo(() => {
+    const call = pendingEditFor(request, session.entries);
+    return call ? toolDiffs(call) : [];
+  }, [request, session.entries]);
+  if (diffs.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-sm">
+      {diffs.map((detail) => (
+        <FileDiffCard key={detail.path} detail={detail} />
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -157,6 +212,7 @@ export function PermissionRequestCard({
   }
 
   const { Icon, detail } = requestSubject(request);
+  const isCommand = Boolean(request.subject?.Command);
 
   return (
     <section
@@ -188,15 +244,25 @@ export function PermissionRequestCard({
           <h3 className="text-label-md text-(--tethys-text-primary)">
             {request.title}
           </h3>
-          {detail && (
-            <code
-              title={detail}
-              className="self-start truncate rounded-xs bg-(--tethys-surface-hover) px-1.5 py-0.5 font-mono text-mono-micro text-(--tethys-text-secondary)"
-              style={{ maxWidth: "100%" }}
-            >
-              {detail}
-            </code>
-          )}
+          {detail &&
+            (isCommand ? (
+              <code className="flex max-h-32 items-start gap-sm overflow-auto rounded-sm border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) px-sm py-1.5 font-mono text-mono-code whitespace-pre-wrap break-all text-(--tethys-text-on-sunken)">
+                <span
+                  aria-hidden="true"
+                  className="select-none text-(--tethys-text-on-sunken-muted)"
+                >
+                  $
+                </span>
+                {detail}
+              </code>
+            ) : (
+              <code
+                title={detail}
+                className="max-w-full self-start truncate rounded-xs bg-(--tethys-surface-hover) px-1.5 py-0.5 font-mono text-mono-micro text-(--tethys-text-secondary)"
+              >
+                {detail}
+              </code>
+            ))}
           {request.description && (
             <p className="text-body-sm text-(--tethys-text-secondary)">
               {request.description}
@@ -209,6 +275,7 @@ export function PermissionRequestCard({
           )}
         </div>
       </header>
+      <PendingEditPreview request={request} />
       <div className="flex flex-wrap gap-sm">
         {request.options.map((option, index) => (
           <div

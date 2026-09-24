@@ -8,7 +8,7 @@ import {
   useTrustedWorkspaces,
   type WorkspaceCapabilityFixture,
 } from "@tethys/state";
-import { cn } from "@tethys/ui";
+import { ActivityOrb, cn } from "@tethys/ui";
 import { useEffect, useRef, useState } from "react";
 import {
   canDockComposer,
@@ -25,6 +25,7 @@ import { ProviderPopover } from "../providers/provider-popover";
 import { latestAnnouncement, TranscriptAnnouncer } from "./announcer";
 import { registerInspectorRenderers } from "./register";
 import { JumpToLatest } from "./renderers/jump-to-latest";
+import { WorkingIndicator, workingState } from "./renderers/working-indicator";
 import { TranscriptStage } from "./TranscriptStage";
 import { useSessionState } from "./use-session-state";
 import { useTailPin } from "./use-tail-pin";
@@ -70,6 +71,8 @@ export function InspectorScreen({
     state.entries.length,
   );
 
+  const [loadingThread, setLoadingThread] = useState(false);
+
   useEffect(() => {
     const store = getOrCreateSessionStore(sessionId);
     let cancelled = false;
@@ -80,9 +83,14 @@ export function InspectorScreen({
       // route that mounts without a hydrated store re-fetches here.
       const hydrated = isSessionHydrated(sessionId);
       if (!hydrated && client.thread?.get) {
-        const view = await client.thread.get(sessionId);
-        if (cancelled) return;
-        hydrateSessionView(view);
+        setLoadingThread(true);
+        try {
+          const view = await client.thread.get(sessionId);
+          if (cancelled) return;
+          hydrateSessionView(view);
+        } finally {
+          if (!cancelled) setLoadingThread(false);
+        }
       }
       if (!client.events || cancelled) return;
       releaseStream = subscribeSessionStream(
@@ -174,12 +182,26 @@ export function InspectorScreen({
             aria-busy={state.status === "running"}
             className="min-h-0 flex-1 overflow-auto"
           >
+            {loadingThread && state.entries.length === 0 && (
+              <div
+                role="status"
+                className="flex h-full min-h-40 items-center justify-center gap-sm text-label-md text-(--tethys-text-muted)"
+              >
+                <ActivityOrb size={16} />
+                Loading thread…
+              </div>
+            )}
             <TranscriptStage
               entries={state.entries}
               capabilities={capabilities}
               sessionId={sessionId}
               className="pb-lg"
             />
+            {state.status === "running" && (
+              <div className="mx-auto w-full max-w-(--layout-stage-measure) px-4 pb-lg">
+                <WorkingIndicator {...workingState(state.entries)} />
+              </div>
+            )}
           </div>
           <JumpToLatest
             visible={!pinned}

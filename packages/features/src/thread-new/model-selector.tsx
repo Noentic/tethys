@@ -1,6 +1,6 @@
 //! `model-selector-pill` + `model-selector-popover` (DESIGN.md; spec §3).
 //!
-//! Two-column popover: a fixed 200px Provider column and the Provider's own
+//! Two-column popover: a fluid Provider column (at most 200px) and the Provider's own
 //! `session-config-panel`. Never indexes a possibly-empty provider list for
 //! initial state (the M1.6 shell's `useState(ACP_PROVIDERS[0])` bug).
 
@@ -13,15 +13,20 @@ import {
   useProviderConnections,
 } from "@tethys/state";
 import {
+  ActivityOrb,
+  cn,
   EmptyState,
   Listbox,
   Popover,
   ProtocolPill,
   StatusDot,
+  TruncatedText,
 } from "@tethys/ui";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import { providerIcon } from "../agents/provider-catalog";
-import { optionValues, SessionConfigPanel } from "./session-config-panel";
+import { optionValues } from "./config-values";
+import { ModelOptionList } from "./model-option-list";
+import { SessionConfigPanel } from "./session-config-panel";
 import type { PreparedDraftStatus } from "./use-prepared-draft";
 
 /** The catalog logo with a corner status dot, or a bare status dot when the
@@ -47,9 +52,10 @@ function ProviderMark({
   );
 }
 
-// Pen `XrH5y / Provider model pill`: 22px, surface-card, md radius, hairline.
+// Pen `XrH5y / Provider model pill`: 28px, surface-card, md radius, hairline.
+// It grows with the type size and never past the room the prompt card gives it.
 const PILL_CLASS =
-  "focus-ring flex h-7 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+  "focus-ring flex min-h-7 max-w-full min-w-0 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 
 const SECTION_LABEL_CLASS =
   "px-3 py-1 text-label-sm text-(--tethys-text-muted) uppercase tracking-wider";
@@ -149,7 +155,7 @@ export function ModelSelector({
 
   return (
     <div
-      className="relative"
+      className="relative min-w-0"
       role="toolbar"
       aria-label="Provider and session configuration"
       data-active-column={column}
@@ -187,19 +193,20 @@ export function ModelSelector({
         ) : (
           <StatusDot status="missing" inline />
         )}
-        <span
-          className={
+        <TruncatedText
+          text={label}
+          className={cn(
+            "max-w-40 shrink-0",
             selected
               ? "text-(--tethys-text-primary)"
-              : "text-(--tethys-text-muted)"
-          }
-        >
-          {label}
-        </span>
+              : "text-(--tethys-text-muted)",
+          )}
+        />
         {summary && (
-          <span className="text-label-md text-(--tethys-text-muted)">
-            · {summary}
-          </span>
+          <TruncatedText
+            text={`· ${summary}`}
+            className="text-label-md text-(--tethys-text-muted)"
+          />
         )}
         <ChevronDown
           aria-hidden="true"
@@ -207,14 +214,9 @@ export function ModelSelector({
         />
       </button>
 
-      <Popover
-        open={open}
-        onClose={close}
-        anchorRef={anchorRef}
-        className="bottom-full left-0 mb-1.5"
-      >
-        <div className="flex h-[250px] w-(--layout-popover-selector) divide-x divide-(--tethys-hairline) overflow-hidden">
-          <div className="flex w-[200px] shrink-0 flex-col overflow-y-auto p-2">
+      <Popover open={open} onClose={close} anchorRef={anchorRef} side="top">
+        <div className="flex h-[min(420px,60vh)] w-[min(var(--layout-popover-selector),calc(100vw-16px))] divide-x divide-(--tethys-hairline) overflow-hidden">
+          <div className="flex w-[38%] max-w-[200px] min-w-36 shrink-0 flex-col overflow-y-auto p-2">
             <div className={SECTION_LABEL_CLASS}>Providers</div>
             {providers.length === 0 ? (
               <EmptyState
@@ -232,6 +234,7 @@ export function ModelSelector({
             ) : (
               <Listbox
                 label="Providers"
+                sublabelPlacement="below"
                 selectedId={selected?.id}
                 items={providers.map((provider) => ({
                   id: provider.id,
@@ -249,7 +252,9 @@ export function ModelSelector({
                         ACP {provider.protocol.toLowerCase()}
                       </ProtocolPill>
                     ) : provider.status === "auth_required" ? (
-                      <span className="text-(--tethys-status-warning)">⚠</span>
+                      <span className="text-(--tethys-status-warning)">
+                        Sign in required
+                      </span>
                     ) : undefined,
                   disabled: !isProviderSelectable(provider),
                 }))}
@@ -274,10 +279,11 @@ export function ModelSelector({
             )}
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-md overflow-y-auto p-md">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-sm p-sm">
             {selected ? (
               <>
-                <span className="text-label-sm text-(--tethys-text-muted)">
+                <span className="flex items-center gap-1.5 px-1 text-label-sm text-(--tethys-text-muted)">
+                  {draftStatus === "preparing" && <ActivityOrb size={12} />}
                   {configColumnCopy(selected, draftStatus)}
                 </span>
                 {draftError !== null && draftStatus === "error" ? (
@@ -289,10 +295,15 @@ export function ModelSelector({
                   </p>
                 ) : modelOption ? (
                   <>
-                    <SessionConfigPanel
-                      options={[modelOption]}
-                      values={values}
-                      onChange={onConfigChange}
+                    <ModelOptionList
+                      option={modelOption}
+                      value={
+                        values[modelOption.id] ?? modelOption.current_value
+                      }
+                      onChange={(value) =>
+                        onConfigChange(modelOption.id, value)
+                      }
+                      className="min-h-0 flex-1 rounded-md border border-(--tethys-hairline)"
                     />
                     {moreOptions.length > 0 && (
                       <>
@@ -302,16 +313,18 @@ export function ModelSelector({
                           onClick={() =>
                             setMoreOptionsOpen((previous) => !previous)
                           }
-                          className="focus-ring self-start rounded-sm px-2 py-1 text-label-md text-(--tethys-accent-focus) hover:bg-(--tethys-surface-hover)"
+                          className="focus-ring shrink-0 self-start rounded-sm px-2 py-1 text-label-md text-(--tethys-accent-focus) hover:bg-(--tethys-surface-hover)"
                         >
                           {moreOptionsOpen ? "Fewer options" : "More options…"}
                         </button>
                         {moreOptionsOpen && (
-                          <SessionConfigPanel
-                            options={moreOptions}
-                            values={values}
-                            onChange={onConfigChange}
-                          />
+                          <div className="max-h-[45%] shrink-0 overflow-y-auto">
+                            <SessionConfigPanel
+                              options={moreOptions}
+                              values={values}
+                              onChange={onConfigChange}
+                            />
+                          </div>
                         )}
                       </>
                     )}

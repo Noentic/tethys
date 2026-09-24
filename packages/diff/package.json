@@ -31,6 +31,7 @@
     "@tethys/client": "workspace:*",
     "@tethys/state": "workspace:*",
     "@tethys/ui": "workspace:*",
+    "diff": "^8.0.4",
     "shiki": "^4.4.3"
   }
 }

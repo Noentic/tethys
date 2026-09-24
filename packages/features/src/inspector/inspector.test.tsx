@@ -96,9 +96,78 @@ describe("Transcript entry renderers (M1.7 U8)", () => {
         })}
       />,
     );
-    const diff = screen.getByTestId("file-diff");
-    expect(diff.textContent).toContain("- old line");
-    expect(diff.textContent).toContain("+ new line");
+    const diff = screen.getByTestId("file-diff-card");
+    expect(
+      diff.querySelector('[data-row-kind="deletion"]')?.textContent,
+    ).toContain("old line");
+    expect(
+      diff.querySelector('[data-row-kind="addition"]')?.textContent,
+    ).toContain("new line");
+  });
+
+  it("reads OpenCode's camelCase edit fields and names the file in the header", () => {
+    render(
+      <ToolAccordionRenderer
+        entry={toolCall({
+          status: "Completed",
+          title: "README.md",
+          toolKind: "edit",
+          input: JSON.stringify({
+            filePath: "/repo/README.md",
+            oldString: "## Quick Start",
+            newString: "## Demo\n\n## Quick Start",
+          }),
+          output: JSON.stringify({ output: "Edit applied successfully." }),
+        })}
+      />,
+    );
+    expect(screen.getByText("Edited")).toBeTruthy();
+    expect(screen.getByTitle("README.md")).toBeTruthy();
+    expect(screen.getByTestId("file-diff-card")).toBeTruthy();
+    expect(
+      screen.getByRole("img", { name: /2 lines added, 0 lines removed/ }),
+    ).toBeTruthy();
+  });
+
+  it("shows a shell call as its command and the tail of its output", () => {
+    render(
+      <ToolAccordionRenderer
+        entry={toolCall({
+          status: "Failed",
+          title: "bash",
+          toolKind: "execute",
+          input: JSON.stringify({ command: "pnpm test" }),
+          output: JSON.stringify({
+            output: "1 failed",
+            metadata: { exit: 1 },
+          }),
+        })}
+      />,
+    );
+    expect(screen.getByText("Ran")).toBeTruthy();
+    expect(screen.getAllByText("pnpm test").length).toBeGreaterThan(0);
+    expect(screen.getByText("exit 1")).toBeTruthy();
+    expect(screen.getByLabelText("Command output").textContent).toContain(
+      "1 failed",
+    );
+  });
+
+  it("shows an MCP call's arguments and result as formatted data", () => {
+    render(
+      <ToolAccordionRenderer
+        entry={toolCall({
+          status: "Failed",
+          title: "create_issue",
+          toolKind: "other",
+          origin: { kind: "mcp", server: "github" },
+          input: JSON.stringify({ title: "Bug" }),
+          output: JSON.stringify({ number: 7 }),
+        })}
+      />,
+    );
+    expect(screen.getByText("Arguments")).toBeTruthy();
+    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText(/"title": "Bug"/)).toBeTruthy();
   });
 
   it("renders filesystem and checkpoint ACP entries", () => {
@@ -124,7 +193,8 @@ describe("Transcript entry renderers (M1.7 U8)", () => {
         <TimelineEventRenderer entry={checkpoint} />
       </>,
     );
-    expect(screen.getByText("src/main.ts")).toBeTruthy();
+    expect(screen.getByText("Created")).toBeTruthy();
+    expect(screen.getByTitle("src/main.ts")).toBeTruthy();
     expect(screen.getByText(/turn end/)).toBeTruthy();
   });
 

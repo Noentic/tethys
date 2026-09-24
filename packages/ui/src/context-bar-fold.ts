@@ -38,8 +38,22 @@ export const CONTEXT_BAR_CHROME_WIDTH = 24;
 
 const NEVER_FOLDS: ReadonlySet<string> = new Set(["stop", "isolation-pill"]);
 
-function itemWidth(id: string): number {
-  return CONTEXT_BAR_ITEM_WIDTHS[id] ?? CONTEXT_BAR_ITEM_WIDTHS.default;
+/** The body size the width budgets above were measured at. */
+const BASE_BODY_PX = 14;
+
+/**
+ * How much wider text renders than the budgets assume: the Settings type size
+ * shifts every step of the ramp by `--tethys-type-offset`, so a pill measured at
+ * 14px body text is proportionally wider at 18px.
+ */
+export function typeScale(
+  root: Element | null = globalThis.document?.documentElement ?? null,
+): number {
+  if (!root || typeof getComputedStyle === "undefined") return 1;
+  const offset = Number.parseFloat(
+    getComputedStyle(root).getPropertyValue("--tethys-type-offset"),
+  );
+  return Number.isFinite(offset) ? (BASE_BODY_PX + offset) / BASE_BODY_PX : 1;
 }
 
 export interface ContextBarItem {
@@ -57,7 +71,10 @@ export interface ContextBarItem {
 export function foldContextBar(
   items: readonly ContextBarItem[],
   availableWidth: number,
+  scale = 1,
 ): Set<string> {
+  const itemWidth = (id: string) =>
+    (CONTEXT_BAR_ITEM_WIDTHS[id] ?? CONTEXT_BAR_ITEM_WIDTHS.default) * scale;
   const foldable = items
     .filter((item) => item.present && !NEVER_FOLDS.has(item.id))
     .sort((a, b) => a.priority - b.priority);

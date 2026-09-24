@@ -137,7 +137,10 @@ describe("Inspector composition (M1.7 U10)", () => {
 
     render(<InspectorScreen sessionId="s-plan" client={noopClient} />);
     expect(screen.queryByTestId("inspector-pane")).toBeNull();
-    expect(screen.queryByText(/Plan · /)).toBeNull();
+    // The transcript keeps its own plan card where the plan arose; the
+    // Inspector's plan panel is the shell's alone.
+    expect(document.querySelector('[data-inspector-slot="plan"]')).toBeNull();
+    expect(screen.getByText("step one")).toBeTruthy();
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 });

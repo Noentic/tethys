@@ -17,6 +17,11 @@ export interface ListboxProps<T = string> {
   onSelect: (item: ListboxItem<T>) => void;
   className?: string;
   label?: string;
+  /**
+   * `trailing` puts a short sublabel (a badge, a count) at the row's end;
+   * `below` stacks a long one (a path) under the label so neither squeezes the other.
+   */
+  sublabelPlacement?: "trailing" | "below";
 }
 
 export function Listbox<T = string>({
@@ -25,6 +30,7 @@ export function Listbox<T = string>({
   onSelect,
   className,
   label = "Options",
+  sublabelPlacement = "trailing",
 }: ListboxProps<T>) {
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
   const rovingIndex =
@@ -73,7 +79,7 @@ export function Listbox<T = string>({
               nodes?.[next]?.focus();
             }}
             className={cn(
-              "relative flex h-9 cursor-pointer items-center gap-2 rounded-sm px-3 text-body-sm transition-colors duration-150 select-none",
+              "relative flex min-h-9 cursor-pointer items-center gap-2 rounded-sm px-3 py-1.5 text-body-sm transition-colors duration-150 select-none",
               isSelected
                 ? "bg-(--tethys-surface-active) text-(--tethys-text-primary) before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-r-xs before:bg-(--tethys-accent-focus)"
                 : "text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)",
@@ -86,11 +92,24 @@ export function Listbox<T = string>({
                 {item.icon}
               </span>
             )}
-            <span className="truncate flex-1">{item.label}</span>
-            {item.sublabel && (
-              <span className="shrink-0 font-mono text-mono-micro text-(--tethys-text-muted)">
-                {item.sublabel}
+            {sublabelPlacement === "below" ? (
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate">{item.label}</span>
+                {item.sublabel && (
+                  <span className="min-w-0 font-mono text-mono-micro text-(--tethys-text-muted)">
+                    {item.sublabel}
+                  </span>
+                )}
               </span>
+            ) : (
+              <>
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                {item.sublabel && (
+                  <span className="max-w-[50%] min-w-0 shrink truncate font-mono text-mono-micro text-(--tethys-text-muted)">
+                    {item.sublabel}
+                  </span>
+                )}
+              </>
             )}
           </div>
         );

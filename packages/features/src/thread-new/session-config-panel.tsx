@@ -3,6 +3,8 @@
 
 import type { ConfigOption } from "@tethys/bindings";
 import { EmptyState, SchemaFieldGroup, Select, ToggleSwitch } from "@tethys/ui";
+import { optionValues, valueLabel } from "./config-values";
+import { ModelOptionList } from "./model-option-list";
 
 export interface SessionConfigPanelProps {
   options: ConfigOption[];
@@ -31,28 +33,6 @@ function isBoolean(option: ConfigOption): boolean {
   if (option.kind === "boolean") return true;
   if (option.kind === "select") return false;
   return booleanPair(option.values);
-}
-
-function valueLabel(option: ConfigOption, id: string): string {
-  return option.value_options?.find((value) => value.id === id)?.name ?? id;
-}
-
-/** The Provider's display values, with `value_options` names preferred. */
-export function optionValues(
-  option: ConfigOption,
-): Array<{ id: string; name: string; description?: string | null }> {
-  if (option.value_options && option.value_options.length > 0) {
-    return option.value_options.map((value) => ({
-      id: value.id,
-      name: value.name,
-      description: value.description,
-    }));
-  }
-  return option.values.map((value) => ({
-    id: value,
-    name: valueLabel(option, value),
-    description: undefined,
-  }));
 }
 
 /**
@@ -88,37 +68,12 @@ export function SessionConfigPanel({
         return (
           <SchemaFieldGroup key={option.id} label={option.name}>
             {option.category === "model" && !isBoolean(option) ? (
-              <div
-                role="radiogroup"
-                aria-label={option.name}
-                className="flex flex-col gap-1"
-              >
-                {optionValues(option).map((value) => (
-                  <label
-                    key={value.id}
-                    className="flex cursor-pointer items-start gap-2 rounded-sm px-2 py-1.5 text-body-sm hover:bg-(--tethys-surface-hover)"
-                  >
-                    <input
-                      type="radio"
-                      name={option.id}
-                      value={value.id}
-                      checked={current === value.id}
-                      onChange={() => onChange(option.id, value.id)}
-                      className="mt-0.5 accent-(--tethys-accent-toggle)"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-(--tethys-text-primary)">
-                        {value.name}
-                      </span>
-                      {value.description && (
-                        <span className="block text-label-sm text-(--tethys-text-muted)">
-                          {value.description}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <ModelOptionList
+                option={option}
+                value={current}
+                onChange={(value) => onChange(option.id, value)}
+                className="max-h-64 rounded-md border border-(--tethys-hairline)"
+              />
             ) : isBoolean(option) ? (
               <div className="flex items-center justify-between gap-2">
                 {option.description && (

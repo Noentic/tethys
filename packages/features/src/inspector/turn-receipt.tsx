@@ -1,5 +1,6 @@
 import type { RestoreTarget } from "@tethys/bindings";
-import { Button, useInspectorControl } from "@tethys/ui";
+import { DiffStat } from "@tethys/diff";
+import { Button, cn, TruncatedText, useInspectorControl } from "@tethys/ui";
 import { useMemo, useState } from "react";
 import { useReviewClient } from "../review/client-context";
 import { useDiffRevision, useDiffSummary } from "../review/use-review-diff";
@@ -66,29 +67,39 @@ export function TurnReceipt({
       aria-label={`Turn ${turn} changes`}
       className="flex w-full flex-col gap-sm rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested) p-md"
     >
-      <p className="text-label-md text-(--tethys-text-primary)">
+      <p className="flex flex-wrap items-center gap-x-sm text-label-md text-(--tethys-text-primary)">
         {undo ? (
           "Reverted ·"
         ) : (
           <>
-            Changed {summary.files.length} file
-            {summary.files.length === 1 ? "" : "s"}{" "}
-            <span className="text-diff-added">+{summary.additions}</span>{" "}
-            <span className="text-diff-removed">−{summary.deletions}</span>
+            <span>
+              Changed {summary.files.length} file
+              {summary.files.length === 1 ? "" : "s"}
+            </span>
+            <DiffStat
+              additions={summary.additions}
+              deletions={summary.deletions}
+            />
           </>
         )}
       </p>
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col">
         {files.map((file) => (
-          <li
-            key={file.path}
-            className={`flex justify-between gap-sm font-mono text-mono-code ${undo ? "line-through text-(--tethys-text-muted)" : "text-(--tethys-text-secondary)"}`}
-          >
-            <span className="truncate">{file.path}</span>
-            <span className="shrink-0 text-mono-micro">
-              <span className="text-diff-added">+{file.additions}</span>{" "}
-              <span className="text-diff-removed">−{file.deletions}</span>
-            </span>
+          <li key={file.path}>
+            <button
+              type="button"
+              title={`Open ${file.path} in Changes`}
+              onClick={() => openChanges?.(turn)}
+              className={cn(
+                "focus-ring -mx-1.5 flex w-[calc(100%+12px)] min-w-0 items-center justify-between gap-sm rounded-sm px-1.5 py-0.5 text-left font-mono text-mono-code hover:bg-(--tethys-surface-hover)",
+                undo
+                  ? "line-through text-(--tethys-text-muted)"
+                  : "text-(--tethys-text-secondary)",
+              )}
+            >
+              <TruncatedText mode="path" text={file.path} />
+              <DiffStat additions={file.additions} deletions={file.deletions} />
+            </button>
           </li>
         ))}
       </ul>
@@ -104,7 +115,8 @@ export function TurnReceipt({
         {canRestore && (
           <Button
             size="sm"
-            variant={undo ? "ghost" : "destructive"}
+            variant="ghost"
+            className={undo ? undefined : "text-(--tethys-status-danger)"}
             loading={busy}
             disabled={busy}
             onClick={() => void restore()}

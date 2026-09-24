@@ -144,9 +144,6 @@ export function TranscriptStage({
             </div>
           ) : null;
         }
-        if (entry.kind === "plan") {
-          return null;
-        }
         if (entry.kind === "history_divider") {
           return (
             // biome-ignore lint/a11y/useSemanticElements: a labelled divider with inline text has no single semantic element

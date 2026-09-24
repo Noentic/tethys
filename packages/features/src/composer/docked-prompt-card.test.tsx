@@ -260,14 +260,39 @@ describe("docked prompt card", () => {
     });
   }
 
-  it("spins the action button while a turn runs", () => {
+  it("shows the activity orb on the action button while a turn runs", () => {
     seed({ status: "running", cancellationState: "idle" });
     const { client } = setup();
     expect(screen.queryByRole("button", { name: "Send prompt" })).toBeNull();
     const stop = screen.getByRole("button", { name: "Stop prompt" });
-    expect(stop.querySelector("svg")).toBeTruthy();
+    // The orb's lattice, not a spinner glyph; the stop square is its hover face.
+    expect(stop.querySelectorAll(".rounded-full.bg-current")).toHaveLength(9);
     fireEvent.click(stop);
     expect(client.thread.cancel).toHaveBeenCalledWith(SESSION);
+  });
+
+  it("offers Fork on the branch strip, outside the prompt card", () => {
+    seed({
+      status: "idle",
+      capabilities: {
+        ...(getOrCreateSessionStore(SESSION, "claude-code", "ws-1").state
+          .capabilities ?? {}),
+        session_fork: true,
+      } as SessionState["capabilities"],
+    });
+    const onFork = vi.fn();
+    render(
+      <DockedPromptCard
+        sessionId={SESSION}
+        client={fakeClient() as unknown as DockedComposerClient}
+        onFork={onFork}
+      />,
+    );
+    const fork = screen.getByRole("button", { name: "Fork session" });
+    expect(screen.getByTestId("branch-bar").contains(fork)).toBe(true);
+    expect(screen.getByTestId("docked-prompt-card").contains(fork)).toBe(false);
+    fireEvent.click(fork);
+    expect(onFork).toHaveBeenCalled();
   });
 
   it("shows Cancelling as a neutral pending control, and Force kill only after the grace window", () => {

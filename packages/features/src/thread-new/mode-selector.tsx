@@ -1,18 +1,36 @@
-import { ChevronDown } from "@nebutra/icons";
+import { Check, ChevronDown } from "@nebutra/icons";
 import type { ConfigOption, PermissionMode } from "@tethys/bindings";
-import { Popover } from "@tethys/ui";
+import { Popover, TruncatedText } from "@tethys/ui";
 import { type KeyboardEvent, type RefObject, useRef, useState } from "react";
-import { optionValues } from "./session-config-panel";
+import { optionValues } from "./config-values";
 
 const PILL_CLASS =
-  "focus-ring flex h-7 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
+  "focus-ring flex min-h-7 max-w-48 min-w-0 items-center gap-2 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-card) px-2.5 text-label-md text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)";
 const ROW_CLASS =
-  "focus-ring flex min-h-9 w-full items-center gap-sm rounded-sm px-2.5 text-left text-body-sm text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)";
+  "focus-ring flex min-h-9 w-full items-start gap-sm rounded-sm px-2.5 py-1.5 text-left text-body-sm text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) aria-selected:text-(--tethys-text-primary)";
+const KEY_CLASS =
+  "mt-px w-4 shrink-0 font-mono text-mono-micro text-(--tethys-text-muted)";
 
 const APPROVAL_LABELS: Record<PermissionMode, string> = {
   supervised: "Ask first",
   "auto-edit": "Auto-edit",
   yolo: "Full auto",
+};
+
+/**
+ * What each approval level lets the agent do, in Tethys's own words (the level
+ * is Tethys's policy, so the sentence is not invented for a Provider; P11).
+ */
+const APPROVAL_CONSEQUENCES: Record<PermissionMode, string> = {
+  supervised: "Asks before every edit, command and network call",
+  "auto-edit": "Edits files in this thread's folder; asks for commands",
+  yolo: "Runs everything without asking; every action is logged",
+};
+
+const APPROVAL_RANK: Record<PermissionMode, number> = {
+  supervised: 0,
+  "auto-edit": 1,
+  yolo: 2,
 };
 
 interface ModeRole {
@@ -47,6 +65,34 @@ function modeRole(option: ConfigOption, valueId: string): ModeRole {
     // Older and third-party metadata has no Tethys role annotation.
   }
   return { kind: "working" };
+}
+
+function RowText({
+  name,
+  consequence,
+}: {
+  name: string;
+  consequence?: string;
+}) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col">
+      <span className="truncate">{name}</span>
+      {consequence && (
+        <span className="text-label-sm font-normal text-(--tethys-text-muted)">
+          {consequence}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function SelectedMark() {
+  return (
+    <Check
+      aria-hidden="true"
+      className="mt-0.5 size-3.5 shrink-0 text-(--tethys-text-primary)"
+    />
+  );
 }
 
 export interface ModeSelectorProps {
@@ -88,12 +134,26 @@ export function ModeSelector({
   const displayedMode = workingModes.find(
     (candidate) => candidate.id === current,
   );
-  const display = `${displayedMode?.name ?? "Mode"} · ${APPROVAL_LABELS[permissionMode]}`;
-  const approvalProviderValue = (mode: PermissionMode) =>
-    values.find((candidate) => {
+  // A Provider mode that is really a permission preset is never shown as a
+  // working mode, so the pill names only the approval then.
+  const display = displayedMode
+    ? `${displayedMode.name} · ${APPROVAL_LABELS[permissionMode]}`
+    : APPROVAL_LABELS[permissionMode];
+  // The widest Provider preset that is still no wider than the chosen level:
+  // Tethys never sets a Provider mode wider than its own policy (PRM-04), and
+  // answers whatever the Provider still asks through `request_permission`.
+  const approvalProviderValue = (mode: PermissionMode) => {
+    let best: { id: string; rank: number } | undefined;
+    for (const candidate of values) {
       const role = modeRole(option, candidate.id);
-      return role.kind === "approval" && role.level === mode;
-    });
+      if (role.kind !== "approval" || !role.level) continue;
+      const rank = APPROVAL_RANK[role.level];
+      if (rank <= APPROVAL_RANK[mode] && (!best || rank > best.rank)) {
+        best = { id: candidate.id, rank };
+      }
+    }
+    return best;
+  };
   const close = () => setOpen(false);
   const chooseWorking = (id: string) => {
     onChange(id);
@@ -132,7 +192,7 @@ export function ModeSelector({
   };
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <button
         ref={anchorRef}
         type="button"
@@ -151,8 +211,11 @@ export function ModeSelector({
         }}
         className={PILL_CLASS}
       >
-        <span className="text-(--tethys-text-muted)">Mode</span>
-        <span className="text-(--tethys-text-primary)">{display}</span>
+        <span className="shrink-0 text-(--tethys-text-muted)">Mode</span>
+        <TruncatedText
+          text={display}
+          className="text-(--tethys-text-primary)"
+        />
         <ChevronDown
           aria-hidden="true"
           className="size-3.5 shrink-0 text-(--tethys-text-muted)"
@@ -163,7 +226,8 @@ export function ModeSelector({
         open={open}
         onClose={close}
         anchorRef={anchorRef}
-        className="bottom-full left-0 mb-1.5 w-[304px]"
+        side="top"
+        className="w-[min(340px,calc(100vw-16px))]"
       >
         <fieldset
           className="m-0 flex min-w-0 flex-col gap-sm border-0 p-sm"
@@ -171,7 +235,7 @@ export function ModeSelector({
         >
           <legend className="sr-only">Select a mode or approval level</legend>
           <section aria-label="Working mode">
-            <h3 className="px-2 pb-1 text-label-sm text-(--tethys-text-muted)">
+            <h3 className="truncate px-2 pb-1 text-label-sm text-(--tethys-text-muted)">
               Working mode · {providerName}
             </h3>
             <div role="listbox" aria-label="Working mode">
@@ -189,12 +253,14 @@ export function ModeSelector({
                     onClick={() => chooseWorking(candidate.id)}
                     className={ROW_CLASS}
                   >
-                    {index < 9 && (
-                      <kbd className="w-4 font-mono text-mono-micro text-(--tethys-text-muted)">
-                        {index + 1}
-                      </kbd>
-                    )}
-                    <span className="truncate">{candidate.name}</span>
+                    <kbd className={KEY_CLASS}>
+                      {index < 9 ? index + 1 : ""}
+                    </kbd>
+                    <RowText
+                      name={candidate.name}
+                      consequence={candidate.description ?? undefined}
+                    />
+                    {candidate.id === current && <SelectedMark />}
                   </button>
                 );
               })}
@@ -223,10 +289,12 @@ export function ModeSelector({
                     onClick={() => chooseApproval(mode)}
                     className={ROW_CLASS}
                   >
-                    <kbd className="w-4 font-mono text-mono-micro text-(--tethys-text-muted)">
-                      {index + 1}
-                    </kbd>
-                    <span>{APPROVAL_LABELS[mode]}</span>
+                    <kbd className={KEY_CLASS}>{index + 1}</kbd>
+                    <RowText
+                      name={APPROVAL_LABELS[mode]}
+                      consequence={APPROVAL_CONSEQUENCES[mode]}
+                    />
+                    {permissionMode === mode && <SelectedMark />}
                   </button>
                 );
               })}
@@ -237,37 +305,41 @@ export function ModeSelector({
             aria-label="Full auto"
             className="border-t border-(--tethys-hairline) pt-sm"
           >
-            <div className="flex items-center gap-sm px-2">
-              <kbd className="w-4 font-mono text-mono-micro text-(--tethys-text-muted)">
-                {numberedChoices.length}
-              </kbd>
-              <span className="text-body-sm text-(--tethys-text-primary)">
-                Full auto
-              </span>
-              <button
-                type="button"
-                disabled={!worktreeEnabled}
-                onClick={() => chooseApproval("yolo")}
-                className="focus-ring ml-auto rounded border border-(--tethys-hairline) px-2 py-1 text-label-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Enable
-              </button>
+            <div className="flex items-start gap-sm px-2.5">
+              <kbd className={KEY_CLASS}>{numberedChoices.length}</kbd>
+              <RowText
+                name={APPROVAL_LABELS.yolo}
+                consequence={
+                  worktreeEnabled
+                    ? APPROVAL_CONSEQUENCES.yolo
+                    : "Full auto needs a new worktree"
+                }
+              />
+              {permissionMode === "yolo" ? (
+                <SelectedMark />
+              ) : (
+                <button
+                  type="button"
+                  disabled={!worktreeEnabled}
+                  onClick={() => chooseApproval("yolo")}
+                  className="focus-ring shrink-0 rounded border border-(--tethys-hairline) px-2 py-1 text-label-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Enable
+                </button>
+              )}
             </div>
-            {!worktreeEnabled && (
-              <p className="px-8 pt-1 text-label-sm text-(--tethys-text-muted)">
-                Full auto needs a new worktree
-              </p>
-            )}
           </section>
 
-          <footer className="flex items-center justify-between border-t border-(--tethys-hairline) pt-sm text-label-sm text-(--tethys-text-muted)">
-            <span>Applies to this thread</span>
+          <footer className="flex flex-wrap items-center justify-between gap-x-sm gap-y-1 border-t border-(--tethys-hairline) px-2 pt-sm text-label-sm text-(--tethys-text-muted)">
+            <span className="shrink-0">Applies to this thread</span>
             <button
               type="button"
               onClick={onMakeDefault}
-              className="focus-ring rounded px-1 text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)"
+              title={`Make default for ${workspaceName}`}
+              className="focus-ring flex min-w-0 max-w-full items-center rounded px-1 text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover)"
             >
-              Make default for {workspaceName}
+              <span className="shrink-0">Make default for&nbsp;</span>
+              <span className="min-w-0 truncate">{workspaceName}</span>
             </button>
           </footer>
         </fieldset>

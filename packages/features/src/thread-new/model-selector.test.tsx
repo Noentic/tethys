@@ -38,11 +38,11 @@ describe("ModelSelector", () => {
     ).toBeTruthy();
   });
 
-  it("shows model radios first and the remaining options on demand", () => {
+  it("shows a searchable model list first and the remaining options on demand", () => {
     renderSelector();
     openPopover();
-    expect(screen.getByRole("radiogroup", { name: "Model" })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "Sonnet" })).toBeTruthy();
+    expect(screen.getByPlaceholderText("Search models…")).toBeTruthy();
+    expect(screen.getByRole("option", { name: /^Sonnet/ })).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: "Effort" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "More options…" }));
     expect(screen.getByRole("combobox", { name: "Effort" })).toBeTruthy();
@@ -59,13 +59,27 @@ describe("ModelSelector", () => {
     );
     renderSelector({ onConfigChange, configOptions });
     openPopover();
-    fireEvent.click(screen.getByRole("radio", { name: "Opus" }));
+    fireEvent.click(screen.getByRole("option", { name: /^Opus/ }));
     fireEvent.click(screen.getByRole("button", { name: "More options…" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Effort" }), {
       target: { value: "high" },
     });
     expect(onConfigChange).toHaveBeenNthCalledWith(1, "model", "claude-opus-x");
     expect(onConfigChange).toHaveBeenNthCalledWith(2, "effort", "high");
+  });
+
+  it("finds a model by typing instead of scrolling", () => {
+    renderSelector();
+    openPopover();
+    fireEvent.change(screen.getByPlaceholderText("Search models…"), {
+      target: { value: "opus" },
+    });
+    const models = screen
+      .getAllByRole("option")
+      .filter((option) => option.hasAttribute("cmdk-item"));
+    expect(models.map((option) => option.textContent)).toEqual([
+      expect.stringMatching(/^Opus/),
+    ]);
   });
 
   it("keeps mode out of the model popover and shows only the model summary", () => {

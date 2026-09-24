@@ -5,6 +5,7 @@ import {
   CONTEXT_BAR_PRIORITY,
   foldContextBar,
   OVERFLOW_TRIGGER_WIDTH,
+  typeScale,
   UNDECLARED_SLOT_PRIORITY,
 } from "./context-bar-fold";
 
@@ -142,5 +143,26 @@ describe("context bar fold", () => {
       700,
     );
     expect(withoutPill.size).toBeLessThanOrEqual(withPill.size);
+  });
+
+  it("folds sooner when a larger type size widens every pill", () => {
+    const fitsAtBase =
+      CHROME +
+      foldableTotal([
+        "provider/config",
+        "diff-summary",
+        "mode",
+        "queue-count",
+        "usage-bar",
+      ]);
+    expect(foldContextBar(FULL, fitsAtBase).size).toBe(0);
+    expect(foldContextBar(FULL, fitsAtBase, 18 / 14).size).toBeGreaterThan(0);
+  });
+
+  it("reads the type offset from the root", () => {
+    document.documentElement.style.setProperty("--tethys-type-offset", "4px");
+    expect(typeScale()).toBeCloseTo(18 / 14);
+    document.documentElement.style.removeProperty("--tethys-type-offset");
+    expect(typeScale()).toBe(1);
   });
 });
