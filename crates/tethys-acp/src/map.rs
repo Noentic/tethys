@@ -121,6 +121,7 @@ pub fn v1_update(
                     title: maybe_string(&update.title),
                     updated_at: maybe_string(&update.updated_at),
                     goal: Patch::Unchanged,
+                    file_change_report: Patch::Unchanged,
                 },
             )]
         }
@@ -171,6 +172,7 @@ pub(crate) fn v1_tool_patch(tool_call: &acp1::ToolCall) -> ToolCallPatch {
         parent_tool_call_id: None,
         locations: tool_call.locations.iter().map(tool_location).collect(),
         metadata: None,
+        async_task_id: None,
     }
 }
 
@@ -189,6 +191,7 @@ pub(crate) fn v1_tool_update_patch(fields: &acp1::ToolCallUpdateFields) -> ToolC
             .map(|locations| locations.iter().map(tool_location).collect())
             .unwrap_or_default(),
         metadata: None,
+        async_task_id: None,
     }
 }
 
@@ -211,9 +214,33 @@ pub(crate) fn tool_content_v1(content: &acp1::ToolCallContent) -> ToolCallConten
         acp1::ToolCallContent::Diff(diff) => ToolCallContent::Diff {
             path: diff.path.display().to_string(),
             patch: unified_diff(diff.old_text.as_deref().unwrap_or(""), &diff.new_text),
+            stats: diff_statistics(diff.meta.as_ref()),
+            metadata: diff
+                .meta
+                .as_ref()
+                .and_then(|meta| serde_json::to_string(meta).ok()),
         },
         other => ToolCallContent::Unknown(json_string(other)),
     }
+}
+
+pub(crate) fn diff_statistics(
+    metadata: Option<&serde_json::Map<String, serde_json::Value>>,
+) -> Option<tethys_schema::thread::DiffStatistics> {
+    let stats = metadata?.get("jetbrains")?.get("air")?.get("diffStats")?;
+    if stats.get("version")?.as_u64()? != 1 {
+        return None;
+    }
+    let added = stats.get("added")?.as_u64()?;
+    let removed = stats.get("removed")?.as_u64()?;
+    let max_count = i32::MAX as u64;
+    if added > max_count || removed > max_count {
+        return None;
+    }
+    Some(tethys_schema::thread::DiffStatistics {
+        added: added as u32,
+        removed: removed as u32,
+    })
 }
 
 /// Renders a unified diff between two texts (empty when identical).
@@ -424,7 +451,10 @@ pub(crate) fn config_option(option: &acp1::SessionConfigOption) -> ConfigOption 
         kind: Some(kind),
         value_options,
         recommended_value: None,
-        metadata: None,
+        metadata: option
+            .meta
+            .as_ref()
+            .and_then(|meta| serde_json::to_string(meta).ok()),
     }
 }
 
@@ -550,5 +580,36 @@ mod tests {
             blocks[5],
             ContentBlock::Resource { blob: Some(_), .. }
         ));
+    }
+
+    #[test]
+    fn diff_blocks_keep_metadata_and_valid_line_statistics() {
+        let content: acp1::ToolCallContent = serde_json::from_value(json!({
+            "type": "diff",
+            "path": "/repo/src/lib.rs",
+            "oldText": "old\n",
+            "newText": "new\n",
+            "_meta": {"jetbrains": {"air": {"diffStats": {
+                "version": 1,
+                "added": 2,
+                "removed": 1
+            }}}}
+        }))
+        .expect("valid diff content");
+
+        assert!(matches!(
+            tool_content_v1(&content),
+            ToolCallContent::Diff { path, stats: Some(stats), metadata: Some(_), .. }
+                if path == "/repo/src/lib.rs" && stats.added == 2 && stats.removed == 1
+        ));
+
+        let invalid = json!({
+            "jetbrains": {"air": {"diffStats": {
+                "version": 1,
+                "added": "2",
+                "removed": 1
+            }}}
+        });
+        assert!(diff_statistics(invalid.as_object()).is_none());
     }
 }

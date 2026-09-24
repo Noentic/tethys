@@ -4,9 +4,9 @@
 //! first prompt. Replacing either selection discards the unprompted draft.
 
 import type {
+  PermissionMode,
   ThreadBootstrap,
   ThreadIsolation,
-  PermissionMode,
   WorkspaceCapabilities,
 } from "@tethys/bindings";
 import {

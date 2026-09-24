@@ -17,7 +17,8 @@ use tethys_schema::elicitation::{
     ElicitationOutcome, ElicitationRequest, ElicitationResponse, ElicitationValue,
 };
 use tethys_schema::thread::{
-    ContentBlock, Decider, PermOutcome, PermissionRequested, TurnEventBody,
+    ContentBlock, Decider, PermOutcome, PermissionRequested, ProviderControl,
+    ProviderControlResult, ProviderHeader, TurnEventBody,
 };
 #[cfg(feature = "acp-v2")]
 use tethys_thread::ResumeSession;
@@ -56,14 +57,11 @@ impl ElicitationResolver for AutoElicit {
         _session: &SessionId,
         request: ElicitationRequest,
     ) -> ElicitationResponse {
-        let values = request
-            .fields
-            .iter()
-            .any(|field| field.key == "name")
-            .then(|| {
-                BTreeMap::from([("name".to_string(), ElicitationValue::Text("tethys".into()))])
-            })
-            .unwrap_or_default();
+        let values = if request.fields.iter().any(|field| field.key == "name") {
+            BTreeMap::from([("name".to_string(), ElicitationValue::Text("tethys".into()))])
+        } else {
+            BTreeMap::new()
+        };
         ElicitationResponse::accepted(request.req_id, values)
     }
 }
@@ -85,6 +83,7 @@ fn extension_integration(
         id: "fixture".into(),
         initialize_meta: Default::default(),
         client_capabilities_meta: Default::default(),
+        gateway_auth: false,
         extension_methods: vec!["_fixture.dev/action".into()],
         tethys_commands: Default::default(),
         extension_request_handler: handler,
@@ -93,6 +92,7 @@ fn extension_integration(
         config_options_handler: None,
         permission_metadata_handler: None,
         prompt_response_handler: None,
+        prompt_metadata_handler: None,
     }
 }
 
@@ -190,6 +190,69 @@ async fn v1_mock_streams_chunks_and_permission_round_trip() {
     assert!(collected.iter().all(|event| !event.replayed));
 
     drop(events);
+    drop(connection);
+    let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
+#[tokio::test]
+async fn v1_provider_routing_controls_use_typed_routes_and_respect_required() {
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v1(agent_channel).await });
+    let connection = connect(options(), client_channel)
+        .await
+        .expect("connect v1");
+    let session = SessionId("routing-test".into());
+
+    let routes = connection
+        .provider_control(&session, ProviderControl::ListProviders)
+        .await
+        .expect("list routes");
+    assert!(matches!(
+        routes,
+        ProviderControlResult::Providers { ref providers }
+            if providers.len() == 2
+                && providers[0].provider_id == "primary"
+                && providers[0].required
+                && providers[0].current.as_ref().is_some_and(|route| route.api_type == "openai")
+    ));
+
+    let update = connection
+        .provider_control(
+            &session,
+            ProviderControl::SetProvider {
+                provider_id: "alternate".into(),
+                api_type: "openai".into(),
+                base_url: "https://gateway.example/v1".into(),
+                headers: vec![ProviderHeader {
+                    name: "Authorization".into(),
+                    value: "Bearer transient".into(),
+                }],
+            },
+        )
+        .await
+        .expect("set route");
+    assert_eq!(update, ProviderControlResult::ProviderUpdated);
+
+    let disabled = connection
+        .provider_control(
+            &session,
+            ProviderControl::DisableProvider {
+                provider_id: "alternate".into(),
+            },
+        )
+        .await
+        .expect("disable optional route");
+    assert_eq!(disabled, ProviderControlResult::ProviderDisabled);
+    assert!(connection
+        .provider_control(
+            &session,
+            ProviderControl::DisableProvider {
+                provider_id: "primary".into(),
+            },
+        )
+        .await
+        .is_err());
+
     drop(connection);
     let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
 }
@@ -579,7 +642,7 @@ async fn v1_contract_fixtures_reach_normalized_events() {
         collected.iter().any(|event| matches!(
             &event.body,
             TurnEventBody::ToolCallContentChunk {
-                item: ToolCallContent::Diff { path, patch },
+                item: ToolCallContent::Diff { path, patch, .. },
                 ..
             } if path == "/tmp/contract.txt" && !patch.is_empty()
         )),
@@ -621,6 +684,46 @@ async fn v1_contract_fixtures_reach_normalized_events() {
     );
 
     drop(events);
+    drop(connection);
+    let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
+}
+
+#[cfg(feature = "acp-v2")]
+#[tokio::test]
+async fn v2_provider_routing_controls_use_typed_routes() {
+    let (client_channel, agent_channel) = Channel::duplex();
+    let server = tokio::spawn(async move { tethys_acp::mock::serve_v2(agent_channel).await });
+    let options = AcpConnectOptions::new(AcpProtocol::V2, Arc::new(AutoApprove));
+    let connection = connect(options, client_channel).await.expect("connect v2");
+    let session = SessionId("routing-test-v2".into());
+
+    assert!(matches!(
+        connection
+            .provider_control(&session, ProviderControl::ListProviders)
+            .await
+            .expect("list v2 routes"),
+        ProviderControlResult::Providers { providers }
+            if providers.len() == 2 && providers[0].required
+    ));
+    assert_eq!(
+        connection
+            .provider_control(
+                &session,
+                ProviderControl::SetProvider {
+                    provider_id: "alternate".into(),
+                    api_type: "openai".into(),
+                    base_url: "https://gateway.example/v1".into(),
+                    headers: vec![ProviderHeader {
+                        name: "Authorization".into(),
+                        value: "Bearer transient".into(),
+                    }],
+                },
+            )
+            .await
+            .expect("set v2 route"),
+        ProviderControlResult::ProviderUpdated
+    );
+
     drop(connection);
     let _ = tokio::time::timeout(Duration::from_secs(5), server).await;
 }

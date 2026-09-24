@@ -10,6 +10,7 @@ fn row(id: &str) -> AgentProfileRow {
         launch_spec: r#"{"program":"npx","args":["-y","pkg@1.0.0"],"cwd":null,"env":[]}"#
             .to_string(),
         registry_ref: Some(r#"{"id":"claude-acp","version":"1.0.0"}"#.to_string()),
+        integration_id: Some("claude-acp".to_string()),
         projection_target: Some("claude-code".to_string()),
         preferred_protocol: Some("V1".to_string()),
         enabled: true,
@@ -30,6 +31,7 @@ async fn nullable_columns_round_trip_as_none() {
     let store = EventStore::in_memory().await.expect("store");
     let mut nullable = row("b");
     nullable.registry_ref = None;
+    nullable.integration_id = None;
     nullable.projection_target = None;
     nullable.preferred_protocol = None;
     store

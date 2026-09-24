@@ -19,6 +19,7 @@ tracing.workspace = true
 tokio.workspace = true
 parking_lot = "0.12"
 which.workspace = true
+url.workspace = true
 sysinfo.workspace = true
 time = { version = "0.3", features = ["formatting", "parsing"] }
 tethys-api = { path = "../tethys-api" }

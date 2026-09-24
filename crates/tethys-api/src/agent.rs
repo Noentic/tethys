@@ -1,7 +1,7 @@
 //! `agent.*` namespace (`architecture.md` §12.1).
 
 use tethys_schema::agents::{
-    AgentLoginOutcome, AgentProfileView, AgentRegistryEntryView, InstallResult,
+    AgentLoginInput, AgentLoginOutcome, AgentProfileView, AgentRegistryEntryView, InstallResult,
     LoginTerminalOutput, ProcessSample, ProfileInput,
 };
 use tethys_schema::connection::ConnectionEntry;
@@ -47,6 +47,13 @@ pub trait AgentApi: Send + Sync {
         async { Err(ApiError::Unimplemented("agent.registry_list")) }
     }
 
+    fn agent_registry_use_system(
+        &self,
+        _id: String,
+    ) -> impl std::future::Future<Output = Result<AgentProfileView, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("agent.registry_use_system")) }
+    }
+
     fn agent_registry_install(
         &self,
         _id: String,
@@ -79,6 +86,7 @@ pub trait AgentApi: Send + Sync {
         &self,
         _profile_id: String,
         _method_id: String,
+        _input: Option<AgentLoginInput>,
     ) -> impl std::future::Future<Output = Result<AgentLoginOutcome, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("agent.login")) }
     }

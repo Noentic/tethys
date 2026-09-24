@@ -19,7 +19,9 @@ export function diffRevision(state: SessionState): string {
     if (
       entry.kind === "tool_call" &&
       "status" in entry &&
-      (entry.status === "Completed" || entry.status === "Failed") &&
+      (entry.status === "Completed" ||
+        entry.status === "Failed" ||
+        entry.status === "Cancelled") &&
       WRITING_KINDS.has(
         ("toolKind" in entry ? entry.toolKind : null) ?? "other",
       )

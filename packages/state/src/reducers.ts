@@ -4,9 +4,11 @@ import type {
   ConfigOption,
   ContentBlock,
   Decider,
+  DiffStatistics,
   ElicitationOutcome,
   ElicitationRequest,
   ElicitationValue,
+  FileChangeReport,
   Patch,
   PermissionMode,
   PermissionSubject,
@@ -85,7 +87,7 @@ export interface ToolCallEntry extends BaseSessionEntry {
   kind: "tool_call";
   toolCallId: string;
   title: string;
-  status: "Pending" | "Executing" | "Completed" | "Failed";
+  status: "Pending" | "Executing" | "Completed" | "Failed" | "Cancelled";
   toolKind?: ToolKind | null;
   origin?: ToolOrigin | null;
   parentToolCallId?: string | null;
@@ -93,6 +95,8 @@ export interface ToolCallEntry extends BaseSessionEntry {
   input?: string | null;
   output?: string | null;
   metadata?: string | null;
+  asyncTaskId?: string | null;
+  diffStats?: Record<string, DiffStatistics>;
 }
 
 export interface PermissionRequestEntry extends BaseSessionEntry {
@@ -192,6 +196,7 @@ export interface SessionState {
   workdir: string;
   title: string;
   goal: SessionGoal | null;
+  fileChangeReport: FileChangeReport | null;
   branchName?: string;
   status: string; // "idle" | "running" | "awaiting_approval" | "error" | "interrupted" | "suspended" | "archived"
   cancellationState: CancellationState;
@@ -277,6 +282,7 @@ export function createInitialSessionState(
     workdir,
     title,
     goal: null,
+    fileChangeReport: null,
     branchName,
     status: "idle",
     cancellationState: "idle",
@@ -392,6 +398,19 @@ function toolContentText(item: ToolCallContent): string {
   if ("Unknown" in item && typeof item.Unknown === "string")
     return item.Unknown;
   return "";
+}
+
+function diffContent(item: ToolCallContent): {
+  path: string;
+  stats: DiffStatistics | null;
+  metadata: string | null;
+} | null {
+  if (!("Diff" in item) || !item.Diff) return null;
+  return {
+    path: item.Diff.path,
+    stats: item.Diff.stats ?? null,
+    metadata: item.Diff.metadata ?? null,
+  };
 }
 
 export function sessionReducer(
@@ -562,6 +581,7 @@ export function sessionReducer(
           input: newInput,
           output: newOutput,
           metadata: patch.metadata ?? existing.metadata ?? null,
+          asyncTaskId: patch.async_task_id ?? existing.asyncTaskId ?? null,
           toolKind: patch.kind ?? existing.toolKind ?? null,
           origin: patch.origin ?? existing.origin ?? null,
           parentToolCallId:
@@ -588,6 +608,7 @@ export function sessionReducer(
           input: patch.input,
           output: patch.output,
           metadata: patch.metadata,
+          asyncTaskId: patch.async_task_id,
           timestamp: Date.now(),
         };
         nextLive = [...state.liveEntries, newEntry];
@@ -983,10 +1004,18 @@ export function sessionReducer(
         state.goal,
         event.body.goal ?? { type: "Unchanged" },
       );
+      const fileChangeReport = applyPatch(
+        state.fileChangeReport,
+        event.body.file_change_report ?? { type: "Unchanged" },
+      );
       return {
         ...state,
         title: title ?? state.title,
         goal: goal === undefined ? state.goal : goal,
+        fileChangeReport:
+          fileChangeReport === undefined
+            ? state.fileChangeReport
+            : fileChangeReport,
         seq: currentSeq,
       };
     }
@@ -994,7 +1023,8 @@ export function sessionReducer(
     case "ToolCallContentChunk": {
       const { tool_call_id, item } = event.body;
       const chunk = toolContentText(item);
-      if (chunk.length === 0) {
+      const diff = diffContent(item);
+      if (chunk.length === 0 && !diff?.stats && !diff?.metadata) {
         return { ...state, seq: currentSeq };
       }
       const existingIndex = state.liveEntries.findIndex(
@@ -1013,7 +1043,8 @@ export function sessionReducer(
           locations: [],
           input: null,
           output: chunk,
-          metadata: null,
+          metadata: diff?.metadata,
+          diffStats: diff?.stats ? { [diff.path]: diff.stats } : {},
           timestamp: Date.now(),
         };
         const nextLive = [...state.liveEntries, entry];
@@ -1028,10 +1059,15 @@ export function sessionReducer(
       const existing = nextLive[existingIndex] as ToolCallEntry;
       nextLive[existingIndex] = {
         ...existing,
-        output:
-          existing.output && existing.output.length > 0
+        metadata: diff?.metadata ?? existing.metadata ?? null,
+        diffStats: diff?.stats
+          ? { ...existing.diffStats, [diff.path]: diff.stats }
+          : existing.diffStats,
+        output: chunk
+          ? existing.output && existing.output.length > 0
             ? `${existing.output}${chunk}`
-            : chunk,
+            : chunk
+          : existing.output,
       };
       return {
         ...state,

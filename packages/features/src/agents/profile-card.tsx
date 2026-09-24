@@ -7,6 +7,7 @@ export interface ProfileCardProps {
   entry: AgentRegistryEntryView;
   busy?: boolean;
   onInstall?: () => void;
+  onUseSystem?: () => void;
   onUpdate?: () => void;
   className?: string;
 }
@@ -15,6 +16,7 @@ export function ProfileCard({
   entry,
   busy = false,
   onInstall,
+  onUseSystem,
   onUpdate,
   className,
 }: ProfileCardProps): React.ReactElement {
@@ -23,7 +25,10 @@ export function ProfileCard({
     ? updateAvailable
       ? { label: "Update", handler: onUpdate }
       : null
-    : { label: "Install", handler: onInstall };
+    : entry.system_available
+      ? { label: "Use existing", handler: onUseSystem }
+      : { label: "Install", handler: onInstall };
+  const usesSystem = !entry.installed && entry.system_available;
   const runtime = entry.needs_node
     ? "Requires Node.js"
     : entry.needs_uvx
@@ -76,6 +81,11 @@ export function ProfileCard({
             {entry.selection_reason}
           </span>
         )}
+        {entry.setup_note && (
+          <span className="text-label-sm text-(--tethys-text-secondary)">
+            {entry.setup_note}
+          </span>
+        )}
         {entry.compliance_note && (
           <span className="mt-1 text-label-md text-(--tethys-status-warning)">
             {entry.compliance_note}
@@ -88,7 +98,11 @@ export function ProfileCard({
           variant={entry.installed ? "secondary" : "primary"}
           size="sm"
           loading={busy}
-          disabled={!entry.installed && entry.install_block_reason !== null}
+          disabled={
+            !entry.installed &&
+            !usesSystem &&
+            entry.install_block_reason !== null
+          }
           title={entry.install_block_reason ?? undefined}
           onClick={action.handler}
         >

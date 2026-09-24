@@ -46,6 +46,7 @@ function clientFor(profile: AgentProfileView): ProvidersClient {
       profilesUpdate: vi.fn(async () => profile),
       profilesDelete: vi.fn(async () => {}),
       registryList: vi.fn(async () => []),
+      registryUseSystem: vi.fn(async () => profile),
       registryInstall: vi.fn(),
       registryUpdate: vi.fn(),
       connectionsRestart: vi.fn(async () => {}),

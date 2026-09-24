@@ -5,19 +5,18 @@ use std::sync::Arc;
 
 use serde_json::{json, Map, Value};
 use tethys_acp::client::{
-    ConfigOptionsHandler, PermissionMetadataHandler, PromptResponseHandler, SessionUpdateHandler,
+    AcpProviderIntegration, ConfigOptionsHandler, PermissionMetadataHandler, PromptResponseHandler,
+    SessionUpdateHandler,
 };
 use tethys_schema::thread::{
     AgentCommandControl, ConfigOption, Patch, PermissionRequested, SessionGoal, SessionInfo,
     ToolCallPatch, ToolCallStatus, ToolKind, ToolOrigin, TurnEventBody,
 };
 
-use crate::provider_integration::ProviderIntegrationDescriptor;
-
 pub const REGISTRY_ID: &str = "claude-acp";
 
 /// Claims only metadata whose client-side behavior is implemented here.
-pub fn descriptor() -> ProviderIntegrationDescriptor {
+pub fn descriptor() -> AcpProviderIntegration {
     let mut client_capabilities_meta = Map::new();
     client_capabilities_meta.insert(
         "jetbrains".into(),
@@ -33,7 +32,8 @@ pub fn descriptor() -> ProviderIntegrationDescriptor {
         }),
     );
 
-    ProviderIntegrationDescriptor {
+    AcpProviderIntegration {
+        id: REGISTRY_ID.into(),
         client_capabilities_meta,
         tethys_commands: HashMap::from([
             ("model".into(), AgentCommandControl::Model),
@@ -42,23 +42,25 @@ pub fn descriptor() -> ProviderIntegrationDescriptor {
             ("resume".into(), AgentCommandControl::Resume),
             ("clear".into(), AgentCommandControl::Clear),
         ]),
-        handle_session_update: Some(Arc::new(map_session_update) as SessionUpdateHandler),
-        handle_config_options: Some(Arc::new(apply_initial_config_options) as ConfigOptionsHandler),
-        handle_permission_metadata: Some(
+        session_update_handler: Some(Arc::new(map_session_update) as SessionUpdateHandler),
+        config_options_handler: Some(Arc::new(apply_initial_config_options) as ConfigOptionsHandler),
+        permission_metadata_handler: Some(
             Arc::new(map_permission_metadata) as PermissionMetadataHandler
         ),
-        handle_prompt_response: Some(Arc::new(map_prompt_response) as PromptResponseHandler),
+        prompt_response_handler: Some(Arc::new(map_prompt_response) as PromptResponseHandler),
         ..Default::default()
     }
 }
 
-fn map_session_update(raw: &Value, events: &mut Vec<TurnEventBody>) -> Option<String> {
+fn map_session_update(
+    _session_id: &str,
+    _prompt_request_id: Option<&str>,
+    raw: &Value,
+    events: &mut Vec<TurnEventBody>,
+) -> Option<String> {
     match string_field(raw, &["sessionUpdate"]) {
         Some("subagent_spawned") => {
-            let Some(session_id) = string_field(raw, &["subagentSessionId", "subagent_session_id"])
-            else {
-                return None;
-            };
+            let session_id = string_field(raw, &["subagentSessionId", "subagent_session_id"])?;
             events.retain(|event| !matches!(event, TurnEventBody::Unknown { .. }));
             events.push(TurnEventBody::ToolCallUpsert {
                 tool_call_id: session_id.to_string(),
@@ -136,6 +138,7 @@ fn map_session_update(raw: &Value, events: &mut Vec<TurnEventBody>) -> Option<St
                     title: None,
                     updated_at: None,
                     goal: goal_patch(goal),
+                    file_change_report: Patch::Unchanged,
                 }));
             }
         }
@@ -311,7 +314,7 @@ mod tests {
     use super::*;
 
     fn map_update(raw: &Value, events: &mut Vec<TurnEventBody>) -> Option<String> {
-        map_session_update(raw, events)
+        map_session_update("session", None, raw, events)
     }
 
     #[test]
@@ -422,8 +425,8 @@ mod tests {
             "sessionUpdate": "config_option_update",
             "configOptions": [{ "id": "mode" }]
         });
-        let handler = descriptor().handle_session_update.expect("handler");
-        handler(&raw, &mut events);
+        let handler = descriptor().session_update_handler.expect("handler");
+        handler("session", None, &raw, &mut events);
 
         let TurnEventBody::ConfigOptionsChanged { options } = &events[0] else {
             panic!("config event")
@@ -448,7 +451,7 @@ mod tests {
     fn annotates_modes_before_a_new_thread_is_prepared() {
         let descriptor = descriptor();
         let handler = descriptor
-            .handle_config_options
+            .config_options_handler
             .expect("Claude config option handler");
         let mut options = vec![ConfigOption {
             id: "mode".into(),

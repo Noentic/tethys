@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use tethys_schema::connection::{AgentInfo, NormalizedCapabilities};
 use tethys_schema::thread::{
-    ConfigOption, ContentBlock, PermOutcome, PermissionRequested, TurnEventBody,
+    ConfigOption, ContentBlock, PermOutcome, PermissionRequested, ProviderControl,
+    ProviderControlResult, TurnEventBody,
 };
 
 /// Session identifier assigned by the agent.
@@ -92,6 +93,12 @@ pub enum ConnectionError {
     Transport(String),
     #[error("protocol: {0}")]
     Protocol(String),
+    #[error("provider error {code}: {message}")]
+    Remote {
+        code: i32,
+        message: String,
+        data: Option<serde_json::Value>,
+    },
     #[error("unsupported: {0}")]
     Unsupported(&'static str),
     #[error("session not found: {0}")]
@@ -161,6 +168,14 @@ pub trait AgentConnection: Send + Sync {
         request: ResumeSession,
     ) -> Result<SessionHandle, ConnectionError>;
 
+    async fn fork_session(
+        &self,
+        _source: &SessionId,
+        _request: NewSession,
+    ) -> Result<SessionHandle, ConnectionError> {
+        Err(ConnectionError::Unsupported("session_fork"))
+    }
+
     async fn list_sessions(&self, cwd: &Path) -> Result<Vec<SessionSummary>, ConnectionError> {
         let mut summaries = Vec::new();
         let mut cursor = None;
@@ -225,7 +240,19 @@ pub trait AgentConnection: Send + Sync {
         Err(ConnectionError::Unsupported("session/set_mode"))
     }
 
-    async fn login(&self, _method_id: &str) -> Result<(), ConnectionError> {
+    async fn provider_control(
+        &self,
+        _id: &SessionId,
+        _control: ProviderControl,
+    ) -> Result<ProviderControlResult, ConnectionError> {
+        Err(ConnectionError::Unsupported("provider_control"))
+    }
+
+    async fn login(
+        &self,
+        _method_id: &str,
+        _meta: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<(), ConnectionError> {
         Err(ConnectionError::Unsupported("login"))
     }
 

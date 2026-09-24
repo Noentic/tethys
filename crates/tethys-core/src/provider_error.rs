@@ -26,6 +26,15 @@ pub(crate) fn map_connection(
             stage: FailureStage::Initialize,
             message,
         },
+        ConnectionError::Remote {
+            code,
+            message,
+            data,
+        } => ApiError::Failure {
+            stage: FailureStage::ProviderRejected,
+            message: serde_json::json!({ "code": code, "message": message, "data": data })
+                .to_string(),
+        },
         ConnectionError::SessionNotFound(id) => {
             ApiError::NotFound(format!("provider session {id}"))
         }

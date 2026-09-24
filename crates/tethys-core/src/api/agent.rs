@@ -6,8 +6,9 @@ use tethys_agent_servers::registry::{
 };
 use tethys_api::{AgentApi, ApiError, FailureStage};
 use tethys_schema::agents::{
-    AgentLoginOutcome, AgentProfileView, AgentRegistryEntryView, AuthMethodShape, BackendClass,
-    EnvVarInput, InstallResult, LoginTerminalOutput, ProcessSample, ProfileInput, RecheckStatus,
+    AgentLoginInput, AgentLoginOutcome, AgentProfileView, AgentRegistryEntryView, AuthMethodShape,
+    BackendClass, EnvVarInput, InstallResult, LoginTerminalOutput, ProcessSample, ProfileInput,
+    RecheckStatus,
 };
 use tethys_schema::connection::ConnectionEntry;
 use tethys_store::{AgentProfileRow, StoreError};
@@ -20,6 +21,10 @@ use std::sync::Arc;
 use crate::agent_profile as profile;
 use crate::env_secrets;
 use crate::Core;
+
+mod auth;
+mod profiles;
+mod registry;
 
 impl AgentApi for Core {
     async fn agent_profiles_list(&self) -> Result<Vec<AgentProfileView>, ApiError> {
@@ -41,6 +46,7 @@ impl AgentApi for Core {
             class: BackendClass::Manual,
             launch_spec: &input.launch_spec,
             registry_ref: None,
+            integration_id: None,
             projection_target: input.projection_target,
             preferred_protocol: input.preferred_protocol,
             enabled: input.enabled,
@@ -119,7 +125,14 @@ impl AgentApi for Core {
         let uv_present = which::which("uvx").is_ok();
         let mut views = Vec::with_capacity(registry.agents.len());
         for agent in &registry.agents {
-            let stored = rows.iter().find(|row| row.id == agent.id);
+            let stored = rows.iter().find(|row| {
+                row.id == agent.id
+                    || profile::integration_id_from_row(row)
+                        .ok()
+                        .flatten()
+                        .as_deref()
+                        == Some(agent.id.as_str())
+            });
             let pinned = stored
                 .and_then(|row| profile::registry_ref_from_row(row).ok().flatten())
                 .map(|reference| reference.version);
@@ -174,12 +187,68 @@ impl AgentApi for Core {
                 selection_reason,
                 install_block_reason,
                 installed: stored.is_some(),
+                system_available: agent.id == tethys_agent_servers::providers::codex::REGISTRY_ID
+                    && tethys_agent_servers::providers::codex::system_launch_spec().is_some(),
+                setup_note: (agent.id == tethys_agent_servers::providers::codex::REGISTRY_ID)
+                    .then(tethys_agent_servers::providers::codex::setup_note)
+                    .flatten(),
                 pinned_version: pinned,
                 update,
                 compliance_note: compliance_note(&agent.id).map(str::to_string),
             });
         }
         Ok(views)
+    }
+
+    async fn agent_registry_use_system(&self, id: String) -> Result<AgentProfileView, ApiError> {
+        let detected = if id == tethys_agent_servers::providers::codex::REGISTRY_ID {
+            tethys_agent_servers::providers::codex::system_launch_spec()
+        } else {
+            None
+        }
+        .ok_or_else(|| ApiError::NotFound(format!("system ACP server {id}")))?;
+        let rows = self.profile_rows().await?;
+        let existing = rows.iter().find(|row| {
+            profile::integration_id_from_row(row)
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some(id.as_str())
+        });
+
+        let profile_id = existing.map_or_else(
+            || {
+                if rows.iter().any(|row| row.id == id) {
+                    format!("system-{id}")
+                } else {
+                    id.clone()
+                }
+            },
+            |row| row.id.clone(),
+        );
+        let row = if let Some(existing) = existing {
+            profile::system_profile_from_existing(existing, &id, detected)?
+        } else {
+            let launch_spec = profile::launch_spec_for_system(None, detected);
+            profile::row_from_input(profile::ProfileDraft {
+                id: profile_id.clone(),
+                name: "Codex",
+                class: BackendClass::Manual,
+                launch_spec: &launch_spec,
+                registry_ref: None,
+                integration_id: Some(&id),
+                projection_target: None,
+                preferred_protocol: None,
+                enabled: true,
+            })?
+        };
+        self.sync_store()?
+            .upsert_agent_profile(row.clone())
+            .await
+            .map_err(map_store)?;
+        self.register_row(&row);
+        self.recheck_with_current_spec(&profile_id).await;
+        self.view_from_row(&row)
     }
 
     async fn agent_registry_install(
@@ -200,7 +269,7 @@ impl AgentApi for Core {
         };
         let outcome = install(&agent, version.as_deref(), &options)
             .await
-            .map_err(map_registry)?;
+            .map_err(registry::map_registry)?;
         self.persist_install(&outcome, None, None).await
     }
 
@@ -210,17 +279,19 @@ impl AgentApi for Core {
             .agent(&id)
             .cloned()
             .ok_or_else(|| ApiError::NotFound(format!("registry agent {id}")))?;
-        let existing = self
-            .sync_store()?
-            .agent_profile(&id)
-            .await
-            .map_err(map_store)?;
+        let rows = self.profile_rows().await?;
+        let existing = rows.iter().find(|row| {
+            row.id == id
+                || profile::integration_id_from_row(row)
+                    .ok()
+                    .flatten()
+                    .as_deref()
+                    == Some(id.as_str())
+        });
         let projection = existing
-            .as_ref()
             .and_then(|row| row.projection_target.as_deref())
             .and_then(tethys_schema::sync::ProjectionTarget::parse);
         let preferred = existing
-            .as_ref()
             .and_then(|row| row.preferred_protocol.as_deref())
             .and_then(|value| match value {
                 "V1" => Some(tethys_schema::connection::AcpProtocol::V1),
@@ -235,7 +306,7 @@ impl AgentApi for Core {
         };
         let outcome = install(&agent, None, &options)
             .await
-            .map_err(map_registry)?;
+            .map_err(registry::map_registry)?;
         self.persist_install(&outcome, projection, preferred).await
     }
 
@@ -255,6 +326,7 @@ impl AgentApi for Core {
         &self,
         profile_id: String,
         method_id: String,
+        input: Option<AgentLoginInput>,
     ) -> Result<AgentLoginOutcome, ApiError> {
         let key = self
             .sessions
@@ -287,9 +359,18 @@ impl AgentApi for Core {
                 "unsupported auth method {method_id}"
             )));
         }
+        let metadata = auth::auth_login_metadata(
+            method,
+            input,
+            lease
+                .connection()
+                .capabilities()
+                .provider_extensions
+                .gateway_auth,
+        )?;
         lease
             .connection()
-            .login(&method_id)
+            .login(&method_id, metadata)
             .await
             .map_err(|error| map_connection(self.sessions.health(), &profile_id, error))?;
         drop(lease);
@@ -474,142 +555,10 @@ impl AgentApi for Core {
     }
 }
 
-impl Core {
-    async fn profile_rows(&self) -> Result<Vec<AgentProfileRow>, ApiError> {
-        match self.sync_store() {
-            Ok(store) => store.agent_profiles().await.map_err(map_store),
-            Err(_) => Ok(Vec::new()),
-        }
-    }
-
-    async fn registry(&self) -> Result<tethys_agent_servers::registry::Registry, ApiError> {
-        let source = self.registry_source()?;
-        source.fetch().await.map_err(map_registry)
-    }
-
-    /// Persists an install outcome and refreshes the hot cache + health.
-    async fn persist_install(
-        &self,
-        outcome: &InstallOutcome,
-        projection_target: Option<tethys_schema::sync::ProjectionTarget>,
-        preferred_protocol: Option<tethys_schema::connection::AcpProtocol>,
-    ) -> Result<InstallResult, ApiError> {
-        let row = profile::row_from_input(profile::ProfileDraft {
-            id: outcome.profile_id.clone(),
-            name: &outcome.name,
-            class: BackendClass::Registry,
-            launch_spec: &outcome.launch_spec,
-            registry_ref: Some(&outcome.registry_ref),
-            projection_target,
-            preferred_protocol,
-            enabled: true,
-        })?;
-        self.sync_store()?
-            .upsert_agent_profile(row.clone())
-            .await
-            .map_err(map_store)?;
-        self.register_row(&row);
-        self.recheck_with_current_spec(&outcome.profile_id).await;
-        Ok(InstallResult {
-            profile_id: outcome.profile_id.clone(),
-            version: outcome.registry_ref.version.clone(),
-            distribution: outcome.distribution.clone(),
-            selection_reason: outcome.selection_reason.clone(),
-            launch_spec: outcome.launch_spec.clone(),
-            warning: outcome.warning.clone(),
-            needs_node: outcome.needs_node,
-            needs_uvx: outcome.needs_uvx,
-        })
-    }
-
-    /// A launch spec just changed: retire an unused connection so the check that
-    /// follows spawns with the new spec instead of reusing the old process. A
-    /// connection in use keeps running until it is restarted.
-    async fn recheck_with_current_spec(&self, profile_id: &str) {
-        if let Some(key) = self.sessions.connection_key(profile_id) {
-            self.sessions.store().retire_idle(&key).await;
-            self.sessions.health().recheck(&key).await;
-        }
-    }
-
-    fn register_row(&self, row: &AgentProfileRow) {
-        let Ok(input) = profile::input_from_row(row) else {
-            return;
-        };
-        let integration_id = profile::registry_ref_from_row(row)
-            .ok()
-            .flatten()
-            .map(|reference| reference.id);
-        let spec = profile::spec_from_input(&row.id, &input, integration_id.as_deref());
-        let compat = profile::compat_from_row(row);
-        self.sessions.register_profile(spec, compat);
-        self.sessions.set_profile_enabled(&row.id, row.enabled);
-    }
-
-    fn view_from_row(&self, row: &AgentProfileRow) -> Result<AgentProfileView, ApiError> {
-        let record = self.sessions.health().record(&row.id);
-        let input = profile::input_from_row(row)?;
-        let registry_ref = profile::registry_ref_from_row(row)?;
-        let (health, detail) = if !row.enabled {
-            (
-                record.health,
-                Some("Disabled in Tethys settings".to_string()),
-            )
-        } else {
-            (record.health, record.detail.clone())
-        };
-        Ok(AgentProfileView {
-            id: row.id.clone(),
-            name: row.name.clone(),
-            class: profile::class_from_row(row),
-            enabled: row.enabled,
-            launch_spec: input,
-            registry_ref,
-            projection_target: row
-                .projection_target
-                .as_deref()
-                .and_then(tethys_schema::sync::ProjectionTarget::parse),
-            preferred_protocol: profile::compat_from_row(row).preferred_protocol,
-            health,
-            auth_state: record.auth_state,
-            detail,
-            protocol: record.protocol,
-            capabilities: record.capabilities,
-            auth_methods: record.auth_methods,
-            detected_version: record.detected_version,
-            latency_ms: record.latency_ms,
-            last_checked_ms: record.last_checked_ms,
-            recheck: if record.recheck == RecheckStatus::Checking {
-                RecheckStatus::Checking
-            } else {
-                RecheckStatus::Idle
-            },
-        })
-    }
-}
-
 fn map_store(error: StoreError) -> ApiError {
     match error {
         StoreError::Conflict(message) => ApiError::Conflict(message),
         StoreError::NotFound(message) => ApiError::NotFound(message),
         other => ApiError::Internal(other.to_string()),
-    }
-}
-
-fn map_registry(error: tethys_agent_servers::registry::RegistryError) -> ApiError {
-    use tethys_agent_servers::registry::RegistryError;
-    let stage = match &error {
-        RegistryError::Fetch(_) | RegistryError::Malformed(_) => FailureStage::Install,
-        RegistryError::UnknownAgent(_) | RegistryError::VersionUnavailable { .. } => {
-            FailureStage::ProviderRejected
-        }
-        RegistryError::UnsupportedDistribution(_) | RegistryError::UnsupportedPlatform(_) => {
-            FailureStage::Unsupported
-        }
-        RegistryError::Integrity { .. } | RegistryError::Install(_) => FailureStage::Install,
-    };
-    ApiError::Failure {
-        stage,
-        message: error.to_string(),
     }
 }

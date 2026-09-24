@@ -1,6 +1,8 @@
 import type { ToolCallEntry } from "@tethys/state";
-import { Chip, cn, StatusDot } from "@tethys/ui";
-import { useId, useState } from "react";
+import { Button, Chip, cn, StatusDot } from "@tethys/ui";
+import { useEffect, useId, useState } from "react";
+import { useInspectorClient } from "../../client-context";
+import { useSessionState } from "../use-session-state";
 import { diffForTool, InlineFileDiff } from "./file-diff";
 import { DisclosureChevron, ToolKindIcon } from "./tool-kind-icon";
 import { ToolOriginTag } from "./tool-origin-tag";
@@ -10,6 +12,7 @@ const STATUS_KEY: Record<ToolCallEntry["status"], string> = {
   Executing: "running",
   Completed: "healthy",
   Failed: "error",
+  Cancelled: "idle",
 };
 
 const OUTPUT_CAP = 1200;
@@ -30,14 +33,47 @@ export function ToolAccordionRenderer({
   onOpenLocation?: (path: string, line: number | null) => void;
 }) {
   const diff = diffForTool(entry);
-  const [expanded, setExpanded] = useState(
-    entry.status === "Failed" || entry.status === "Pending" || diff !== null,
+  const inspector = useInspectorClient();
+  const session = useSessionState(inspector?.threadId ?? "");
+  const canStop = Boolean(
+    entry.asyncTaskId &&
+      session.capabilities?.provider_extensions?.async_tasks &&
+      inspector?.client.thread?.providerControl,
   );
+  const [expanded, setExpanded] = useState(
+    entry.status === "Failed" ||
+      entry.status === "Pending" ||
+      diff !== null ||
+      canStop,
+  );
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
   const regionId = useId();
   const output = entry.output ?? "";
   const capped = output.length > OUTPUT_CAP;
   const shownLocations = entry.locations.slice(0, LOCATION_CAP);
   const moreLocations = entry.locations.length - shownLocations.length;
+
+  useEffect(() => {
+    if (canStop) setExpanded(true);
+  }, [canStop]);
+
+  const stopTask = async () => {
+    const providerControl = inspector?.client.thread?.providerControl;
+    if (!providerControl || !entry.asyncTaskId || stopping) return;
+    setStopping(true);
+    setStopError(null);
+    try {
+      await providerControl(inspector.threadId, {
+        kind: "stop-async-task",
+        async_task_id: entry.asyncTaskId,
+      });
+    } catch (error) {
+      setStopError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setStopping(false);
+    }
+  };
 
   return (
     <div
@@ -73,12 +109,28 @@ export function ToolAccordionRenderer({
             Failed
           </span>
         )}
+        {entry.status === "Cancelled" && (
+          <span className="text-label-sm text-(--tethys-text-muted)">
+            Stopped
+          </span>
+        )}
         {entry.locations.length > 0 && (
           <span className="ml-auto font-mono text-mono-micro text-(--tethys-text-muted)">
             {entry.locations.length} file
             {entry.locations.length === 1 ? "" : "s"}
           </span>
         )}
+        {Object.entries(entry.diffStats ?? {}).map(([path, stats]) => (
+          <span
+            key={path}
+            role="img"
+            title={path || "File diff"}
+            aria-label={`${path || "File diff"}: ${stats.added} lines added, ${stats.removed} lines removed`}
+            className="ml-auto font-mono text-mono-micro text-(--tethys-text-muted)"
+          >
+            +{stats.added} −{stats.removed}
+          </span>
+        ))}
       </button>
       {entry.locations.length > 0 && (
         <div className="flex flex-wrap gap-1 px-md pb-sm">
@@ -102,6 +154,26 @@ export function ToolAccordionRenderer({
           className="border-t border-(--tethys-hairline) px-md py-sm"
         >
           <InlineFileDiff diff={diff} />
+          {canStop && (
+            <div className="mb-sm flex items-center gap-sm">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={stopping}
+                onClick={() => void stopTask()}
+              >
+                {stopping ? "Stopping…" : "Stop background task"}
+              </Button>
+              {stopError && (
+                <span
+                  role="alert"
+                  className="text-body-sm text-(--tethys-status-danger)"
+                >
+                  {stopError}
+                </span>
+              )}
+            </div>
+          )}
           {entry.input && (
             <pre
               className={cn(
@@ -124,6 +196,16 @@ export function ToolAccordionRenderer({
             >
               View full
             </button>
+          )}
+          {entry.metadata && (
+            <details className="mt-sm rounded-sm border border-(--tethys-hairline) px-sm py-xs">
+              <summary className="cursor-pointer text-label-sm text-(--tethys-text-muted)">
+                Provider metadata
+              </summary>
+              <pre className="mt-xs max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-mono-micro text-(--tethys-text-muted)">
+                {entry.metadata}
+              </pre>
+            </details>
           )}
         </div>
       )}

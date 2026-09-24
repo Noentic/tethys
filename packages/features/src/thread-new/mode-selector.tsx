@@ -119,7 +119,7 @@ export function ModeSelector({
     { kind: "approval", value: "yolo" },
   ];
 
-  const chooseNumber = (event: KeyboardEvent<HTMLDivElement>) => {
+  const chooseNumber = (event: KeyboardEvent<HTMLFieldSetElement>) => {
     const number = Number.parseInt(event.key, 10);
     if (Number.isNaN(number) || number < 1 || number > 9) return;
     const choice = numberedChoices[number - 1];
@@ -165,7 +165,11 @@ export function ModeSelector({
         anchorRef={anchorRef}
         className="bottom-full left-0 mb-1.5 w-[304px]"
       >
-        <div className="flex flex-col gap-sm p-sm" onKeyDown={chooseNumber}>
+        <fieldset
+          className="m-0 flex min-w-0 flex-col gap-sm border-0 p-sm"
+          onKeyDown={chooseNumber}
+        >
+          <legend className="sr-only">Select a mode or approval level</legend>
           <section aria-label="Working mode">
             <h3 className="px-2 pb-1 text-label-sm text-(--tethys-text-muted)">
               Working mode · {providerName}
@@ -266,7 +270,7 @@ export function ModeSelector({
               Make default for {workspaceName}
             </button>
           </footer>
-        </div>
+        </fieldset>
       </Popover>
     </div>
   );

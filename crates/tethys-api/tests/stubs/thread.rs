@@ -59,7 +59,7 @@ async fn thread_defaults_return_unimplemented() {
         "thread.delete_provider_session",
         api.thread_delete_provider_session("t1".into()).await,
     );
-    assert_unimplemented("thread.fork", api.thread_fork().await);
+    assert_unimplemented("thread.fork", api.thread_fork(ThreadId::from("t1")).await);
     assert_unimplemented(
         "thread.archive",
         api.thread_archive(ThreadId::from("t1")).await,

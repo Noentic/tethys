@@ -204,6 +204,87 @@ describe("login surfaces per authMethods shape (M1.12 U9)", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledWith("success"));
   });
 
+  it("sends an API key only with the declared API-key method and clears the field", async () => {
+    const onClose = vi.fn();
+    const onLogin = vi.fn(async () => ({ kind: "complete" as const }));
+    const profile = authProfile([], {
+      auth_methods: [
+        {
+          id: "api-key",
+          name: "API Key",
+          description: null,
+          shape: { shape: "agent-auth" },
+          metadata: JSON.stringify({ "api-key": { provider: "openai" } }),
+        },
+      ],
+    });
+    render(
+      <LoginSurface profile={profile} onClose={onClose} onLogin={onLogin} />,
+    );
+
+    expect(onLogin).not.toHaveBeenCalled();
+    const field = screen.getByLabelText("API key") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "short-lived-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() =>
+      expect(onLogin).toHaveBeenCalledWith("api-key", {
+        kind: "api-key",
+        api_key: "short-lived-secret",
+      }),
+    );
+    expect(field.value).toBe("");
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith("success"));
+  });
+
+  it("sends gateway URL and custom headers only after gateway capability negotiation", async () => {
+    const onLogin = vi.fn(async () => ({ kind: "complete" as const }));
+    const profile = authProfile([], {
+      capabilities: {
+        load_session: false,
+        resume: false,
+        mcp: { stdio: false, http: false, sse: false },
+        prompt_embedded_context: false,
+        provider_extensions: { gateway_auth: true },
+      },
+      auth_methods: [
+        {
+          id: "gateway",
+          name: "Custom model gateway",
+          description: null,
+          shape: { shape: "agent-auth" },
+          metadata: JSON.stringify({ gateway: { protocol: "openai" } }),
+        },
+      ],
+    });
+    render(
+      <LoginSurface profile={profile} onClose={vi.fn()} onLogin={onLogin} />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Gateway URL"), {
+      target: { value: "https://gateway.example.test/v1" },
+    });
+    fireEvent.change(screen.getByLabelText("Provider name"), {
+      target: { value: "team-gateway" },
+    });
+    fireEvent.change(screen.getByLabelText("Gateway header name"), {
+      target: { value: "Authorization" },
+    });
+    fireEvent.change(screen.getByLabelText("Gateway header value"), {
+      target: { value: "Bearer transient-token" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect gateway" }));
+
+    await waitFor(() =>
+      expect(onLogin).toHaveBeenCalledWith("gateway", {
+        kind: "gateway",
+        base_url: "https://gateway.example.test/v1",
+        provider_name: "team-gateway",
+        headers: { Authorization: "Bearer transient-token" },
+      }),
+    );
+  });
+
   it("renders nothing when the Provider declares no authMethods", () => {
     const { container } = render(
       <LoginSurface profile={authProfile([])} onClose={vi.fn()} />,

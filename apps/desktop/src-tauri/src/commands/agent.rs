@@ -3,7 +3,7 @@
 use tauri::State;
 use tethys_api::AgentApi;
 use tethys_schema::agents::{
-    AgentLoginOutcome, AgentProfileView, AgentRegistryEntryView, InstallResult,
+    AgentLoginInput, AgentLoginOutcome, AgentProfileView, AgentRegistryEntryView, InstallResult,
     LoginTerminalOutput, ProcessSample, ProfileInput,
 };
 use tethys_schema::connection::ConnectionEntry;
@@ -62,6 +62,19 @@ pub async fn agent_registry_list(
     state: State<'_, CoreState>,
 ) -> Result<Vec<AgentRegistryEntryView>, String> {
     state.agent_registry_list().await.map_err(|e| e.to_string())
+}
+
+/// `agent.registry.use_system` — attach an existing known ACP executable.
+#[tauri::command]
+#[specta::specta]
+pub async fn agent_registry_use_system(
+    state: State<'_, CoreState>,
+    id: String,
+) -> Result<AgentProfileView, String> {
+    state
+        .agent_registry_use_system(id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// `agent.registry.install` — install a pinned version.
@@ -123,9 +136,10 @@ pub async fn agent_login(
     state: State<'_, CoreState>,
     profile_id: String,
     method_id: String,
+    input: Option<AgentLoginInput>,
 ) -> Result<AgentLoginOutcome, String> {
     state
-        .agent_login(profile_id, method_id)
+        .agent_login(profile_id, method_id, input)
         .await
         .map_err(|e| e.to_string())
 }

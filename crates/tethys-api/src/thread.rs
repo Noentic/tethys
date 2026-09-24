@@ -3,8 +3,8 @@
 use tethys_schema::cancel::CancelState;
 use tethys_schema::queue::QueuedPrompt;
 use tethys_schema::thread::{
-    ContentBlock, CreateThread, ProviderSessionPage, ThreadBootstrap, ThreadId, ThreadSessionView,
-    ThreadSummary,
+    ContentBlock, CreateThread, ProviderControl, ProviderControlResult, ProviderSessionPage,
+    ThreadBootstrap, ThreadId, ThreadSessionView, ThreadSummary,
 };
 
 use crate::ApiError;
@@ -127,6 +127,14 @@ pub trait ThreadApi: Send + Sync {
         async { Err(ApiError::Unimplemented("thread.respond_extension")) }
     }
 
+    fn thread_provider_control(
+        &self,
+        _id: ThreadId,
+        _control: ProviderControl,
+    ) -> impl std::future::Future<Output = Result<ProviderControlResult, ApiError>> + Send {
+        async { Err(ApiError::Unimplemented("thread.provider_control")) }
+    }
+
     fn thread_delete_provider_session(
         &self,
         _id: ThreadId,
@@ -134,7 +142,10 @@ pub trait ThreadApi: Send + Sync {
         async { Err(ApiError::Unimplemented("thread.delete_provider_session")) }
     }
 
-    fn thread_fork(&self) -> impl std::future::Future<Output = Result<(), ApiError>> + Send {
+    fn thread_fork(
+        &self,
+        _id: ThreadId,
+    ) -> impl std::future::Future<Output = Result<ThreadBootstrap, ApiError>> + Send {
         async { Err(ApiError::Unimplemented("thread.fork")) }
     }
 

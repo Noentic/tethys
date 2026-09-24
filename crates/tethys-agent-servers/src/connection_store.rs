@@ -6,7 +6,7 @@ use agent_client_protocol::ByteStreams;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use tethys_acp::{AcpConnectOptions, AcpConnection};
-use tethys_schema::agents::LoginTerminalOutput;
+use tethys_schema::agents::{LoginTerminalOutput, ProviderAuthStatus};
 use tethys_schema::connection::{
     AcpProtocol, AgentCompat, AgentInfo, ConnectionEntry, ConnectionKey, ConnectionState,
     NormalizedCapabilities,
@@ -426,6 +426,13 @@ impl ConnectionStore {
             .and_then(|entry| entry.child.as_ref())
             .map(|child| child.stderr_buffer().to_string_lossy())
             .unwrap_or_default()
+    }
+
+    pub fn provider_auth_status(&self, key: &ConnectionKey) -> Option<ProviderAuthStatus> {
+        self.lock_entries()
+            .get(key)
+            .and_then(|entry| entry.connection.as_ref())
+            .and_then(|connection| connection.provider_auth_status())
     }
 
     pub fn entries(&self) -> Vec<ConnectionEntry> {

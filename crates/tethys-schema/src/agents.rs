@@ -40,6 +40,23 @@ pub struct AuthMethodView {
     pub name: String,
     pub description: Option<String>,
     pub shape: AuthMethodShape,
+    #[serde(default)]
+    pub metadata: Option<String>,
+}
+
+/// Ephemeral credentials passed to an agent's declared authenticate method.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum AgentLoginInput {
+    ApiKey {
+        api_key: String,
+    },
+    Gateway {
+        base_url: String,
+        provider_name: Option<String>,
+        #[serde(default)]
+        headers: std::collections::BTreeMap<String, String>,
+    },
 }
 
 /// Result of starting one declared ACP authentication method.
@@ -66,6 +83,17 @@ pub enum AuthState {
     Unknown,
     Ready,
     Required,
+}
+
+/// Identity reported by a connection-scoped provider auth-status extension.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ProviderAuthStatus {
+    pub kind: String,
+    pub label: String,
+    pub detail: Option<String>,
+    pub email: Option<String>,
+    pub organization: Option<String>,
+    pub plan: Option<String>,
 }
 
 /// One environment binding: a literal or a `keychain:…` reference.
@@ -147,6 +175,9 @@ pub enum RecheckStatus {
 pub struct AgentProfileView {
     pub id: String,
     pub name: String,
+    /// Stable provider identity, independent of registry install ownership.
+    #[serde(default)]
+    pub integration_id: Option<String>,
     pub class: BackendClass,
     pub enabled: bool,
     pub launch_spec: LaunchSpecInput,
@@ -155,6 +186,8 @@ pub struct AgentProfileView {
     pub preferred_protocol: Option<AcpProtocol>,
     pub health: ProviderHealth,
     pub auth_state: AuthState,
+    #[serde(default)]
+    pub provider_auth_status: Option<ProviderAuthStatus>,
     /// Human-readable reason for `health` (e.g. `needs Node.js`).
     pub detail: Option<String>,
     /// Protocol actually negotiated at the last handshake.
@@ -208,6 +241,12 @@ pub struct AgentRegistryEntryView {
     pub selection_reason: Option<String>,
     pub install_block_reason: Option<String>,
     pub installed: bool,
+    /// A compatible ACP command is already on the app's PATH and can be reused.
+    #[serde(default)]
+    pub system_available: bool,
+    /// Setup guidance when a vendor CLI exists but its ACP server is missing.
+    #[serde(default)]
+    pub setup_note: Option<String>,
     pub pinned_version: Option<String>,
     pub update: Option<UpdateAvailability>,
     /// Vendor compliance note where the matrix has one (PRD §2).
@@ -292,6 +331,7 @@ mod tests {
         let view = AgentProfileView {
             id: "manual-1".into(),
             name: "Manual".into(),
+            integration_id: None,
             class: BackendClass::Manual,
             enabled: true,
             launch_spec: LaunchSpecInput {
@@ -308,6 +348,7 @@ mod tests {
             preferred_protocol: Some(AcpProtocol::V2),
             health: ProviderHealth::Unknown,
             auth_state: AuthState::Unknown,
+            provider_auth_status: None,
             detail: None,
             protocol: None,
             capabilities: None,

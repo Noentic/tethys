@@ -9,6 +9,8 @@ import type {
   ProviderSessionPage,
   QueuedPrompt,
   ThreadBootstrap,
+  ProviderControl,
+  ProviderControlResult,
   ThreadSessionView,
   ThreadSummary,
 } from "@tethys/bindings";
@@ -85,7 +87,9 @@ export function threadNamespace(call: Call) {
       }),
     deleteProviderSession: (id: string) =>
       call<void>("thread_delete_provider_session", { id }),
-    fork: () => call<void>("thread_fork"),
+    providerControl: (id: string, control: ProviderControl) =>
+      call<ProviderControlResult>("thread_provider_control", { id, control }),
+    fork: (id: string) => call<ThreadBootstrap>("thread_fork", { id }),
     archive: (id: string) => call<void>("thread_archive", { id }),
     delete: (id: string) => call<void>("thread_delete", { id }),
     setConfigOption: (id: string, optionId: string, value: string) =>

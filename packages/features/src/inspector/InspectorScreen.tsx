@@ -1,5 +1,6 @@
 import {
   getOrCreateSessionStore,
+  getSessionStreamManager,
   hydrateSessionView,
   isSessionHydrated,
   subscribeSessionStream,
@@ -39,11 +40,13 @@ registerInspectorRenderers();
 export function InspectorScreen({
   sessionId,
   client,
+  onNavigateThread,
   capabilityFixture,
   className,
 }: {
   sessionId: string;
   client: InspectorClient;
+  onNavigateThread?: (id: string) => void;
   capabilityFixture?: WorkspaceCapabilityFixture;
   className?: string;
 }) {
@@ -58,6 +61,8 @@ export function InspectorScreen({
       state.workdir !== workspace.path,
   );
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [forkError, setForkError] = useState<string | null>(null);
+  const [forking, setForking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const providerAnchorRef = useRef<HTMLButtonElement>(null);
   const { pinned, newCount, jumpToLatest } = useTailPin(
@@ -114,6 +119,25 @@ export function InspectorScreen({
 
   const hasPending =
     state.pendingPermissions.length > 0 || state.pendingElicitations.length > 0;
+  const forkThread = async () => {
+    if (!client.thread?.fork || !onNavigateThread || forking) return;
+    setForking(true);
+    setForkError(null);
+    try {
+      const bootstrap = await client.thread.fork(sessionId);
+      const forkStore = hydrateSessionView(bootstrap);
+      getSessionStreamManager(
+        bootstrap.thread.id,
+        forkStore,
+        bootstrap.latest_seq,
+      );
+      onNavigateThread(bootstrap.thread.id);
+    } catch (error) {
+      setForkError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setForking(false);
+    }
+  };
   return (
     <InspectorClientProvider client={client} threadId={sessionId}>
       <div
@@ -127,6 +151,14 @@ export function InspectorScreen({
             className="mx-auto w-full max-w-(--layout-stage-measure) shrink-0 text-body-sm text-(--tethys-status-danger)"
           >
             This thread could not be opened.
+          </p>
+        )}
+        {forkError && (
+          <p
+            role="alert"
+            className="text-body-sm text-(--tethys-status-danger)"
+          >
+            The session could not be forked: {forkError}
           </p>
         )}
 
@@ -168,6 +200,13 @@ export function InspectorScreen({
               worktreeEnabled={worktreeEnabled}
               workspaceName={workspace?.name}
               providerAnchorRef={providerAnchorRef}
+              onFork={
+                state.capabilities?.session_fork &&
+                client.thread?.fork &&
+                onNavigateThread
+                  ? () => void forkThread()
+                  : undefined
+              }
             />
             {client.thread.respondExtension && (
               <ProviderPopover

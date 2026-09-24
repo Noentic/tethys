@@ -3,7 +3,12 @@
 //! staged-prompt list, and a lower bar with the Model and Effort chips and the
 //! one action button. It owns what the retired 56px action bar used to slot in.
 
-import type { ContentBlock } from "@tethys/bindings";
+import type {
+  ContentBlock,
+  ProviderControl,
+  ProviderControlResult,
+  ThreadBootstrap,
+} from "@tethys/bindings";
 import {
   COMPOSER_CONTROL_SHORTCUT_EVENT,
   COMPOSER_INSERT_CHIP_EVENT,
@@ -19,7 +24,7 @@ import {
   getOrCreateSessionStore,
   type PromptQueueClient,
 } from "@tethys/state";
-import { ActionIconButton, cn, StopControl } from "@tethys/ui";
+import { ActionIconButton, Button, cn, StopControl } from "@tethys/ui";
 import type React from "react";
 import {
   useCallback,
@@ -46,6 +51,7 @@ import {
   skillSource,
 } from "./popups";
 import { promptContentBlocks } from "./prompt-blocks";
+import { ProviderControls } from "./provider-controls";
 import { PromptQueue } from "./queue";
 
 /**
@@ -73,6 +79,11 @@ export type DockedComposerClient = ComposerClient &
         id: string,
         mode: import("@tethys/bindings").PermissionMode,
       ) => Promise<void>;
+      fork?: (id: string) => Promise<ThreadBootstrap>;
+      providerControl?: (
+        id: string,
+        control: ProviderControl,
+      ) => Promise<ProviderControlResult>;
     };
   };
 
@@ -87,6 +98,7 @@ export interface DockedPromptCardProps {
   editorRef?: React.RefObject<EditorHandle | null>;
   /** The provider pill, the anchor a Provider request popover mounts on. */
   providerAnchorRef?: React.Ref<HTMLButtonElement>;
+  onFork?: () => void;
   className?: string;
 }
 
@@ -122,6 +134,7 @@ export function DockedPromptCard({
   workspaceName,
   editorRef: externalEditorRef,
   providerAnchorRef,
+  onFork,
   className,
 }: DockedPromptCardProps) {
   const state = useSessionState(sessionId);
@@ -146,6 +159,15 @@ export function DockedPromptCard({
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
   const submitting = useRef(false);
+  const sendProviderControl = useCallback(
+    (control: ProviderControl) => {
+      const providerControl = client.thread.providerControl;
+      return providerControl
+        ? providerControl(sessionId, control)
+        : Promise.reject(new Error("Provider controls are unavailable"));
+    },
+    [client, sessionId],
+  );
 
   useEffect(() => {
     const handleShortcut = (event: Event) => {
@@ -390,8 +412,27 @@ export function DockedPromptCard({
         </p>
       )}
 
+      {client.thread.providerControl && (
+        <ProviderControls
+          sessionId={sessionId}
+          goal={state.goal}
+          capabilities={state.capabilities?.provider_extensions}
+          send={sendProviderControl}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-md">
         <div className="flex min-w-0 items-center gap-md">
+          {state.capabilities?.session_fork && onFork && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={turnInFlight}
+              onClick={onFork}
+            >
+              Fork session
+            </Button>
+          )}
           <AttachmentPicker
             providerName={state.providerId}
             capabilities={{

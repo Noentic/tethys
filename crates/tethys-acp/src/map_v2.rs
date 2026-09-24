@@ -100,6 +100,7 @@ pub fn v2_update(update: &acp2::SessionUpdate) -> Vec<TurnEventBody> {
                     title: maybe_string(&update.title),
                     updated_at: maybe_string(&update.updated_at),
                     goal: Patch::Unchanged,
+                    file_change_report: Patch::Unchanged,
                 },
             )]
         }
@@ -155,6 +156,7 @@ fn tool_patch(update: &acp2::ToolCallUpdate) -> ToolCallPatch {
             .map(|locations| locations.iter().map(tool_location).collect())
             .unwrap_or_default(),
         metadata: None,
+        async_task_id: None,
     }
 }
 
@@ -186,7 +188,29 @@ pub(crate) fn tool_content(content: &acp2::ToolCallContent) -> ToolCallContent {
         acp2::ToolCallContent::Terminal(terminal) => ToolCallContent::Terminal {
             terminal_id: terminal.terminal_id.to_string(),
         },
-        acp2::ToolCallContent::Diff(diff) => ToolCallContent::Unknown(json_string(diff)),
+        acp2::ToolCallContent::Diff(diff) => {
+            let Some(patch) = diff.patch.as_ref() else {
+                return ToolCallContent::Unknown(json_string(diff));
+            };
+            let path = diff
+                .changes
+                .iter()
+                .find_map(|change| {
+                    let change = serde_json::to_value(change).ok()?;
+                    change
+                        .get("path")
+                        .or_else(|| change.get("oldPath"))
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                })
+                .unwrap_or_default();
+            ToolCallContent::Diff {
+                path,
+                patch: patch.text.clone(),
+                stats: crate::map::diff_statistics(diff.meta.as_ref()),
+                metadata: diff.meta.as_ref().map(json_string),
+            }
+        }
         acp2::ToolCallContent::Other(other) => ToolCallContent::Unknown(json_string(other)),
         _ => ToolCallContent::Unknown("null".to_string()),
     }
@@ -353,7 +377,10 @@ pub(crate) fn config_option(option: &acp2::SessionConfigOption) -> ConfigOption 
         kind: Some(kind),
         value_options,
         recommended_value: None,
-        metadata: None,
+        metadata: option
+            .meta
+            .as_ref()
+            .and_then(|meta| serde_json::to_string(meta).ok()),
     }
 }
 
@@ -400,6 +427,8 @@ pub(crate) fn permission_request(
                 option_id: option.option_id.to_string(),
                 name: option.name.clone(),
                 kind: Some(json_string(&option.kind).trim_matches('"').to_string()),
+                description: None,
+                metadata: None,
             })
             .collect(),
         metadata: None,
@@ -432,5 +461,38 @@ fn subject(subject: &acp2::RequestPermissionSubject) -> tethys_schema::thread::P
             }
         }
         other => tethys_schema::thread::PermissionSubject::Unknown(json_string(other)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn structured_diff_keeps_patch_statistics_and_provider_metadata() {
+        let content: acp2::ToolCallContent = serde_json::from_value(json!({
+            "type": "diff",
+            "changes": [{"operation": "modify", "path": "/repo/src/lib.rs"}],
+            "patch": {
+                "format": "git_patch",
+                "text": "diff --git a/lib.rs b/lib.rs\n+new"
+            },
+            "_meta": {"jetbrains": {"air": {"diffStats": {
+                "version": 1,
+                "added": 2,
+                "removed": 1
+            }}}}
+        }))
+        .expect("valid v2 diff");
+
+        assert!(matches!(
+            tool_content(&content),
+            ToolCallContent::Diff { path, patch, stats: Some(stats), metadata: Some(_) }
+                if path == "/repo/src/lib.rs"
+                    && patch.contains("diff --git")
+                    && stats.added == 2
+                    && stats.removed == 1
+        ));
     }
 }

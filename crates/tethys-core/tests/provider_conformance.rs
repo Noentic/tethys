@@ -8,18 +8,20 @@
 //! Output is one machine-readable line per run; raw ACP params, launch env
 //! values, credentials, and provider stderr never reach it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
 use tethys_agent_servers::registry::HttpRegistrySource;
-use tethys_api::{AgentApi, EventsApi, ThreadApi, WorkspaceApi};
+use tethys_api::{AgentApi, ApiError, EventsApi, ThreadApi, WorkspaceApi};
 use tethys_core::{Core, CorePaths};
 use tethys_schema::agents::{AgentProfileView, InstallResult};
 use tethys_schema::catalog::{TrustGrant, TrustScope};
-use tethys_schema::thread::{ContentBlock, CreateThread, SessionState, TurnEventBody};
+use tethys_schema::thread::{
+    ContentBlock, CreateThread, ProviderControl, ProviderControlResult, SessionState, TurnEventBody,
+};
 use tethys_schema::workspace::PermissionMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,14 +54,7 @@ fn report(provider_id: &str, disposition: Disposition, stage: &str, reason: &str
     );
 }
 
-fn report_install_snapshot(
-    provider_id: &str,
-    disposition: Disposition,
-    stage: &str,
-    reason: &str,
-    install: &InstallResult,
-    profile: Option<&AgentProfileView>,
-) {
+fn profile_snapshot(profile: Option<&AgentProfileView>, launch_source: &str) -> serde_json::Value {
     let auth_methods = profile
         .map(|profile| {
             profile
@@ -75,18 +70,121 @@ fn report_install_snapshot(
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    let snapshot = serde_json::json!({
-        "registry_version": install.version,
-        "distribution": install.distribution,
-        "node_runtime_missing": install.needs_node,
+    serde_json::json!({
+        "launch_source": launch_source,
         "adapter_version": profile.and_then(|profile| profile.detected_version.as_deref()),
         "protocol": profile.and_then(|profile| profile.protocol),
         "health": profile.map(|profile| profile.health),
         "auth_state": profile.map(|profile| profile.auth_state),
         "auth_methods": auth_methods,
         "capabilities": profile.and_then(|profile| profile.capabilities.as_ref()),
-    });
+    })
+}
+
+fn report_conformance_snapshot(
+    provider_id: &str,
+    disposition: Disposition,
+    stage: &str,
+    reason: &str,
+    install: Option<&InstallResult>,
+    profile: Option<&AgentProfileView>,
+    launch_source: &str,
+) {
+    let mut snapshot = profile_snapshot(profile, launch_source);
+    if let Some(install) = install {
+        snapshot["registry_version"] = serde_json::json!(install.version);
+        snapshot["distribution"] = serde_json::json!(install.distribution);
+        snapshot["node_runtime_missing"] = serde_json::json!(install.needs_node);
+    }
     report_record(provider_id, disposition, stage, reason, snapshot);
+}
+
+fn report_install_snapshot(
+    provider_id: &str,
+    disposition: Disposition,
+    stage: &str,
+    reason: &str,
+    install: &InstallResult,
+    profile: Option<&AgentProfileView>,
+) {
+    report_conformance_snapshot(
+        provider_id,
+        disposition,
+        stage,
+        reason,
+        Some(install),
+        profile,
+        "registry",
+    );
+}
+
+fn registry_install_allowed(
+    adapter_path_supplied: bool,
+    system_adapter_found: bool,
+    install_opted_in: bool,
+) -> bool {
+    !adapter_path_supplied && !system_adapter_found && install_opted_in
+}
+
+fn validate_adapter_path(path: PathBuf) -> Result<PathBuf, &'static str> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    if !matches!(name, "codex-acp" | "codex-acp.exe") {
+        return Err("TETHYS_CONFORMANCE_ACP_PATH must point to codex-acp");
+    }
+    let path = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()
+            .map_err(|_| "could not resolve the ACP adapter path")?
+            .join(path)
+    };
+    if !path.is_file() {
+        return Err("the configured ACP adapter path is not a file");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if std::fs::metadata(&path)
+            .map_err(|_| "could not inspect the ACP adapter file")?
+            .permissions()
+            .mode()
+            & 0o111
+            == 0
+        {
+            return Err("the configured ACP adapter file is not executable");
+        }
+    }
+    Ok(path)
+}
+
+struct RestorePath(Option<std::ffi::OsString>);
+
+impl Drop for RestorePath {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            std::env::set_var("PATH", path);
+        } else {
+            std::env::remove_var("PATH");
+        }
+    }
+}
+
+fn prepend_adapter_path(path: &Path) -> Result<RestorePath, std::io::Error> {
+    let original = std::env::var_os("PATH");
+    let mut paths = vec![path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf()];
+    if let Some(original) = &original {
+        paths.extend(std::env::split_paths(original));
+    }
+    let joined = std::env::join_paths(paths)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+    std::env::set_var("PATH", joined);
+    Ok(RestorePath(original))
 }
 
 fn report_record(
@@ -115,6 +213,22 @@ fn report_record(
     );
 }
 
+fn report_feature(
+    provider_id: &str,
+    feature: &str,
+    disposition: Disposition,
+    reason: &str,
+    evidence: serde_json::Value,
+) {
+    report_record(
+        provider_id,
+        disposition,
+        feature,
+        reason,
+        serde_json::json!({ "evidence": evidence }),
+    );
+}
+
 /// Strips query strings and truncates; never prints raw params or env values.
 fn sanitize(message: &str) -> String {
     let scrubbed: String = message
@@ -132,6 +246,44 @@ fn classify_setup(reason: &str) -> Disposition {
     } else {
         Disposition::SetupRequired
     }
+}
+
+#[test]
+fn registry_install_requires_opt_in_and_no_adapter_source() {
+    assert!(!registry_install_allowed(true, false, true));
+    assert!(!registry_install_allowed(false, true, true));
+    assert!(!registry_install_allowed(false, false, false));
+    assert!(registry_install_allowed(false, false, true));
+}
+
+#[test]
+fn explicit_adapter_path_must_name_codex_acp() {
+    assert_eq!(
+        validate_adapter_path(PathBuf::from("/tmp/other-agent")),
+        Err("TETHYS_CONFORMANCE_ACP_PATH must point to codex-acp")
+    );
+}
+
+#[test]
+fn explicit_adapter_path_accepts_a_local_executable_fixture() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let name = if cfg!(windows) {
+        "codex-acp.exe"
+    } else {
+        "codex-acp"
+    };
+    let adapter = directory.path().join(name);
+    std::fs::write(&adapter, "fixture").expect("fixture adapter");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(&adapter)
+            .expect("adapter metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&adapter, permissions).expect("executable fixture");
+    }
+    assert_eq!(validate_adapter_path(adapter.clone()), Ok(adapter));
 }
 
 #[tokio::test]
@@ -167,77 +319,134 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
         return Ok(());
     }
 
+    let adapter_path = match std::env::var_os("TETHYS_CONFORMANCE_ACP_PATH") {
+        Some(path) => match validate_adapter_path(PathBuf::from(path)) {
+            Ok(path) => Some(path),
+            Err(reason) => {
+                report(&provider_id, Disposition::SetupRequired, "adapter", reason);
+                return Ok(());
+            }
+        },
+        None => None,
+    };
+    if adapter_path.is_some() && provider_id != "codex-acp" {
+        report(
+            &provider_id,
+            Disposition::SetupRequired,
+            "adapter",
+            "TETHYS_CONFORMANCE_ACP_PATH currently selects the codex-acp adapter",
+        );
+        return Ok(());
+    }
+
+    let run_id = format!("run-{}", std::process::id());
     let home = std::env::var_os("TETHYS_CONFORMANCE_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("tethys-provider-conformance"));
+        .map(|home| PathBuf::from(home).join(&run_id))
+        .unwrap_or_else(|| {
+            std::env::temp_dir().join(format!("tethys-provider-conformance-{run_id}"))
+        });
     let core = Arc::new(
         Core::open(CorePaths::new(home))
             .await?
             .with_registry_source(Arc::new(HttpRegistrySource::published()?)),
     );
+    let install_opted_in =
+        std::env::var("TETHYS_CONFORMANCE_ALLOW_REGISTRY_INSTALL").as_deref() == Ok("1");
+    let version = std::env::var("TETHYS_CONFORMANCE_VERSION").ok();
 
-    let install = match core
-        .agent_registry_install(
-            provider_id.clone(),
-            std::env::var("TETHYS_CONFORMANCE_VERSION").ok(),
-        )
-        .await
-    {
-        Ok(result) => result,
-        Err(error) => {
-            let message = error.to_string();
-            report(&provider_id, classify_setup(&message), "install", &message);
-            return Ok(());
+    let (profile, install, launch_source) = if let Some(path) = adapter_path.as_deref() {
+        let _restore_path = prepend_adapter_path(path)?;
+        match core.agent_registry_use_system(provider_id.clone()).await {
+            Ok(profile) => (profile, None, "explicit-path"),
+            Err(error) => {
+                report_conformance_snapshot(
+                    &provider_id,
+                    classify_setup(&error.to_string()),
+                    "adapter",
+                    &error.to_string(),
+                    None,
+                    None,
+                    "explicit-path",
+                );
+                return Ok(());
+            }
         }
-    };
-    if let Err(error) = core.agent_recheck(Some(install.profile_id.clone())).await {
-        report_install_snapshot(
-            &provider_id,
-            classify_setup(&error.to_string()),
-            "initialize",
-            &error.to_string(),
-            &install,
-            None,
-        );
-        return Ok(());
-    }
-    let profile = core
-        .agent_profiles_list()
-        .await?
-        .into_iter()
-        .find(|profile| profile.id == install.profile_id);
-    let Some(profile) = profile else {
-        report_install_snapshot(
-            &provider_id,
-            Disposition::NotObserved,
-            "profile",
-            "installed profile was not returned",
-            &install,
-            None,
-        );
-        return Ok(());
+    } else {
+        match core.agent_registry_use_system(provider_id.clone()).await {
+            Ok(profile) => (profile, None, "system-path"),
+            Err(ApiError::NotFound(reason)) if reason.starts_with("system ACP server ") => {
+                if !registry_install_allowed(false, false, install_opted_in) {
+                    report(
+                        &provider_id,
+                        Disposition::SetupRequired,
+                        "adapter",
+                        "no codex-acp adapter found; registry install requires TETHYS_CONFORMANCE_ALLOW_REGISTRY_INSTALL=1",
+                    );
+                    return Ok(());
+                }
+                let install = match core
+                    .agent_registry_install(provider_id.clone(), version)
+                    .await
+                {
+                    Ok(install) => install,
+                    Err(error) => {
+                        let message = error.to_string();
+                        report(&provider_id, classify_setup(&message), "install", &message);
+                        return Ok(());
+                    }
+                };
+                let profile = core
+                    .agent_profiles_list()
+                    .await?
+                    .into_iter()
+                    .find(|profile| profile.id == install.profile_id);
+                let Some(profile) = profile else {
+                    report_install_snapshot(
+                        &provider_id,
+                        Disposition::NotObserved,
+                        "profile",
+                        "installed profile was not returned",
+                        &install,
+                        None,
+                    );
+                    return Ok(());
+                };
+                (profile, Some(install), "registry")
+            }
+            Err(error) => {
+                report(
+                    &provider_id,
+                    Disposition::SetupRequired,
+                    "adapter",
+                    &error.to_string(),
+                );
+                return Ok(());
+            }
+        }
     };
     if profile.health != tethys_schema::agents::ProviderHealth::Healthy {
         if profile.auth_state == tethys_schema::agents::AuthState::Required {
-            report_install_snapshot(
+            report_conformance_snapshot(
                 &provider_id,
                 Disposition::SetupRequired,
                 "auth",
                 "provider authentication is required",
-                &install,
+                install.as_ref(),
                 Some(&profile),
+                launch_source,
             );
         } else {
-            report_install_snapshot(
+            report_conformance_snapshot(
                 &provider_id,
                 Disposition::NotObserved,
                 "initialize",
-                &profile
+                profile
                     .detail
                     .as_deref()
                     .unwrap_or("provider did not reach healthy state"),
-                &install,
+                install.as_ref(),
                 Some(&profile),
+                launch_source,
             );
         }
         return Ok(());
@@ -254,13 +463,14 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
     {
         Ok(workspace) => workspace,
         Err(error) => {
-            report_install_snapshot(
+            report_conformance_snapshot(
                 &provider_id,
                 Disposition::NotObserved,
                 "workspace",
                 &error.to_string(),
-                &install,
+                install.as_ref(),
                 Some(&profile),
+                launch_source,
             );
             return Ok(());
         }
@@ -268,7 +478,7 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
     let bootstrap = match core
         .thread_prepare(CreateThread {
             workspace_id: workspace_item.id.to_string(),
-            agent_profile_id: install.profile_id.clone(),
+            agent_profile_id: profile.id.clone(),
             workdir: workspace.display().to_string(),
             additional_directories: Vec::new(),
             isolation: None,
@@ -277,18 +487,59 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
     {
         Ok(bootstrap) => bootstrap,
         Err(error) => {
-            report_install_snapshot(
+            report_conformance_snapshot(
                 &provider_id,
                 classify_setup(&error.to_string()),
                 "prepare",
                 &error.to_string(),
-                &install,
+                install.as_ref(),
                 Some(&profile),
+                launch_source,
             );
             return Ok(());
         }
     };
     let thread_id = bootstrap.thread.id.clone();
+    let capabilities = bootstrap.capabilities.as_ref();
+    if capabilities.is_some_and(|caps| caps.provider_extensions.provider_routing) {
+        match core
+            .thread_provider_control(thread_id.clone(), ProviderControl::ListProviders)
+            .await
+        {
+            Ok(ProviderControlResult::Providers { providers }) => report_feature(
+                &provider_id,
+                "provider-routing-list",
+                Disposition::Exercised,
+                "read-only route list succeeded; route ids, URLs, and headers omitted",
+                serde_json::json!({
+                    "routes": providers.len(),
+                    "required_routes": providers.iter().filter(|route| route.required).count(),
+                }),
+            ),
+            Ok(_) => report_feature(
+                &provider_id,
+                "provider-routing-list",
+                Disposition::NotObserved,
+                "provider list returned an unexpected result",
+                serde_json::Value::Null,
+            ),
+            Err(error) => report_feature(
+                &provider_id,
+                "provider-routing-list",
+                Disposition::NotObserved,
+                &error.to_string(),
+                serde_json::Value::Null,
+            ),
+        }
+    } else {
+        report_feature(
+            &provider_id,
+            "provider-routing-list",
+            Disposition::DeclaredUnsupported,
+            "provider routing was not negotiated",
+            serde_json::Value::Null,
+        );
+    }
     let mut events = match core
         .events_subscribe(thread_id.clone(), bootstrap.latest_seq)
         .await
@@ -301,13 +552,14 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
                 .err()
                 .map(|cleanup| format!("{error}; thread cleanup failed: {cleanup}"))
                 .unwrap_or_else(|| error.to_string());
-            report_install_snapshot(
+            report_conformance_snapshot(
                 &provider_id,
                 Disposition::NotObserved,
                 "subscribe",
                 &reason,
-                &install,
+                install.as_ref(),
                 Some(&profile),
+                launch_source,
             );
             return Ok(());
         }
@@ -447,6 +699,61 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
             )
         });
     }
+    if failure.is_none() {
+        if capabilities.is_some_and(|caps| caps.session_fork) {
+            match core.thread_fork(thread_id.clone()).await {
+                Ok(fork) if fork.thread.id != thread_id => {
+                    let fork_id = fork.thread.id;
+                    match core.thread_delete(fork_id).await {
+                        Ok(()) => report_feature(
+                            &provider_id,
+                            "session-fork",
+                            Disposition::Exercised,
+                            "provider fork created a distinct Tethys thread and cleanup succeeded",
+                            serde_json::json!({ "distinct_thread": true, "cleaned_up": true }),
+                        ),
+                        Err(error) => {
+                            let reason = format!("fork cleanup failed: {error}");
+                            report_feature(
+                                &provider_id,
+                                "session-fork",
+                                Disposition::NotObserved,
+                                &reason,
+                                serde_json::json!({ "distinct_thread": true, "cleaned_up": false }),
+                            );
+                            failure.get_or_insert((
+                                Disposition::NotObserved,
+                                "fork_cleanup",
+                                reason,
+                            ));
+                        }
+                    }
+                }
+                Ok(_) => report_feature(
+                    &provider_id,
+                    "session-fork",
+                    Disposition::NotObserved,
+                    "provider fork did not create a distinct Tethys thread",
+                    serde_json::Value::Null,
+                ),
+                Err(error) => report_feature(
+                    &provider_id,
+                    "session-fork",
+                    Disposition::NotObserved,
+                    &error.to_string(),
+                    serde_json::Value::Null,
+                ),
+            }
+        } else {
+            report_feature(
+                &provider_id,
+                "session-fork",
+                Disposition::DeclaredUnsupported,
+                "session fork was not negotiated",
+                serde_json::Value::Null,
+            );
+        }
+    }
     if let Err(error) = core.thread_delete(thread_id).await {
         let delete_error = format!("thread deletion failed: {error}");
         if let Some((_, _, reason)) = failure.as_mut() {
@@ -457,23 +764,25 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
         }
     }
     if let Some((disposition, stage, reason)) = failure {
-        report_install_snapshot(
+        report_conformance_snapshot(
             &provider_id,
             disposition,
             stage,
             &reason,
-            &install,
+            install.as_ref(),
             Some(&profile),
+            launch_source,
         );
         return Ok(());
     }
-    report_install_snapshot(
+    report_conformance_snapshot(
         &provider_id,
         Disposition::Exercised,
         "vertical",
         "install→prepare→prompt→idle→delete",
-        &install,
+        install.as_ref(),
         Some(&profile),
+        launch_source,
     );
     Ok(())
 }

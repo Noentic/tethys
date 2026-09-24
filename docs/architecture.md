@@ -313,6 +313,18 @@ ACP v2 is published as a draft. Its migration guide tells implementers to keep v
 
 **Provider extensions.** A Provider may send vendor-specific JSON-RPC requests or notifications under a `_`-prefixed method. These are neither `session/request_permission` nor `elicitation/create`, so they are not transcript entries. M1.17 extends the existing append-only event to `ProviderExtension { kind, method, correlation_id?, params }`, keyed by thread and resolved in the webview through `registerProviderSurface(providerId, method, surface)`. Claimed requests keep their responder until `thread.respond_extension`; unclaimed requests receive method-not-found. Notifications without a registered surface remain in the event log and render generically. A Provider integration therefore contributes one backend registration and one UI registration without shared dispatch branches. `TurnEventBody::Unknown { raw }` remains for unrecognised `session/update` variants, which have no method to route.
 
+### Provider launch and feature seams
+
+An installed vendor CLI, an ACP server, and a Tethys Provider profile have separate identities. Settings first reuses an existing profile, then probes a known local **ACP command** (including a user-selected path) through `initialize`, and only then offers a permitted registry distribution. It must not treat `codex` or `claude` on `PATH` as proof that their separate ACP adapters are installed; `opencode acp` and `kiro-cli acp` are native commands. `agy` has no documented ACP command; its separate registry server remains compliance-gated. Keep one Provider row when the launch source changes. [Provider features and install cases](./provider-integration.md) records the five initial agents and the distinction between upstream capabilities and Tethys support.
+
+`AgentProfile.integration_id` identifies a known Provider/descriptor regardless of launch source; `registry_ref` exists only for a pinned registry install. Neither the command name nor a registry id inferred from the UI should masquerade as a registry-owned artifact. Recheck the ACP handshake and current auth state after any path, install, login, or connection change. Preserve a user's executable override, environment, and profile rather than creating a second Provider. Registry update/removal controls apply only to registry installs. Discovery uses the app process's `PATH` and offers a path override when it differs from the user's shell.
+
+The extension boundary has two directions and two scopes. Inbound session requests/notifications use the registered thread surface and responder; inbound connection-level notifications such as `_auth/status_update` go to profile health/login state without requiring `sessionId`. Outbound, a typed, capability-checked agent request route handles negotiated session controls such as `_session/goal`, `_session/steering`, and `_session/async_task/stop`. `session/prompt` can carry per-turn `_meta`, including a correlated file-change report request. Authenticate can carry ephemeral method-specific `_meta`; secrets never enter profile storage or event logs. Shared typed Provider-session fork and negotiated `providers/*` controls complete the advertised lifecycle/config surface.
+
+Client capability advertisement follows working UI and lifecycle handlers, including plans, notices, compaction, terminal output deltas, subagents, async tasks, file-change reports, typed failures, recommended config, and gateway auth. The v1 normalizer retains permission option descriptions, diff statistics, usage/quota, structured failure details, and unknown `_meta` for inspection. Provider modules interpret only their own extension payloads; standard ACP dispatch stays provider-neutral. The [Codex plan](../.agents/plans/2026-09-21-codex-provider-integration.md) records these seams and the remaining live adapter acceptance.
+
+**Module ownership.** `tethys-acp::client` stays the public connection facade and keeps handshake, inbound messages, session operations, provider controls, and wire conversion in private submodules. The ACP session module owns the cohesive `AgentConnection` lifecycle and `SessionDeleter`; `provider_control.rs` owns route and session-control wire dispatch. All implementation modules stay below the 800-line review target; the largest is `client/inbound.rs` at 795 lines. `ThreadSessions` keeps its state/facade in `thread_session.rs`; lifecycle, fork cleanup, persistence/hydration, profile cache, and turn/control behavior live in sibling modules. `AgentApi for Core` remains one trait implementation while profile, registry, and auth helpers live under `api/agent/`. In the feature UI, `LoginSurface` owns method selection and close/recheck lifecycle while `login-credentials.tsx` owns credential inputs; `ProvidersView` owns data/actions while row and registry rendering live separately; `ProviderControls` owns goal/steering state while keyed `ProviderRoutes` owns route editing state. These are internal boundaries; callers keep the existing ACP, Core API, and React exports.
+
 ### 7.3 Normalized event model
 
 ```rust
@@ -698,7 +710,7 @@ pub enum BackendClass { AcpNative, AcpAdapter, NativeTerminal }
 
 pub struct AgentProfile {
     id: AgentProfileId, name: String, class: BackendClass,
-    launch: LaunchSpec, registry_ref: Option<RegistryRef>,
+    launch: LaunchSpec, integration_id: Option<String>, registry_ref: Option<RegistryRef>,
     secret_bindings: Vec<SecretBinding>, default_policy: PermissionPolicyId,
     compat: AgentCompat,               // multi-session ok, skill strategy, known quirks, preferred protocol
 }
@@ -748,8 +760,8 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 |---|---|
 | `host` | `info`, `pair`, `health` |
 | `workspace` | `list`, `add`, `remove`, `settings.*`, `status`, `capabilities` (§10.6) |
-| `agent` | `profiles.*`, `registry.list/install/update`, `connections.list/restart`, `login → AuthFlow`, negotiated `logout`, `stderr`, `env_secret_set` (write-only: the value goes to the keychain and the profile keeps a `keychain:tethys/…` reference; there is no getter, G7), `process_sample`, `health_interval_set`, `recheck`, `config.schema/get/validate/plan/apply/rollback` (SYN‑11; `plan/apply/rollback` reuse the §11.3 safety path) |
-| `thread` | `create → ThreadBootstrap`, `list`, `get → ThreadView`, `prompt`, `queue.*`, `cancel` (emits `cancel_requested{grace_deadline}` → `grace_elapsed` → `terminating` as `CancelPhaseChanged` events on the thread's stream; a press in `grace_elapsed` is the explicit force-kill), `cancel_state`, Provider-session `list/import/load/resume/close/delete`, local `archive/delete`, `setConfigOption`, `setPermissionMode`, `respondExtension` |
+| `agent` | `profiles.*`, `registry.list/install/update/useSystem`, `connections.list/restart`, `login(method, ephemeralInput) → AuthFlow`, negotiated `logout`, `stderr`, `env_secret_set` (write-only: the value goes to the keychain and the profile keeps a `keychain:tethys/…` reference; there is no getter, G7), `process_sample`, `health_interval_set`, `recheck`, `config.schema/get/validate/plan/apply/rollback` (SYN‑11; `plan/apply/rollback` reuse the §11.3 safety path) |
+| `thread` | `create → ThreadBootstrap`, `list`, `get → ThreadView`, `prompt(content, perTurnMeta)`, typed Provider-session `fork`, `providerControl` (negotiated goal/steering/async-stop/provider-routing), `queue.*`, `cancel` (emits `cancel_requested{grace_deadline}` → `grace_elapsed` → `terminating` as `CancelPhaseChanged` events on the thread's stream; a press in `grace_elapsed` is the explicit force-kill), `cancel_state`, Provider-session `list/import/load/resume/close/delete`, local `archive/delete`, `setConfigOption`, `setPermissionMode`, `respondExtension` |
 | `events` | `subscribe {threadId, sinceSeq}` (exclusive, first event `1`), `unsubscribe`, `inbox.subscribe` |
 | `permission` | `respond`, `rules.*` |
 | `git` | `worktree.*`, `checkpoint.*`, `diff.summary`, `diff.file`, `stage`, `unstage`, `discard`, `commit`, `merge`, `push`, `pr.create` (all return `GIT_DISABLED` where the workspace has no git capability or sets `isolation: plain`, §10.6) |
@@ -758,6 +770,8 @@ The blob store lives at `~/.tethys/blobs/`, keyed by blake3.
 | `skills` | `list`, `import`, `update.*`, `trust`, `enable` |
 | `commands` | `list` (with `include_shadowed`: `false` for the composer's shadowing lookup, `true` for the Settings editor), `expand`, `read`, `write`, `delete` (`CMP‑07`) |
 | `terminal` | `list`, `attach`, `write`, `resize` |
+
+**M1.19 API additions:** `agent.profiles.*` accepts a known integration id for a system ACP launch without inventing a `registry_ref`; `registry.useSystem` reuses an installed ACP command. `agent.login` accepts ephemeral method metadata. `thread.prompt` accepts per-turn metadata, Provider-session `fork` uses the connected agent, and `thread.providerControl` exposes negotiated goal, steering, async-stop, and upstream provider-routing controls. Upstream `providers/*` routes remain distinct from Tethys `agent.*` setup profiles. These are thin typed boundaries over the shared ACP connection, not Codex-specific commands.
 
 **Addressing.** Every method above that touches the filesystem (`mcp.*`, `skills.*`, `search.files`, `commands.*`, `git.worktree.create`) takes a `workspace_id` or `thread_id` and never a path (principle 8). Core resolves the root, and an unknown id is `NotFound`.
 

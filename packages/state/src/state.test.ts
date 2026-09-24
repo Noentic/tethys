@@ -642,7 +642,9 @@ describe("Inspector session model (M1.7 U5)", () => {
       type: "StateChanged",
       body: { state: { Idle: { stop_reason: "EndTurn" } } },
     });
-    expect(state.liveEntries.filter((entry) => entry.kind === "turn_end")).toHaveLength(1);
+    expect(
+      state.liveEntries.filter((entry) => entry.kind === "turn_end"),
+    ).toHaveLength(1);
   });
 
   it("accumulates terminal output chunks in order", () => {

@@ -60,6 +60,31 @@ pub struct NormalizedCapabilities {
     /// sends elicitation requests never materializes an entry.
     #[serde(default)]
     pub elicitation: bool,
+    #[serde(default)]
+    pub session_fork: bool,
+    #[serde(default)]
+    pub provider_extensions: ProviderExtensionCapabilities,
+}
+
+/// Provider extension features the client and agent both negotiated.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ProviderExtensionCapabilities {
+    #[serde(default)]
+    pub goal_actions: Vec<String>,
+    #[serde(default)]
+    pub steering: bool,
+    #[serde(default)]
+    pub async_tasks: bool,
+    #[serde(default)]
+    pub native_subagents: bool,
+    #[serde(default)]
+    pub file_change_report: bool,
+    #[serde(default)]
+    pub auth_status: bool,
+    #[serde(default)]
+    pub provider_routing: bool,
+    #[serde(default)]
+    pub gateway_auth: bool,
 }
 
 fn capability_enabled() -> bool {
@@ -82,6 +107,8 @@ impl Default for NormalizedCapabilities {
             prompt_audio: false,
             prompt_embedded_context: false,
             elicitation: false,
+            session_fork: false,
+            provider_extensions: ProviderExtensionCapabilities::default(),
         }
     }
 }

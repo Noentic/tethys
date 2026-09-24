@@ -1,8 +1,8 @@
 import {
   type SessionEntry,
   selectTurnActionsVisible,
-  type TurnEndEntry,
   type ToolCallEntry,
+  type TurnEndEntry,
 } from "@tethys/state";
 import { cn, getEntryRenderer } from "@tethys/ui";
 import { ProviderCapabilityNotice } from "../providers/capability-notice";

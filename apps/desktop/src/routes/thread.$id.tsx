@@ -3,6 +3,7 @@ import { client } from "../client";
 
 export interface ThreadViewProps {
   sessionId: string;
+  onNavigateThread?: (id: string) => void;
 }
 
 /**
@@ -10,11 +11,12 @@ export interface ThreadViewProps {
  * `InspectorScreen`, which owns the transcript, the interaction cards and the
  * approval inbox through the slot registries.
  */
-export function ThreadView({ sessionId }: ThreadViewProps) {
+export function ThreadView({ sessionId, onNavigateThread }: ThreadViewProps) {
   return (
     <InspectorScreen
       sessionId={sessionId}
       client={client}
+      onNavigateThread={onNavigateThread}
       className="h-full w-full bg-(--tethys-canvas)"
     />
   );

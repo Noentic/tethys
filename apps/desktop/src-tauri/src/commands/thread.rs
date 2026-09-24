@@ -5,8 +5,8 @@ use tethys_api::ThreadApi;
 use tethys_schema::cancel::CancelState;
 use tethys_schema::queue::QueuedPrompt;
 use tethys_schema::thread::{
-    ContentBlock, CreateThread, ProviderSessionPage, ThreadBootstrap, ThreadId, ThreadSessionView,
-    ThreadSummary,
+    ContentBlock, CreateThread, ProviderControl, ProviderControlResult, ProviderSessionPage,
+    ThreadBootstrap, ThreadId, ThreadSessionView, ThreadSummary,
 };
 
 use crate::commands::CoreState;
@@ -203,7 +203,30 @@ pub async fn thread_delete_provider_session(
         .await
         .map_err(|error| error.to_string())
 }
-stub_cmd!(thread_fork);
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_provider_control(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+    control: ProviderControl,
+) -> Result<ProviderControlResult, String> {
+    state
+        .thread_provider_control(id, control)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn thread_fork(
+    state: State<'_, CoreState>,
+    id: ThreadId,
+) -> Result<ThreadBootstrap, String> {
+    state
+        .thread_fork(id)
+        .await
+        .map_err(|error| error.to_string())
+}
 
 /// `thread.archive` — see `architecture.md §12.1`.
 #[tauri::command]

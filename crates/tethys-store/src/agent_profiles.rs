@@ -21,6 +21,8 @@ pub struct AgentProfileRow {
     pub launch_spec: String,
     /// `RegistryRef` as JSON, when installed from the ACP Registry.
     pub registry_ref: Option<String>,
+    /// Stable provider identity, independent of registry install ownership.
+    pub integration_id: Option<String>,
     pub projection_target: Option<String>,
     pub preferred_protocol: Option<String>,
     pub enabled: bool,
@@ -30,15 +32,16 @@ pub struct AgentProfileRow {
 pub fn insert(conn: &Connection, row: &AgentProfileRow) -> Result<(), StoreError> {
     conn.execute(
         "INSERT INTO agent_profiles
-             (id, name, class, launch_spec, registry_ref,
+             (id, name, class, launch_spec, registry_ref, integration_id,
               projection_target, preferred_protocol, enabled)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             row.id,
             row.name,
             row.class,
             row.launch_spec,
             row.registry_ref,
+            row.integration_id,
             row.projection_target,
             row.preferred_protocol,
             row.enabled as i64,
@@ -59,14 +62,15 @@ pub fn insert(conn: &Connection, row: &AgentProfileRow) -> Result<(), StoreError
 pub fn upsert(conn: &Connection, row: &AgentProfileRow) -> Result<(), StoreError> {
     conn.execute(
         "INSERT INTO agent_profiles
-             (id, name, class, launch_spec, registry_ref,
+             (id, name, class, launch_spec, registry_ref, integration_id,
               projection_target, preferred_protocol, enabled)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
          ON CONFLICT(id) DO UPDATE SET
              name = excluded.name,
              class = excluded.class,
              launch_spec = excluded.launch_spec,
              registry_ref = excluded.registry_ref,
+             integration_id = excluded.integration_id,
              projection_target = excluded.projection_target,
              preferred_protocol = excluded.preferred_protocol,
              enabled = excluded.enabled",
@@ -76,6 +80,7 @@ pub fn upsert(conn: &Connection, row: &AgentProfileRow) -> Result<(), StoreError
             row.class,
             row.launch_spec,
             row.registry_ref,
+            row.integration_id,
             row.projection_target,
             row.preferred_protocol,
             row.enabled as i64,
@@ -92,9 +97,10 @@ pub fn update(conn: &Connection, row: &AgentProfileRow) -> Result<bool, StoreErr
              class = ?3,
              launch_spec = ?4,
              registry_ref = ?5,
-             projection_target = ?6,
-             preferred_protocol = ?7,
-             enabled = ?8
+             integration_id = ?6,
+             projection_target = ?7,
+             preferred_protocol = ?8,
+             enabled = ?9
          WHERE id = ?1",
         params![
             row.id,
@@ -102,6 +108,7 @@ pub fn update(conn: &Connection, row: &AgentProfileRow) -> Result<bool, StoreErr
             row.class,
             row.launch_spec,
             row.registry_ref,
+            row.integration_id,
             row.projection_target,
             row.preferred_protocol,
             row.enabled as i64,
@@ -119,7 +126,7 @@ pub fn delete(conn: &Connection, id: &str) -> Result<bool, StoreError> {
 /// Reads one profile.
 pub fn get(conn: &Connection, id: &str) -> Result<Option<AgentProfileRow>, StoreError> {
     conn.query_row(
-        "SELECT id, name, class, launch_spec, registry_ref,
+        "SELECT id, name, class, launch_spec, registry_ref, integration_id,
                 projection_target, preferred_protocol, enabled
          FROM agent_profiles WHERE id = ?1",
         params![id],
@@ -132,7 +139,7 @@ pub fn get(conn: &Connection, id: &str) -> Result<Option<AgentProfileRow>, Store
 /// Lists all profiles, ordered by id for stable UI output.
 pub fn list(conn: &Connection) -> Result<Vec<AgentProfileRow>, StoreError> {
     let mut statement = conn.prepare(
-        "SELECT id, name, class, launch_spec, registry_ref,
+        "SELECT id, name, class, launch_spec, registry_ref, integration_id,
                 projection_target, preferred_protocol, enabled
          FROM agent_profiles ORDER BY id",
     )?;
@@ -149,9 +156,10 @@ fn row_from_sql(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentProfileRow> {
         class: row.get(2)?,
         launch_spec: row.get(3)?,
         registry_ref: row.get(4)?,
-        projection_target: row.get(5)?,
-        preferred_protocol: row.get(6)?,
-        enabled: row.get::<_, i64>(7)? != 0,
+        integration_id: row.get(5)?,
+        projection_target: row.get(6)?,
+        preferred_protocol: row.get(7)?,
+        enabled: row.get::<_, i64>(8)? != 0,
     })
 }
 
@@ -166,6 +174,7 @@ mod tests {
             class: "manual".to_string(),
             launch_spec: r#"{"program":"my-agent","args":[],"cwd":null,"env":[]}"#.to_string(),
             registry_ref: None,
+            integration_id: None,
             projection_target: None,
             preferred_protocol: Some("V2".to_string()),
             enabled: true,
@@ -181,6 +190,7 @@ mod tests {
                 class TEXT NOT NULL,
                 launch_spec TEXT NOT NULL,
                 registry_ref TEXT,
+                integration_id TEXT,
                 projection_target TEXT,
                 preferred_protocol TEXT,
                 enabled INTEGER NOT NULL DEFAULT 1

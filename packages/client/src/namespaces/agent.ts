@@ -4,6 +4,7 @@
 //! untyped until M2.5 owns their bodies.
 
 import type {
+  AgentLoginInput,
   AgentLoginOutcome,
   AgentProfileView,
   AgentRegistryEntryView,
@@ -36,6 +37,10 @@ export function agentNamespace(call: Call) {
     // === registry ===
     registryList: () => call<AgentRegistryEntryView[]>("agent_registry_list"),
     registry_list: () => call<AgentRegistryEntryView[]>("agent_registry_list"),
+    registryUseSystem: (id: string) =>
+      call<AgentProfileView>("agent_registry_use_system", { id }),
+    registry_use_system: (id: string) =>
+      call<AgentProfileView>("agent_registry_use_system", { id }),
     registryInstall: (id: string, version?: string) =>
       call<InstallResult>("agent_registry_install", { id, version }),
     registry_install: (id: string, version?: string) =>
@@ -52,8 +57,8 @@ export function agentNamespace(call: Call) {
       call<void>("agent_connections_restart", { profileId }),
     connections_restart: (profileId: string) =>
       call<void>("agent_connections_restart", { profileId }),
-    login: (profileId: string, methodId: string) =>
-      call<AgentLoginOutcome>("agent_login", { profileId, methodId }),
+    login: (profileId: string, methodId: string, input?: AgentLoginInput) =>
+      call<AgentLoginOutcome>("agent_login", { profileId, methodId, input }),
     loginTerminalOutput: (profileId: string, terminalId: string) =>
       call<LoginTerminalOutput>("agent_login_terminal_output", {
         profileId,

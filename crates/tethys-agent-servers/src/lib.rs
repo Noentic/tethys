@@ -12,4 +12,4 @@ pub use connection_store::{
     StoreOptions,
 };
 pub use launch::LaunchSpec;
-pub use provider_integration::{ProviderIntegrationDescriptor, ProviderIntegrationRegistry};
+pub use provider_integration::ProviderIntegrationRegistry;

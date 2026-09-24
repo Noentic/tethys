@@ -25,6 +25,9 @@ export type AgentInfo = {
 	title: string | null,
 };
 
+/**  Ephemeral credentials passed to an agent's declared authenticate method. */
+export type AgentLoginInput = { kind: "api-key"; api_key: string } | { kind: "gateway"; base_url: string; provider_name: string | null; headers?: { [key in string]: string } };
+
 /**  Result of starting one declared ACP authentication method. */
 export type AgentLoginOutcome = { kind: "complete" } | { kind: "terminal"; terminal_id: string };
 
@@ -32,6 +35,8 @@ export type AgentLoginOutcome = { kind: "complete" } | { kind: "terminal"; termi
 export type AgentProfileView = {
 	id: string,
 	name: string,
+	/**  Stable provider identity, independent of registry install ownership. */
+	integration_id?: string | null,
 	class: BackendClass,
 	enabled: boolean,
 	launch_spec: LaunchSpecInput,
@@ -40,6 +45,7 @@ export type AgentProfileView = {
 	preferred_protocol: AcpProtocol | null,
 	health: ProviderHealth,
 	auth_state: AuthState,
+	provider_auth_status?: ProviderAuthStatus | null,
 	/**  Human-readable reason for `health` (e.g. `needs Node.js`). */
 	detail: string | null,
 	/**  Protocol actually negotiated at the last handshake. */
@@ -75,6 +81,10 @@ export type AgentRegistryEntryView = {
 	selection_reason: string | null,
 	install_block_reason: string | null,
 	installed: boolean,
+	/**  A compatible ACP command is already on the app's PATH and can be reused. */
+	system_available?: boolean,
+	/**  Setup guidance when a vendor CLI exists but its ACP server is missing. */
+	setup_note?: string | null,
 	pinned_version: string | null,
 	update: UpdateAvailability | null,
 	/**  Vendor compliance note where the matrix has one (PRD §2). */
@@ -129,6 +139,7 @@ export type AuthMethodView = {
 	name: string,
 	description: string | null,
 	shape: AuthMethodShape,
+	metadata?: string | null,
 };
 
 /**  Current authentication state, independent of available authentication methods. */
@@ -441,6 +452,11 @@ export type DiffSource =
 	thread_id: string,
 } }) & { BaseLatestEnd?: never; BaseWorktree?: never; HeadIndex?: never; HeadWorktree?: never; TurnStartEnd?: never; TurnStartWorktree?: never };
 
+export type DiffStatistics = {
+	added: number,
+	removed: number,
+};
+
 /**  Aggregated diff for one anchor pair. */
 export type DiffSummary = {
 	source: DiffSource,
@@ -567,8 +583,20 @@ export type ExpandedCommand = {
 	references: ComposerReference[],
 };
 
+/**  A best-effort per-turn file list reported through an ACP provider extension. */
+export type FileChangeReport = {
+	request_id: string,
+	paths: string[],
+	declared_complete: boolean,
+	truncated: boolean,
+	uncertainty: string | null,
+};
+
 /**  Host of a workspace's git remote (read-only; never an entry point). */
 export type GitHost = "github" | "gitlab" | "other";
+
+/**  Actions supported by the provider-neutral session goal control. */
+export type GoalAction = "set" | "pause" | "resume" | "clear";
 
 /**  Liveness probe result (`host.health`). */
 export type HealthStatus = {
@@ -687,6 +715,8 @@ export type NormalizedCapabilities = {
 	 *  sends elicitation requests never materializes an entry.
 	 */
 	elicitation?: boolean,
+	session_fork?: boolean,
+	provider_extensions?: ProviderExtensionCapabilities,
 };
 
 /**  Three-state field for v2 patch semantics. */
@@ -696,6 +726,8 @@ export type PermOption = {
 	option_id: string,
 	name: string,
 	kind: string | null,
+	description?: string | null,
+	metadata?: string | null,
 };
 
 export type PermOutcome = "Approved" | "Rejected" | "Cancelled";
@@ -775,6 +807,16 @@ export type ProjectionPlan = {
 /**  A file surface that a registry entry can be projected to. */
 export type ProjectionTarget = "claude-code" | "codex" | "open-code";
 
+/**  Identity reported by a connection-scoped provider auth-status extension. */
+export type ProviderAuthStatus = {
+	kind: string,
+	label: string,
+	detail: string | null,
+	email: string | null,
+	organization: string | null,
+	plan: string | null,
+};
+
 /**  A column in the attachment grid representing an ACP Provider. */
 export type ProviderColumn = {
 	id: string,
@@ -782,6 +824,11 @@ export type ProviderColumn = {
 	connected: boolean,
 	target?: ProjectionTarget | null,
 };
+
+/**  A bounded provider control. The caller cannot choose an ACP method name. */
+export type ProviderControl = { kind: "goal"; action: GoalAction; objective: string | null } | { kind: "steer"; prompt: ContentBlock[] } | { kind: "stop-async-task"; async_task_id: string } | { kind: "list-providers" } | { kind: "set-provider"; provider_id: string; api_type: string; base_url: string; headers: ProviderHeader[] } | { kind: "disable-provider"; provider_id: string };
+
+export type ProviderControlResult = { kind: "goal-updated" } | { kind: "steering"; outcome: SteeringOutcome } | { kind: "async-task-stopped"; stopped: boolean } | { kind: "providers"; providers: ProviderRoute[] } | { kind: "provider-updated" } | { kind: "provider-disabled" };
 
 /**  One untyped vendor-extension request or notification. */
 export type ProviderExtension = {
@@ -799,12 +846,48 @@ export type ProviderExtension = {
 	params: string,
 };
 
+/**  Provider extension features the client and agent both negotiated. */
+export type ProviderExtensionCapabilities = {
+	goal_actions?: string[],
+	steering?: boolean,
+	async_tasks?: boolean,
+	native_subagents?: boolean,
+	file_change_report?: boolean,
+	auth_status?: boolean,
+	provider_routing?: boolean,
+	gateway_auth?: boolean,
+};
+
+/**  A transient provider header sent through ACP routing configuration. */
+export type ProviderHeader = {
+	name: string,
+	value: string,
+};
+
 /**  Health of a profile's executable + ACP handshake (spec §5.2). */
 export type ProviderHealth = 
 /**  No check has completed yet. */
 "unknown" | "healthy" | "auth-required" | 
 /**  Program not found on PATH or missing install (e.g. Node.js for `npx`). */
 "not-found" | "error";
+
+/**
+ *  An ACP-routed upstream provider. Header values are intentionally omitted;
+ *  the protocol's list response only returns non-secret effective settings.
+ */
+export type ProviderRoute = {
+	provider_id: string,
+	supported: string[],
+	required: boolean,
+	current: ProviderRouteConfig | null,
+	metadata: string | null,
+};
+
+export type ProviderRouteConfig = {
+	api_type: string,
+	base_url: string,
+	metadata: string | null,
+};
 
 /**  One page of Provider sessions; `next_cursor` continues exclusively. */
 export type ProviderSessionPage = {
@@ -942,6 +1025,7 @@ export type SessionInfo = {
 	title: string | null,
 	updated_at: string | null,
 	goal?: Patch<SessionGoal>,
+	file_change_report?: Patch<FileChangeReport>,
 };
 
 /**
@@ -1028,6 +1112,8 @@ export type StateChanged = {
 	state: SessionState,
 };
 
+export type SteeringOutcome = "injected" | "startedNewTurn" | "failed";
+
 export type StopReason = "EndTurn" | "MaxTokens" | "MaxTurnRequests" | "StopSequence" | "Refusal" | "Cancelled" | "Error" | { Other: string };
 
 /**  An immutable event stored in the append-only event log. */
@@ -1105,6 +1191,8 @@ export type ThreadView = {
 export type ToolCallContent = ({ Text: string }) & { Diff?: never; Terminal?: never; Unknown?: never } | ({ Diff: {
 	path: string,
 	patch: string,
+	stats?: DiffStatistics | null,
+	metadata?: string | null,
 } }) & { Terminal?: never; Text?: never; Unknown?: never } | ({ Terminal: {
 	terminal_id: string,
 } }) & { Diff?: never; Text?: never; Unknown?: never } | ({ Unknown: string }) & { Diff?: never; Terminal?: never; Text?: never };
@@ -1119,9 +1207,10 @@ export type ToolCallPatch = {
 	parent_tool_call_id?: string | null,
 	locations?: ToolLocation[],
 	metadata?: string | null,
+	async_task_id?: string | null,
 };
 
-export type ToolCallStatus = "Pending" | "Executing" | "Completed" | "Failed";
+export type ToolCallStatus = "Pending" | "Executing" | "Completed" | "Failed" | "Cancelled";
 
 /**
  *  Closed ACP tool taxonomy, plus an open `Other` fallback.

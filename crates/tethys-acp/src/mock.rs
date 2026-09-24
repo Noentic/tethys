@@ -158,6 +158,7 @@ pub async fn serve_v1_with_auth(
                 );
                 let mut capabilities = acp1::AgentCapabilities::new()
                     .load_session(load_sessions)
+                    .providers(acp1::ProvidersCapabilities::new())
                     .session_capabilities(
                         acp1::SessionCapabilities::new()
                             .list(acp1::SessionListCapabilities::new())
@@ -174,6 +175,47 @@ pub async fn serve_v1_with_auth(
                         .agent_capabilities(capabilities)
                         .auth_methods(auth_methods),
                 )
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async |_request: acp1::ListProvidersRequest,
+                   responder: Responder<acp1::ListProvidersResponse>,
+                   _connection| {
+                responder.respond(acp1::ListProvidersResponse::new(vec![
+                    acp1::ProviderInfo::new(
+                        "primary",
+                        vec![acp1::LlmProtocol::OpenAi],
+                        true,
+                        Some(acp1::ProviderCurrentConfig::new(
+                            acp1::LlmProtocol::OpenAi,
+                            "https://api.example.test/v1",
+                        )),
+                    ),
+                    acp1::ProviderInfo::new(
+                        "alternate",
+                        vec![acp1::LlmProtocol::OpenAi],
+                        false,
+                        Some(acp1::ProviderCurrentConfig::new(
+                            acp1::LlmProtocol::OpenAi,
+                            "https://alternate.example.test/v1",
+                        )),
+                    ),
+                ]))
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async |_request: acp1::SetProviderRequest,
+                   responder: Responder<acp1::SetProviderResponse>,
+                   _connection| { responder.respond(acp1::SetProviderResponse::new()) },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async |_request: acp1::DisableProviderRequest,
+                   responder: Responder<acp1::DisableProviderResponse>,
+                   _connection| {
+                responder.respond(acp1::DisableProviderResponse::new())
             },
             agent_client_protocol::on_receive_request!(),
         )
@@ -743,9 +785,53 @@ mod v2 {
                         )
                         .capabilities(
                             acp2::AgentCapabilities::new()
-                                .session(acp2::SessionCapabilities::new()),
+                                .session(acp2::SessionCapabilities::new())
+                                .providers(acp2::ProvidersCapabilities::new()),
                         ),
                     )
+                },
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                async |_request: acp2::ListProvidersRequest,
+                       responder: Responder<acp2::ListProvidersResponse>,
+                       _connection: V2ConnectionTo<agent_client_protocol::Client>| {
+                    responder.respond(acp2::ListProvidersResponse::new(vec![
+                        acp2::ProviderInfo::new(
+                            "primary",
+                            vec![acp2::LlmProtocol::OpenAi],
+                            true,
+                            Some(acp2::ProviderCurrentConfig::new(
+                                acp2::LlmProtocol::OpenAi,
+                                "https://api.example.test/v1",
+                            )),
+                        ),
+                        acp2::ProviderInfo::new(
+                            "alternate",
+                            vec![acp2::LlmProtocol::OpenAi],
+                            false,
+                            Some(acp2::ProviderCurrentConfig::new(
+                                acp2::LlmProtocol::OpenAi,
+                                "https://alternate.example.test/v1",
+                            )),
+                        ),
+                    ]))
+                },
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                async |_request: acp2::SetProviderRequest,
+                       responder: Responder<acp2::SetProviderResponse>,
+                       _connection: V2ConnectionTo<agent_client_protocol::Client>| {
+                    responder.respond(acp2::SetProviderResponse::new())
+                },
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                async |_request: acp2::DisableProviderRequest,
+                       responder: Responder<acp2::DisableProviderResponse>,
+                       _connection: V2ConnectionTo<agent_client_protocol::Client>| {
+                    responder.respond(acp2::DisableProviderResponse::new())
                 },
                 agent_client_protocol::on_receive_request!(),
             )

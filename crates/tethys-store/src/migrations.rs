@@ -7,6 +7,7 @@
 //! - `0004`: Rename `projects` to `workspaces` and `threads.project_id` to `workspace_id`.
 //! - `0005`: Pre-allocate Wave 2's `workspace_trust` and `agent_profiles` tables (DDL only).
 //! - `0006`: Persist ACP thread bootstrap metadata alongside the event log.
+//! - `0007`: Persist stable Provider integration identity independently from registry ownership.
 
 use rusqlite::Connection;
 use rusqlite_migration::{Migrations, M};
@@ -144,6 +145,8 @@ pub fn migrations() -> Migrations<'static> {
         ),
         M::up("ALTER TABLE threads ADD COLUMN metadata TEXT;")
             .down("ALTER TABLE threads DROP COLUMN metadata;"),
+        M::up("ALTER TABLE agent_profiles ADD COLUMN integration_id TEXT;")
+            .down("ALTER TABLE agent_profiles DROP COLUMN integration_id;"),
     ])
 }
 

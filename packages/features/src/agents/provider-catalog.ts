@@ -30,6 +30,7 @@ export interface ProviderCatalogEntry {
   icon: string;
   support: "ready" | "soon";
   setup: ProviderSetupStep[];
+  setupNote?: string;
 }
 
 export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
@@ -40,12 +41,10 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     icon: claudeIcon,
     support: "ready",
     setup: [
-      {
-        label: "Install the CLI",
-        command: "npm install -g @anthropic-ai/claude-code",
-      },
-      { label: "Sign in once", command: "claude" },
+      { label: "Install the ACP adapter", command: "Tethys ACP Registry" },
     ],
+    setupNote:
+      "The Claude CLI alone is not an ACP server. Tethys installs the separate Claude ACP adapter; a global Claude CLI install is not required for this path.",
   },
   {
     id: "codex",
@@ -54,12 +53,10 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     icon: codexIcon,
     support: "ready",
     setup: [
-      {
-        label: "Install the CLI",
-        command: "npm install -g @openai/codex",
-      },
-      { label: "Sign in once", command: "codex login" },
+      { label: "Install the ACP adapter", command: "Tethys ACP Registry" },
     ],
+    setupNote:
+      "An installed codex CLI is not itself an ACP server. Tethys can reuse codex-acp from PATH; otherwise the adapter package is required and includes its own @openai/codex dependency, which may install a second runtime copy. Tethys does not install @openai/codex globally.",
   },
   {
     id: "opencode",
@@ -68,9 +65,13 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     icon: opencodeIcon,
     support: "ready",
     setup: [
-      { label: "Install the CLI", command: "npm i -g opencode-ai" },
-      { label: "Sign in once", command: "opencode auth login" },
+      {
+        label: "Install OpenCode or use the existing CLI",
+        command: "opencode acp",
+      },
     ],
+    setupNote:
+      "OpenCode exposes ACP through its own CLI. Tethys can launch an installed OpenCode binary with the `acp` command.",
   },
   {
     id: "antigravity",
@@ -108,13 +109,17 @@ export function providerIcon(id: string): string | undefined {
 
 /** The catalog entry that owns a profile, or null for an unrecognised profile. */
 export function catalogEntryForProfile<
-  T extends { registry_ref: { id: string } | null },
+  T extends {
+    registry_ref: { id: string } | null;
+    integration_id?: string | null;
+  },
 >(catalog: ProviderCatalogEntry[], profile: T): ProviderCatalogEntry | null {
   return (
     catalog.find(
       (entry) =>
         entry.support === "ready" &&
-        entry.registryId === profile.registry_ref?.id,
+        entry.registryId ===
+          (profile.integration_id ?? profile.registry_ref?.id),
     ) ?? null
   );
 }

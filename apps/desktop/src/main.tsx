@@ -93,7 +93,15 @@ const threadRoute = createRoute({
   },
   component: () => {
     const params = useParams({ from: threadRoute.id });
-    return <ThreadView sessionId={params.id} />;
+    const navigate = useNavigate();
+    return (
+      <ThreadView
+        sessionId={params.id}
+        onNavigateThread={(id) =>
+          void navigate({ to: "/thread/$id", params: { id } })
+        }
+      />
+    );
   },
 });
 

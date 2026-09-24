@@ -27,10 +27,11 @@ export function PlanPanel({
     (entry): entry is PlanEntry => entry.kind === "plan",
   );
   const goal = state.goal;
+  const fileChangeReport = state.fileChangeReport;
   const steps: PlanStep[] = Array.isArray(data)
     ? (data as PlanStep[])
     : (livePlan?.steps ?? []);
-  if (steps.length === 0 && !goal) {
+  if (steps.length === 0 && !goal && !fileChangeReport) {
     return null;
   }
   const complete = steps.filter((step) => step.status === "Completed").length;
@@ -56,6 +57,29 @@ export function PlanPanel({
           {goal.last_reason && (
             <p className="mt-xs text-body-sm text-(--tethys-text-muted)">
               {goal.last_reason}
+            </p>
+          )}
+        </div>
+      )}
+      {fileChangeReport && (
+        <div data-testid="file-change-report" className="mb-md">
+          <header className="mb-xs text-label-sm text-(--tethys-text-muted)">
+            Files reported · {fileChangeReport.paths.length}
+          </header>
+          <ul className="flex flex-col gap-1 text-body-sm text-(--tethys-text-secondary)">
+            {fileChangeReport.paths.map((path) => (
+              <li key={path} className="break-all font-mono text-mono-micro">
+                {path}
+              </li>
+            ))}
+          </ul>
+          {(!fileChangeReport.declared_complete ||
+            fileChangeReport.truncated) && (
+            <p className="mt-xs text-body-sm text-(--tethys-text-muted)">
+              This report may be incomplete.
+              {fileChangeReport.uncertainty
+                ? ` ${fileChangeReport.uncertainty}`
+                : ""}
             </p>
           )}
         </div>

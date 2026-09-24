@@ -46,6 +46,34 @@ export function ProviderAccordion({
     >
       <LaunchSpecEditor profile={profile} onSave={onSaveLaunchSpec} />
 
+      {profile.provider_auth_status && (
+        <SchemaFieldGroup label="Signed-in account">
+          <div
+            data-testid="provider-auth-status"
+            className="flex flex-col gap-1 text-body-sm"
+          >
+            <span className="text-(--tethys-text-primary)">
+              {profile.provider_auth_status.label}
+            </span>
+            {profile.provider_auth_status.email && (
+              <span className="text-(--tethys-text-secondary)">
+                {profile.provider_auth_status.email}
+              </span>
+            )}
+            {profile.provider_auth_status.organization && (
+              <span className="text-(--tethys-text-secondary)">
+                {profile.provider_auth_status.organization}
+              </span>
+            )}
+            {profile.provider_auth_status.detail && (
+              <span className="text-(--tethys-text-muted)">
+                {profile.provider_auth_status.detail}
+              </span>
+            )}
+          </div>
+        </SchemaFieldGroup>
+      )}
+
       <SchemaFieldGroup label="Connection">
         <div className="flex flex-wrap items-center gap-sm">
           {canLogin && (

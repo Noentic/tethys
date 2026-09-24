@@ -211,24 +211,41 @@ export function PermissionRequestCard({
       </header>
       <div className="flex flex-wrap gap-sm">
         {request.options.map((option, index) => (
-          <Button
+          <div
             key={option.option_id}
-            size="sm"
-            variant={optionVariant(option.kind)}
-            aria-keyshortcuts={index < 9 ? String(index + 1) : undefined}
-            disabled={pendingOption !== null}
-            onClick={() => respond(option.option_id)}
+            className="flex max-w-full flex-col gap-1"
           >
-            {option.name}
-            {index < 9 && (
+            <Button
+              size="sm"
+              variant={optionVariant(option.kind)}
+              aria-keyshortcuts={index < 9 ? String(index + 1) : undefined}
+              aria-describedby={
+                option.description
+                  ? `permission-option-${option.option_id}`
+                  : undefined
+              }
+              disabled={pendingOption !== null}
+              onClick={() => respond(option.option_id)}
+            >
+              {option.name}
+              {index < 9 && (
+                <span
+                  aria-hidden="true"
+                  className="ml-1 rounded-xs border border-current/25 px-1 font-mono text-mono-micro opacity-70"
+                >
+                  {index + 1}
+                </span>
+              )}
+            </Button>
+            {option.description && (
               <span
-                aria-hidden="true"
-                className="ml-1 rounded-xs border border-current/25 px-1 font-mono text-mono-micro opacity-70"
+                id={`permission-option-${option.option_id}`}
+                className="max-w-64 text-body-sm text-(--tethys-text-muted)"
               >
-                {index + 1}
+                {option.description}
               </span>
             )}
-          </Button>
+          </div>
         ))}
       </div>
     </section>

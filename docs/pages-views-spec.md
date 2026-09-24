@@ -375,11 +375,11 @@ A unified configuration surface: a left-hand navigation column of `settings-nav-
 │ 🔌 Providers     │ ◉ Claude Code  [ACP v2]                           (∨) [●]│
 │ 🧩 Skills & Cmds │   Healthy — ACP handshake verified                       │
 │ 🌐 MCP Servers   │ ┌──────────────────────────────────────────────────────┐ │
-│ ⌨ Keybindings   │ │ Executable: [/usr/local/bin/claude                ]  │ │
+│ ⌨ Keybindings   │ │ Executable: [/usr/local/bin/claude-agent-acp      ]  │ │
 │                  │ │ Mode: [ ACP v2 ∨ ]   [Launch Vendor Login]           │ │
 │                  │ └──────────────────────────────────────────────────────┘ │
-│                  │ ⊘ Codex CLI                                       (∨) [○]│
-│                  │   Not found — binary missing from PATH                   │
+│                  │ ⊘ Codex ACP                                       (∨) [○]│
+│                  │   ACP adapter not found — install or select a path        │
 └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -406,7 +406,7 @@ A unified configuration surface: a left-hand navigation column of `settings-nav-
 
 **Components**
 
-- `provider-row`: vendor icon, name, status dot, protocol pills (`ACP v2`, `Early Access`, adapter name), a monospace status subtext (`Not found — Codex CLI ('codex') is not installed or not on PATH`), optional `health-badge` telemetry (`12ms` ping latency plus the handshake protocol; hidden on `Not found`), an expand chevron, and a runtime toggle switch. The dot: Red = missing CLI / connection failed, Amber = detected but disabled or `auth_required`, Green = healthy handshake, Sky = one or more active Sessions (overrides green while leased). The chevron and toggle are separately focusable: `Space` toggles, `Enter` expands.
+- `provider-row`: vendor icon, name, status dot, protocol pills (`ACP v2`, `Early Access`, adapter name), a monospace status subtext naming the actual ACP launch requirement (for example, `Codex ACP adapter not found — install or select a path`), optional `health-badge` telemetry (`12ms` ping latency plus the handshake protocol; hidden on `Not found`), an expand chevron, and a runtime toggle switch. The dot: Red = missing ACP command / connection failed, Amber = detected but disabled or `auth_required`, Green = healthy handshake, Sky = one or more active Sessions (overrides green while leased). The chevron and toggle are separately focusable: `Space` toggles, `Enter` expands.
 - `provider-accordion`: Inline collapsible configuration panel that slides down under its row with zero layout shift (sibling rows translate, never reflow text). Contains:
   1. Executable path override input with `Browse…` file picker; a validation error renders in danger `mono-micro`.
   2. Protocol & mode select — `ACP v1` | `ACP v2` | `CLI Subprocess Wrapper`; options the binary can't support show `Unsupported by this binary`.
@@ -417,7 +417,7 @@ A unified configuration surface: a left-hand navigation column of `settings-nav-
 - `toggle-switch`: instant runtime enable/disable, `Space` toggles, `aria-checked` bound to the profile's enabled state.
 - `terminal-sheet`: isolated interactive terminal overlay for vendor login, an xterm surface on the sunken well. Its title shows the exact command being run; no copy-out of secrets; closing returns focus to `Launch Vendor Login`.
 
-**UX Flow**: Missing CLI detected → user expands accordion → pastes custom binary path → clicks `Manual Health Check` → status dot flips to green. Auth-required Provider detected → user expands accordion → `LoginDialog` renders the method that Provider actually declared → the user completes or dismisses it → on close Tethys re-checks that Provider at once → on a successful re-check the status dot flips from amber to green and the Provider becomes selectable in `model-selector-popover` (§3).
+**UX Flow**: Missing ACP command detected → user expands accordion → selects its installed adapter/native ACP executable or installs the offered registry distribution → clicks `Manual Health Check` → a successful handshake turns the status dot green. Auth-required Provider detected → user expands accordion → `LoginDialog` renders the method that Provider actually declared → the user completes or dismisses it → on close Tethys re-checks that Provider at once → on a successful re-check the status dot flips from amber to green and the Provider becomes selectable in `model-selector-popover` (§3). An installed `codex` or `claude` CLI alone does not satisfy their separate ACP adapter requirement; [provider install cases](./provider-integration.md) supply the setup copy.
 
 #### 5.2.1 Profiles & activity
 

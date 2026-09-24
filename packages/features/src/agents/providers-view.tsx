@@ -4,7 +4,6 @@
 //! health poller, registry install/pin/update, login surfaces and the M1.13
 //! activity table. `settings.providers.tsx` is left a thin mount (D13).
 
-import { RefreshClockwise } from "@nebutra/icons";
 import type {
   AgentProfileView,
   AgentRegistryEntryView,
@@ -22,7 +21,6 @@ import {
   sessionsRegistryStore,
   useProviders,
 } from "@tethys/state";
-import { IconButton } from "@tethys/ui";
 import {
   useCallback,
   useEffect,
@@ -33,15 +31,17 @@ import {
 } from "react";
 import { ActivityTable } from "../monitor";
 import { LoginSurface } from "./login-surface";
-import { ProfileCard } from "./profile-card";
-import { ProviderAccordion } from "./provider-accordion";
 import {
   catalogEntryForProfile,
   PROVIDER_CATALOG,
   type ProviderCatalogEntry,
 } from "./provider-catalog";
-import { ProviderRow } from "./provider-row";
-import { ProviderSetupGuide } from "./provider-setup-guide";
+import { ProviderRegistry } from "./provider-registry";
+import {
+  type ProviderRowActions,
+  type ProviderRowItem,
+  ProviderRows,
+} from "./provider-rows";
 import { ProvidersHeader } from "./providers-header";
 import type { ProvidersClient } from "./types";
 
@@ -59,7 +59,8 @@ function joinNames(names: string[]): string {
 function entryForProfile(profile: AgentProfileView): ProviderCatalogEntry {
   return {
     id: profile.id,
-    registryId: profile.registry_ref?.id ?? profile.id,
+    registryId:
+      profile.integration_id ?? profile.registry_ref?.id ?? profile.id,
     name: profile.name,
     icon: "",
     support: "ready",
@@ -250,6 +251,37 @@ export function ProvidersView({
     [client, refresh, refreshRegistry],
   );
 
+  const attachSystemProfile = useCallback(
+    async (entry: AgentRegistryEntryView) => {
+      setBusyEntryId(entry.id);
+      try {
+        // The setup guide can render before the initial profile query settles.
+        // Read the source of truth at click time so a repair is not announced
+        // as a newly added Provider.
+        const currentProfiles = await client.agent.profilesList();
+        const alreadyConfigured = currentProfiles.some(
+          (profile) =>
+            catalogEntryForProfile(PROVIDER_CATALOG, profile)?.registryId ===
+            entry.id,
+        );
+        await client.agent.registryUseSystem(entry.id);
+        setRegistryNotice(
+          alreadyConfigured
+            ? `${entry.name} profile updated to use its ACP executable from your system PATH.`
+            : `${entry.name} profile added from its ACP executable on your system PATH.`,
+        );
+        await Promise.all([refresh(), refreshRegistry()]);
+      } catch (error) {
+        setRegistryNotice(
+          `Could not use the installed ${entry.name} adapter: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      } finally {
+        setBusyEntryId(null);
+      }
+    },
+    [client, refresh, refreshRegistry],
+  );
+
   const update = useCallback(
     async (entry: AgentRegistryEntryView) => {
       setBusyEntryId(entry.id);
@@ -321,7 +353,17 @@ export function ProvidersView({
   const extraRows = profiles
     .filter((profile) => !matchedProfileIds.has(profile.id))
     .map((profile) => ({ entry: entryForProfile(profile), profile }));
-  const rows = [...catalogRows, ...extraRows];
+  const rows: ProviderRowItem[] = [...catalogRows, ...extraRows].map(
+    ({ entry, profile }) => ({
+      entry,
+      profile,
+      systemEntry:
+        registry.find(
+          (candidate) =>
+            candidate.id === entry.registryId && candidate.system_available,
+        ) ?? null,
+    }),
+  );
 
   const isDetected = (row: {
     entry: ProviderCatalogEntry;
@@ -346,6 +388,22 @@ export function ProvidersView({
     .filter(Boolean)
     .join(". ");
 
+  const rowActions: ProviderRowActions = {
+    manualCheck: () => void manualCheck(),
+    toggleExpanded: (id) =>
+      setExpandedId((current) => (current === id ? null : id)),
+    toggleEnabled: (profile, enabled) => void toggleEnabled(profile, enabled),
+    saveLaunchSpec: (profile, spec, protocol) =>
+      void saveLaunchSpec(profile, spec, protocol),
+    login: (profile) => setLoginProfile(profile),
+    logout: (profile) => void client.agent.logout(profile.id).then(refresh),
+    restart: (profile) =>
+      void client.agent.connectionsRestart(profile.id).then(refresh),
+    viewStderr: (profile) => void viewStderr(profile),
+    attachSystem: (entry) => void attachSystemProfile(entry),
+    recheck: (profile) => void client.agent.recheck(profile.id).then(refresh),
+  };
+
   return (
     <div
       className={`flex flex-col gap-2xl ${className ?? ""}`}
@@ -359,114 +417,24 @@ export function ProvidersView({
         onIntervalChange={(seconds) => void changeInterval(seconds)}
       />
 
-      <div className="flex flex-col gap-2">
-        <div
-          data-testid="providers-detection"
-          className="flex items-center gap-3 rounded-md bg-(--tethys-surface-panel) px-4 py-3"
-        >
-          <div className="flex shrink-0 items-center gap-1">
-            {PROVIDER_CATALOG.map((entry) => (
-              <img
-                key={entry.id}
-                src={entry.icon}
-                alt=""
-                aria-hidden="true"
-                className="size-4"
-              />
-            ))}
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-body-sm text-(--tethys-text-primary)">
-              {detected} of {PROVIDER_CATALOG.length} providers detected
-            </span>
-            <span className="truncate text-label-sm text-(--tethys-text-muted)">
-              {detectionDetail}
-            </span>
-          </div>
-          <IconButton
-            size="compact"
-            label="Re-check providers"
-            onClick={() => void manualCheck()}
-            className="shrink-0 text-(--tethys-text-secondary)"
-          >
-            <RefreshClockwise className="size-4" aria-hidden="true" />
-          </IconButton>
-        </div>
+      <ProviderRows
+        rows={rows}
+        catalog={PROVIDER_CATALOG}
+        detected={detected}
+        detectionDetail={detectionDetail}
+        expandedId={expandedId}
+        stderrById={stderrById}
+        actions={rowActions}
+      />
 
-        {rows.map(({ entry, profile }) => (
-          <div key={entry.id} className="flex flex-col">
-            <ProviderRow
-              entry={entry}
-              profile={profile}
-              expanded={expandedId === entry.id}
-              onToggleExpanded={() =>
-                setExpandedId((current) =>
-                  current === entry.id ? null : entry.id,
-                )
-              }
-              onToggleEnabled={
-                profile
-                  ? (enabled) => void toggleEnabled(profile, enabled)
-                  : undefined
-              }
-            >
-              {profile && (
-                <ProviderAccordion
-                  profile={profile}
-                  stderr={stderrById[profile.id] ?? ""}
-                  onSaveLaunchSpec={(spec, protocol) =>
-                    void saveLaunchSpec(profile, spec, protocol)
-                  }
-                  onLogin={() => setLoginProfile(profile)}
-                  onLogout={() =>
-                    void client.agent.logout(profile.id).then(refresh)
-                  }
-                  onRestart={() =>
-                    void client.agent
-                      .connectionsRestart(profile.id)
-                      .then(refresh)
-                  }
-                  onViewStderr={() => void viewStderr(profile)}
-                />
-              )}
-            </ProviderRow>
-            {entry.support === "ready" && profile?.health !== "healthy" && (
-              <ProviderSetupGuide
-                entry={entry}
-                statusLabel="Not detected"
-                onRecheck={() =>
-                  void client.agent.recheck(profile?.id).then(refresh)
-                }
-              />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {registry.length > 0 && (
-        <section className="flex flex-col gap-md">
-          <h2 className="text-heading-md text-(--tethys-text-primary)">
-            ACP Registry
-          </h2>
-          {registryNotice && (
-            <p
-              className="rounded-md bg-(--tethys-status-warning-soft) px-3 py-2 text-body-sm text-(--tethys-text-primary)"
-              role="status"
-            >
-              {registryNotice}
-            </p>
-          )}
-          {registry.map((entry) => (
-            <ProfileCard
-              key={entry.id}
-              entry={entry}
-              busy={busyEntryId === entry.id}
-              onInstall={() => void install(entry)}
-              onUpdate={() => void update(entry)}
-            />
-          ))}
-        </section>
-      )}
+      <ProviderRegistry
+        entries={registry}
+        notice={registryNotice}
+        busyEntryId={busyEntryId}
+        onInstall={(entry) => void install(entry)}
+        onUseSystem={(entry) => void attachSystemProfile(entry)}
+        onUpdate={(entry) => void update(entry)}
+      />
 
       {activityProfiles.length === 0 ? (
         <ActivityTable samples={[]} />
@@ -502,7 +470,9 @@ export function ProvidersView({
             void client.agent.recheck(loginProfile.id).then(refresh);
           }}
           command={loginProfile.launch_spec.program}
-          onLogin={(methodId) => client.agent.login(loginProfile.id, methodId)}
+          onLogin={(methodId, input) =>
+            client.agent.login(loginProfile.id, methodId, input)
+          }
           onTerminalOutput={(terminalId) =>
             client.agent.loginTerminalOutput(loginProfile.id, terminalId)
           }

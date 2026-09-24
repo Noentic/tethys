@@ -48,14 +48,11 @@ impl ElicitationResolver for AutoElicit {
         _session: &SessionId,
         request: ElicitationRequest,
     ) -> ElicitationResponse {
-        let values = request
-            .fields
-            .iter()
-            .any(|field| field.key == "name")
-            .then(|| {
-                BTreeMap::from([("name".to_string(), ElicitationValue::Text("tethys".into()))])
-            })
-            .unwrap_or_default();
+        let values = if request.fields.iter().any(|field| field.key == "name") {
+            BTreeMap::from([("name".to_string(), ElicitationValue::Text("tethys".into()))])
+        } else {
+            BTreeMap::new()
+        };
         ElicitationResponse::accepted(request.req_id, values)
     }
 }

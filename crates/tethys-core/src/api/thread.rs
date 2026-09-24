@@ -148,6 +148,18 @@ impl ThreadApi for Core {
             .await
     }
 
+    async fn thread_provider_control(
+        &self,
+        id: ThreadId,
+        control: tethys_schema::thread::ProviderControl,
+    ) -> Result<tethys_schema::thread::ProviderControlResult, ApiError> {
+        self.sessions.provider_control(&id, control).await
+    }
+
+    async fn thread_fork(&self, id: ThreadId) -> Result<ThreadBootstrap, ApiError> {
+        self.sessions.fork(&id).await
+    }
+
     async fn thread_delete_provider_session(&self, id: ThreadId) -> Result<(), ApiError> {
         self.sessions.delete_provider_session(&id).await
     }

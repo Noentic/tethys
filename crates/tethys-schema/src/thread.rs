@@ -159,6 +159,7 @@ pub enum ToolCallStatus {
     Executing,
     Completed,
     Failed,
+    Cancelled,
 }
 
 /// Closed ACP tool taxonomy, plus an open `Other` fallback.
@@ -256,14 +257,31 @@ pub struct ToolCallPatch {
     pub locations: Vec<ToolLocation>,
     #[serde(default)]
     pub metadata: Option<String>,
+    #[serde(default)]
+    pub async_task_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub enum ToolCallContent {
     Text(String),
-    Diff { path: String, patch: String },
-    Terminal { terminal_id: String },
+    Diff {
+        path: String,
+        patch: String,
+        #[serde(default)]
+        stats: Option<DiffStatistics>,
+        #[serde(default)]
+        metadata: Option<String>,
+    },
+    Terminal {
+        terminal_id: String,
+    },
     Unknown(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DiffStatistics {
+    pub added: u32,
+    pub removed: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -371,6 +389,98 @@ pub struct SessionInfo {
     pub updated_at: Option<String>,
     #[serde(default)]
     pub goal: Patch<SessionGoal>,
+    #[serde(default)]
+    pub file_change_report: Patch<FileChangeReport>,
+}
+
+/// A best-effort per-turn file list reported through an ACP provider extension.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct FileChangeReport {
+    pub request_id: String,
+    pub paths: Vec<String>,
+    pub declared_complete: bool,
+    pub truncated: bool,
+    pub uncertainty: Option<String>,
+}
+
+/// Actions supported by the provider-neutral session goal control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum GoalAction {
+    Set,
+    Pause,
+    Resume,
+    Clear,
+}
+
+/// A bounded provider control. The caller cannot choose an ACP method name.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ProviderControl {
+    Goal {
+        action: GoalAction,
+        objective: Option<String>,
+    },
+    Steer {
+        prompt: Vec<ContentBlock>,
+    },
+    StopAsyncTask {
+        async_task_id: String,
+    },
+    ListProviders,
+    SetProvider {
+        provider_id: String,
+        api_type: String,
+        base_url: String,
+        headers: Vec<ProviderHeader>,
+    },
+    DisableProvider {
+        provider_id: String,
+    },
+}
+
+/// A transient provider header sent through ACP routing configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ProviderHeader {
+    pub name: String,
+    pub value: String,
+}
+
+/// An ACP-routed upstream provider. Header values are intentionally omitted;
+/// the protocol's list response only returns non-secret effective settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ProviderRoute {
+    pub provider_id: String,
+    pub supported: Vec<String>,
+    pub required: bool,
+    pub current: Option<ProviderRouteConfig>,
+    pub metadata: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ProviderRouteConfig {
+    pub api_type: String,
+    pub base_url: String,
+    pub metadata: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SteeringOutcome {
+    Injected,
+    StartedNewTurn,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ProviderControlResult {
+    GoalUpdated,
+    Steering { outcome: SteeringOutcome },
+    AsyncTaskStopped { stopped: bool },
+    Providers { providers: Vec<ProviderRoute> },
+    ProviderUpdated,
+    ProviderDisabled,
 }
 
 /// Provider-neutral goal snapshot carried by the Claude ACP goal extension.
@@ -398,6 +508,10 @@ pub struct PermOption {
     pub option_id: String,
     pub name: String,
     pub kind: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub metadata: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]

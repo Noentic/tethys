@@ -141,7 +141,7 @@ async fn run() {
         "the value lives in the keychain"
     );
 
-    core.agent_login("audit".into(), "agent".into())
+    core.agent_login("audit".into(), "agent".into(), None)
         .await
         .expect("login");
 

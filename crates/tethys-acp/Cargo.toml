@@ -6,8 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 
 [features]
-default = []
-acp-v2 = ["agent-client-protocol/unstable_protocol_v2"]
+default = ["session-fork", "llm-providers"]
+acp-v2 = ["agent-client-protocol/unstable_protocol_v2", "session-fork", "llm-providers"]
+session-fork = ["agent-client-protocol/unstable_session_fork"]
+llm-providers = ["agent-client-protocol/unstable_llm_providers"]
 mock = []
 
 [dependencies]

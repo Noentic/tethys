@@ -5,10 +5,15 @@ import {
   createInitialSessionState,
   type SessionEntry,
   sessionReducer,
+  type ToolCallEntry,
 } from "./reducers";
 
 function entry(id: string, entries: SessionEntry[]): SessionEntry | undefined {
   return entries.find((item) => item.id === id);
+}
+
+function isToolCall(entry: SessionEntry | undefined): entry is ToolCallEntry {
+  return entry?.kind === "tool_call";
 }
 
 describe("stable update coverage", () => {
@@ -167,6 +172,56 @@ describe("stable update coverage", () => {
       2,
     );
     expect(state.goal).toBeNull();
+  });
+
+  it("keeps async task identity and structured diff statistics", () => {
+    let state = createInitialSessionState("s-1", "p-1", "ws-1");
+    state = sessionReducer(
+      state,
+      {
+        type: "ToolCallUpsert",
+        body: {
+          tool_call_id: "tool-1",
+          patch: {
+            title: "Edit file",
+            status: "Executing",
+            kind: null,
+            input: null,
+            output: null,
+            async_task_id: "task-1",
+          },
+        },
+      },
+      1,
+    );
+    state = sessionReducer(
+      state,
+      {
+        type: "ToolCallContentChunk",
+        body: {
+          tool_call_id: "tool-1",
+          item: {
+            Diff: {
+              path: "src/main.rs",
+              patch: "@@ -1 +1 @@",
+              stats: { added: 3, removed: 1 },
+              metadata: '{"source":"codex"}',
+            },
+          },
+        },
+      },
+      2,
+    );
+
+    const tool = entry("tool-1", state.liveEntries);
+    expect(tool?.kind).toBe("tool_call");
+    if (isToolCall(tool)) {
+      expect(tool.asyncTaskId).toBe("task-1");
+      expect(tool.diffStats).toEqual({
+        "src/main.rs": { added: 3, removed: 1 },
+      });
+      expect(tool.metadata).toBe('{"source":"codex"}');
+    }
   });
 
   it("keeps an unknown update inspectable instead of dropping it", () => {

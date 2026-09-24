@@ -1,19 +1,32 @@
-# Provider integration surface
+# Provider integration
 
-M1.17 gives ACP-compatible agents one data-driven connection path:
+**Snapshot:** 2026-09-24. The live ACP handshake and registry entry decide actual capabilities, versions, and distributions.
 
-`registry entry → resolved launch spec → ConnectionStore → initialize → auth state → session/new → typed events → UI state`
+Tethys is an ACP client. A vendor CLI, an ACP server or adapter, and a Tethys Provider profile are distinct. One Provider row represents one agent across installed and registry launch sources. See [architecture.md](./architecture.md#provider-launch-and-feature-seams) for the shared seams.
 
-Registry profiles carry the stable registry id as `integration_id`. A new ACP
-agent that uses the standard protocol only needs registry data; it does not add
-a provider branch to the launcher, ACP mapper, thread coordinator, or UI.
+M1.17 established the registry path; M1.19 adds discovery of installed ACP
+commands. Both use the same connection path:
+
+`existing ACP command or registry entry → resolved launch spec → ConnectionStore → initialize → auth state → session/new → typed events → UI state`
+
+A known Provider profile carries a stable `integration_id` regardless of launch
+source; `registry_ref` is reserved for a pinned registry installation. A new ACP agent
+that uses the standard protocol only needs registry data or a manual launch
+profile; it does not add a provider branch to the launcher, ACP mapper, thread
+coordinator, or UI.
 
 Provider-specific behavior is optional. The backend registers one
-`ProviderIntegrationDescriptor` for initialize `_meta` and claimed namespaced
-methods. The UI registers one provider surface module with
+`AcpProviderIntegration` value for initialize `_meta`, negotiated capabilities,
+and claimed namespaced methods. The provider registry stores that value
+directly; provider id, extension methods, and handlers are not mirrored in a
+second descriptor. The UI registers one provider surface module with
 `registerProviderSurface`. Requests are scoped to a thread and correlation id;
 unknown methods remain inspectable and unclaimed requests receive
-`method-not-found`.
+`method-not-found`. Connection-level notifications reach profile state without
+a thread id. Negotiated outbound session controls and per-turn prompt metadata
+use the same shared ACP boundary; a provider module supplies only its extension
+payload. Capability negotiation uses declared metadata and handler presence; it
+does not invoke handlers with synthetic sessions, requests, or prompts.
 
 The shared session contract exposes negotiated lifecycle, prompt content,
 configuration, MCP, callback, authentication, and extension capabilities. The
@@ -28,11 +41,50 @@ catalog supplies display order and setup copy only.
 ## Adding a standards-only agent
 
 Publish or add the registry row, install it through `agent.registry_install`,
-and use the normal provider/session APIs. No Rust or TypeScript provider module
-is required.
+or point a manual profile at a verified ACP command. Use the normal
+provider/session APIs. No Rust or TypeScript provider module is required.
 
 ## Adding an extension
 
-Add one backend descriptor to the provider integration registry and one UI
-registration module. Keep extension payloads opaque at the shared boundary and
-return responses through `thread.respond_extension`.
+Add one `AcpProviderIntegration` to the backend provider integration registry
+and one UI registration module. Keep extension payloads opaque at the shared
+boundary and return responses through `thread.respond_extension`.
+
+## First five Providers
+
+| Provider | ACP command Tethys should launch | If the vendor CLI is already installed | Tethys status |
+|---|---|---|---|
+| **Claude Code** | Separate `claude-agent-acp` adapter ([source](https://github.com/agentclientprotocol/claude-agent-acp)); registry id `claude-acp` | `claude` alone is not an ACP server. Reuse an installed `claude-agent-acp`; otherwise offer its registry distribution. The adapter uses the Claude Agent SDK, so do not require a second global `claude` install just to use ACP. | Catalog says ready; code implementation is complete, with live desktop acceptance still open ([results](./claude-code-provider-results.md)). |
+| **Codex** | Separate `codex-acp` adapter ([source](https://github.com/agentclientprotocol/codex-acp)); registry id `codex-acp` | `codex` alone is not an ACP server. Reuse an installed `codex-acp`; otherwise offer the registry package. The package includes a compatible `@openai/codex` dependency. `CODEX_PATH` can select the user's existing binary at run time after a compatibility check, but does **not** prevent that package dependency from being downloaded. | Source integration and the existing-adapter action are implemented. Live adapter/auth/desktop acceptance remains open in the [results ledger](./codex-provider-results.md). |
+| **OpenCode** | Built-in `opencode acp` ([official ACP docs](https://opencode.ai/docs/acp/)); registry id `opencode` | Reuse the existing `opencode` executable directly after an ACP handshake. Offer the registry binary only when no usable local executable/profile exists. No separate adapter install. | Catalog says ready; M1.20 integration remains planned. |
+| **Antigravity CLI (`agy`)** | Separate registry server `antigravity-acp` ([Google's Zed guidance](https://antigravity.google/docs/ide/extensions/zed)); registry id `antigravity-acp` | [`agy` CLI docs](https://antigravity.google/docs/cli-install) do not document an ACP launch mode or establish that `agy` replaces `antigravity-acp`. Detecting `agy` is informational, not ACP readiness. | Catalog says soon. Tethys holds installation/connection behind its existing compliance review; do not offer an automatic install yet. |
+| **Kiro CLI** | Built-in `kiro-cli acp` ([official ACP docs](https://kiro.dev/docs/cli/acp/)) | Reuse the installed `kiro-cli` directly after an ACP handshake. No second client or adapter install. | Catalog says soon. No `kiro` entry was present in the live ACP registry at this snapshot, so there is no registry fallback to offer. |
+
+## Install and detection cases
+
+1. **Existing Tethys profile:** recheck that profile first. Do not create a second profile or overwrite a user's launch path, environment, or authentication choice.
+2. **Installed ACP executable:** find the provider's actual ACP command in the app's `PATH`, or use a path the user selected. Launch and `initialize` it before marking the Provider ready. A vendor CLI's presence alone is insufficient where an adapter is required.
+3. **No usable ACP executable:** if a supported registry distribution exists and Tethys permits it, offer one install action with the exact package/binary and version shown. Codex and Claude installs add adapters; OpenCode's registry binary is an alternative to a local `opencode`; Kiro currently has no registry fallback. Antigravity stays gated.
+4. **After install or path change:** retain one Provider row, record its launch source and actual version, recheck auth separately from executable health, and keep user credentials in the agent's auth flow or Tethys's secret handling. Tethys's app process may have a different `PATH` than an interactive shell; offer a path override when discovery misses a known install.
+
+`registry_ref` means a **pinned registry installation**. An existing-system profile has no `registry_ref`; it still carries the known integration id. Registry update/removal actions apply only to registry-owned installs. Switching source requires an explicit profile action and must preserve user data.
+
+For a known adapter, explicitly choosing **Use existing** repairs the same
+profile's executable and arguments from the detected ACP command while
+preserving its id, name, environment, working directory, protocol preference,
+projection target, and enabled state. A registry-owned profile becomes a
+system/manual launch and loses its `registry_ref`; the installed registry
+artifact is not deleted by that profile change. Tethys rechecks the ACP
+handshake afterward, and a failed handshake remains unhealthy.
+
+## Feature contract
+
+| Provider | Upstream ACP surface relevant to Tethys | Tethys work/status |
+|---|---|---|
+| Claude Code | The [official adapter](https://github.com/agentclientprotocol/claude-agent-acp) exposes prompts with context/images, tools and permissions, edit review, TODO/plan, subagents, terminals, slash commands, MCP, and opt-in goal/failure/config/permission extensions. | Shared ACP UI plus Claude-owned extension mapping exists; finish the [live acceptance matrix](./claude-code-provider-results.md). |
+| Codex | The [maintained adapter](https://github.com/agentclientprotocol/codex-acp) exposes auth, session/config/lifecycle, prompt content, tools/diffs/permissions/terminal, MCP, usage, review, commands, and opt-in goals, steering, async tasks, subagents, file-change reports, recommended values, and failure/notice/compaction metadata. | Shared controls and Codex metadata mapping are implemented, with deterministic fixture coverage. Live adapter/auth/desktop acceptance and the exact advertised feature snapshot remain setup-required; see the [Codex results ledger](./codex-provider-results.md). |
+| OpenCode | [`opencode acp`](https://opencode.ai/docs/acp/) exposes its tools, custom commands, MCP config, rules, agents, and permissions. The upstream docs currently call out `/undo` and `/redo` as unsupported over ACP. | M1.20 should use the native command and record actual handshake/feature dispositions. |
+| Antigravity CLI | Google's [ACP registry instructions](https://antigravity.google/docs/ide/extensions/zed) identify `antigravity-acp`; the [CLI installation docs](https://antigravity.google/docs/cli-install) describe `agy`. The available docs do not establish feature parity between them. | Keep the catalog entry inert until the compliance gate and separate ACP conformance review close. |
+| Kiro CLI | [`kiro-cli acp`](https://kiro.dev/docs/cli/acp/) documents new/load/prompt/cancel, mode/model changes, image prompts, streaming, and `_kiro.dev/` command, MCP OAuth/server status, compaction, and clear events. | Future direct-launch integration; map those events to commands, MCP health/auth, and session status only after handshake and UI support. |
+
+For all five, the [ACP protocol](https://agentclientprotocol.com/) is the common contract. A feature advertised by an upstream README is **not** automatically supported by Tethys: the integration must preserve its wire fields, render or control it, and record an exercised, unsupported, or unobserved disposition in [provider conformance](./provider-conformance.md). This distinction also applies to optional ACP draft and vendor extensions.

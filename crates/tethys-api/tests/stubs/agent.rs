@@ -51,7 +51,7 @@ async fn agent_defaults_return_unimplemented() {
     );
     assert_unimplemented(
         "agent.login",
-        api.agent_login("p1".into(), "method".into()).await,
+        api.agent_login("p1".into(), "method".into(), None).await,
     );
     assert_unimplemented("agent.logout", api.agent_logout("p1".into()).await);
     assert_unimplemented("agent.stderr", api.agent_stderr("p1".into()).await);

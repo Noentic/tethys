@@ -290,7 +290,7 @@ async fn unsupported_defaults_are_typed() {
         Err(ConnectionError::Unsupported(m)) => assert_eq!(m, "list_sessions_page"),
         other => panic!("expected Unsupported, got {other:?}"),
     }
-    match connection.login("token").await {
+    match connection.login("token", None).await {
         Err(ConnectionError::Unsupported(m)) => assert_eq!(m, "login"),
         other => panic!("expected Unsupported, got {other:?}"),
     }
@@ -337,6 +337,8 @@ async fn permission_resolver_is_dyn_and_returns_typed_decision() {
             option_id: "allow".into(),
             name: "Allow".into(),
             kind: None,
+            description: None,
+            metadata: None,
         }],
         metadata: None,
     };

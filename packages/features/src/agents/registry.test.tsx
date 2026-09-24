@@ -79,6 +79,8 @@ function entry(
     selection_reason: null,
     install_block_reason: null,
     installed: true,
+    system_available: false,
+    setup_note: null,
     pinned_version: "1.2.0",
     update: { kind: "available", latest: "1.3.0" },
     compliance_note: null,
@@ -96,6 +98,7 @@ function fakeClient(
       profilesUpdate: vi.fn(async () => profile()),
       profilesDelete: vi.fn(async () => {}),
       registryList: vi.fn(async () => []),
+      registryUseSystem: vi.fn(async () => profile()),
       registryInstall: vi.fn(async () => ({
         profile_id: "claude-acp",
         version: "1.3.0",

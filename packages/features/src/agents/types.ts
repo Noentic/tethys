@@ -4,6 +4,7 @@
 //! without a mock layer.
 
 import type {
+  AgentLoginInput,
   AgentLoginOutcome,
   AgentProfileView,
   AgentRegistryEntryView,
@@ -20,10 +21,15 @@ export interface ProvidersClient {
     profilesUpdate(input: ProfileInput): Promise<AgentProfileView>;
     profilesDelete(id: string): Promise<void>;
     registryList(): Promise<AgentRegistryEntryView[]>;
+    registryUseSystem(id: string): Promise<AgentProfileView>;
     registryInstall(id: string, version?: string): Promise<InstallResult>;
     registryUpdate(id: string): Promise<InstallResult>;
     connectionsRestart(profileId: string): Promise<void>;
-    login(profileId: string, methodId: string): Promise<AgentLoginOutcome>;
+    login(
+      profileId: string,
+      methodId: string,
+      input?: AgentLoginInput,
+    ): Promise<AgentLoginOutcome>;
     logout(profileId: string): Promise<void>;
     loginTerminalOutput(
       profileId: string,

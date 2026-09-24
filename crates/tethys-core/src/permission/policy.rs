@@ -263,6 +263,8 @@ mod tests {
             option_id: "allow".into(),
             name: "Allow".into(),
             kind: Some("allow_once".into()),
+            description: None,
+            metadata: None,
         }
     }
 
@@ -271,6 +273,8 @@ mod tests {
             option_id: "deny".into(),
             name: "Deny".into(),
             kind: Some("reject_once".into()),
+            description: None,
+            metadata: None,
         }
     }
 
@@ -450,6 +454,8 @@ mod tests {
                 option_id: "mystery".into(),
                 name: "Mystery".into(),
                 kind: Some("escalate".into()),
+                description: None,
+                metadata: None,
             }],
         );
         std::mem::drop(registry.park_permission(ThreadId::new("thread-1"), request));
@@ -462,6 +468,8 @@ mod tests {
             option_id: "mystery".into(),
             name: "Mystery".into(),
             kind: Some("escalate".into()),
+            description: None,
+            metadata: None,
         }));
     }
 
@@ -515,6 +523,8 @@ mod tests {
                 option_id: "x".into(),
                 name: "X".into(),
                 kind: Some(kind.into()),
+                description: None,
+                metadata: None,
             }));
         }
         for kind in ["allowlist", "allow_custom", "escalate", "reject_once"] {
@@ -522,6 +532,8 @@ mod tests {
                 option_id: "x".into(),
                 name: "X".into(),
                 kind: Some(kind.into()),
+                description: None,
+                metadata: None,
             }));
         }
     }

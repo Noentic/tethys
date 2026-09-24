@@ -5,6 +5,7 @@
 //! the caller turns that into one `recheck(profile_id)`.
 
 import type {
+  AgentLoginInput,
   AgentLoginOutcome,
   AgentProfileView,
   LoginTerminalOutput,
@@ -13,6 +14,14 @@ import { TerminalView } from "@tethys/terminal";
 import { Button, Input, ModalDialog } from "@tethys/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LoginCountdown } from "./login-countdown";
+import type { EnvSecretRow } from "./login-credentials";
+import {
+  ApiKeyCredentialForm,
+  EnvironmentCredentialForm,
+  GatewayCredentialForm,
+} from "./login-credentials";
+
+export type { EnvSecretRow } from "./login-credentials";
 
 export type LoginCloseReason =
   | "success"
@@ -20,12 +29,6 @@ export type LoginCloseReason =
   | "escape"
   | "expiry"
   | "process-exit";
-
-/** One typed environment binding; the value is input-only and transient. */
-export interface EnvSecretRow {
-  key: string;
-  value: string;
-}
 
 export interface LoginSurfaceProps {
   profile: AgentProfileView;
@@ -39,7 +42,10 @@ export interface LoginSurfaceProps {
    * which writes it to the keychain and stores only a reference (G7).
    */
   onSubmitEnv?: (rows: EnvSecretRow[]) => void | Promise<void>;
-  onLogin?: (methodId: string) => Promise<AgentLoginOutcome>;
+  onLogin?: (
+    methodId: string,
+    input?: AgentLoginInput,
+  ) => Promise<AgentLoginOutcome>;
   onTerminalOutput?: (terminalId: string) => Promise<LoginTerminalOutput>;
   onTerminalWrite?: (terminalId: string, text: string) => Promise<void>;
   onTerminalCancel?: (terminalId: string) => Promise<void>;
@@ -77,9 +83,6 @@ export function LoginSurface({
     [onClose],
   );
 
-  const [envRows, setEnvRows] = useState<Array<{ key: string; value: string }>>(
-    [{ key: "", value: "" }],
-  );
   const [code, setCode] = useState("");
   const [expired, setExpired] = useState(false);
   const [selectedMethodId, setSelectedMethodId] = useState(
@@ -102,6 +105,21 @@ export function LoginSurface({
     (candidate) => candidate.id === selectedMethodId,
   );
   const shape = method?.shape ?? null;
+  let methodMetadata: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = method?.metadata ? JSON.parse(method.metadata) : {};
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      methodMetadata = parsed as Record<string, unknown>;
+    }
+  } catch {
+    methodMetadata = {};
+  }
+  const apiKeyMethod = method?.id === "api-key" && "api-key" in methodMetadata;
+  const gatewayDeclared =
+    method?.id === "gateway" && "gateway" in methodMetadata;
+  const gatewayMethod =
+    gatewayDeclared &&
+    profile.capabilities?.provider_extensions?.gateway_auth === true;
   const methodPicker = profile.auth_methods.length > 1 && (
     <label className="flex flex-col gap-xs text-label-sm text-(--tethys-text-secondary)">
       Sign-in method
@@ -132,6 +150,8 @@ export function LoginSurface({
     if (
       !method ||
       !onLogin ||
+      apiKeyMethod ||
+      gatewayDeclared ||
       (shape?.shape !== "agent-auth" && shape?.shape !== "cli-passthrough") ||
       startedMethod.current === method.id
     ) {
@@ -163,7 +183,16 @@ export function LoginSurface({
     return () => {
       cancelled = true;
     };
-  }, [loginAttempt, method, shape, onLogin, onTerminalCancel, closeOnce]);
+  }, [
+    loginAttempt,
+    method,
+    shape,
+    onLogin,
+    onTerminalCancel,
+    closeOnce,
+    apiKeyMethod,
+    gatewayDeclared,
+  ]);
 
   useEffect(() => {
     if (!terminalId || !onTerminalOutput) return;
@@ -232,96 +261,33 @@ export function LoginSurface({
 
   const title = `Sign in to ${profile.name}`;
 
+  const submitLogin = async (input?: AgentLoginInput) => {
+    if (!method || !onLogin) return;
+    setLoginError(null);
+    try {
+      const outcome = input
+        ? await onLogin(method.id, input)
+        : await onLogin(method.id);
+      if (outcome.kind === "complete") closeOnce("success");
+      else setTerminalId(outcome.terminal_id);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   if (shape.shape === "env-var") {
-    const validKey = (key: string) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key);
-    const typed = envRows.filter((row) => row.key.trim() !== "");
-    const canSave =
-      typed.length > 0 &&
-      typed.every((row) => validKey(row.key.trim()) && row.value !== "");
-    const submit = async () => {
-      const rows = envRows
-        .map((row) => ({ key: row.key.trim(), value: row.value }))
-        .filter((row) => row.key !== "" && row.value !== "");
-      // Nothing typed stays in component state once it has been handed up.
-      setEnvRows([{ key: "", value: "" }]);
-      setLoginError(null);
-      try {
-        await onSubmitEnv?.(rows);
-        closeOnce("success");
-      } catch (error) {
-        setLoginError(error instanceof Error ? error.message : String(error));
-      }
-    };
     return (
-      <ModalDialog
-        open
-        onClose={() => closeOnce("escape")}
+      <EnvironmentCredentialForm
         title={title}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => closeOnce("cancel")}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={submit} disabled={!canSave}>
-              Save
-            </Button>
-          </>
-        }
-      >
-        <div className={className} data-testid="login-surface-env-var">
-          {methodPicker}
-          {envRows.map((row, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: positional rows
-            <div key={index} className="flex items-center gap-2 py-1">
-              <Input
-                aria-label="Environment variable name"
-                value={row.key}
-                placeholder="API_KEY"
-                onChange={(event) => {
-                  const key = event.target.value;
-                  setEnvRows((rows) =>
-                    rows.map((entry, i) =>
-                      i === index ? { ...entry, key } : entry,
-                    ),
-                  );
-                }}
-              />
-              <Input
-                aria-label="Environment variable value"
-                type="password"
-                autoComplete="off"
-                value={row.value}
-                placeholder="value"
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setEnvRows((rows) =>
-                    rows.map((entry, i) =>
-                      i === index ? { ...entry, value } : entry,
-                    ),
-                  );
-                }}
-              />
-            </div>
-          ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              setEnvRows((rows) => [...rows, { key: "", value: "" }])
-            }
-          >
-            Add variable
-          </Button>
-          {loginError && (
-            <p
-              className="text-body-sm text-(--tethys-status-danger)"
-              role="alert"
-            >
-              {loginError}
-            </p>
-          )}
-        </div>
-      </ModalDialog>
+        className={className}
+        methodPicker={methodPicker}
+        error={loginError}
+        onEscape={() => closeOnce("escape")}
+        onCancel={() => closeOnce("cancel")}
+        onSubmit={onSubmitEnv}
+        onSuccess={() => closeOnce("success")}
+        onError={setLoginError}
+      />
     );
   }
 
@@ -460,6 +426,58 @@ export function LoginSurface({
               )}
             </div>
           )}
+        </div>
+      </ModalDialog>
+    );
+  }
+
+  if (apiKeyMethod) {
+    return (
+      <ApiKeyCredentialForm
+        title={title}
+        className={className}
+        methodPicker={methodPicker}
+        error={loginError}
+        enabled={Boolean(onLogin)}
+        onEscape={() => closeOnce("escape")}
+        onCancel={() => closeOnce("cancel")}
+        onSubmit={submitLogin}
+      />
+    );
+  }
+
+  if (gatewayMethod) {
+    return (
+      <GatewayCredentialForm
+        title={title}
+        className={className}
+        methodPicker={methodPicker}
+        error={loginError}
+        enabled={Boolean(onLogin)}
+        onEscape={() => closeOnce("escape")}
+        onCancel={() => closeOnce("cancel")}
+        onSubmit={(input) => submitLogin(input)}
+      />
+    );
+  }
+
+  if (gatewayDeclared && !gatewayMethod) {
+    return (
+      <ModalDialog
+        open
+        onClose={() => closeOnce("escape")}
+        title={title}
+        footer={
+          <Button variant="ghost" onClick={() => closeOnce("cancel")}>
+            Cancel
+          </Button>
+        }
+      >
+        <div
+          data-testid="login-surface-gateway-unavailable"
+          aria-disabled="true"
+        >
+          Custom gateway sign-in is unavailable for this connection.
         </div>
       </ModalDialog>
     );
