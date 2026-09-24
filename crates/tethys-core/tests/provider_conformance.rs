@@ -131,8 +131,11 @@ fn validate_adapter_path(path: PathBuf) -> Result<PathBuf, &'static str> {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_default();
-    if !matches!(name, "codex-acp" | "codex-acp.exe") {
-        return Err("TETHYS_CONFORMANCE_ACP_PATH must point to codex-acp");
+    if !matches!(
+        name,
+        "codex-acp" | "codex-acp.exe" | "opencode" | "opencode.exe"
+    ) {
+        return Err("TETHYS_CONFORMANCE_ACP_PATH must point to codex-acp or opencode");
     }
     let path = if path.is_absolute() {
         path
@@ -257,10 +260,10 @@ fn registry_install_requires_opt_in_and_no_adapter_source() {
 }
 
 #[test]
-fn explicit_adapter_path_must_name_codex_acp() {
+fn explicit_adapter_path_must_name_supported_provider() {
     assert_eq!(
         validate_adapter_path(PathBuf::from("/tmp/other-agent")),
-        Err("TETHYS_CONFORMANCE_ACP_PATH must point to codex-acp")
+        Err("TETHYS_CONFORMANCE_ACP_PATH must point to codex-acp or opencode")
     );
 }
 
@@ -284,6 +287,28 @@ fn explicit_adapter_path_accepts_a_local_executable_fixture() {
         std::fs::set_permissions(&adapter, permissions).expect("executable fixture");
     }
     assert_eq!(validate_adapter_path(adapter.clone()), Ok(adapter));
+
+    // Also verify opencode executable fixture is accepted
+    let opencode_name = if cfg!(windows) {
+        "opencode.exe"
+    } else {
+        "opencode"
+    };
+    let opencode_adapter = directory.path().join(opencode_name);
+    std::fs::write(&opencode_adapter, "fixture").expect("fixture adapter");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(&opencode_adapter)
+            .expect("adapter metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&opencode_adapter, permissions).expect("executable fixture");
+    }
+    assert_eq!(
+        validate_adapter_path(opencode_adapter.clone()),
+        Ok(opencode_adapter)
+    );
 }
 
 #[tokio::test]
@@ -329,12 +354,12 @@ async fn run_selected_registry_provider() -> Result<(), Box<dyn std::error::Erro
         },
         None => None,
     };
-    if adapter_path.is_some() && provider_id != "codex-acp" {
+    if adapter_path.is_some() && provider_id != "codex-acp" && provider_id != "opencode" {
         report(
             &provider_id,
             Disposition::SetupRequired,
             "adapter",
-            "TETHYS_CONFORMANCE_ACP_PATH currently selects the codex-acp adapter",
+            "TETHYS_CONFORMANCE_ACP_PATH currently selects the codex-acp or opencode adapter",
         );
         return Ok(());
     }

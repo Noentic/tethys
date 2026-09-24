@@ -187,11 +187,20 @@ impl AgentApi for Core {
                 selection_reason,
                 install_block_reason,
                 installed: stored.is_some(),
-                system_available: agent.id == tethys_agent_servers::providers::codex::REGISTRY_ID
-                    && tethys_agent_servers::providers::codex::system_launch_spec().is_some(),
-                setup_note: (agent.id == tethys_agent_servers::providers::codex::REGISTRY_ID)
-                    .then(tethys_agent_servers::providers::codex::setup_note)
-                    .flatten(),
+                system_available: (agent.id == tethys_agent_servers::providers::codex::REGISTRY_ID
+                    && tethys_agent_servers::providers::codex::system_launch_spec().is_some())
+                    || (agent.id == tethys_agent_servers::providers::opencode::REGISTRY_ID
+                        && tethys_agent_servers::providers::opencode::system_launch_spec()
+                            .is_some()),
+                setup_note: match agent.id.as_str() {
+                    tethys_agent_servers::providers::codex::REGISTRY_ID => {
+                        tethys_agent_servers::providers::codex::setup_note()
+                    }
+                    tethys_agent_servers::providers::opencode::REGISTRY_ID => {
+                        tethys_agent_servers::providers::opencode::setup_note()
+                    }
+                    _ => None,
+                },
                 pinned_version: pinned,
                 update,
                 compliance_note: compliance_note(&agent.id).map(str::to_string),
@@ -201,12 +210,22 @@ impl AgentApi for Core {
     }
 
     async fn agent_registry_use_system(&self, id: String) -> Result<AgentProfileView, ApiError> {
-        let detected = if id == tethys_agent_servers::providers::codex::REGISTRY_ID {
-            tethys_agent_servers::providers::codex::system_launch_spec()
+        let (detected, default_name) = if id == tethys_agent_servers::providers::codex::REGISTRY_ID
+        {
+            (
+                tethys_agent_servers::providers::codex::system_launch_spec(),
+                "Codex",
+            )
+        } else if id == tethys_agent_servers::providers::opencode::REGISTRY_ID {
+            (
+                tethys_agent_servers::providers::opencode::system_launch_spec(),
+                "OpenCode",
+            )
         } else {
-            None
-        }
-        .ok_or_else(|| ApiError::NotFound(format!("system ACP server {id}")))?;
+            (None, "")
+        };
+        let detected =
+            detected.ok_or_else(|| ApiError::NotFound(format!("system ACP server {id}")))?;
         let rows = self.profile_rows().await?;
         let existing = rows.iter().find(|row| {
             profile::integration_id_from_row(row)
@@ -232,7 +251,7 @@ impl AgentApi for Core {
             let launch_spec = profile::launch_spec_for_system(None, detected);
             profile::row_from_input(profile::ProfileDraft {
                 id: profile_id.clone(),
-                name: "Codex",
+                name: default_name,
                 class: BackendClass::Manual,
                 launch_spec: &launch_spec,
                 registry_ref: None,

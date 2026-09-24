@@ -47,6 +47,7 @@
   --tethys-wash-on-sunken: rgba(255, 255, 255, 0.05);
   --tethys-diff-added: #5bcc80;
   --tethys-diff-removed: #ff8a84;
+  --tethys-type-offset: 0px;
 
   /* Paint order (DESIGN.md stacking). Structural, so it is not themeable. */
   --tethys-z-base: 0;

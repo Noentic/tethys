@@ -42,6 +42,7 @@ impl ProviderIntegrationRegistry {
         let integrations = [
             crate::providers::claude_code::descriptor(),
             crate::providers::codex::descriptor(),
+            crate::providers::opencode::descriptor(),
         ];
         Self {
             integrations: integrations

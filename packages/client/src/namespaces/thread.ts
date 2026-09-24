@@ -6,11 +6,11 @@ import type {
   ContentBlock,
   CreateThread,
   PermissionMode,
+  ProviderControl,
+  ProviderControlResult,
   ProviderSessionPage,
   QueuedPrompt,
   ThreadBootstrap,
-  ProviderControl,
-  ProviderControlResult,
   ThreadSessionView,
   ThreadSummary,
 } from "@tethys/bindings";

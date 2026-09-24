@@ -442,3 +442,50 @@ fn fixture_agent_ids_are_present() {
         assert!(!distribution.is_empty());
     }
 }
+
+#[test]
+fn opencode_all_platform_targets_resolve_deterministically() {
+    let registry = Registry::parse(FIXTURE).expect("fixture");
+    let opencode = registry.agent("opencode").expect("opencode agent");
+    let targets = opencode
+        .distribution
+        .binary
+        .as_ref()
+        .expect("binary targets");
+
+    let required_platforms = [
+        "darwin-aarch64",
+        "darwin-x86_64",
+        "linux-aarch64",
+        "linux-x86_64",
+        "windows-aarch64",
+        "windows-x86_64",
+    ];
+
+    for platform in required_platforms {
+        let target = targets
+            .get(platform)
+            .unwrap_or_else(|| panic!("missing target for {platform}"));
+        assert!(target
+            .archive
+            .starts_with("https://github.com/anomalyco/opencode/releases/download/"));
+        assert_eq!(target.args, vec!["acp".to_string()]);
+        assert_eq!(target.sha256.as_ref().map(|s| s.len()), Some(64));
+        assert!(target.cmd.contains("opencode"));
+    }
+}
+
+#[test]
+fn opencode_provider_descriptor_and_system_launch() {
+    assert_eq!(
+        tethys_agent_servers::providers::opencode::REGISTRY_ID,
+        "opencode"
+    );
+    let descriptor = tethys_agent_servers::providers::opencode::descriptor();
+    assert_eq!(descriptor.id, "opencode");
+    assert!(descriptor.extension_methods.is_empty());
+    assert_eq!(
+        tethys_agent_servers::providers::opencode::setup_note(),
+        None
+    );
+}

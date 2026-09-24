@@ -44,6 +44,9 @@ smoke status, and native-settings handoff are recorded in
 Codex's adapter inventory, deterministic source evidence, live setup blocker,
 and M2.5 native-settings handoff are recorded in
 `docs/codex-provider-results.md`.
+OpenCode's native ACP handshake, live observations, system detection precedence,
+and M2.5 native-settings handoff are recorded in
+`docs/opencode-provider-results.md`.
 
 Set `TETHYS_CONFORMANCE_PROVIDER_ID` and `TETHYS_CONFORMANCE_WORKSPACE`, then
 run:
@@ -61,6 +64,12 @@ explicit path is always a setup error; it never falls through to installation.
 Registry installs use a unique run directory below
 `TETHYS_CONFORMANCE_HOME` (or the system temporary directory). The `codex`
 vendor CLI by itself is not an ACP adapter and never satisfies this check.
+
+For OpenCode, the binary itself natively implements ACP via `opencode acp`
+(no adapter crate or separate package is needed). The runner checks for `opencode`
+on the process `PATH` (or via `TETHYS_CONFORMANCE_ACP_PATH`) and launches it with
+args `["acp"]`. Registry installation is only used as a fallback when no system
+binary is detected and `TETHYS_CONFORMANCE_ALLOW_REGISTRY_INSTALL=1` is set.
 
 The runner never prints credentials, launch env values, raw ACP params, or
 provider stderr: each line carries the disposition, the provider id, a stage,

@@ -56,8 +56,9 @@ export function ProviderSetupGuide({
 
           {systemAvailable ? (
             <p className="text-body-sm text-(--tethys-text-secondary)">
-              Tethys found an ACP executable on this system. Use it for this
-              Provider profile.
+              {entry.id === "opencode"
+                ? "Tethys found OpenCode on your system PATH (`opencode acp`). Use it for this Provider profile."
+                : "Tethys found an ACP executable on this system. Use it for this Provider profile."}
             </p>
           ) : (
             <>

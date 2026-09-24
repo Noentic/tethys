@@ -136,7 +136,9 @@ export function ProviderRows({
                 entry={entry}
                 statusLabel={
                   registryEntry?.system_available
-                    ? "ACP adapter found"
+                    ? entry.id === "opencode"
+                      ? "OpenCode detected"
+                      : "ACP adapter found"
                     : profile === null
                       ? "Not configured"
                       : "Not found"

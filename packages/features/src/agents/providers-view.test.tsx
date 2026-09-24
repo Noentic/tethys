@@ -393,6 +393,39 @@ describe("providers view catalog", () => {
     );
   });
 
+  it("reuses a system-detected OpenCode executable without extra downloads", async () => {
+    const opencodeRegistryEntry = registryEntry({
+      id: "opencode",
+      name: "OpenCode",
+      version: "1.0.0",
+      description: "OpenCode CLI",
+      distributions: ["npm"],
+      selected_distribution: "npm",
+      system_available: true,
+    });
+    const systemClient = client([], [opencodeRegistryEntry]);
+    render(<ProvidersView client={systemClient} />);
+
+    await screen.findByText("Set up OpenCode");
+    const guide = screen
+      .getAllByTestId("provider-setup-guide")
+      .find((element) => element.textContent?.includes("Set up OpenCode"));
+    if (!guide) throw new Error("OpenCode setup guide was not rendered");
+    expect(within(guide).getByText("OpenCode detected")).toBeTruthy();
+    expect(
+      within(guide).getByText(/Tethys found OpenCode on your system PATH/),
+    ).toBeTruthy();
+    const useExisting = within(guide).getByRole("button", {
+      name: "Use existing",
+    });
+    fireEvent.click(useExisting);
+    await waitFor(() =>
+      expect(systemClient.agent.registryUseSystem).toHaveBeenCalledWith(
+        "opencode",
+      ),
+    );
+  });
+
   it("keeps a profile the catalog does not own as its own row", async () => {
     render(
       <ProvidersView

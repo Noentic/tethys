@@ -5,7 +5,7 @@ use tethys_store::migrations::{migrate_to_latest, migrate_to_version};
 use tethys_store::EventStore;
 
 /// Mirrors the migration list in `crates/tethys-store/src/migrations.rs`.
-const LATEST_SCHEMA_VERSION: i64 = 6;
+const LATEST_SCHEMA_VERSION: i64 = 7;
 
 fn setup_temp_store_path() -> (TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("create temp dir");

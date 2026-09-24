@@ -26,6 +26,18 @@ import {
   DockedPromptCard,
 } from "./docked-prompt-card";
 
+if (typeof Range !== "undefined") {
+  Object.assign(Range.prototype, {
+    getClientRects: () => [] as unknown as DOMRectList,
+    getBoundingClientRect: () => new DOMRect(),
+  });
+}
+if (typeof Element !== "undefined") {
+  Object.assign(Element.prototype, {
+    getClientRects: () => [] as unknown as DOMRectList,
+  });
+}
+
 const SESSION = "s-docked";
 
 function option(
