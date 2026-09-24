@@ -1,6 +1,7 @@
 import { ToolCallDensityRow, TrustedFolders } from "@tethys/features";
-import { PageHeader, Select, ToggleSwitch } from "@tethys/ui";
+import { PageHeader, Select, StepperInput, ToggleSwitch } from "@tethys/ui";
 import type React from "react";
+import { useState } from "react";
 import {
   setNotificationsEnabled,
   useNotificationPreference,
@@ -9,10 +10,16 @@ import {
   CODE_FONTS,
   setCodeFont,
   setColorScheme,
+  setTypeSizePx,
   setUiFont,
+  setZoomPercent,
+  TYPE_SIZE_MAX,
+  TYPE_SIZE_MIN,
   UI_FONTS,
   useResolvedTheme,
   useThemePreference,
+  ZOOM_MAX,
+  ZOOM_MIN,
 } from "../shell/theme-preference";
 
 /** One pen `HL2ay` form row: label (+ help) at the reading width, control right. */
@@ -46,6 +53,7 @@ export function SettingsGeneralView() {
   const preference = useThemePreference();
   const resolved = useResolvedTheme();
   const notifications = useNotificationPreference();
+  const [zoomError, setZoomError] = useState(false);
 
   return (
     <div className="flex flex-col gap-2xl">
@@ -84,6 +92,35 @@ export function SettingsGeneralView() {
           </Select>
         </SettingRow>
 
+        <SettingRow
+          label="Zoom"
+          help="Use Ctrl/Cmd + + or - anywhere in the app."
+        >
+          <div className="flex flex-col items-end gap-1">
+            <StepperInput
+              label="Zoom"
+              className="w-fit"
+              value={preference.zoomPercent}
+              min={ZOOM_MIN}
+              max={ZOOM_MAX}
+              step={10}
+              formatValue={(value) => `${value}%`}
+              onChange={(value) => {
+                setZoomError(false);
+                void setZoomPercent(value).catch(() => setZoomError(true));
+              }}
+            />
+            {zoomError && (
+              <span
+                role="alert"
+                className="text-label-sm text-(--tethys-status-danger)"
+              >
+                Could not apply zoom.
+              </span>
+            )}
+          </div>
+        </SettingRow>
+
         <SettingRow label="UI font">
           <Select
             aria-label="UI font"
@@ -112,6 +149,18 @@ export function SettingsGeneralView() {
               </option>
             ))}
           </Select>
+        </SettingRow>
+
+        <SettingRow label="Typography size">
+          <StepperInput
+            label="Typography size"
+            value={preference.typeSizePx}
+            min={TYPE_SIZE_MIN}
+            max={TYPE_SIZE_MAX}
+            step={1}
+            formatValue={(value) => `${value}px`}
+            onChange={setTypeSizePx}
+          />
         </SettingRow>
 
         <SettingRow

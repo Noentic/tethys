@@ -209,6 +209,17 @@ describe("screens", () => {
       expect(screen.queryByText(/Tethys Sync/)).toBeNull();
       expect(screen.getByLabelText("Color scheme")).toBeTruthy();
       expect(screen.getByLabelText("Tool call density")).toBeTruthy();
+      const zoom = screen.getByRole("spinbutton", { name: "Zoom" });
+      expect(zoom.getAttribute("aria-valuenow")).toBe("100");
+      expect(zoom.textContent).toContain("100%");
+      expect(
+        screen.getByRole("spinbutton", { name: "Typography size" }).textContent,
+      ).toContain("14px");
+
+      fireEvent.keyDown(window, { key: "=", ctrlKey: true, cancelable: true });
+      await waitFor(() =>
+        expect(zoom.getAttribute("aria-valuenow")).toBe("110"),
+      );
     },
     IMPORT_TIMEOUT_MS,
   );

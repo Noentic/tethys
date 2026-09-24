@@ -3,12 +3,14 @@
 //! This catalog, not the remote ACP registry, decides the Providers page's list
 //! and its order: the registry is fetched from the network and only carries the
 //! entries that happen to publish there. The catalog also carries what the
-//! registry cannot — the support status (`soon` for an integration that ships
-//! later) and the setup steps the not-detected state renders.
+//! registry cannot — the Settings action gate (`ready` for a supported standard
+//! ACP setup path, `soon` while that path is unavailable) and the setup steps
+//! the not-detected state renders. Provider-specific feature acceptance stays
+//! in each integration's results ledger.
 //!
-//! A `soon` entry is inert: it renders the `Soon` chip and no toggle, and it is
-//! never matched against profiles, so a stray profile cannot make it look
-//! connectable.
+//! A `soon` entry is inert: it renders the `Soon` chip and no setup action, and
+//! it is never matched against profiles, so a stray profile cannot make it
+//! look connectable.
 
 import antigravityIcon from "./provider-icons/antigravity.svg";
 import claudeIcon from "./provider-icons/claude.svg";

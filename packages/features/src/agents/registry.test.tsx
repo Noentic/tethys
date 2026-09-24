@@ -148,22 +148,12 @@ const _clientCheck: ProvidersClient = createClient();
 
 beforeEach(() => clearProvidersForTesting());
 
-describe("profile-card registry install/pin (M1.12 U10)", () => {
-  it("shows the pin and an Update available pill without changing the pin", () => {
-    render(<ProfileCard entry={entry()} onUpdate={vi.fn()} />);
-    expect(screen.getByTestId("update-available")).toBeTruthy();
+describe("other ACP registry card", () => {
+  it("shows registry metadata without offering install or update", () => {
+    render(<ProfileCard entry={entry()} />);
     expect(screen.getByText(/Pinned 1\.2\.0/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Update" })).toBeTruthy();
-  });
-
-  it("shows Install for an entry that is not installed", () => {
-    render(
-      <ProfileCard
-        entry={entry({ installed: false, pinned_version: null, update: null })}
-        onInstall={vi.fn()}
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Install" })).toBeTruthy();
+    expect(screen.queryByTestId("update-available")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });
 

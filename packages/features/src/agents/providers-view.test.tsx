@@ -46,6 +46,37 @@ function profile(overrides: Partial<AgentProfileView> = {}): AgentProfileView {
   };
 }
 
+function registryEntry(
+  overrides: Partial<AgentRegistryEntryView> = {},
+): AgentRegistryEntryView {
+  return {
+    id: "claude-acp",
+    name: "Claude Agent",
+    version: "0.80.0",
+    description: "ACP adapter",
+    repository: null,
+    authors: [],
+    license: null,
+    license_url: null,
+    website: null,
+    icon: null,
+    preview_version: null,
+    distributions: ["npx"],
+    selected_distribution: "npx",
+    needs_node: false,
+    needs_uvx: false,
+    selection_reason: null,
+    install_block_reason: null,
+    installed: false,
+    system_available: false,
+    setup_note: null,
+    pinned_version: null,
+    update: null,
+    compliance_note: null,
+    ...overrides,
+  };
+}
+
 function client(
   profiles: AgentProfileView[],
   registry: AgentRegistryEntryView[] = [],
@@ -106,6 +137,131 @@ describe("providers view catalog", () => {
       screen.getByText(/codex CLI is not itself an ACP server/),
     ).toBeTruthy();
     expect(screen.getByText("Set up Codex")).toBeTruthy();
+  });
+
+  it.each([
+    { name: "Claude Code", registryId: "claude-acp" },
+    { name: "Codex", registryId: "codex-acp" },
+    { name: "OpenCode", registryId: "opencode" },
+  ])(
+    "installs ready Provider $name from its setup guide",
+    async ({ name, registryId }) => {
+      const providerRegistryEntry = registryEntry({
+        id: registryId,
+        name,
+      });
+      const providersClient = client([], [providerRegistryEntry]);
+      render(<ProvidersView client={providersClient} />);
+
+      const guide = (await screen.findAllByTestId("provider-setup-guide")).find(
+        (element) => element.textContent?.includes(`Set up ${name}`),
+      );
+      if (!guide) throw new Error(`${name} setup guide was not rendered`);
+      fireEvent.click(within(guide).getByRole("button", { name: "Install" }));
+
+      await waitFor(() =>
+        expect(providersClient.agent.registryInstall).toHaveBeenCalledWith(
+          registryId,
+          "0.80.0",
+        ),
+      );
+      expect(screen.queryByText("Other ACP agents")).toBeNull();
+    },
+  );
+
+  it.each([
+    {
+      name: "Claude Code",
+      registryId: "claude-acp",
+      providerId: "claude-code",
+    },
+    { name: "Codex", registryId: "codex-acp", providerId: "codex" },
+    { name: "OpenCode", registryId: "opencode", providerId: "opencode" },
+  ])(
+    "shows $name registry updates on its Provider row",
+    async ({ name, registryId, providerId }) => {
+      const claude = registryEntry({
+        id: registryId,
+        name,
+        installed: true,
+        pinned_version: "0.79.0",
+        update: { kind: "available", latest: "0.80.0" },
+      });
+      const installedProfile = profile({
+        id: registryId,
+        name,
+        integration_id: registryId,
+        registry_ref: {
+          id: registryId,
+          version: "0.79.0",
+          distribution: "npx",
+        },
+      });
+      const providersClient = client([installedProfile], [claude]);
+      render(<ProvidersView client={providersClient} />);
+
+      const row = (await screen.findAllByTestId("provider-row")).find(
+        (element) => element.dataset.provider === providerId,
+      );
+      if (!row) throw new Error(`${name} provider row was not rendered`);
+      const updateButtons = within(row).getAllByRole("button", {
+        name: "Update",
+      });
+      expect(updateButtons).toHaveLength(1);
+      expect(within(row).queryByText("Update available")).toBeNull();
+      fireEvent.click(updateButtons[0]);
+
+      await waitFor(() =>
+        expect(providersClient.agent.registryUpdate).toHaveBeenCalledWith(
+          registryId,
+        ),
+      );
+    },
+  );
+
+  it("keeps unsupported ACP Registry entries browse-only", async () => {
+    const unsupported = registryEntry({
+      id: "future-agent",
+      name: "Future Agent",
+      installed: false,
+      update: null,
+    });
+    render(<ProvidersView client={client([], [unsupported])} />);
+
+    await screen.findByText("Other ACP agents");
+    expect(screen.getByText("Future Agent")).toBeTruthy();
+    expect(screen.getByText(/Tethys setup becomes available/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Install" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Update" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use existing" })).toBeNull();
+  });
+
+  it("does not expose registry updates for an already installed unsupported Provider", async () => {
+    const unsupported = registryEntry({
+      id: "future-agent",
+      name: "Future Agent",
+      installed: true,
+      pinned_version: "0.7.0",
+      update: { kind: "available", latest: "0.8.0" },
+    });
+    const unsupportedProfile = profile({
+      id: "my-future-agent",
+      name: "My Future Agent",
+      integration_id: null,
+      registry_ref: {
+        id: "future-agent",
+        version: "0.7.0",
+        distribution: "npx",
+      },
+    });
+    render(
+      <ProvidersView client={client([unsupportedProfile], [unsupported])} />,
+    );
+
+    await screen.findByText("Other ACP agents");
+    expect(screen.getByText("My Future Agent")).toBeTruthy();
+    expect(screen.getByText(/Pinned 0\.7\.0/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Update" })).toBeNull();
   });
 
   it("uses an installed Codex ACP executable from the provider row", async () => {

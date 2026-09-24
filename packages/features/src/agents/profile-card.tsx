@@ -1,34 +1,14 @@
 //! `profile-card` (DESIGN.md): a registry entry with its version pin.
 
 import type { AgentRegistryEntryView } from "@tethys/bindings";
-import { Badge, Button, Card } from "@tethys/ui";
+import { Badge, Card } from "@tethys/ui";
 
 export interface ProfileCardProps {
   entry: AgentRegistryEntryView;
-  busy?: boolean;
-  onInstall?: () => void;
-  onUseSystem?: () => void;
-  onUpdate?: () => void;
   className?: string;
 }
 
-export function ProfileCard({
-  entry,
-  busy = false,
-  onInstall,
-  onUseSystem,
-  onUpdate,
-  className,
-}: ProfileCardProps): React.ReactElement {
-  const updateAvailable = entry.update?.kind === "available";
-  const action = entry.installed
-    ? updateAvailable
-      ? { label: "Update", handler: onUpdate }
-      : null
-    : entry.system_available
-      ? { label: "Use existing", handler: onUseSystem }
-      : { label: "Install", handler: onInstall };
-  const usesSystem = !entry.installed && entry.system_available;
+export function ProfileCard({ entry, className }: ProfileCardProps) {
   const runtime = entry.needs_node
     ? "Requires Node.js"
     : entry.needs_uvx
@@ -53,11 +33,6 @@ export function ProfileCard({
           {entry.preview_version && (
             <Badge variant="muted" size="sm">
               Preview {entry.preview_version}
-            </Badge>
-          )}
-          {updateAvailable && (
-            <Badge variant="warning" size="sm" data-testid="update-available">
-              Update available
             </Badge>
           )}
         </div>
@@ -92,23 +67,6 @@ export function ProfileCard({
           </span>
         )}
       </div>
-
-      {action && (
-        <Button
-          variant={entry.installed ? "secondary" : "primary"}
-          size="sm"
-          loading={busy}
-          disabled={
-            !entry.installed &&
-            !usesSystem &&
-            entry.install_block_reason !== null
-          }
-          title={entry.install_block_reason ?? undefined}
-          onClick={action.handler}
-        >
-          {action.label}
-        </Button>
-      )}
     </Card>
   );
 }

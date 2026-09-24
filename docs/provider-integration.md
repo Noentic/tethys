@@ -36,13 +36,54 @@ outbound blocks are rejected before a wire call.
 
 The first supported product order is Claude Code, Codex, and OpenCode. Their
 registry ids and live capability/auth results remain the source of truth; the
-catalog supplies display order and setup copy only.
+catalog supplies display order, setup copy, and the Settings action gate. As
+of this snapshot, all three current `ready` entries get first-class setup and
+update actions. Their provider-specific acceptance ledgers remain authoritative
+for unfinished scenarios; an open scenario does not remove the explicitly
+approved standard ACP setup actions.
+
+## Provider setup actions and promotion
+
+The curated catalog's `support: "ready"` value is the Settings action gate.
+Each ready Provider has one setup/update area beside its Provider row:
+
+- Prefer a verified installed ACP command and offer **Use existing** when one
+  is available. A vendor CLI is not evidence that its separate ACP adapter is
+  installed.
+- Otherwise offer **Install** only for that ready Provider's compatible,
+  permitted registry distribution. Show its package or binary, version, and
+  runtime requirement with the action.
+- Offer **Update** only when the active profile has a matching `registry_ref`
+  and the registry reports a newer version. A manual or system launch does not
+  own a registry update.
+- Do not duplicate these actions in the registry browser. `soon` Providers and
+  registry-only entries remain visible as browse-only cards. A registry entry
+  is not a Tethys support claim. A compliance or distribution block suppresses
+  the action and keeps its reason visible.
+- Keep one Provider profile across launch-source changes and preserve its
+  user-owned name, environment, working directory, enabled state, protocol
+  preference, and projection target. Update only registry-owned launch data
+  during a registry update.
+
+For future additions, promote a Provider to `ready` only when Tethys has a
+usable ACP launch source, a successful `initialize` handshake, and a verified
+basic session path through `session/new` and a prompt, including its auth path
+when authentication is required. Resolve applicable compliance gates before
+showing a setup action. Record provider-specific
+feature and live acceptance results in its results ledger; incomplete optional
+capabilities or live scenarios remain explicit there and are not implied by
+registry metadata. Keep `soon` entries inert until the basic supported path is
+ready.
 
 ## Adding a standards-only agent
 
-Publish or add the registry row, install it through `agent.registry_install`,
-or point a manual profile at a verified ACP command. Use the normal
-provider/session APIs. No Rust or TypeScript provider module is required.
+Publish or add the registry row and point a manual profile at a verified ACP
+command. Settings keeps this registry entry browse-only until the Provider
+passes the promotion rule above. The generic registry install API remains
+available to internal integration and conformance tests; it is not a user
+facing install path for an unsupported entry. Use the normal provider/session
+APIs. No Rust or TypeScript provider module is required for standards-only
+protocol support.
 
 ## Adding an extension
 
@@ -56,7 +97,7 @@ boundary and return responses through `thread.respond_extension`.
 |---|---|---|---|
 | **Claude Code** | Separate `claude-agent-acp` adapter ([source](https://github.com/agentclientprotocol/claude-agent-acp)); registry id `claude-acp` | `claude` alone is not an ACP server. Reuse an installed `claude-agent-acp`; otherwise offer its registry distribution. The adapter uses the Claude Agent SDK, so do not require a second global `claude` install just to use ACP. | Catalog says ready; code implementation is complete, with live desktop acceptance still open ([results](./claude-code-provider-results.md)). |
 | **Codex** | Separate `codex-acp` adapter ([source](https://github.com/agentclientprotocol/codex-acp)); registry id `codex-acp` | `codex` alone is not an ACP server. Reuse an installed `codex-acp`; otherwise offer the registry package. The package includes a compatible `@openai/codex` dependency. `CODEX_PATH` can select the user's existing binary at run time after a compatibility check, but does **not** prevent that package dependency from being downloaded. | Source integration and the existing-adapter action are implemented. Live adapter/auth/desktop acceptance remains open in the [results ledger](./codex-provider-results.md). |
-| **OpenCode** | Built-in `opencode acp` ([official ACP docs](https://opencode.ai/docs/acp/)); registry id `opencode` | Reuse the existing `opencode` executable directly after an ACP handshake. Offer the registry binary only when no usable local executable/profile exists. No separate adapter install. | Catalog says ready; M1.20 integration remains planned. |
+| **OpenCode** | Built-in `opencode acp` ([official ACP docs](https://opencode.ai/docs/acp/)); registry id `opencode` | The ready catalog row offers the registry distribution. Use an existing executable through a verified profile; provider-specific local discovery is offered only where implemented. No separate adapter install. | Settings offers standard ACP registry setup; M1.20 native-command verification and provider-specific acceptance remain not started. |
 | **Antigravity CLI (`agy`)** | Separate registry server `antigravity-acp` ([Google's Zed guidance](https://antigravity.google/docs/ide/extensions/zed)); registry id `antigravity-acp` | [`agy` CLI docs](https://antigravity.google/docs/cli-install) do not document an ACP launch mode or establish that `agy` replaces `antigravity-acp`. Detecting `agy` is informational, not ACP readiness. | Catalog says soon. Tethys holds installation/connection behind its existing compliance review; do not offer an automatic install yet. |
 | **Kiro CLI** | Built-in `kiro-cli acp` ([official ACP docs](https://kiro.dev/docs/cli/acp/)) | Reuse the installed `kiro-cli` directly after an ACP handshake. No second client or adapter install. | Catalog says soon. No `kiro` entry was present in the live ACP registry at this snapshot, so there is no registry fallback to offer. |
 
@@ -64,7 +105,7 @@ boundary and return responses through `thread.respond_extension`.
 
 1. **Existing Tethys profile:** recheck that profile first. Do not create a second profile or overwrite a user's launch path, environment, or authentication choice.
 2. **Installed ACP executable:** find the provider's actual ACP command in the app's `PATH`, or use a path the user selected. Launch and `initialize` it before marking the Provider ready. A vendor CLI's presence alone is insufficient where an adapter is required.
-3. **No usable ACP executable:** if a supported registry distribution exists and Tethys permits it, offer one install action with the exact package/binary and version shown. Codex and Claude installs add adapters; OpenCode's registry binary is an alternative to a local `opencode`; Kiro currently has no registry fallback. Antigravity stays gated.
+3. **No usable ACP executable:** for a ready catalog Provider, if a permitted registry distribution exists, offer one install action with its selected distribution and version shown. Codex and Claude installs add adapters; OpenCode's registry binary is its standard ACP launch source; Kiro currently has no registry fallback. Antigravity stays gated.
 4. **After install or path change:** retain one Provider row, record its launch source and actual version, recheck auth separately from executable health, and keep user credentials in the agent's auth flow or Tethys's secret handling. Tethys's app process may have a different `PATH` than an interactive shell; offer a path override when discovery misses a known install.
 
 `registry_ref` means a **pinned registry installation**. An existing-system profile has no `registry_ref`; it still carries the known integration id. Registry update/removal actions apply only to registry-owned installs. Switching source requires an explicit profile action and must preserve user data.
@@ -83,7 +124,7 @@ handshake afterward, and a failed handshake remains unhealthy.
 |---|---|---|
 | Claude Code | The [official adapter](https://github.com/agentclientprotocol/claude-agent-acp) exposes prompts with context/images, tools and permissions, edit review, TODO/plan, subagents, terminals, slash commands, MCP, and opt-in goal/failure/config/permission extensions. | Shared ACP UI plus Claude-owned extension mapping exists; finish the [live acceptance matrix](./claude-code-provider-results.md). |
 | Codex | The [maintained adapter](https://github.com/agentclientprotocol/codex-acp) exposes auth, session/config/lifecycle, prompt content, tools/diffs/permissions/terminal, MCP, usage, review, commands, and opt-in goals, steering, async tasks, subagents, file-change reports, recommended values, and failure/notice/compaction metadata. | Shared controls and Codex metadata mapping are implemented, with deterministic fixture coverage. Live adapter/auth/desktop acceptance and the exact advertised feature snapshot remain setup-required; see the [Codex results ledger](./codex-provider-results.md). |
-| OpenCode | [`opencode acp`](https://opencode.ai/docs/acp/) exposes its tools, custom commands, MCP config, rules, agents, and permissions. The upstream docs currently call out `/undo` and `/redo` as unsupported over ACP. | M1.20 should use the native command and record actual handshake/feature dispositions. |
+| OpenCode | [`opencode acp`](https://opencode.ai/docs/acp/) exposes its tools, custom commands, MCP config, rules, agents, and permissions. The upstream docs currently call out `/undo` and `/redo` as unsupported over ACP. | Settings can install its ready registry distribution. M1.20 still needs to verify the native command and record actual handshake/feature dispositions. |
 | Antigravity CLI | Google's [ACP registry instructions](https://antigravity.google/docs/ide/extensions/zed) identify `antigravity-acp`; the [CLI installation docs](https://antigravity.google/docs/cli-install) describe `agy`. The available docs do not establish feature parity between them. | Keep the catalog entry inert until the compliance gate and separate ACP conformance review close. |
 | Kiro CLI | [`kiro-cli acp`](https://kiro.dev/docs/cli/acp/) documents new/load/prompt/cancel, mode/model changes, image prompts, streaming, and `_kiro.dev/` command, MCP OAuth/server status, compaction, and clear events. | Future direct-launch integration; map those events to commands, MCP health/auth, and session status only after handshake and UI support. |
 

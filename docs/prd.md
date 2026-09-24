@@ -31,7 +31,7 @@ One lightweight desktop window to run, supervise, and review coding agents from 
 | ID | Goal | Success measure |
 |---|---|---|
 | G1 | Run many agent threads across many workspaces at once | ≥ 8 active threads with smooth UI (p95 frame < 16 ms) |
-| G2 | Work with any standard agent | Any ACP Registry agent can be added without code changes |
+| G2 | Work with standard agents | Create a manual ACP profile for any standard agent without code changes; Settings exposes ACP Registry setup actions only for Providers marked ready in Tethys's curated catalog |
 | G3 | No collisions | In a git workspace, write‑capable threads get their own worktree by default; no agent writes outside the thread's root |
 | G4 | Review and undo by turn | Every turn has a diff and a restore point, ready within 300 ms for typical changes |
 | G5 | Configure once | One MCP and skill setup reaches every supported agent, with preview and rollback |
@@ -75,6 +75,8 @@ Tethys maintains a published **vendor compliance matrix**: backend class × sign
 
 **First-class Providers.** The Providers Tethys connects and verifies first, against installed binaries, are **Claude Code**, **Codex**, and **OpenCode**. All three come from the official ACP Registry and exercise the generic integration path; provider-owned adapters are limited to negotiated extensions. Kiro and other Providers follow as rolling additions. The integration plan is Wave 2.5 in [milestone.md](./milestone.md).
 
+Settings / Providers keeps the ACP Registry browseable, but entries outside the ready Provider catalog have no Install, Use existing, or Update action. Users can still add a known ACP executable through `Add Custom ACP Server`. Registry-driven setup is promoted with a Provider integration, not by registry publication alone.
+
 **Antigravity is not in the first-class set, and is gated on a compliance determination.** It is technically connectable: the ACP Registry lists `antigravity-acp`, a Google-distributed ACP server binary. But Antigravity's terms (§6) state that "using third party software, tools, or services to access the Service … is a breach of this Agreement" and may lead to suspension or termination of the user's Antigravity and/or Gemini CLI accounts. Whether running Google's own ACP server inside a third-party client falls under that clause is a determination the vendor compliance matrix has not made, and the matrix's Google row covers API-key and Google Cloud ADC sign-in only. Tethys will not expose a user's account to that risk on an assumption, so any future integration remains gated outside Wave 2.5. Config-sync targets for Antigravity (SYN‑05, SYN‑11) are file operations that never touch the subscription and are not changed by this note.
 
 ---
@@ -85,7 +87,7 @@ Tethys maintains a published **vendor compliance matrix**: backend class × sign
 
 | ID | Requirement | Pri |
 |---|---|---|
-| AGT‑01 | Create agent profiles manually or install them from the ACP Registry, with version pinning and opt‑in updates | P0 |
+| AGT‑01 | Create manual ACP profiles; install and update registry distributions only for Providers marked ready in the curated catalog, with version pinning and opt‑in updates | P0 |
 | AGT‑02 | Support backend classes A and B | P0 |
 | AGT‑03 | Support backend class C for vendors confirmed under PD‑2 | P1 |
 | AGT‑04 | Run multiple concurrent threads per workspace, across multiple workspaces (one at a time in a folder with no git, WT‑11) | P0 |

@@ -5,9 +5,17 @@
 //! `prefers-color-scheme` and re-applies when the OS setting changes, so the
 //! window never needs a reload. Custom theme manifests stay out of scope.
 
+import { isTauri } from "@tauri-apps/api/core";
 import { useSyncExternalStore } from "react";
 
 export type ColorScheme = "system" | "dark" | "light";
+
+export const ZOOM_MIN = 50;
+export const ZOOM_MAX = 200;
+export const ZOOM_STEP = 10;
+export const TYPE_SIZE_MIN = 13;
+export const TYPE_SIZE_MAX = 18;
+export const DEFAULT_TYPE_SIZE = 14;
 
 /** Picker label → CSS font stack; the first entry of each list is the default. */
 export const UI_FONTS: Record<string, string> = {
@@ -26,6 +34,8 @@ export interface ThemePreference {
   scheme: ColorScheme;
   uiFont: string;
   codeFont: string;
+  zoomPercent: number;
+  typeSizePx: number;
 }
 
 const STORAGE_KEY = "tethys.theme-preference";
@@ -33,16 +43,22 @@ const DEFAULT_PREFERENCE: ThemePreference = {
   scheme: "dark",
   uiFont: "Geist Sans",
   codeFont: "Geist Mono",
+  zoomPercent: 100,
+  typeSizePx: DEFAULT_TYPE_SIZE,
 };
 
 const listeners = new Set<() => void>();
 let current: ThemePreference = read();
+let requestedZoomPercent = current.zoomPercent;
+let zoomQueue = Promise.resolve();
 
 function read(): ThemePreference {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_PREFERENCE;
     const parsed = JSON.parse(raw) as Partial<ThemePreference>;
+    const zoomPercent = parsed.zoomPercent;
+    const typeSizePx = parsed.typeSizePx;
     return {
       scheme:
         parsed.scheme === "light" || parsed.scheme === "system"
@@ -56,6 +72,21 @@ function read(): ThemePreference {
         parsed.codeFont && CODE_FONTS[parsed.codeFont] !== undefined
           ? parsed.codeFont
           : DEFAULT_PREFERENCE.codeFont,
+      zoomPercent:
+        typeof zoomPercent === "number" &&
+        Number.isInteger(zoomPercent) &&
+        zoomPercent >= ZOOM_MIN &&
+        zoomPercent <= ZOOM_MAX &&
+        zoomPercent % ZOOM_STEP === 0
+          ? zoomPercent
+          : DEFAULT_PREFERENCE.zoomPercent,
+      typeSizePx:
+        typeof typeSizePx === "number" &&
+        Number.isInteger(typeSizePx) &&
+        typeSizePx >= TYPE_SIZE_MIN &&
+        typeSizePx <= TYPE_SIZE_MAX
+          ? typeSizePx
+          : DEFAULT_PREFERENCE.typeSizePx,
     };
   } catch {
     return DEFAULT_PREFERENCE;
@@ -98,6 +129,10 @@ export function applyThemePreference(
   root.setAttribute("data-theme", resolveScheme(preference.scheme));
   applyFontStack("--font-sans", UI_FONTS[preference.uiFont] ?? "");
   applyFontStack("--font-mono", CODE_FONTS[preference.codeFont] ?? "");
+  const typeOffset = preference.typeSizePx - DEFAULT_TYPE_SIZE;
+  if (typeOffset)
+    root.style.setProperty("--tethys-type-offset", `${typeOffset}px`);
+  else root.style.removeProperty("--tethys-type-offset");
 }
 
 function write(next: ThemePreference): void {
@@ -128,6 +163,56 @@ export function setUiFont(uiFont: string): void {
 export function setCodeFont(codeFont: string): void {
   if (CODE_FONTS[codeFont] === undefined) return;
   write({ ...current, codeFont });
+}
+
+export function setTypeSizePx(typeSizePx: number): void {
+  if (!Number.isFinite(typeSizePx)) return;
+  const value = Math.min(
+    TYPE_SIZE_MAX,
+    Math.max(TYPE_SIZE_MIN, Math.round(typeSizePx)),
+  );
+  write({ ...current, typeSizePx: value });
+}
+
+async function applyZoom(zoomPercent: number): Promise<void> {
+  const root = globalThis.document?.documentElement;
+  if (isTauri()) {
+    const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+    await getCurrentWebview().setZoom(zoomPercent / 100);
+  } else if (root) {
+    if (zoomPercent === 100) root.style.removeProperty("zoom");
+    else root.style.setProperty("zoom", String(zoomPercent / 100));
+  }
+}
+
+export function applyStoredZoom(): Promise<void> {
+  return applyZoom(current.zoomPercent);
+}
+
+export function setZoomPercent(zoomPercent: number): Promise<void> {
+  if (!Number.isFinite(zoomPercent)) return Promise.resolve();
+  const value = Math.min(
+    ZOOM_MAX,
+    Math.max(ZOOM_MIN, Math.round(zoomPercent / ZOOM_STEP) * ZOOM_STEP),
+  );
+  requestedZoomPercent = value;
+
+  const request = zoomQueue.then(async () => {
+    await applyZoom(value);
+    write({ ...current, zoomPercent: value });
+  });
+  zoomQueue = request.catch(() => {
+    if (requestedZoomPercent === value) {
+      requestedZoomPercent = current.zoomPercent;
+    }
+  });
+  return request;
+}
+
+export function stepZoom(direction: "in" | "out"): Promise<void> {
+  return setZoomPercent(
+    requestedZoomPercent + (direction === "in" ? ZOOM_STEP : -ZOOM_STEP),
+  );
 }
 
 /** The resolved theme, for a control that names what is on screen right now. */

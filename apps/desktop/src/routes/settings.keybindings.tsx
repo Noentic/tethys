@@ -16,6 +16,8 @@ const BINDINGS: Binding[] = [
   { action: "Close tab", keys: ["Ctrl", "W"], scope: "Global" },
   { action: "Toggle sessions sidebar", keys: ["Ctrl", "B"], scope: "Global" },
   { action: "Toggle inspector", keys: ["Ctrl", "I"], scope: "Global" },
+  { action: "Zoom in", keys: ["Ctrl", "+"], scope: "Global" },
+  { action: "Zoom out", keys: ["Ctrl", "-"], scope: "Global" },
   { action: "Open settings", keys: ["Ctrl", ","], scope: "Global" },
   { action: "Unstack top modal / drawer", keys: ["Esc"], scope: "Global" },
   { action: "Submit prompt", keys: ["Ctrl", "Enter"], scope: "Editor" },

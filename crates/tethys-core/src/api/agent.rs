@@ -256,6 +256,7 @@ impl AgentApi for Core {
         id: String,
         version: Option<String>,
     ) -> Result<InstallResult, ApiError> {
+        registry::ensure_registry_install_allowed(&id)?;
         let registry = self.registry().await?;
         let agent = registry
             .agent(&id)
@@ -274,25 +275,30 @@ impl AgentApi for Core {
     }
 
     async fn agent_registry_update(&self, id: String) -> Result<InstallResult, ApiError> {
+        registry::ensure_registry_install_allowed(&id)?;
         let registry = self.registry().await?;
         let agent = registry
             .agent(&id)
             .cloned()
             .ok_or_else(|| ApiError::NotFound(format!("registry agent {id}")))?;
         let rows = self.profile_rows().await?;
-        let existing = rows.iter().find(|row| {
-            row.id == id
-                || profile::integration_id_from_row(row)
-                    .ok()
-                    .flatten()
-                    .as_deref()
-                    == Some(id.as_str())
-        });
+        let mut existing = None;
+        for row in &rows {
+            if profile::registry_ref_from_row(row)?.is_some_and(|reference| reference.id == id) {
+                existing = Some(row);
+                break;
+            }
+        }
+        let existing = existing.ok_or_else(|| {
+            ApiError::NotFound(format!("registry installation for provider {id}"))
+        })?;
         let projection = existing
-            .and_then(|row| row.projection_target.as_deref())
+            .projection_target
+            .as_deref()
             .and_then(tethys_schema::sync::ProjectionTarget::parse);
         let preferred = existing
-            .and_then(|row| row.preferred_protocol.as_deref())
+            .preferred_protocol
+            .as_deref()
             .and_then(|value| match value {
                 "V1" => Some(tethys_schema::connection::AcpProtocol::V1),
                 "V2" => Some(tethys_schema::connection::AcpProtocol::V2),

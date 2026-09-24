@@ -57,6 +57,42 @@ describe("setupGlobalKeyboardMap", () => {
     cleanup();
   });
 
+  it("triggers zoom in and out on Ctrl/Cmd + plus and minus", () => {
+    const handlers = { onZoomStep: vi.fn() };
+    const cleanup = setupGlobalKeyboardMap(handlers);
+
+    for (const event of [
+      new KeyboardEvent("keydown", {
+        key: "=",
+        ctrlKey: true,
+        cancelable: true,
+      }),
+      new KeyboardEvent("keydown", {
+        key: "+",
+        metaKey: true,
+        shiftKey: true,
+        cancelable: true,
+      }),
+    ]) {
+      window.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(handlers.onZoomStep).toHaveBeenLastCalledWith("in");
+    }
+
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "-",
+        ctrlKey: true,
+        cancelable: true,
+      }),
+    );
+    expect(handlers.onZoomStep).toHaveBeenLastCalledWith("out");
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "+" }));
+    expect(handlers.onZoomStep).toHaveBeenCalledTimes(3);
+    cleanup();
+  });
+
   it("triggers onFocusTab for Ctrl+1 through Ctrl+9", () => {
     const handlers = { onFocusTab: vi.fn() };
     const cleanup = setupGlobalKeyboardMap(handlers);

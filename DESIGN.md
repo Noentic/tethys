@@ -1028,6 +1028,7 @@ components:
     backgroundColor: "transparent"
     borderBottom: "1px solid {semantic.hairline}"
     padding: 12px 16px
+    setupActions: "ready Provider Install / Use existing in a compact guide below the row; a pinned registry update shows the version change and one Update button on the row"
   provider-accordion:
     backgroundColor: "{semantic.surface-nested}"
     border: "1px solid {semantic.hairline}"
@@ -1038,6 +1039,7 @@ components:
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.md}"
     padding: "{spacing.lg}"
+    behavior: "browse-only ACP Registry metadata; no Install, Use existing, or Update action"
   process-row:
     backgroundColor: "transparent"
     textColor: "{semantic.text-secondary}"
@@ -1483,6 +1485,8 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 | `Ctrl+O` | Cycle transcript density (Summary / Normal / Verbose) for this thread |
 | `Ctrl/Cmd+B` | Toggle the Sessions drawer (the same control as the titlebar toggle) |
 | `Ctrl/Cmd+,` | Open Settings |
+| `Ctrl/Cmd+=` | Zoom in by 10% (maximum 200%) |
+| `Ctrl/Cmd+-` | Zoom out by 10% (minimum 50%) |
 | `Enter/Space` | Open/confirm focused control |
 | `Esc` | Unstack, derived from `stacking`: close popover → palette → sheet → dialog → drawer |
 
@@ -1491,6 +1495,7 @@ All P0 actions reachable by keyboard; layout stable at 60fps under synthetic 8-s
 ## Styling & Token Rules
 
 * **Font stack**: `Geist Sans` for all structural UI labels (titles, pills, buttons, segmented items, provider names). `Geist Mono` for branch names, `session-item` labels, diff stats (`+42 −12`), hotkeys, telemetry, stepper numbers, and status subtext. `Geist Icons` for all glyphs. Never swap.
+* **Type size**: Settings / General adjusts the shared type ramp by a `-1px` to `+4px` offset from its default 14px body size. At 14px, every token matches the listed typography scale; line height, tracking, and weight stay fixed.
 * **Backgrounds**: `{semantic.canvas}` global, `{semantic.surface-rail}` chrome, `{semantic.surface-elevated}`/`{semantic.surface-overlay}` for prompt/popover/drawer/palette/sheets, `{semantic.surface-card}` cards, `{semantic.surface-nested}` accordion, `{semantic.surface-sunken}` terminal/diff wells. No other fills.
 * **Dividers**: strictly `1px solid`. `{semantic.hairline-structural}` for shell region edges and splitters; `{semantic.hairline}` for component borders and row separators; `{semantic.border-control}` for input strokes, toggle tracks and other control edges; `{semantic.hairline-strong}` for Level 3-4 surface borders. No shadows for depth — tonal steps, hairlines and the `{semantic.edge-highlight}` lit edge only.
 * **Accents**: general chrome entirely monochromatic. Color accents restricted to `{semantic.accent-agent-active}`/`{semantic.status-active-session}` streaming/running, `{semantic.status-success}` healthy/idle-ready, `{semantic.status-warning}` / `{semantic.status-danger}` health warnings, `{semantic.accent-focus}` focus + toggle-active. Effort labels, chips, and badges never use accent color except a state marker: the `status-dot`, the `state-badge`, and a state left rule.

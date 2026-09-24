@@ -8,6 +8,7 @@ export interface ShortcutHandler {
   onToggleInspector?: () => void;
   onToggleChanges?: () => void;
   onOpenComposerControl?: (control: "mode" | "model" | "effort") => void;
+  onZoomStep?: (direction: "in" | "out") => void;
 }
 
 export type UnstackType = "popover" | "drawer" | "palette" | "dialog";
@@ -87,6 +88,18 @@ export function setupGlobalKeyboardMap(handlers: ShortcutHandler): () => void {
     }
 
     if (isMetaOrCtrl) {
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        handlers.onZoomStep?.("in");
+        return;
+      }
+
+      if (e.key === "-") {
+        e.preventDefault();
+        handlers.onZoomStep?.("out");
+        return;
+      }
+
       if (e.shiftKey) {
         const key = e.key.toLowerCase();
         if (key === "d") {

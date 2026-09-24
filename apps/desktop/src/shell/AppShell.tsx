@@ -46,9 +46,11 @@ import {
   STAGE_MIN_WIDTH,
 } from "./shell-layout";
 import {
+  applyStoredZoom,
   getThemePreference,
   resolveScheme,
   setColorScheme,
+  stepZoom,
 } from "./theme-preference";
 import { WindowHeader } from "./WindowHeader";
 
@@ -206,6 +208,12 @@ export function AppShell({
 
   // Replaceable default: a registered drawer body supersedes the placeholder.
   const DrawerBody = getApprovalDrawerBody() ?? ApprovalDrawerBody;
+
+  useEffect(() => {
+    void applyStoredZoom().catch((error) => {
+      console.error("Failed to apply the saved app zoom", error);
+    });
+  }, []);
 
   // OS notifications: approval growth while blurred, and a turn settling. Both
   // respect the Settings toggles; the plugin import is lazy and Tauri-only.
@@ -454,6 +462,11 @@ export function AppShell({
       },
       onOpenSettings: () => {
         onNavigate?.("/settings/general");
+      },
+      onZoomStep: (direction) => {
+        void stepZoom(direction).catch((error) => {
+          console.error("Failed to change app zoom", error);
+        });
       },
     });
   }, [

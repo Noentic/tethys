@@ -108,7 +108,9 @@ export function ProvidersView({
   const pendingSecrets = useRef<Promise<void>>(Promise.resolve());
   const [stderrById, setStderrById] = useState<Record<string, string>>({});
   const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
-  const [registryNotice, setRegistryNotice] = useState<string | null>(null);
+  const [actionNoticeById, setActionNoticeById] = useState<
+    Record<string, string>
+  >({});
   // One process tree per Provider, so Restart and the cancel ladder target the
   // Provider whose processes are listed.
   const [samplesById, setSamplesById] = useState<
@@ -238,12 +240,16 @@ export function ProvidersView({
           result.needs_node ? "Install Node.js to launch this provider." : null,
           result.needs_uvx ? "Install uv to launch this provider." : null,
         ].filter((message): message is string => message !== null);
-        setRegistryNotice(notices.length > 0 ? notices.join(" ") : null);
+        setActionNoticeById((current) => ({
+          ...current,
+          [entry.id]: notices.join(" "),
+        }));
         await Promise.all([refresh(), refreshRegistry()]);
       } catch (error) {
-        setRegistryNotice(
-          `Could not install ${entry.name}: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        setActionNoticeById((current) => ({
+          ...current,
+          [entry.id]: `Could not install ${entry.name}: ${error instanceof Error ? error.message : String(error)}`,
+        }));
       } finally {
         setBusyEntryId(null);
       }
@@ -265,16 +271,18 @@ export function ProvidersView({
             entry.id,
         );
         await client.agent.registryUseSystem(entry.id);
-        setRegistryNotice(
-          alreadyConfigured
+        setActionNoticeById((current) => ({
+          ...current,
+          [entry.id]: alreadyConfigured
             ? `${entry.name} profile updated to use its ACP executable from your system PATH.`
             : `${entry.name} profile added from its ACP executable on your system PATH.`,
-        );
+        }));
         await Promise.all([refresh(), refreshRegistry()]);
       } catch (error) {
-        setRegistryNotice(
-          `Could not use the installed ${entry.name} adapter: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        setActionNoticeById((current) => ({
+          ...current,
+          [entry.id]: `Could not use the installed ${entry.name} adapter: ${error instanceof Error ? error.message : String(error)}`,
+        }));
       } finally {
         setBusyEntryId(null);
       }
@@ -293,12 +301,16 @@ export function ProvidersView({
           result.needs_node ? "Install Node.js to launch this provider." : null,
           result.needs_uvx ? "Install uv to launch this provider." : null,
         ].filter((message): message is string => message !== null);
-        setRegistryNotice(notices.length > 0 ? notices.join(" ") : null);
+        setActionNoticeById((current) => ({
+          ...current,
+          [entry.id]: notices.join(" "),
+        }));
         await Promise.all([refresh(), refreshRegistry()]);
       } catch (error) {
-        setRegistryNotice(
-          `Could not update ${entry.name}: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        setActionNoticeById((current) => ({
+          ...current,
+          [entry.id]: `Could not update ${entry.name}: ${error instanceof Error ? error.message : String(error)}`,
+        }));
       } finally {
         setBusyEntryId(null);
       }
@@ -353,15 +365,18 @@ export function ProvidersView({
   const extraRows = profiles
     .filter((profile) => !matchedProfileIds.has(profile.id))
     .map((profile) => ({ entry: entryForProfile(profile), profile }));
+  const setupActionProviderIds = new Set(
+    PROVIDER_CATALOG.filter((entry) => entry.support === "ready").map(
+      (entry) => entry.id,
+    ),
+  );
   const rows: ProviderRowItem[] = [...catalogRows, ...extraRows].map(
     ({ entry, profile }) => ({
       entry,
       profile,
-      systemEntry:
-        registry.find(
-          (candidate) =>
-            candidate.id === entry.registryId && candidate.system_available,
-        ) ?? null,
+      setupActionsAvailable: setupActionProviderIds.has(entry.id),
+      registryEntry:
+        registry.find((candidate) => candidate.id === entry.registryId) ?? null,
     }),
   );
 
@@ -400,6 +415,8 @@ export function ProvidersView({
     restart: (profile) =>
       void client.agent.connectionsRestart(profile.id).then(refresh),
     viewStderr: (profile) => void viewStderr(profile),
+    install: (entry) => void install(entry),
+    update: (entry) => void update(entry),
     attachSystem: (entry) => void attachSystemProfile(entry),
     recheck: (profile) => void client.agent.recheck(profile.id).then(refresh),
   };
@@ -424,16 +441,18 @@ export function ProvidersView({
         detectionDetail={detectionDetail}
         expandedId={expandedId}
         stderrById={stderrById}
+        busyEntryId={busyEntryId}
+        actionNoticeById={actionNoticeById}
         actions={rowActions}
       />
 
       <ProviderRegistry
-        entries={registry}
-        notice={registryNotice}
-        busyEntryId={busyEntryId}
-        onInstall={(entry) => void install(entry)}
-        onUseSystem={(entry) => void attachSystemProfile(entry)}
-        onUpdate={(entry) => void update(entry)}
+        entries={registry.filter(
+          (entry) =>
+            PROVIDER_CATALOG.find(
+              (provider) => provider.registryId === entry.id,
+            )?.support !== "ready",
+        )}
       />
 
       {activityProfiles.length === 0 ? (

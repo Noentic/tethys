@@ -13,7 +13,8 @@ import { ProviderSetupGuide } from "./provider-setup-guide";
 export interface ProviderRowItem {
   entry: ProviderCatalogEntry;
   profile: AgentProfileView | null;
-  systemEntry: AgentRegistryEntryView | null;
+  registryEntry: AgentRegistryEntryView | null;
+  setupActionsAvailable: boolean;
 }
 
 export interface ProviderRowActions {
@@ -29,6 +30,8 @@ export interface ProviderRowActions {
   logout: (profile: AgentProfileView) => void;
   restart: (profile: AgentProfileView) => void;
   viewStderr: (profile: AgentProfileView) => void;
+  install: (entry: AgentRegistryEntryView) => void;
+  update: (entry: AgentRegistryEntryView) => void;
   attachSystem: (entry: AgentRegistryEntryView) => void;
   recheck: (profile: AgentProfileView) => void;
 }
@@ -40,6 +43,8 @@ export function ProviderRows({
   detectionDetail,
   expandedId,
   stderrById,
+  busyEntryId,
+  actionNoticeById,
   actions,
 }: {
   rows: ProviderRowItem[];
@@ -48,6 +53,8 @@ export function ProviderRows({
   detectionDetail: string;
   expandedId: string | null;
   stderrById: Record<string, string>;
+  busyEntryId: string | null;
+  actionNoticeById: Record<string, string>;
   actions: ProviderRowActions;
 }): React.ReactElement {
   return (
@@ -85,11 +92,22 @@ export function ProviderRows({
         </IconButton>
       </div>
 
-      {rows.map(({ entry, profile, systemEntry }) => (
+      {rows.map(({ entry, profile, registryEntry, setupActionsAvailable }) => (
         <div key={entry.id} className="flex flex-col">
           <ProviderRow
             entry={entry}
             profile={profile}
+            registryEntry={registryEntry}
+            setupActionsAvailable={setupActionsAvailable}
+            busy={busyEntryId === registryEntry?.id}
+            actionNotice={
+              profile && profile.health !== "not-found"
+                ? (actionNoticeById[entry.registryId] ?? null)
+                : null
+            }
+            onUpdate={
+              registryEntry ? () => actions.update(registryEntry) : undefined
+            }
             expanded={expandedId === entry.id}
             onToggleExpanded={() => actions.toggleExpanded(entry.id)}
             onToggleEnabled={
@@ -112,21 +130,32 @@ export function ProviderRows({
               />
             )}
           </ProviderRow>
-          {entry.support === "ready" &&
+          {setupActionsAvailable &&
             (profile === null || profile.health === "not-found") && (
               <ProviderSetupGuide
                 entry={entry}
                 statusLabel={
-                  systemEntry
+                  registryEntry?.system_available
                     ? "ACP adapter found"
                     : profile === null
                       ? "Not configured"
                       : "Not found"
                 }
-                systemAvailable={systemEntry !== null}
+                registryEntry={registryEntry}
+                systemAvailable={registryEntry?.system_available === true}
+                busy={busyEntryId === registryEntry?.id}
+                notice={actionNoticeById[entry.registryId] ?? null}
+                onInstall={
+                  setupActionsAvailable &&
+                  registryEntry &&
+                  profile === null &&
+                  !registryEntry.system_available
+                    ? () => actions.install(registryEntry)
+                    : undefined
+                }
                 onUseSystem={
-                  systemEntry
-                    ? () => actions.attachSystem(systemEntry)
+                  setupActionsAvailable && registryEntry?.system_available
+                    ? () => actions.attachSystem(registryEntry)
                     : undefined
                 }
                 onRecheck={profile ? () => actions.recheck(profile) : undefined}

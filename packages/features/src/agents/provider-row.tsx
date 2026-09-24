@@ -4,8 +4,17 @@
 //! `soon` or undetected provider has no profile at all.
 
 import { ChevronDown } from "@nebutra/icons";
-import type { AgentProfileView } from "@tethys/bindings";
-import { IconButton, ProtocolPill, StatusDot, ToggleSwitch } from "@tethys/ui";
+import type {
+  AgentProfileView,
+  AgentRegistryEntryView,
+} from "@tethys/bindings";
+import {
+  Button,
+  IconButton,
+  ProtocolPill,
+  StatusDot,
+  ToggleSwitch,
+} from "@tethys/ui";
 import type { ReactNode } from "react";
 import type { ProviderCatalogEntry } from "./provider-catalog";
 import { providerDotStatus, providerSubtext } from "./provider-status";
@@ -13,6 +22,11 @@ import { providerDotStatus, providerSubtext } from "./provider-status";
 export interface ProviderRowProps {
   entry: ProviderCatalogEntry;
   profile: AgentProfileView | null;
+  setupActionsAvailable?: boolean;
+  registryEntry?: AgentRegistryEntryView | null;
+  busy?: boolean;
+  actionNotice?: string | null;
+  onUpdate?: () => void;
   expanded?: boolean;
   onToggleExpanded?: () => void;
   onToggleEnabled?: (enabled: boolean) => void;
@@ -25,6 +39,11 @@ export interface ProviderRowProps {
 export function ProviderRow({
   entry,
   profile,
+  setupActionsAvailable = false,
+  registryEntry = null,
+  busy = false,
+  actionNotice = null,
+  onUpdate,
   expanded = false,
   onToggleExpanded,
   onToggleEnabled,
@@ -39,8 +58,16 @@ export function ProviderRow({
   const subtext = soon
     ? "Integration soon — ships in a later milestone"
     : providerSubtext(profile);
+  const registryRef = profile?.registry_ref;
   const latency =
     !soon && profile?.latency_ms != null ? `${profile.latency_ms}ms` : null;
+  const updateAvailable =
+    setupActionsAvailable &&
+    entry.support === "ready" &&
+    profile !== null &&
+    registryEntry !== null &&
+    registryRef?.id === registryEntry.id &&
+    registryEntry.update?.kind === "available";
 
   return (
     <div
@@ -97,6 +124,25 @@ export function ProviderRow({
           </span>
         )}
 
+        {updateAvailable && registryRef && registryEntry && (
+          <div className="flex shrink-0 items-center gap-2">
+            <span
+              title={`Pinned ${registryRef.version}; latest ${registryEntry.version}`}
+              className="font-mono text-mono-micro text-(--tethys-text-muted)"
+            >
+              {registryRef.version} → {registryEntry.version}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={busy}
+              onClick={onUpdate}
+            >
+              Update
+            </Button>
+          </div>
+        )}
+
         {!soon && profile && (
           <>
             <IconButton
@@ -124,6 +170,14 @@ export function ProviderRow({
       </div>
 
       {expanded && children && <div className="px-4 pb-4">{children}</div>}
+      {actionNotice && (
+        <p
+          className="px-4 pb-3 text-label-sm text-(--tethys-text-secondary)"
+          role="status"
+        >
+          {actionNotice}
+        </p>
+      )}
     </div>
   );
 }

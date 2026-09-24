@@ -10,7 +10,10 @@ The standards-only vertical slice lives in
 registry id from a local registry fixture, proves no Provider descriptor is
 needed, and drives prepare → subscribe → prompt → permission, form
 elicitation, terminal, and jailed filesystem callbacks → completion → delete
-through the ordinary Core API.
+through the ordinary Core API. This is an internal protocol/conformance
+capability, not a Settings install path: registry-only entries are browse-only
+in the desktop until Tethys promotes them to a ready Provider. Users can still
+create a manual ACP profile for an executable they already know.
 
 The real-provider runner is opt in and uses the same public APIs as the desktop.
 It prints one machine-readable JSON record per run and reports one of these

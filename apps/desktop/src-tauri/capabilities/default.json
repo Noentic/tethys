@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "S0.0 minimum plus Wave 2 plugin permissions: OS notifications (M1.8) and the native folder picker (M1.16).",
+  "description": "Core window access, OS notifications, folder picking, and app zoom.",
   "windows": ["main"],
-  "permissions": ["core:default", "notification:default", "dialog:default"]
+  "permissions": [
+    "core:default",
+    "core:webview:allow-set-webview-zoom",
+    "notification:default",
+    "dialog:default"
+  ]
 }

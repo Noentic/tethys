@@ -8,23 +8,33 @@ use tethys_api::AgentApi;
 use tethys_core::health::DEFAULT_INTERVAL_SECS;
 use tethys_core::Core;
 use tethys_core::CorePaths;
-use tethys_schema::agents::{LaunchSpecInput, ProfileInput};
+use tethys_schema::agents::{EnvVarInput, LaunchSpecInput, ProfileInput};
 use tethys_schema::connection::AcpProtocol;
+use tethys_schema::sync::ProjectionTarget;
 
 /// A registry source whose document can be swapped to simulate a release.
 struct FixtureSource(Arc<Mutex<Registry>>);
 
 impl FixtureSource {
     fn new(version: &str) -> Self {
+        Self::for_entry(
+            "claude-acp",
+            "Claude Agent",
+            version,
+            &format!("@agentclientprotocol/claude-agent-acp@{version}"),
+        )
+    }
+
+    fn for_entry(id: &str, name: &str, version: &str, package: &str) -> Self {
         let registry: Registry = serde_json::from_value(serde_json::json!({
             "version": "1.0.0",
             "agents": [{
-                "id": "claude-acp",
-                "name": "Claude Agent",
+                "id": id,
+                "name": name,
                 "version": version,
                 "description": "ACP wrapper",
                 "license": "proprietary",
-                "distribution": { "npx": { "package": format!("@agentclientprotocol/claude-agent-acp@{version}") } },
+                "distribution": { "npx": { "package": package } },
             }],
             "extensions": [],
         }))
@@ -180,6 +190,33 @@ async fn registry_install_pins_and_an_upstream_release_does_not_mutate_it() {
         })
     );
 
+    let mut profile = core
+        .agent_profiles_list()
+        .await
+        .expect("profiles")
+        .into_iter()
+        .find(|profile| profile.id == installed.profile_id)
+        .expect("installed profile");
+    profile.name = "My Claude setup".into();
+    profile.launch_spec.cwd = Some("/workspace".into());
+    profile.launch_spec.env = vec![EnvVarInput {
+        key: "CLAUDE_CONFIG_DIR".into(),
+        value: "/private/claude".into(),
+    }];
+    profile.projection_target = Some(ProjectionTarget::ClaudeCode);
+    profile.preferred_protocol = Some(AcpProtocol::V2);
+    profile.enabled = false;
+    core.agent_profiles_update(ProfileInput {
+        id: Some(profile.id.clone()),
+        name: profile.name,
+        launch_spec: profile.launch_spec,
+        projection_target: profile.projection_target,
+        preferred_protocol: profile.preferred_protocol,
+        enabled: profile.enabled,
+    })
+    .await
+    .expect("customize installed profile");
+
     let updated = core
         .agent_registry_update("claude-acp".into())
         .await
@@ -189,6 +226,66 @@ async fn registry_install_pins_and_an_upstream_release_does_not_mutate_it() {
         updated.launch_spec.args[1],
         "@agentclientprotocol/claude-agent-acp@0.80.0"
     );
+    let profile = core
+        .agent_profiles_list()
+        .await
+        .expect("profiles")
+        .into_iter()
+        .find(|profile| profile.id == installed.profile_id)
+        .expect("updated profile");
+    assert_eq!(profile.name, "My Claude setup");
+    assert_eq!(profile.launch_spec.cwd.as_deref(), Some("/workspace"));
+    assert_eq!(profile.launch_spec.env[0].key, "CLAUDE_CONFIG_DIR");
+    assert_eq!(profile.launch_spec.env[0].value, "/private/claude");
+    assert_eq!(
+        profile.projection_target,
+        Some(ProjectionTarget::ClaudeCode)
+    );
+    assert_eq!(profile.preferred_protocol, Some(AcpProtocol::V2));
+    assert!(!profile.enabled);
+    assert_eq!(profile.registry_ref.as_ref().unwrap().version, "0.80.0");
+}
+
+#[tokio::test]
+async fn registry_update_requires_a_registry_owned_profile() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let source = Arc::new(FixtureSource::new("0.79.0"));
+    let core = open_core(dir.path(), source).await;
+    let mut input = profile_input("My Claude", "claude");
+    input.id = Some("claude-acp".into());
+    core.agent_profiles_create(input)
+        .await
+        .expect("manual profile");
+
+    let error = core
+        .agent_registry_update("claude-acp".into())
+        .await
+        .expect_err("manual profiles do not own registry updates");
+    assert!(matches!(error, tethys_api::ApiError::NotFound(_)));
+}
+
+#[tokio::test]
+async fn compliance_gated_registry_entries_cannot_be_installed() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let source = Arc::new(FixtureSource::for_entry(
+        "antigravity-acp",
+        "Antigravity ACP",
+        "1.0.0",
+        "antigravity-acp@1.0.0",
+    ));
+    let core = open_core(dir.path(), source).await;
+
+    let error = core
+        .agent_registry_install("antigravity-acp".into(), None)
+        .await
+        .expect_err("compliance gate");
+    assert!(matches!(error, tethys_api::ApiError::Failure { .. }));
+    assert!(error.to_string().contains("compliance review"));
+    assert!(core
+        .agent_profiles_list()
+        .await
+        .expect("profiles")
+        .is_empty());
 }
 
 #[tokio::test]
