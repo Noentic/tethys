@@ -3,14 +3,13 @@ import { ActivityOrb, cn, TruncatedText } from "@tethys/ui";
 import { useEffect, useId, useMemo, useState } from "react";
 import { isFileMutation, type ToolRun } from "../group-runs";
 import { toolDiffs, toolHeadline } from "../tool-view";
+import { DisclosureChevron } from "./disclosure-chevron";
 import { ToolAccordionRenderer } from "./tool-accordion";
-import { DisclosureChevron } from "./tool-kind-icon";
 
 /**
  * Collapses a run of consecutive tool calls into one summary row (DESIGN.md
- * `tool-run-group`). A run with a failed or awaiting member opens itself and
- * cannot be collapsed while a member awaits — something that asks the user is
- * never made unreachable.
+ * `tool-run-group`). Only a failure opens it; a call waiting on the user is
+ * answered in the request dock above the composer, not here.
  */
 export function ToolRunGroup({
   run,
@@ -21,7 +20,7 @@ export function ToolRunGroup({
   className?: string;
   onOpenLocation?: (path: string, line: number | null) => void;
 }) {
-  const [expanded, setExpanded] = useState(run.hasFailure || run.hasAwaiting);
+  const [expanded, setExpanded] = useState(run.hasFailure);
   const regionId = useId();
   // The run's edits carry their size on the summary row (P17), so a large
   // change is visible without opening the run.
@@ -48,17 +47,8 @@ export function ToolRunGroup({
       : run.summary;
 
   useEffect(() => {
-    if (run.hasFailure || run.hasAwaiting) {
-      setExpanded(true);
-    }
-  }, [run.hasFailure, run.hasAwaiting]);
-
-  const toggle = () => {
-    if (run.hasAwaiting && expanded) {
-      return;
-    }
-    setExpanded((value) => !value);
-  };
+    if (run.hasFailure) setExpanded(true);
+  }, [run.hasFailure]);
 
   return (
     <div
@@ -72,7 +62,7 @@ export function ToolRunGroup({
         aria-expanded={expanded}
         aria-controls={regionId}
         aria-busy={run.isLive || undefined}
-        onClick={toggle}
+        onClick={() => setExpanded((value) => !value)}
         className="focus-ring-inset flex min-h-7 w-full min-w-0 items-center gap-sm rounded-sm px-2 text-left text-body-sm text-(--tethys-text-secondary) transition-colors hover:bg-(--tethys-surface-hover)"
       >
         {run.isLive && (

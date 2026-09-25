@@ -180,20 +180,22 @@ impl PermissionRegistry {
             pending.ok_or_else(|| ApiError::NotFound(format!("pending permission {req_id}")))?;
         let decision = match option_id {
             Some(option_id) => {
-                let kind = pending
+                let option = pending
                     .request
                     .options
                     .iter()
-                    .find(|option| option.option_id == option_id)
-                    .and_then(|option| option.kind.as_deref());
-                let outcome = if is_approving_kind(kind) {
+                    .find(|option| option.option_id == option_id);
+                let outcome = if is_approving_kind(option.and_then(|option| option.kind.as_deref()))
+                {
                     tethys_schema::thread::PermOutcome::Approved
                 } else {
                     tethys_schema::thread::PermOutcome::Rejected
                 };
+                // Only an option the Provider offered is sent back as selected; an
+                // unknown id still rejects, but reaches the agent as a cancel.
                 PermissionDecision {
                     outcome,
-                    option_id: Some(option_id),
+                    option_id: option.map(|_| option_id),
                     decided_by: tethys_schema::thread::Decider::User,
                 }
             }

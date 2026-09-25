@@ -1,22 +1,24 @@
-//! The body of a tool-call card, one shape per kind of work (DESIGN.md
-//! `tool-accordion.content`, P20): a file edit is its diff, a shell command is
-//! the command and the tail of what it printed, a read or search is its
-//! result, and anything else (an MCP tool, a Provider's own tool) is its
-//! arguments and result as formatted data. The raw payload stays one
-//! disclosure away on every card, never the default view.
+//! The bodies a tool-call card can show (DESIGN.md `tool-accordion.content`,
+//! P20): a file edit is its diff, a shell command is the command and the tail
+//! of what it printed, an MCP call is its arguments and result, and anything
+//! else is its payload as formatted data. `tool-surfaces.tsx` picks one per
+//! surface; the raw payload stays one disclosure away, never the default view.
 
 import type { DiffFileDetail } from "@tethys/bindings";
 import { FileDiffCard } from "@tethys/diff";
 import type { ToolCallEntry } from "@tethys/state";
-import { cn } from "@tethys/ui";
-import type React from "react";
+import { cn, TruncatedText } from "@tethys/ui";
 import { useState } from "react";
 import {
   prettyPayload,
+  toolArguments,
   toolCommand,
   toolExitCode,
   toolOutputText,
+  toolQuestions,
+  toolTodos,
 } from "../tool-view";
+import { TaskList } from "./plan-panel";
 
 /** Lines of output shown before `Show all`. */
 const TAIL_LINES = 12;
@@ -59,7 +61,7 @@ export function OutputWell({
   );
 }
 
-function EditBody({
+export function EditBody({
   entry,
   diffs,
   onOpenChanges,
@@ -84,7 +86,7 @@ function EditBody({
   );
 }
 
-function ShellBody({ entry }: { entry: ToolCallEntry }) {
+export function ShellBody({ entry }: { entry: ToolCallEntry }) {
   const command = toolCommand(entry);
   const exitCode = toolExitCode(entry);
   const output = toolOutputText(entry);
@@ -120,7 +122,7 @@ function ShellBody({ entry }: { entry: ToolCallEntry }) {
   );
 }
 
-function PayloadBody({ entry }: { entry: ToolCallEntry }) {
+export function PayloadBody({ entry }: { entry: ToolCallEntry }) {
   const input = prettyPayload(entry.input);
   const output = prettyPayload(entry.output);
   return (
@@ -151,78 +153,114 @@ function PayloadBody({ entry }: { entry: ToolCallEntry }) {
 export function RawPayload({ entry }: { entry: ToolCallEntry }) {
   if (!entry.input && !entry.output && !entry.metadata) return null;
   return (
-    <details className="group rounded-sm border border-(--tethys-hairline) px-sm py-1">
-      <summary className="cursor-pointer text-label-sm text-(--tethys-text-muted) select-none hover:text-(--tethys-text-primary)">
+    <details className="group">
+      <summary className="focus-ring w-fit cursor-pointer rounded-xs text-label-sm text-(--tethys-text-muted) select-none hover:text-(--tethys-text-primary)">
         Raw
       </summary>
       <div className="mt-1 flex flex-col gap-1">
-        {entry.input && (
-          <pre className="max-h-48 overflow-auto font-mono text-mono-micro whitespace-pre-wrap break-all text-(--tethys-text-muted)">
-            {prettyPayload(entry.input)}
-          </pre>
-        )}
-        {entry.output && (
-          <pre className="max-h-48 overflow-auto font-mono text-mono-micro whitespace-pre-wrap break-all text-(--tethys-text-muted)">
-            {prettyPayload(entry.output)}
-          </pre>
-        )}
-        {entry.metadata && (
-          <pre className="max-h-48 overflow-auto font-mono text-mono-micro whitespace-pre-wrap break-all text-(--tethys-text-muted)">
-            {prettyPayload(entry.metadata)}
-          </pre>
-        )}
+        {[entry.input, entry.output, entry.metadata]
+          .filter((payload): payload is string => Boolean(payload))
+          .map((payload, index) => (
+            <pre
+              // biome-ignore lint/suspicious/noArrayIndexKey: fixed slots
+              key={index}
+              className={cn(
+                WELL_CLASS,
+                "max-h-48 overflow-auto px-sm py-1.5 text-mono-micro whitespace-pre-wrap break-all",
+              )}
+            >
+              {prettyPayload(payload)}
+            </pre>
+          ))}
       </div>
     </details>
   );
 }
 
-/** Whether a call's body shows its payload itself, so `Raw` would repeat it. */
-function showsPayload(entry: ToolCallEntry): boolean {
-  return ![
-    "read",
-    "edit",
-    "delete",
-    "move",
-    "search",
-    "execute",
-    "fetch",
-  ].includes(entry.toolKind ?? "");
-}
-
-export function ToolBody({
+/** The call's result text in a well; a search lists the files it matched. */
+export function OutputBody({
   entry,
-  diffs,
-  onOpenChanges,
+  onOpenLocation,
 }: {
   entry: ToolCallEntry;
-  /** The call's file changes (`toolDiffs`), read once by the card. */
-  diffs: DiffFileDetail[];
-  onOpenChanges?: () => void;
+  onOpenLocation?: (path: string, line: number | null) => void;
 }) {
-  let body: React.ReactNode;
-  switch (entry.toolKind) {
-    case "edit":
-    case "delete":
-    case "move":
-      body = (
-        <EditBody entry={entry} diffs={diffs} onOpenChanges={onOpenChanges} />
-      );
-      break;
-    case "execute":
-      body = <ShellBody entry={entry} />;
-      break;
-    case "read":
-    case "search":
-    case "fetch":
-      body = <OutputWell text={toolOutputText(entry)} label="Tool output" />;
-      break;
-    default:
-      body = <PayloadBody entry={entry} />;
-  }
   return (
     <div className="flex flex-col gap-sm">
-      {body}
-      {!showsPayload(entry) && <RawPayload entry={entry} />}
+      {entry.locations.length > 1 && (
+        <ul aria-label="Matched files" className="flex flex-col">
+          {entry.locations.map((location) => (
+            <li key={`${location.path}:${location.line ?? ""}`}>
+              <button
+                type="button"
+                onClick={() => onOpenLocation?.(location.path, location.line)}
+                className="focus-ring flex max-w-full rounded-xs px-1 font-mono text-mono-micro text-(--tethys-text-secondary) hover:bg-(--tethys-surface-hover) hover:text-(--tethys-text-primary)"
+              >
+                <TruncatedText
+                  mode="path"
+                  text={
+                    location.line === null
+                      ? location.path
+                      : `${location.path}:${location.line}`
+                  }
+                />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <OutputWell text={toolOutputText(entry)} label="Tool output" />
     </div>
+  );
+}
+
+/** An MCP call: its arguments as named values, then what the server returned. */
+export function McpBody({ entry }: { entry: ToolCallEntry }) {
+  const args = toolArguments(entry);
+  return (
+    <div className="flex flex-col gap-sm">
+      {args.length > 0 && (
+        <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-md gap-y-0.5 text-body-sm">
+          {args.map(([name, value]) => (
+            <div key={name} className="contents">
+              <dt className="text-(--tethys-text-muted)">{name}</dt>
+              <dd className="min-w-0 truncate font-mono text-mono-code text-(--tethys-text-secondary)">
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <OutputWell text={toolOutputText(entry)} label="Tool result" />
+    </div>
+  );
+}
+
+/**
+ * A question tool's record when the Provider did not ask it through a form:
+ * what it asked and the answer it got back, read-only.
+ */
+export function QuestionBody({ entry }: { entry: ToolCallEntry }) {
+  const questions = toolQuestions(entry);
+  const answer = toolOutputText(entry).trim();
+  return (
+    <div className="flex flex-col gap-1 text-body-sm">
+      {questions.map((question) => (
+        <p key={question} className="text-(--tethys-text-primary)">
+          {question}
+        </p>
+      ))}
+      {answer && <p className="text-(--tethys-text-secondary)">→ {answer}</p>}
+    </div>
+  );
+}
+
+/** A todo write whose Provider sent no plan: the list it wrote. */
+export function TodoBody({ entry }: { entry: ToolCallEntry }) {
+  const steps = toolTodos(entry);
+  return steps.length > 0 ? (
+    <TaskList steps={steps} />
+  ) : (
+    <PayloadBody entry={entry} />
   );
 }

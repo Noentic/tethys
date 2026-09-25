@@ -1,4 +1,5 @@
 import {
+  type ElicitationEntry,
   type SessionEntry,
   selectTurnActionsVisible,
   type ToolCallEntry,
@@ -11,6 +12,7 @@ import { indexChildren } from "./nest-children";
 import { SubagentCard } from "./renderers/subagent-card";
 import { ToolRunGroup } from "./renderers/tool-run-group";
 import { useToolCallDensity } from "./tool-call-density";
+import { surfaceOf } from "./tool-view";
 import { TurnReceipt } from "./turn-receipt";
 
 type StageSegment =
@@ -33,11 +35,40 @@ function isTurnEndEntry(entry: SessionEntry): entry is TurnEndEntry {
   );
 }
 
+/**
+ * Tool calls another entry already records: a todo write when the plan card
+ * shows the list, and a question the question card asked. Rendering both would
+ * say the same thing twice.
+ */
+export function recordedElsewhere(entries: SessionEntry[]): Set<string> {
+  const hasPlan = entries.some((entry) => entry.kind === "plan");
+  const asked = new Set(
+    entries
+      .filter((entry) => entry.kind === "elicitation")
+      .map((entry) => (entry as ElicitationEntry).request.tool_call_id)
+      .filter(Boolean),
+  );
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    if (entry.kind !== "tool_call") continue;
+    const call = entry as ToolCallEntry;
+    const surface = surfaceOf(call);
+    if (
+      (surface === "todo" && hasPlan) ||
+      (surface === "question" && asked.has(call.toolCallId))
+    ) {
+      ids.add(call.id);
+    }
+  }
+  return ids;
+}
+
 function segmentEntries(
   entries: SessionEntry[],
   density: "summary" | "full",
 ): StageSegment[] {
   const { childIds, orphanIds } = indexChildren(entries);
+  const hidden = recordedElsewhere(entries);
   const segments: StageSegment[] = [];
   let buffer: ToolCallEntry[] = [];
 
@@ -51,7 +82,10 @@ function segmentEntries(
   };
 
   for (const entry of entries) {
-    if (childIds.has(entry.id) && !orphanIds.has(entry.id)) {
+    if (
+      (childIds.has(entry.id) && !orphanIds.has(entry.id)) ||
+      hidden.has(entry.id)
+    ) {
       continue;
     }
     if (isSubagentParent(entry)) {

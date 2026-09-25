@@ -132,13 +132,12 @@ pub(super) fn raw_content_metadata_field<T: serde::de::DeserializeOwned>(
 pub(super) fn v1_permission_response(
     decision: PermissionDecision,
 ) -> acp1::RequestPermissionResponse {
-    let outcome = match decision.outcome {
-        PermOutcome::Approved => match decision.option_id {
-            Some(option_id) => acp1::RequestPermissionOutcome::Selected(
-                acp1::SelectedPermissionOutcome::new(option_id),
-            ),
-            None => acp1::RequestPermissionOutcome::Cancelled,
-        },
+    let outcome = match (decision.outcome, decision.option_id) {
+        (PermOutcome::Approved | PermOutcome::Rejected, Some(option_id)) => {
+            acp1::RequestPermissionOutcome::Selected(acp1::SelectedPermissionOutcome::new(
+                option_id,
+            ))
+        }
         _ => acp1::RequestPermissionOutcome::Cancelled,
     };
     acp1::RequestPermissionResponse::new(outcome)
@@ -148,13 +147,12 @@ pub(super) fn v1_permission_response(
 pub(super) fn v2_permission_response(
     decision: PermissionDecision,
 ) -> acp2::RequestPermissionResponse {
-    let outcome = match decision.outcome {
-        PermOutcome::Approved => match decision.option_id {
-            Some(option_id) => acp2::RequestPermissionOutcome::Selected(
-                acp2::SelectedPermissionOutcome::new(option_id),
-            ),
-            None => acp2::RequestPermissionOutcome::Cancelled,
-        },
+    let outcome = match (decision.outcome, decision.option_id) {
+        (PermOutcome::Approved | PermOutcome::Rejected, Some(option_id)) => {
+            acp2::RequestPermissionOutcome::Selected(acp2::SelectedPermissionOutcome::new(
+                option_id,
+            ))
+        }
         _ => acp2::RequestPermissionOutcome::Cancelled,
     };
     acp2::RequestPermissionResponse::new(outcome)
@@ -363,6 +361,9 @@ pub(super) fn elicitation_content(
                 ElicitationValue::Boolean(boolean) => {
                     acp1::ElicitationContentValue::Boolean(boolean)
                 }
+                ElicitationValue::TextList(texts) => {
+                    acp1::ElicitationContentValue::StringArray(texts)
+                }
             };
             (key, value)
         })
@@ -411,6 +412,9 @@ pub(super) fn v2_elicitation_content(
                 ElicitationValue::Number(number) => acp2::ElicitationContentValue::Number(number),
                 ElicitationValue::Boolean(boolean) => {
                     acp2::ElicitationContentValue::Boolean(boolean)
+                }
+                ElicitationValue::TextList(texts) => {
+                    acp2::ElicitationContentValue::StringArray(texts)
                 }
             };
             (key, value)

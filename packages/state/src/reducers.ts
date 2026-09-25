@@ -23,6 +23,7 @@ import type {
   ToolKind,
   ToolLocation,
   ToolOrigin,
+  ToolSurface,
   TurnEventBody,
   UsageSnapshot,
   WriteVia,
@@ -94,6 +95,8 @@ export interface ToolCallEntry extends BaseSessionEntry {
   title: string;
   status: "Pending" | "Executing" | "Completed" | "Failed" | "Cancelled";
   toolKind?: ToolKind | null;
+  /** The surface a Provider adapter named, when `toolKind` could not tell it. */
+  surface?: ToolSurface | null;
   origin?: ToolOrigin | null;
   parentToolCallId?: string | null;
   locations: ToolLocation[];
@@ -636,6 +639,7 @@ export function sessionReducer(
           metadata: patch.metadata ?? existing.metadata ?? null,
           asyncTaskId: patch.async_task_id ?? existing.asyncTaskId ?? null,
           toolKind: patch.kind ?? existing.toolKind ?? null,
+          surface: patch.surface ?? existing.surface ?? null,
           origin: patch.origin ?? existing.origin ?? null,
           parentToolCallId:
             patch.parent_tool_call_id ?? existing.parentToolCallId ?? null,
@@ -655,6 +659,7 @@ export function sessionReducer(
           title: newTitle,
           status: newStatus,
           toolKind: patch.kind ?? null,
+          surface: patch.surface ?? null,
           origin: patch.origin ?? null,
           parentToolCallId: patch.parent_tool_call_id ?? null,
           locations: patch.locations ?? [],

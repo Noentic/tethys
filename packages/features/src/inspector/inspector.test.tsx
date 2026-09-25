@@ -152,7 +152,7 @@ describe("Transcript entry renderers (M1.7 U8)", () => {
     );
   });
 
-  it("shows an MCP call's arguments and result as formatted data", () => {
+  it("shows an MCP call's arguments as named values and its result", () => {
     render(
       <ToolAccordionRenderer
         entry={toolCall({
@@ -165,9 +165,12 @@ describe("Transcript entry renderers (M1.7 U8)", () => {
         })}
       />,
     );
-    expect(screen.getByText("Arguments")).toBeTruthy();
-    expect(screen.getByText("Result")).toBeTruthy();
-    expect(screen.getByText(/"title": "Bug"/)).toBeTruthy();
+    expect(screen.getByText("github · create_issue")).toBeTruthy();
+    expect(screen.getByText("title")).toBeTruthy();
+    expect(screen.getByText("Bug")).toBeTruthy();
+    expect(screen.getByLabelText("Tool result").textContent).toContain(
+      '"number":7',
+    );
   });
 
   it("renders filesystem and checkpoint ACP entries", () => {

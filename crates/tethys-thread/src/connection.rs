@@ -112,7 +112,7 @@ pub enum ConnectionError {
 #[derive(Debug, Clone)]
 pub struct PermissionDecision {
     pub outcome: PermOutcome,
-    /// Agent option selected for `PermOutcome::Approved`.
+    /// Agent option selected, for an approval or a rejection the Provider offered.
     pub option_id: Option<String>,
     pub decided_by: tethys_schema::thread::Decider,
 }

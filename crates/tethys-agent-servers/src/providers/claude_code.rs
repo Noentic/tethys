@@ -10,7 +10,7 @@ use tethys_acp::client::{
 };
 use tethys_schema::thread::{
     AgentCommandControl, ConfigOption, Patch, PermissionRequested, SessionGoal, SessionInfo,
-    ToolCallPatch, ToolCallStatus, ToolKind, ToolOrigin, TurnEventBody,
+    ToolCallPatch, ToolCallStatus, ToolKind, ToolOrigin, ToolSurface, TurnEventBody,
 };
 
 pub const REGISTRY_ID: &str = "claude-acp";
@@ -119,6 +119,7 @@ fn map_session_update(
             match event {
                 TurnEventBody::ToolCallUpsert { patch, .. } => {
                     patch.metadata.clone_from(&metadata);
+                    patch.surface = claude_tool_surface(meta);
                     if let Some(parent) = claude_parent_tool(meta) {
                         patch.origin = Some(ToolOrigin::Subagent);
                         patch.parent_tool_call_id = Some(parent.to_string());
@@ -291,6 +292,20 @@ fn claude_tool_origin(meta: &Value, input: Option<&str>) -> Option<ToolOrigin> {
         });
     }
     None
+}
+
+/// The Tethys surface for the Claude tools ACP's `kind` cannot tell apart:
+/// `TodoWrite` and `AskUserQuestion` are both `think`/`other`, and a web search
+/// shares `fetch` with a page fetch.
+fn claude_tool_surface(meta: &Value) -> Option<ToolSurface> {
+    match meta.get("claudeCode")?.get("toolName")?.as_str()? {
+        "TodoWrite" => Some(ToolSurface::Todo),
+        "AskUserQuestion" => Some(ToolSurface::Question),
+        "WebSearch" => Some(ToolSurface::WebSearch),
+        "WebFetch" => Some(ToolSurface::WebFetch),
+        "Task" | "Agent" => Some(ToolSurface::Subagent),
+        _ => None,
+    }
 }
 
 fn claude_parent_tool(meta: &Value) -> Option<&str> {
@@ -564,6 +579,28 @@ mod tests {
             &mut events,
         );
         assert_eq!(origin_of(&events), None);
+    }
+
+    #[test]
+    fn names_the_surface_for_tools_kind_cannot_tell_apart() {
+        let handler = descriptor().session_update_handler.expect("handler");
+        let surface_of = |tool: &str| {
+            let mut events = tool_upsert(None);
+            handler(
+                "session",
+                None,
+                &json!({"_meta": {"claudeCode": {"toolName": tool}}}),
+                &mut events,
+            );
+            match &events[0] {
+                TurnEventBody::ToolCallUpsert { patch, .. } => patch.surface,
+                _ => None,
+            }
+        };
+        assert_eq!(surface_of("TodoWrite"), Some(ToolSurface::Todo));
+        assert_eq!(surface_of("AskUserQuestion"), Some(ToolSurface::Question));
+        assert_eq!(surface_of("WebSearch"), Some(ToolSurface::WebSearch));
+        assert_eq!(surface_of("Read"), None);
     }
 
     #[test]

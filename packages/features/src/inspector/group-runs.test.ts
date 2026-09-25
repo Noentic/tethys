@@ -68,11 +68,11 @@ describe("groupToolRuns (M1.7 U15)", () => {
     expect(run.run.summary).toBe(
       "Read 3 files · ran 2 commands · 1 search · +2 more",
     );
-    expect(run.run.counts.map((count) => count.category)).toEqual([
+    expect(run.run.counts.map((count) => count.surface)).toEqual([
       "read",
-      "execute",
+      "shell",
       "search",
-      "fetch",
+      "web_fetch",
       "think",
     ]);
   });
@@ -83,7 +83,7 @@ describe("groupToolRuns (M1.7 U15)", () => {
     expect(segments[0].type).toBe("entry");
   });
 
-  it("flags failure and awaiting members", () => {
+  it("flags failed and live members", () => {
     const [segment] = groupToolRuns([
       call("a", "read", "Failed"),
       call("b", "execute", "Pending"),
@@ -91,7 +91,6 @@ describe("groupToolRuns (M1.7 U15)", () => {
     expect(segment.type).toBe("run");
     if (segment.type === "run") {
       expect(segment.run.hasFailure).toBe(true);
-      expect(segment.run.hasAwaiting).toBe(true);
       expect(segment.run.isLive).toBe(true);
     }
   });

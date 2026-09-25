@@ -42,6 +42,13 @@ pub enum ElicitationFieldKind {
         options: Vec<ElicitationEnumOption>,
         default: Option<String>,
     },
+    /// Pick any number of `options`, between `min_items` and `max_items`.
+    MultiEnum {
+        options: Vec<ElicitationEnumOption>,
+        min_items: Option<u32>,
+        max_items: Option<u32>,
+        default: Option<Vec<String>>,
+    },
 }
 
 /// One field of an elicitation form.
@@ -52,6 +59,10 @@ pub struct ElicitationField {
     pub description: Option<String>,
     pub required: bool,
     pub kind: ElicitationFieldKind,
+    /// The key of the choice field this free-text field answers as "Other",
+    /// when the Provider pairs them; the form renders it inside that choice.
+    #[serde(default)]
+    pub custom_for: Option<String>,
 }
 
 /// A normalized `elicitation/create` request.
@@ -66,6 +77,9 @@ pub struct ElicitationRequest {
     #[serde(default)]
     pub url: Option<String>,
     pub fields: Vec<ElicitationField>,
+    /// The tool call this request asks on behalf of (a question tool).
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
 }
 
 /// One typed answer value.
@@ -75,6 +89,7 @@ pub enum ElicitationValue {
     Text(String),
     Number(f64),
     Boolean(bool),
+    TextList(Vec<String>),
 }
 
 /// The three terminal outcomes of an elicitation (UI-04 / U9).
@@ -136,6 +151,7 @@ mod tests {
                         max_len: Some(80),
                         format: None,
                     },
+                    custom_for: None,
                 },
                 ElicitationField {
                     key: "tier".into(),
@@ -157,6 +173,7 @@ mod tests {
                         ],
                         default: Some("free".into()),
                     },
+                    custom_for: None,
                 },
                 ElicitationField {
                     key: "notify".into(),
@@ -166,8 +183,10 @@ mod tests {
                     kind: ElicitationFieldKind::Boolean {
                         default: Some(false),
                     },
+                    custom_for: None,
                 },
             ],
+            tool_call_id: None,
         }
     }
 

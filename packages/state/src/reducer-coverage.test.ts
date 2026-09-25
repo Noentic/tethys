@@ -297,4 +297,32 @@ describe("thought timing", () => {
     expect(thought?.streaming).toBe(false);
     expect(thought?.endedAt).toBe(15_000);
   });
+
+  it("keeps the surface an adapter named across later updates", () => {
+    let state = createInitialSessionState("s-1", "p-1", "ws-1");
+    const upsert = (patch: Record<string, unknown>, seq: number) => {
+      state = sessionReducer(
+        state,
+        {
+          type: "ToolCallUpsert",
+          body: {
+            tool_call_id: "todo-1",
+            patch: {
+              title: null,
+              kind: null,
+              status: null,
+              input: null,
+              output: null,
+              ...patch,
+            },
+          },
+        },
+        seq,
+      );
+    };
+    upsert({ title: "todowrite", kind: "think", surface: "todo" }, 1);
+    upsert({ title: "3 todos", status: "Completed" }, 2);
+    const tool = entry("todo-1", state.liveEntries);
+    expect(isToolCall(tool) ? tool.surface : null).toBe("todo");
+  });
 });

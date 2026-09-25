@@ -5,7 +5,10 @@ use tethys_schema::agents::{EnvVarInput, LaunchSpecInput};
 
 pub const REGISTRY_ID: &str = "opencode";
 
-/// OpenCode operates cleanly over standard ACP v1, requiring no vendor-specific wire extensions.
+/// OpenCode speaks standard ACP v1 with no wire extensions. Its todo and
+/// question tools arrive as plain tool calls; the shared mapper names their
+/// surface from the input and turns a todo write into a plan
+/// (`tethys_acp::surface`), so no hook is needed here.
 pub fn descriptor() -> AcpProviderIntegration {
     AcpProviderIntegration {
         id: REGISTRY_ID.into(),

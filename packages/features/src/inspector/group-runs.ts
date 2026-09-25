@@ -1,69 +1,28 @@
 //! Pure tool-run grouping (M1.7 U15). A run is a maximal sequence of
 //! consecutive tool-call entries; any other entry ends it.
 
+import type { ToolSurface } from "@tethys/bindings";
 import type { SessionEntry, ToolCallEntry } from "@tethys/state";
+import { surfaceCount, surfaceOf } from "./tool-view";
 
-type RunCategory =
-  | "read"
-  | "execute"
-  | "edit"
-  | "search"
-  | "fetch"
-  | "think"
-  | "switch_mode"
-  | "other";
-
-const CATEGORY_OF: Record<string, RunCategory> = {
-  read: "read",
-  execute: "execute",
-  edit: "edit",
-  delete: "edit",
-  move: "edit",
-  search: "search",
-  fetch: "fetch",
-  think: "think",
-  switch_mode: "switch_mode",
-};
-
-const CATEGORY_ORDER: RunCategory[] = [
+/** Surfaces in the order a run's summary names them. */
+const SURFACE_ORDER: ToolSurface[] = [
   "read",
-  "execute",
+  "shell",
   "edit",
   "search",
-  "fetch",
+  "web_fetch",
+  "web_search",
+  "mcp",
+  "question",
+  "todo",
   "think",
-  "switch_mode",
+  "subagent",
   "other",
 ];
 
-function categoryOf(kind: string | null | undefined): RunCategory {
-  return kind ? (CATEGORY_OF[kind] ?? "other") : "other";
-}
-
-function phrase(category: RunCategory, count: number): string {
-  const plural = count === 1 ? "" : "s";
-  switch (category) {
-    case "read":
-      return `Read ${count} file${plural}`;
-    case "execute":
-      return `ran ${count} command${plural}`;
-    case "edit":
-      return `${count} edit${plural}`;
-    case "search":
-      return `${count} search${count === 1 ? "" : "es"}`;
-    case "fetch":
-      return `${count} fetch${count === 1 ? "" : "es"}`;
-    case "think":
-      return `${count} thought${plural}`;
-    case "switch_mode":
-      return `${count} mode switch${count === 1 ? "" : "es"}`;
-    default:
-      return `${count} tool call${plural}`;
-  }
-}
-
 export interface ToolRunCount {
-  category: RunCategory;
+  surface: ToolSurface;
   phrase: string;
   count: number;
 }
@@ -75,7 +34,6 @@ export interface ToolRun {
   summary: string;
   moreCount: number;
   hasFailure: boolean;
-  hasAwaiting: boolean;
   isLive: boolean;
   inFlightTitle: string | null;
 }
@@ -85,12 +43,7 @@ export function isFileMutation(entry: SessionEntry): boolean {
     return true;
   }
   if (entry.kind === "tool_call") {
-    const tool = entry as ToolCallEntry;
-    return (
-      tool.toolKind === "edit" ||
-      tool.toolKind === "delete" ||
-      tool.toolKind === "move"
-    );
+    return surfaceOf(entry as ToolCallEntry) === "edit";
   }
   return false;
 }
@@ -106,16 +59,20 @@ export function summarizeRun(counts: ToolRunCount[]): string {
 }
 
 export function buildToolRun(members: ToolCallEntry[]): ToolRun {
-  const byCategory = new Map<RunCategory, number>();
+  const bySurface = new Map<ToolSurface, number>();
   for (const member of members) {
-    const category = categoryOf(member.toolKind);
-    byCategory.set(category, (byCategory.get(category) ?? 0) + 1);
+    const surface = surfaceOf(member);
+    bySurface.set(surface, (bySurface.get(surface) ?? 0) + 1);
   }
-  const counts: ToolRunCount[] = CATEGORY_ORDER.filter((category) =>
-    byCategory.has(category),
-  ).map((category) => {
-    const count = byCategory.get(category) ?? 0;
-    return { category, count, phrase: phrase(category, count) };
+  const counts: ToolRunCount[] = SURFACE_ORDER.filter((surface) =>
+    bySurface.has(surface),
+  ).map((surface) => {
+    const count = bySurface.get(surface) ?? 0;
+    return {
+      surface,
+      count,
+      phrase: surfaceCount(surface, count),
+    };
   });
   const inFlight = members.find(
     (member) => member.status === "Executing" || member.status === "Pending",
@@ -127,7 +84,6 @@ export function buildToolRun(members: ToolCallEntry[]): ToolRun {
     summary: summarizeRun(counts),
     moreCount: Math.max(0, counts.length - 3),
     hasFailure: members.some((member) => member.status === "Failed"),
-    hasAwaiting: members.some((member) => member.status === "Pending"),
     isLive: members.some(
       (member) => member.status === "Executing" || member.status === "Pending",
     ),

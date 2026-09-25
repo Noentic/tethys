@@ -173,6 +173,7 @@ pub(crate) fn v1_tool_patch(tool_call: &acp1::ToolCall) -> ToolCallPatch {
         locations: tool_call.locations.iter().map(tool_location).collect(),
         metadata: None,
         async_task_id: None,
+        surface: None,
     }
 }
 
@@ -192,6 +193,7 @@ pub(crate) fn v1_tool_update_patch(fields: &acp1::ToolCallUpdateFields) -> ToolC
             .unwrap_or_default(),
         metadata: None,
         async_task_id: None,
+        surface: None,
     }
 }
 

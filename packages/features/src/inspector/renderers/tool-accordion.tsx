@@ -2,7 +2,6 @@ import { DiffStat } from "@tethys/diff";
 import type { ToolCallEntry } from "@tethys/state";
 import {
   Button,
-  Chip,
   cn,
   StatusDot,
   TruncatedText,
@@ -10,11 +9,11 @@ import {
 } from "@tethys/ui";
 import { useEffect, useId, useMemo, useState } from "react";
 import { useInspectorClient } from "../../client-context";
-import { toolDiffs, toolHeadline } from "../tool-view";
+import { surfaceOf, toolDiffs, toolHeadline } from "../tool-view";
 import { useSessionState } from "../use-session-state";
-import { ToolBody } from "./tool-bodies";
-import { DisclosureChevron, ToolKindIcon } from "./tool-kind-icon";
+import { DisclosureChevron } from "./disclosure-chevron";
 import { ToolOriginTag } from "./tool-origin-tag";
+import { opensByDefault, ToolBody, ToolSurfaceIcon } from "./tool-surfaces";
 
 const STATUS_KEY: Record<ToolCallEntry["status"], string> = {
   Pending: "idle",
@@ -23,9 +22,6 @@ const STATUS_KEY: Record<ToolCallEntry["status"], string> = {
   Failed: "error",
   Cancelled: "idle",
 };
-
-const LOCATION_CAP = 3;
-const FILE_KINDS = ["edit", "delete", "move"];
 
 /** `+a −b` across every file the call changed, from its diffs or its stats. */
 function callStat(
@@ -54,10 +50,11 @@ function callStat(
 
 /**
  * A tool call as one card, patched in place as the call updates (DESIGN.md
- * `tool-accordion`). The header names the act and its object — `Edited
- * README.md +3 −1`, `Ran pnpm test` — and the body is shaped by the kind of
- * work (`ToolBody`). A failed call writes `Failed` beside the dot, so failure
- * is never colour alone; a failed or waiting call opens itself.
+ * `tool-accordion`). The header alone names the act and its object — `Edited
+ * README.md +3 −1`, `Ran pnpm test` — and the body, shaped by the call's
+ * surface (`ToolBody`), stays folded until asked for; only an edit's diff and
+ * a failure open themselves. A failed call writes `Failed` beside the dot, so
+ * failure is never colour alone.
  */
 export function ToolAccordionRenderer({
   entry,
@@ -80,23 +77,15 @@ export function ToolAccordionRenderer({
       inspector?.client.thread?.providerControl,
   );
   const [expanded, setExpanded] = useState(
-    entry.status === "Failed" ||
-      entry.status === "Pending" ||
-      diffs.length > 0 ||
-      canStop,
+    () => opensByDefault(entry, diffs) || canStop,
   );
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState<string | null>(null);
   const regionId = useId();
-  // A file edit names its file in the header and its diff; chips would repeat it.
-  const showLocations =
-    entry.locations.length > 0 && !FILE_KINDS.includes(entry.toolKind ?? "");
-  const shownLocations = entry.locations.slice(0, LOCATION_CAP);
-  const moreLocations = entry.locations.length - shownLocations.length;
-
+  // A call that fails after it started still opens, so the error is seen.
   useEffect(() => {
-    if (canStop) setExpanded(true);
-  }, [canStop]);
+    if (canStop || entry.status === "Failed") setExpanded(true);
+  }, [canStop, entry.status]);
 
   const stopTask = async () => {
     const providerControl = inspector?.client.thread?.providerControl;
@@ -120,6 +109,7 @@ export function ToolAccordionRenderer({
       data-entry-kind="tool_call"
       data-tool-call-id={entry.toolCallId}
       data-tool-kind={entry.toolKind ?? "other"}
+      data-tool-surface={surfaceOf(entry)}
       className={cn(
         "min-w-0 rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested)",
         className,
@@ -137,9 +127,9 @@ export function ToolAccordionRenderer({
           expanded={expanded}
           className="shrink-0 text-(--tethys-text-muted)"
         />
-        <ToolKindIcon
-          kind={entry.toolKind}
-          className="shrink-0 text-(--tethys-text-secondary)"
+        <ToolSurfaceIcon
+          entry={entry}
+          className="text-(--tethys-text-secondary)"
         />
         {headline.verb && (
           <span className="shrink-0 text-label-md text-(--tethys-text-secondary)">
@@ -174,28 +164,6 @@ export function ToolAccordionRenderer({
           </span>
         )}
       </button>
-      {showLocations && (
-        <div className="flex flex-wrap gap-1 px-md pb-sm">
-          {shownLocations.map((location) => (
-            <Chip
-              key={`${location.path}:${location.line ?? ""}`}
-              interactive
-              onClick={() => onOpenLocation?.(location.path, location.line)}
-            >
-              <TruncatedText
-                mode="path"
-                className="max-w-64"
-                text={
-                  location.line === null
-                    ? location.path
-                    : `${location.path}:${location.line}`
-                }
-              />
-            </Chip>
-          ))}
-          {moreLocations > 0 && <Chip>+{moreLocations}</Chip>}
-        </div>
-      )}
       {expanded && (
         <div
           id={regionId}
@@ -225,6 +193,7 @@ export function ToolAccordionRenderer({
             entry={entry}
             diffs={diffs}
             onOpenChanges={openChanges ? () => openChanges() : undefined}
+            onOpenLocation={onOpenLocation}
           />
         </div>
       )}

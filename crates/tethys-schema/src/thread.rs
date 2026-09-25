@@ -200,6 +200,27 @@ impl ToolKind {
     }
 }
 
+/// The Tethys surface a tool call renders as, set only where ACP's `ToolKind`
+/// is too coarse to tell (a todo write, a question, a web search): by the
+/// shared ACP mapper from the tool's input, or by a Provider adapter from the
+/// tool's name. Otherwise the webview derives it from `kind` and `origin`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolSurface {
+    Read,
+    Edit,
+    Shell,
+    Search,
+    WebFetch,
+    WebSearch,
+    Mcp,
+    Todo,
+    Question,
+    Think,
+    Subagent,
+    Other,
+}
+
 /// Where a tool call came from. Populated by Provider adapters (Wave 2.5);
 /// no code in M1.6c sets it, and an entry with no `origin` is a built-in call.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -259,6 +280,8 @@ pub struct ToolCallPatch {
     pub metadata: Option<String>,
     #[serde(default)]
     pub async_task_id: Option<String>,
+    #[serde(default)]
+    pub surface: Option<ToolSurface>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]

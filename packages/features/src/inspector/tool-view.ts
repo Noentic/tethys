@@ -5,9 +5,9 @@
 //! and falls back to the call's own title; nothing is invented. Pure, so each
 //! reading is tested on data.
 
-import type { DiffFileDetail } from "@tethys/bindings";
+import type { DiffFileDetail, ToolSurface } from "@tethys/bindings";
 import { detailFromPatch, detailFromTexts } from "@tethys/diff";
-import type { ToolCallEntry } from "@tethys/state";
+import type { PlanStep, ToolCallEntry } from "@tethys/state";
 
 type Json = Record<string, unknown>;
 
@@ -90,19 +90,75 @@ export function toolUrl(entry: ToolCallEntry): string | null {
 }
 
 /**
- * The call's result as text. Agents often report a JSON envelope
- * (`{"output": "…", "metadata": {…}}`); the text inside it is what a reader
- * wants, so it is unwrapped when the envelope has one.
+ * Where the JSON value at the start of `text` ends, or -1 when `text` does not
+ * start with an object, array, or string. A call's output is its raw output
+ * followed by the text content it streamed, so the two are split here.
+ */
+function leadingJsonEnd(text: string): number {
+  const first = text[0];
+  if (first !== "{" && first !== "[" && first !== '"') return -1;
+  let depth = 0;
+  let inString = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (char === "\\") index += 1;
+      else if (char === '"') {
+        inString = false;
+        if (depth === 0) return index + 1;
+      }
+    } else if (char === '"') inString = true;
+    else if (char === "{" || char === "[") depth += 1;
+    else if (char === "}" || char === "]") {
+      depth -= 1;
+      if (depth === 0) return index + 1;
+    }
+  }
+  return -1;
+}
+
+/** Opencode wraps a read in `<path>…</path><type>…</type><content>…</content>`. */
+function unwrapFileEnvelope(text: string): string {
+  const match = /<content>\n?([\s\S]*?)(?:\n?<\/content>|$)/.exec(text);
+  return match && /^\s*<path>/.test(text) ? (match[1] ?? text) : text;
+}
+
+/** The raw output's JSON object, ignoring any text streamed after it. */
+function outputEnvelope(entry: ToolCallEntry): Json | null {
+  const output = (entry.output ?? "").trim();
+  const end = leadingJsonEnd(output);
+  return end < 0 ? null : parseObject(output.slice(0, end));
+}
+
+/**
+ * The call's result as text. Agents report a raw JSON envelope
+ * (`{"output": "…", "metadata": {…}}` or a bare JSON string) and may stream the
+ * same result again as text content after it; the readable text is what the
+ * body shows, and the envelope stays behind `Raw`.
  */
 export function toolOutputText(entry: ToolCallEntry): string {
-  const output = entry.output ?? "";
-  const envelope = parseObject(output.trim().startsWith("{") ? output : null);
-  return stringField(envelope, OUTPUT_KEYS) ?? output;
+  const output = (entry.output ?? "").trim();
+  const end = leadingJsonEnd(output);
+  if (end < 0) return unwrapFileEnvelope(output);
+  const streamed = output.slice(end).trim();
+  if (streamed) return unwrapFileEnvelope(streamed);
+  let value: unknown;
+  try {
+    value = JSON.parse(output.slice(0, end));
+  } catch {
+    return output;
+  }
+  if (typeof value === "string") return unwrapFileEnvelope(value);
+  const text =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? stringField(value as Json, OUTPUT_KEYS)
+      : null;
+  return text === null ? output : unwrapFileEnvelope(text);
 }
 
 /** The exit code a shell call reported, when it reported one. */
 export function toolExitCode(entry: ToolCallEntry): number | null {
-  const envelope = parseObject(entry.output);
+  const envelope = outputEnvelope(entry);
   return (
     numberField(envelope, ["exit_code", "exitCode", "exit"]) ??
     numberField(nested(envelope, "metadata"), ["exit_code", "exitCode", "exit"])
@@ -121,7 +177,7 @@ export function toolDiffs(entry: ToolCallEntry): DiffFileDetail[] {
   if (fromContent.length > 0) return fromContent;
 
   const path = toolPath(entry) ?? "file";
-  const envelope = parseObject(entry.output);
+  const envelope = outputEnvelope(entry);
   const reported =
     stringField(nested(envelope, "metadata"), ["diff", "patch"]) ??
     stringField(envelope, ["diff", "patch"]);
@@ -137,11 +193,40 @@ export function toolDiffs(entry: ToolCallEntry): DiffFileDetail[] {
   }
   // A write with only the new content is a file that did not exist before.
   const written = stringField(input, CONTENT_KEYS);
-  if (written !== null && entry.toolKind === "edit") {
+  if (written !== null && surfaceOf(entry) === "edit") {
     const detail = detailFromTexts(path, "", written);
     return detail ? [detail] : [];
   }
   return [];
+}
+
+/**
+ * The Tethys surface a call renders as. A Provider adapter names it when ACP's
+ * kind cannot (a todo write, a question, a web search); otherwise it follows
+ * from the kind and where the call came from.
+ */
+export function surfaceOf(entry: ToolCallEntry): ToolSurface {
+  if (entry.surface) return entry.surface;
+  if (entry.origin?.kind === "mcp") return "mcp";
+  if (entry.origin?.kind === "subagent") return "subagent";
+  switch (entry.toolKind) {
+    case "read":
+      return "read";
+    case "edit":
+    case "delete":
+    case "move":
+      return "edit";
+    case "execute":
+      return "shell";
+    case "search":
+      return "search";
+    case "fetch":
+      return "web_fetch";
+    case "think":
+      return "think";
+    default:
+      return "other";
+  }
 }
 
 export interface ToolHeadline {
@@ -153,62 +238,209 @@ export interface ToolHeadline {
   mono: boolean;
 }
 
-const VERBS: Record<string, [string, string]> = {
-  read: ["Reading", "Read"],
-  edit: ["Editing", "Edited"],
-  delete: ["Deleting", "Deleted"],
-  move: ["Moving", "Moved"],
-  search: ["Searching", "Searched"],
-  execute: ["Running", "Ran"],
-  fetch: ["Fetching", "Fetched"],
-};
-
 function basename(path: string): string {
   const trimmed = path.replace(/\/+$/, "");
   return trimmed.slice(trimmed.lastIndexOf("/") + 1) || trimmed;
 }
 
+/** `host/path` without the scheme, query, or trailing slash. */
+function shortUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.host}${parsed.pathname}`.replace(/\/$/, "");
+  } catch {
+    return url;
+  }
+}
+
+/** The MCP tool's own name, without Claude's `mcp__<server>__` prefix. */
+function mcpToolName(entry: ToolCallEntry): string {
+  const name =
+    stringField(nested(parseObject(entry.metadata), "claudeCode"), [
+      "toolName",
+    ]) ?? entry.title;
+  const parts = name.split("__");
+  return parts.length >= 3 && parts[0] === "mcp"
+    ? parts.slice(2).join("__")
+    : name;
+}
+
+/** The first question a question tool asked, from its input. */
+export function toolQuestions(entry: ToolCallEntry): string[] {
+  const questions = parseObject(entry.input)?.questions;
+  if (!Array.isArray(questions)) return [];
+  return questions
+    .map((question) =>
+      typeof question === "string"
+        ? question
+        : stringField(question as Json, ["question", "header", "title"]),
+    )
+    .filter((question): question is string => Boolean(question));
+}
+
+const TODO_STATUS: Record<string, PlanStep["status"]> = {
+  pending: "Pending",
+  in_progress: "InProgress",
+  completed: "Completed",
+};
+
+/** The list a todo tool wrote, from its input (`todos: [{content, status}]`). */
+export function toolTodos(entry: ToolCallEntry): PlanStep[] {
+  const todos = parseObject(entry.input)?.todos;
+  if (!Array.isArray(todos)) return [];
+  return todos.flatMap((todo) => {
+    const record = todo && typeof todo === "object" ? (todo as Json) : null;
+    const content = stringField(record, ["content", "text", "title"]);
+    const status = TODO_STATUS[stringField(record, ["status"]) ?? ""];
+    return content && status
+      ? [{ content, status, priority: "Medium" as const }]
+      : [];
+  });
+}
+
 /**
- * The one line that names a call: verb plus object for the kinds whose object
- * is readable from the payload, else the Provider's own title.
+ * A call's arguments as `[name, value]` pairs for a key/value view: strings as
+ * they are, anything else as compact JSON.
  */
-export function toolHeadline(entry: ToolCallEntry): ToolHeadline {
-  const done = entry.status !== "Pending" && entry.status !== "Executing";
-  const verbs = entry.toolKind ? VERBS[entry.toolKind] : undefined;
-  const verb = verbs ? verbs[done ? 1 : 0] : null;
-  const fallback = { verb: null, subject: entry.title, mono: false };
-  switch (entry.toolKind) {
-    case "execute": {
-      const command = toolCommand(entry);
-      return command ? { verb, subject: command, mono: true } : fallback;
-    }
-    case "search": {
-      const query = toolQuery(entry);
-      return query ? { verb, subject: query, mono: true } : fallback;
-    }
-    case "fetch": {
-      const url = toolUrl(entry);
-      return url ? { verb, subject: url, mono: true } : fallback;
-    }
-    case "read":
-    case "edit":
-    case "delete":
-    case "move": {
+export function toolArguments(entry: ToolCallEntry): [string, string][] {
+  const input = parseObject(entry.input);
+  if (!input) return [];
+  return Object.entries(input).map(([name, value]) => [
+    name,
+    typeof value === "string" ? value : JSON.stringify(value),
+  ]);
+}
+
+type Tense = [running: string, done: string];
+
+/**
+ * The text of each surface: its verb, what it names as its object, and how a
+ * run of such calls is counted. Exhaustive, so a new surface cannot ship
+ * without saying how it reads.
+ */
+const SURFACE_TEXT: Record<
+  ToolSurface,
+  {
+    verbs: Tense | null;
+    subject: (entry: ToolCallEntry) => Omit<ToolHeadline, "verb"> | null;
+    count: (count: number) => string;
+  }
+> = {
+  read: {
+    verbs: ["Reading", "Read"],
+    subject: (entry) => {
       const path = toolPath(entry);
-      if (!path) return fallback;
+      if (!path) return null;
       const line = entry.locations[0]?.line;
       return {
-        verb,
-        subject:
-          entry.toolKind === "read" && line
-            ? `${basename(path)}:${line}`
-            : basename(path),
+        subject: line ? `${basename(path)}:${line}` : basename(path),
         mono: true,
       };
-    }
-    default:
-      return fallback;
-  }
+    },
+    count: (count) => `Read ${count} file${count === 1 ? "" : "s"}`,
+  },
+  edit: {
+    verbs: ["Editing", "Edited"],
+    subject: (entry) => {
+      const path = toolPath(entry);
+      return path ? { subject: basename(path), mono: true } : null;
+    },
+    count: (count) => `${count} edit${count === 1 ? "" : "s"}`,
+  },
+  shell: {
+    verbs: ["Running", "Ran"],
+    subject: (entry) => {
+      const command = toolCommand(entry);
+      return command ? { subject: command, mono: true } : null;
+    },
+    count: (count) => `ran ${count} command${count === 1 ? "" : "s"}`,
+  },
+  search: {
+    verbs: ["Searching", "Searched"],
+    subject: (entry) => {
+      const query = toolQuery(entry);
+      return query ? { subject: query, mono: true } : null;
+    },
+    count: (count) => `${count} search${count === 1 ? "" : "es"}`,
+  },
+  web_fetch: {
+    verbs: ["Fetching", "Fetched"],
+    subject: (entry) => {
+      const url = toolUrl(entry);
+      return url ? { subject: shortUrl(url), mono: true } : null;
+    },
+    count: (count) => `${count} fetch${count === 1 ? "" : "es"}`,
+  },
+  web_search: {
+    verbs: ["Searching the web for", "Searched the web for"],
+    subject: (entry) => {
+      const query = toolQuery(entry);
+      return query ? { subject: `“${query}”`, mono: false } : null;
+    },
+    count: (count) => `${count} web search${count === 1 ? "" : "es"}`,
+  },
+  mcp: {
+    verbs: null,
+    subject: (entry) => {
+      const server = entry.origin?.kind === "mcp" ? entry.origin.server : null;
+      const tool = mcpToolName(entry);
+      return { subject: server ? `${server} · ${tool}` : tool, mono: true };
+    },
+    count: (count) => `${count} MCP call${count === 1 ? "" : "s"}`,
+  },
+  todo: {
+    verbs: ["Updating", "Updated"],
+    subject: () => ({ subject: "todos", mono: false }),
+    count: (count) => `${count} todo update${count === 1 ? "" : "s"}`,
+  },
+  question: {
+    verbs: ["Asking", "Asked"],
+    subject: (entry) => {
+      const [first] = toolQuestions(entry);
+      return first ? { subject: first, mono: false } : null;
+    },
+    count: (count) => `${count} question${count === 1 ? "" : "s"}`,
+  },
+  think: {
+    verbs: null,
+    subject: () => null,
+    count: (count) => `${count} thought${count === 1 ? "" : "s"}`,
+  },
+  subagent: {
+    verbs: null,
+    subject: () => null,
+    count: (count) => `${count} subagent${count === 1 ? "" : "s"}`,
+  },
+  other: {
+    verbs: null,
+    subject: () => null,
+    count: (count) => `${count} tool call${count === 1 ? "" : "s"}`,
+  },
+};
+
+const EDIT_VERBS: Partial<Record<string, Tense>> = {
+  delete: ["Deleting", "Deleted"],
+  move: ["Moving", "Moved"],
+};
+
+/**
+ * The one line that names a call: verb plus object for the surfaces whose
+ * object is readable from the payload, else the Provider's own title.
+ */
+export function toolHeadline(entry: ToolCallEntry): ToolHeadline {
+  const surface = surfaceOf(entry);
+  const text = SURFACE_TEXT[surface];
+  const named = text.subject(entry);
+  if (!named) return { verb: null, subject: entry.title, mono: false };
+  const done = entry.status !== "Pending" && entry.status !== "Executing";
+  const verbs =
+    (surface === "edit" && EDIT_VERBS[entry.toolKind ?? ""]) || text.verbs;
+  return { verb: verbs ? verbs[done ? 1 : 0] : null, ...named };
+}
+
+/** How a run of `count` calls on one surface reads in a group header. */
+export function surfaceCount(surface: ToolSurface, count: number): string {
+  return SURFACE_TEXT[surface].count(count);
 }
 
 /** Pretty JSON for a raw payload, or the text as it came when it is not JSON. */

@@ -157,6 +157,7 @@ fn tool_patch(update: &acp2::ToolCallUpdate) -> ToolCallPatch {
             .unwrap_or_default(),
         metadata: None,
         async_task_id: None,
+        surface: None,
     }
 }
 

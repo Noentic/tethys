@@ -479,6 +479,11 @@ export type ElicitationField = {
 	description: string | null,
 	required: boolean,
 	kind: ElicitationFieldKind,
+	/**
+	 *  The key of the choice field this free-text field answers as "Other",
+	 *  when the Provider pairs them; the form renders it inside that choice.
+	 */
+	custom_for?: string | null,
 };
 
 /**  The shape of one elicitation field, carrying its constraints and default. */
@@ -487,7 +492,9 @@ export type ElicitationFieldKind = { kind: "text"; default: string | null; min_l
  *  A named format (`email`, `uri`, `date`, `date-time`) or `None` when
  *  the Provider declared an unrecognised one.
  */
-format: string | null } | { kind: "number"; default: number | null; min: number | null; max: number | null } | { kind: "boolean"; default: boolean | null } | { kind: "enum"; options: ElicitationEnumOption[]; default: string | null };
+format: string | null } | { kind: "number"; default: number | null; min: number | null; max: number | null } | { kind: "boolean"; default: boolean | null } | { kind: "enum"; options: ElicitationEnumOption[]; default: string | null } | 
+/**  Pick any number of `options`, between `min_items` and `max_items`. */
+{ kind: "multi-enum"; options: ElicitationEnumOption[]; min_items: number | null; max_items: number | null; default: string[] | null };
 
 /**  The three terminal outcomes of an elicitation (UI-04 / U9). */
 export type ElicitationOutcome = "accepted" | "declined" | "cancelled";
@@ -504,6 +511,8 @@ export type ElicitationRequest = {
 	description: string | null,
 	url?: string | null,
 	fields: ElicitationField[],
+	/**  The tool call this request asks on behalf of (a question tool). */
+	tool_call_id?: string | null,
 };
 
 /**  The user's answer to an elicitation request. */
@@ -514,7 +523,7 @@ export type ElicitationResponse = {
 };
 
 /**  One typed answer value. */
-export type ElicitationValue = { type: "text"; value: string } | { type: "number"; value: number | null } | { type: "boolean"; value: boolean };
+export type ElicitationValue = { type: "text"; value: string } | { type: "number"; value: number | null } | { type: "boolean"; value: boolean } | { type: "text-list"; value: string[] };
 
 /**  Materialized thread entry representation. */
 export type Entry = {
@@ -1214,6 +1223,7 @@ export type ToolCallPatch = {
 	locations?: ToolLocation[],
 	metadata?: string | null,
 	async_task_id?: string | null,
+	surface?: ToolSurface | null,
 };
 
 export type ToolCallStatus = "Pending" | "Executing" | "Completed" | "Failed" | "Cancelled";
@@ -1240,6 +1250,14 @@ export type ToolLocation = {
  *  no code in M1.6c sets it, and an entry with no `origin` is a built-in call.
  */
 export type ToolOrigin = { kind: "builtin" } | { kind: "mcp"; server: string } | { kind: "skill"; name: string } | { kind: "subagent" };
+
+/**
+ *  The Tethys surface a tool call renders as, set only where ACP's `ToolKind`
+ *  is too coarse to tell (a todo write, a question, a web search): by the
+ *  shared ACP mapper from the tool's input, or by a Provider adapter from the
+ *  tool's name. Otherwise the webview derives it from `kind` and `origin`.
+ */
+export type ToolSurface = "read" | "edit" | "shell" | "search" | "web_fetch" | "web_search" | "mcp" | "todo" | "question" | "think" | "subagent" | "other";
 
 /**  MCP transport of a registry entry. */
 export type TransportKind = "stdio" | "http" | "sse";

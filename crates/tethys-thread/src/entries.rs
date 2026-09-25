@@ -327,4 +327,13 @@ fn merge_tool_call(existing: &mut ToolCallPatch, incoming: &ToolCallPatch) {
             .parent_tool_call_id
             .clone_from(&incoming.parent_tool_call_id);
     }
+    if incoming.metadata.is_some() {
+        existing.metadata.clone_from(&incoming.metadata);
+    }
+    if incoming.async_task_id.is_some() {
+        existing.async_task_id.clone_from(&incoming.async_task_id);
+    }
+    if incoming.surface.is_some() {
+        existing.surface = incoming.surface;
+    }
 }

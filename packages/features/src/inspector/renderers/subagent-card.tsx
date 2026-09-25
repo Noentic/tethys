@@ -3,7 +3,7 @@ import { cn, getEntryRenderer, StatusDot } from "@tethys/ui";
 import { useEffect, useId, useState } from "react";
 import type { ChildIndex } from "../nest-children";
 import { cardChildren } from "../nest-children";
-import { DisclosureChevron } from "./tool-kind-icon";
+import { DisclosureChevron } from "./disclosure-chevron";
 import { ToolOriginTag } from "./tool-origin-tag";
 
 function awaiting(entry: SessionEntry): boolean {

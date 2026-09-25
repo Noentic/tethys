@@ -760,15 +760,22 @@ components:
     onClose: "closing the dialog, by any route (success, cancel, Esc, expiry), triggers an immediate provider health re-check — docs/pages-views-spec.md §5.2"
     agentAuth: "agent-auth method only (the Provider runs its own OAuth and opens the browser): a `{typography.body-sm}` / {semantic.text-muted} line `Waiting for {Provider} to finish sign-in…` and a `Cancel` action. No code field and no countdown — the agent, not Tethys, holds the flow, and Tethys shows nothing it could read as a credential"
   permission-request-card:
-    preview: "What the request would allow, shown above its options: a file request shows the waiting edit as a {components.file-diff-card} (matched to the pending call on that file; nothing is shown when no call matches, never a guessed diff), a command request shows `$ <command>` in a sunken well"
+    preview: "What the request would allow, shown above its options: a file request shows the waiting edit as a {components.file-diff-card} capped at 6 rows before `Show all` (matched to the pending call on that file; nothing is shown when no call matches, never a guessed diff), a command request shows `$ <command>` in a sunken well. The transcript row for the same call stays folded while the request waits, so the diff is shown once"
     backgroundColor: "{semantic.surface-card}"
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.md}"
     padding: "{spacing.lg}"
     pendingTreatment: "the card keeps its {semantic.hairline} border and gains an attention treatment rather than a perimeter stroke: a {semantic.status-warning-soft} wash in place of the card's own plane (the token is an alpha, so it composites over whatever the card sits on), a 2px {semantic.status-warning} left rule, and the breathing `status-dot` in the header. Same grammar as {components.turn-notice.warningRule}. A saturated perimeter is the loudest possible way to say 'a decision is waiting' and the only way it can be said on a 360px column; the tint plus the rule carry it at a fraction of the ink, and the motion carries the rest"
     pendingHover: "hover never recolours the rule or the wash — the card is not the affordance, its buttons are"
-    header: "a 32px {semantic.status-warning-soft} icon tile in {semantic.status-warning} naming what the request touches (`Pencil` for a file or an edit, `Terminal` for a command, `ShieldCheck` otherwise), the title in {typography.label-md}, and the file path or command under it as a {typography.mono-micro} chip"
-    actions: "the Provider's options in the Provider's order. Variant follows the ACP option kind: `allow_once` primary, `reject_*` destructive, anything else secondary. Each carries its number key as a trailing `kbd` (`aria-keyshortcuts`), never a `1.` prefix"
+    header: "one line: the breathing `status-dot`, the Provider's title in {typography.label-md}, and the edit's `+a −b` at the end (P17). No icon tile and no path chip: the diff header or the command well already names the object"
+    actions: "{components.choice-list} of the Provider's options in the Provider's order. A `reject_*` option's label reads in {semantic.status-danger}; no option is a filled button"
+  choice-list:
+    rowHeight: 32px
+    typography: "{typography.label-md}; a Provider-sent description under it in {typography.body-sm} / {semantic.text-muted}"
+    rounded: "{rounded.sm}"
+    scope: "The numbered answer list shared by {components.permission-request-card} and {components.elicitation-card} (P7). One full-width row per option in the Provider's order, its number as a trailing `keycap-pill` (`aria-keyshortcuts`), never a `1.` prefix. Hover and keyboard focus paint {semantic.surface-hover}; a chosen row {semantic.surface-active}. A multiple choice leads each row with a 14px check box"
+    keys: "`↑`/`↓` move between rows, `Enter` or `1`–`9` choose. A single choice answers at once; a multiple choice toggles. A {typography.mono-micro} / {semantic.text-muted} hint line under the rows names the keys"
+    a11y: "a `fieldset` named by the request; rows are buttons, a multiple choice's rows carry `aria-pressed`"
   elicitation-card:
     backgroundColor: "{semantic.surface-card}"
     border: "1px solid {semantic.hairline}"
@@ -776,9 +783,10 @@ components:
     padding: "{spacing.lg}"
     pendingTreatment: "{components.permission-request-card.pendingTreatment}. The two request shapes are one visual family: a user answering either one is doing the same job"
     fieldGroup: "{components.schema-field-group}"
-    decision: "a property with a fixed set of options renders as a numbered decision, one line per option (the option's title; ACP's option type carries a value and a title but no description, so the card never invents a trade-off line — the property's own description is the help text above the options). Keys `1`–`9` select. A free-text `Other` is offered only where the schema permits free text (Interaction Patterns P7)"
-    paging: "a request with more than one property may page one per step with an `n of m` counter and `Back`; the counter is text. A single property renders unpaged"
-    actions: "the three protocol outcomes stay distinct and labelled: the submit button sends `accept` with the answers, `Skip` sends `decline` (the agent proceeds on its own judgement), and dismissing without answering sends `cancel`. `Skip` is never worded `Cancel`"
+    decision: "a single- or multiple-choice property renders as a {components.choice-list}: the option's title, and its description only where the Provider sent one (the card never invents a trade-off line). A free-text field the Provider marks as another field's `Other` (`custom_for`, from the `_askUserQuestionCustomAnswer` marker) renders as a text row inside that question's page, never a page of its own (Interaction Patterns P7)"
+    paging: "a request with more than one question pages one per step behind a `‹ n of m ›` pager in the header, next to a `Question` label and the question's short header; the counter is text. Picking a single choice answers its page and moves on; the last page submits"
+    actions: "`Skip` (ghost) sends `decline` and the secondary `Next` / `Submit` sends `accept` with the answers. `Skip` is never worded `Cancel`"
+    record: "answered, the transcript row folds to one line: `Asked · <question> → Postgres; Auth, Billing`, or `Skipped · <question>`. A question tool call the form answered is not drawn again as a tool row"
     url: "a URL-mode request renders the Provider's title, the host of the URL in {typography.mono-code}, and `Open in browser`; the page is never embedded"
   provider-popover:
     backgroundColor: "{semantic.surface-overlay}"
@@ -953,20 +961,24 @@ components:
     backgroundColor: "{semantic.surface-nested}"
     border: "1px solid {semantic.hairline}"
     rounded: "{rounded.sm}"
-    kindIcon: "one Geist Icon per ACP tool kind — read, edit, delete, move, search, execute, think, fetch, switch_mode, other; an unrecognised kind renders `other`. The icon is decoration: the tool's title carries the meaning"
+    surface: "every call renders as one Tethys surface — read, edit, shell, search, web_fetch, web_search, mcp, todo, question, think, subagent, other. Where ACP's kind cannot tell (a todo write, a question, a web search), the shared ACP mapper names the surface from the tool's input (`todos`, `questions`, a `query` on a `fetch` call) and turns a todo write into a plan; a Provider adapter may name it from the tool's name instead, and that wins. Otherwise it follows from the ACP kind and the call's origin. A new Provider on standard ACP needs no mapping and adds no rendering"
+    kindIcon: "one Geist Icon per surface (a delete or move keeps its own); decoration only, the headline carries the meaning"
     status: "`status-dot` per call state; `failed` also writes the word `Failed` beside the dot, so a failure is never colour alone"
     content: "renders each tool-content item: text and image blocks; a diff as a compact excerpt on `diff-viewer` tokens with `View diff` where the workspace has git; a terminal as an inline sunken well tailing the output with an `Open terminal` action to `terminal-sheet`"
-    locations: "`path:line` chips (`composer-chip` tokens) under the header, at most three and then `+N`. Activating one opens the Inspector diff for that path when the turn changed it, otherwise copies the path"
+    locations: "nothing under the header: the headline already names the object. A search with several matches lists them as clickable `path:line` rows inside its body"
     origin: "a `tool-origin-tag` after the title where the call did not come from the Provider's built-in tools"
-    expansion: "collapsed by default. A `failed` call, a call awaiting permission and a file edit with a diff open themselves; after that the user's own toggle wins and streaming updates never reset it"
-    headline: "the header names the act and its object, in the call's tense: `Editing` / `Edited README.md`, `Running` / `Ran pnpm test`, `Read app.ts:40`, `Searched TODO`, `Fetched <url>`; the object in {typography.mono-code}, truncating. Where the payload names no object, the Provider's own title. A file operation carries its `+a −b` at the row's end (P17)"
+    expansion: "collapsed by default. Only a `failed` call and a file edit with a diff open themselves; a call awaiting permission stays folded because the request docks above the composer. After that the user's own toggle wins and streaming updates never reset it"
+    headline: "the header names the act and its object, in the call's tense: `Editing` / `Edited README.md`, `Running` / `Ran pnpm test`, `Read app.ts:40`, `Searched TODO`, `Fetched host/path`, `Searched the web for “query”`, `github · create_issue`; a path or command in {typography.mono-code}, truncating. Where the payload names no object, the Provider's own title. A file operation carries its `+a −b` at the row's end (P17)"
     bodies: "{components.tool-card}"
   tool-card:
     scope: "The body of a {components.tool-accordion}, one shape per kind of work (P20). Payload fields are read under every spelling a Provider uses (`file_path` / `filePath` / `path`, `old_string` / `oldString` / `oldText`); nothing is invented when none is present"
     edit: "`edit`, `delete`, `move`: a {components.file-diff-card} per changed file, from the Provider's ACP diff content first, then a patch in its output (OpenCode `metadata.diff`), then the before and after text in its input; a write with only new content reads as an all-added file"
     execute: "a sunken well with `$ <command>` and, when reported, `exit <code>` ({semantic.status-danger} when non-zero), then the output's last 12 lines with `Show all N lines`"
-    read: "`read`, `search`, `fetch`: the result in a sunken well, tailing the same way; a `search` names its query in the header"
-    other: "anything else, an MCP tool or a Provider's own: `Arguments` and `Result` as formatted JSON, with the {components.tool-origin-tag} in the header"
+    read: "`read`, `search`, `web_fetch`, `web_search`: the result text in a sunken well, tailing the same way. A Provider's envelope (`{\"output\": …}`, OpenCode's `<path>…<content>`) is unwrapped; the envelope stays behind `Raw`"
+    mcp: "the arguments as a two-column `dl` (name, then the value in {typography.mono-code}), then the result in a sunken well"
+    todo: "the list the call wrote, as {components.task-row}s; a todo write whose Provider also sent a plan is not drawn, the plan card records it"
+    question: "read-only: what was asked and the answer returned, for a Provider that asked without a form"
+    other: "anything else, a Provider's own tool: `Arguments` and `Result` as formatted JSON, with the {components.tool-origin-tag} in the header"
     raw: "every formatted body ends with a `Raw` disclosure holding the payload exactly as the Provider sent it; raw JSON is never the default view"
   tool-origin-tag:
     backgroundColor: "{semantic.surface-hover}"
@@ -984,10 +996,10 @@ components:
     rounded: "{rounded.sm}"
     padding: 4px 8px
     height: 28px
-    scope: "Collapses a run of consecutive tool calls into one summary row, so a 30-call turn is not 30 rows (Interaction Patterns P1). Reads `Read 3 files · ran 2 commands ›`: counts by tool kind (read → files, execute → commands, edit/delete/move → edits, search → searches, fetch → fetches, anything else → tool calls), in first-seen order, the first three kinds and then `+N more`. A run is a maximal sequence of tool-call entries; any message, plan, notice, permission or elicitation entry ends it"
+    scope: "Collapses a run of consecutive tool calls into one summary row, so a 30-call turn is not 30 rows (Interaction Patterns P1). Reads `Read 3 files · ran 2 commands ›`: counts by surface (read → files, shell → commands, edit → edits, search → searches, web_fetch → fetches, mcp → MCP calls, anything else → tool calls), in a fixed order, the first three and then `+N more`. A run is a maximal sequence of tool-call entries; any message, plan, notice, permission or elicitation entry ends it"
     live: "while any member is pending or executing the row shows a 14px {components.activity-orb} and the in-flight call's headline (`Running pnpm test`), and the counts update in place with no layout shift"
     stat: "a run with file edits carries their combined `+a −b` on the row (P17)"
-    expand: "expanding lists the member `tool-accordion`s, each still individually collapsible. A run containing a failed call or a call awaiting permission renders expanded with only those members open, and does not collapse while a member awaits: something that asks the user is never made unreachable (State Precedence rule 5)"
+    expand: "expanding lists the member `tool-accordion`s, each still individually collapsible. A run containing a failed call renders expanded with only that member open. A member awaiting permission does not open the run: the request is answered in the {components.request-dock}, which keeps it reachable (State Precedence rule 5)"
     density: "Settings / General `Tool call density`: `Summary` (default) groups as above; `Full` renders every call as its own `tool-accordion` with no groups"
     a11y: "a `button` with `aria-expanded` and `aria-controls` on the member list; the summary sentence is its accessible name; an in-flight run sets `aria-busy`"
   subagent-card:
@@ -1038,12 +1050,13 @@ components:
     stepDone: "a completed step collapses to a muted check and its title; only the in-progress step keeps full weight (Interaction Patterns P1)"
     steps: "{components.task-row}"
     progress: "the heading `Plan · 3/5 complete` carries a 64px × 4px bar filled to the share done"
-    transcript: "the plan also renders where it arose in the transcript, as a compact {semantic.surface-nested} card of the same task rows (`Plan · 3/5`), so progress is visible without the Inspector"
+    transcript: "the plan also renders where it arose in the transcript, as a compact {semantic.surface-nested} card of the same task rows headed `Todos · 3/5`, updated in place. A finished list folds to `Todos · 5/5 done`"
+    pin: "while a list has open steps, a one-line {semantic.surface-nested} pin sits above the composer, over the {components.request-dock}: the step's marker, `3/5` in {typography.mono-micro}, and the step in progress, truncating. Activating it lists every step; it disappears once every step is done"
   task-row:
     height: 24px
     typography: "{typography.body-sm}"
     marker: "a 20px slot: `Check` in {semantic.status-success} when complete, the {components.activity-orb} in {semantic.accent-agent-active} while in progress, a 12px ring in {semantic.border-control} when pending"
-    text: "complete {semantic.text-muted}; in progress {semantic.text-primary} at weight 500; pending {semantic.text-secondary}"
+    text: "complete {semantic.text-muted}, struck through; in progress {semantic.text-primary} at weight 500; pending {semantic.text-secondary}"
     a11y: "an ordered list; the in-progress row carries `aria-current=step`, and each row names its status in words for assistive tech"
   diff-viewer:
     backgroundColor: "{semantic.surface-sunken}"
@@ -1518,13 +1531,13 @@ A pattern is adopted only where it is Observed or Documented **and** fits an ACP
 
 | # | Rule | Applied in | Grade | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| P1 | **Collapse execution, keep the summary.** Tool calls, thoughts, finished plan steps and unmodified diff context default to a one-line summary with depth one disclosure away. Anything that failed or asks the user opens itself | `tool-run-group`, `tool-accordion`, `thought-block`, `plan-panel.stepDone`, `diff-viewer.collapsedContext` | Observed, Documented | `tool-run-group` new; rest existing |
+| P1 | **Collapse execution, keep the summary.** Tool calls (all but an edit's diff), thoughts, finished plan steps and unmodified diff context default to a one-line summary with depth one disclosure away. Anything that failed opens itself; anything that asks the user docks above the composer | `tool-run-group`, `tool-accordion`, `thought-block`, `plan-panel.stepDone`, `diff-viewer.collapsedContext` | Observed, Documented | `tool-run-group` new; rest existing |
 | P2 | **Status is a sentence, not a colour.** Every non-healthy state carries its reason in words in the same row: the dot says *that*, the words say *what* and how to fix it | `provider-row` status subtext, `health-badge`, `turn-notice`, `tool-accordion` `Failed`, `provider-capability-notice`, `working-indicator` | Observed | Existing rule for Providers; extended to the transcript |
 | P3 | **Enabled-but-unreachable is not disabled.** Toggle and health are independent axes: a row switched on with a red dot reads as a fault; a row switched off by policy is dimmed and its reason is worded as a choice | `provider-row`, `toggle-switch` | Observed | M1.12 verifies with two fixture rows |
 | P4 | **Git context rides with the composer.** Branch, isolation and the thread's diff stat sit next to the input, never in a separate tab. *Next to* means adjacent: in a thread the branch bar docks directly above the card, outside it, so the card holds only what and how | `branch-worktree-pill`, `branch-bar` | Observed | Amended d0-rc13 |
 | P5 | **Controls that change agent behaviour sit beside the input**, not two clicks away in Settings. One home per control | `composer-config-chip`, prompt-card mode and context pills | Observed | New |
 | P6 | **The empty or disabled state names the fix.** The disabled control says what is missing and where to fix it | `prompt-card`, `model-selector-pill` zero-provider, `workspace-selector-pill` unresolved, `session-config-panel`, `code-editor-well` empty state, `activity-ledger`, `turn-notice` `connection-lost` | Observed | Existing; extended |
-| P7 | **Decisions are asked, not buried in prose.** A real fork is a numbered choice with an escape hatch (`Other`) and a way to decline (`Skip`). *Adapted:* ACP's option type has a value and a title but no description, so the card renders the title and the property's help text and never invents a trade-off line | `elicitation-card`, `permission-request-card` | Observed | Extended |
+| P7 | **Decisions are asked, not buried in prose.** A real fork is a numbered choice with an escape hatch (`Other`) and a way to decline (`Skip`). *Adapted:* an ACP option carries a title and at most a Provider-sent description, so the card renders only those and the property's help text and never invents a trade-off line | `elicitation-card`, `permission-request-card`, `choice-list` | Observed | Extended |
 | P8 | **One primary action, pinned where the next click goes.** `Commit…` lives in the always-visible branch bar, never in a panel that can be collapsed or pushed off-screen; review (Changes) and approval (request dock) are separate words for separate acts | `branch-bar`, prompt submit, `turn-notice` single action | Observed | Amended d0-rc12 (supersedes option a) |
 | P9 | **Zero reports zero honestly.** A metric that was reported as zero renders `0`; one that was not reported is hidden or says so. Never sample data, never an estimate | `usage-bar`, `activity-ledger`, `code-editor-well` empty state | Observed | New wording |
 | P10 | **Two indexes over one history.** The transcript answers "what happened, in order"; the ledger answers "what did this session touch, by kind". Neither replaces the other | `activity-ledger` beside the Stage; the study's Progress and Outputs blocks already map to `plan-panel` and `provider-artifact` | Observed | New |

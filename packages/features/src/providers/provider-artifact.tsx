@@ -2,7 +2,7 @@ import { FileText, Image } from "@nebutra/icons";
 import type { BaseSessionEntry } from "@tethys/state";
 import { cn } from "@tethys/ui";
 import { useId, useState } from "react";
-import { DisclosureChevron } from "../inspector/renderers/tool-kind-icon";
+import { DisclosureChevron } from "../inspector/renderers/disclosure-chevron";
 import { ProviderCapabilityNotice } from "./capability-notice";
 
 export type ProviderArtifactKind = "text" | "image" | (string & {});

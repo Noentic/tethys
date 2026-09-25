@@ -1,10 +1,12 @@
 import type { ToolCallEntry } from "@tethys/state";
 import { describe, expect, it } from "vitest";
 import {
+  surfaceOf,
   toolCommand,
   toolDiffs,
   toolHeadline,
   toolOutputText,
+  toolTodos,
 } from "./tool-view";
 
 function call(patch: Partial<ToolCallEntry>): ToolCallEntry {
@@ -88,5 +90,87 @@ describe("tool view", () => {
       subject: "Custom",
       mono: false,
     });
+  });
+
+  it("reads the file text out of a raw envelope and the content streamed after it", () => {
+    const envelope = JSON.stringify({
+      output:
+        "<path>/repo/README.md</path>\n<type>file</type>\n<content>\n1: # nebeng\n</content>",
+    });
+    expect(toolOutputText(call({ output: envelope }))).toBe("1: # nebeng");
+    // The raw output followed by the same text streamed as content.
+    expect(
+      toolOutputText(
+        call({ output: `${envelope}<path>a</path>\n<content>\n1: # x` }),
+      ),
+    ).toBe("1: # x");
+    // A bare JSON string is the text itself, not the quoted string.
+    expect(toolOutputText(call({ output: JSON.stringify("1\tline") }))).toBe(
+      "1\tline",
+    );
+  });
+
+  it("derives a surface from kind and origin, and keeps an adapter's surface", () => {
+    expect(surfaceOf(call({ toolKind: "execute" }))).toBe("shell");
+    expect(surfaceOf(call({ toolKind: "move" }))).toBe("edit");
+    expect(
+      surfaceOf(
+        call({ toolKind: "other", origin: { kind: "mcp", server: "github" } }),
+      ),
+    ).toBe("mcp");
+    expect(surfaceOf(call({ toolKind: "fetch", surface: "web_search" }))).toBe(
+      "web_search",
+    );
+    expect(surfaceOf(call({}))).toBe("other");
+  });
+
+  it("names MCP, web search, and question calls by what they did", () => {
+    expect(
+      toolHeadline(
+        call({
+          title: "mcp__github__create_issue",
+          origin: { kind: "mcp", server: "github" },
+        }),
+      ),
+    ).toEqual({ verb: null, subject: "github · create_issue", mono: true });
+    expect(
+      toolHeadline(
+        call({
+          surface: "web_search",
+          input: JSON.stringify({ query: "acp spec" }),
+        }),
+      ),
+    ).toEqual({
+      verb: "Searched the web for",
+      subject: "“acp spec”",
+      mono: false,
+    });
+    expect(
+      toolHeadline(
+        call({
+          surface: "question",
+          input: JSON.stringify({ questions: [{ question: "Which db?" }] }),
+        }),
+      ).subject,
+    ).toBe("Which db?");
+  });
+
+  it("reads a todo write's list from its input", () => {
+    expect(
+      toolTodos(
+        call({
+          input: JSON.stringify({
+            todos: [
+              { content: "Write", status: "completed" },
+              { content: "Ship", status: "in_progress" },
+              { content: "?", status: "cancelled" },
+            ],
+          }),
+        }),
+      ).map((step) => [step.content, step.status]),
+    ).toEqual([
+      ["Write", "Completed"],
+      ["Ship", "InProgress"],
+    ]);
   });
 });

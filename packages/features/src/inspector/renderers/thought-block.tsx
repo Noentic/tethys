@@ -2,7 +2,7 @@ import type { TurnMessageEntry } from "@tethys/state";
 import { cn } from "@tethys/ui";
 import { useEffect, useId, useRef, useState } from "react";
 import { formatElapsed, useNow } from "../use-now";
-import { DisclosureChevron } from "./tool-kind-icon";
+import { DisclosureChevron } from "./disclosure-chevron";
 import { useRenderedMarkdown } from "./turn-message";
 
 /**

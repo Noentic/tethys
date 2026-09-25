@@ -137,6 +137,7 @@ where
                                         description: None,
                                         url: Some(url),
                                         fields: Vec::new(),
+                                        tool_call_id: None,
                                     }
                                 })
                             })
@@ -146,6 +147,7 @@ where
                                 description: None,
                                 url: None,
                                 fields: Vec::new(),
+                                tool_call_id: None,
                             });
                         let resolve_shared = shared.clone();
                         connection.spawn(async move {

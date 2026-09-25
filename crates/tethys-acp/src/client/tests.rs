@@ -434,3 +434,85 @@ fn unresolved_secret_refs_are_never_sent() {
         serde_json::to_value(v1_mcp_servers(&values, &McpTransports::all())).expect("json");
     assert!(mapped[0]["env"].as_array().expect("env array").is_empty());
 }
+
+#[test]
+fn a_chosen_reject_option_reaches_the_agent_as_selected() {
+    let decision = |outcome, option_id: Option<&str>| PermissionDecision {
+        outcome,
+        option_id: option_id.map(str::to_owned),
+        decided_by: tethys_schema::thread::Decider::User,
+    };
+    let rejected = serde_json::to_value(v1_permission_response(decision(
+        PermOutcome::Rejected,
+        Some("reject-once"),
+    )))
+    .expect("json");
+    assert_eq!(rejected["outcome"]["outcome"], "selected");
+    assert_eq!(rejected["outcome"]["optionId"], "reject-once");
+
+    let cancelled = serde_json::to_value(v1_permission_response(decision(
+        PermOutcome::Rejected,
+        None,
+    )))
+    .expect("json");
+    assert_eq!(cancelled["outcome"]["outcome"], "cancelled");
+}
+
+/// A Provider with no integration at all still gets the todo surface and plan
+/// from a plain tool call: the shared mapper infers them from the input.
+#[test]
+fn a_provider_without_a_hook_gets_todo_and_question_surfaces() {
+    struct TestPermissionResolver;
+
+    #[async_trait]
+    impl PermissionResolver for TestPermissionResolver {
+        async fn resolve(
+            &self,
+            _session: &SessionId,
+            _request: PermissionRequested,
+        ) -> PermissionDecision {
+            PermissionDecision {
+                outcome: PermOutcome::Cancelled,
+                option_id: None,
+                decided_by: tethys_schema::thread::Decider::Policy,
+            }
+        }
+    }
+
+    let options = AcpConnectOptions::new(AcpProtocol::V1, Arc::new(TestPermissionResolver));
+    let shared = Shared::new(&options);
+    let call = |id: &str, input: serde_json::Value| TurnEventBody::ToolCallUpsert {
+        tool_call_id: id.into(),
+        patch: tethys_schema::thread::ToolCallPatch {
+            input: Some(input.to_string()),
+            ..Default::default()
+        },
+    };
+    let mut events = vec![
+        call(
+            "todo",
+            json!({"todos": [{"content": "Ship", "status": "pending"}]}),
+        ),
+        call("ask", json!({"questions": [{"question": "Which?"}]})),
+    ];
+
+    shared.process_session_update("thread", &json!({}), &mut events);
+
+    let surfaces: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            TurnEventBody::ToolCallUpsert { patch, .. } => patch.surface,
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        surfaces,
+        [
+            tethys_schema::thread::ToolSurface::Todo,
+            tethys_schema::thread::ToolSurface::Question
+        ]
+    );
+    assert!(events.iter().any(
+        |event| matches!(event, TurnEventBody::PlanUpsert { plan, .. } if plan.entries.len() == 1)
+    ));
+}

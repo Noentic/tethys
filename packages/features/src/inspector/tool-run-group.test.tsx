@@ -54,29 +54,28 @@ describe("tool-run-group (M1.7 U15)", () => {
     expect(screen.getByText("Boom")).toBeTruthy();
   });
 
-  it("does not collapse while a member awaits permission", () => {
+  it("stays folded while a member waits: the request docks above the composer", () => {
     const run = buildToolRun([call("ok"), call("wait", { status: "Pending" })]);
     render(<ToolRunGroup run={run} />);
     const row = screen.getByTestId("tool-run-group-row");
-    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(row.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(row);
-    // Still expanded: the awaiting member keeps it open.
     expect(row.getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("a user collapse is not reopened by a streaming update", () => {
+  it("starts folded and keeps the reader's choice through streaming updates", () => {
     const { rerender } = render(
       <ToolAccordionRenderer entry={call("a", { status: "Pending" })} />,
     );
     const row = () => screen.getByRole("button");
-    expect(row().getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(row());
     expect(row().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(row());
+    expect(row().getAttribute("aria-expanded")).toBe("true");
     rerender(
       <ToolAccordionRenderer
         entry={call("a", { status: "Executing", output: "streaming" })}
       />,
     );
-    expect(row().getAttribute("aria-expanded")).toBe("false");
+    expect(row().getAttribute("aria-expanded")).toBe("true");
   });
 });

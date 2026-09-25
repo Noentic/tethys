@@ -647,6 +647,8 @@ impl Shared {
         let child_session_id = self.session_update_handler.as_ref().and_then(|handler| {
             handler(session_id, prompt_request_id.as_deref(), raw_update, events)
         });
+        // After the Provider's hook, so a surface it named by tool name wins.
+        crate::surface::infer_tool_surfaces(events);
         if let Some(request_id) = prompt_request_id {
             let reported = events.iter().any(|event| match event {
                 TurnEventBody::SessionInfo(info) => matches!(
