@@ -36,6 +36,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { RequestDock } from "../approvals/request-dock";
+import { TodoPin } from "../inspector/renderers/plan-panel";
 import { useSessionState } from "../inspector/use-session-state";
 import { BranchBar } from "../review/branch-bar";
 import {
@@ -320,7 +321,11 @@ export function DockedPromptCard({
         className,
       )}
     >
-      <RequestDock entries={state.entries} />
+      <TodoPin entries={state.entries} />
+      <RequestDock
+        entries={state.entries}
+        threadStatus={state.status}
+      />
 
       <BranchBar
         sessionId={sessionId}

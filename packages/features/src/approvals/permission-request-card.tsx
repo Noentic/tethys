@@ -1,17 +1,16 @@
-import { Pencil, ShieldCheck, Terminal } from "@nebutra/icons";
-import { FileDiffCard } from "@tethys/diff";
+import { DiffStat, FileDiffCard } from "@tethys/diff";
 import type {
   PermissionRequestEntry,
   PermissionRequestItem,
   SessionEntry,
   ToolCallEntry,
 } from "@tethys/state";
-import { Button, cn, StatusDot } from "@tethys/ui";
-import type React from "react";
+import { cn, StatusDot } from "@tethys/ui";
 import { useMemo, useState } from "react";
 import { useInspectorClient } from "../client-context";
 import { toolDiffs, toolPath } from "../inspector/tool-view";
 import { useSessionState } from "../inspector/use-session-state";
+import { ChoiceList } from "./choice-list";
 
 const FILE_KINDS = ["edit", "delete", "move"];
 
@@ -49,35 +48,6 @@ function rejects(kind: string | null | undefined): boolean {
   return kind?.startsWith("reject") ?? false;
 }
 
-/** Button variant per ACP option kind: allow once leads, a reject reads as a
- * quiet destructive, anything else is secondary. */
-export function optionVariant(
-  kind: string | null | undefined,
-): "primary" | "secondary" | "destructive" {
-  if (kind === "allow_once") return "primary";
-  if (rejects(kind)) return "destructive";
-  return "secondary";
-}
-
-/** What the request touches: an icon for its tile, and the file or command. */
-function requestSubject(request: PermissionRequestItem): {
-  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  detail: string | null;
-} {
-  const subject = request.subject;
-  if (subject?.File) return { Icon: Pencil, detail: subject.File.path };
-  if (subject?.Command) {
-    return { Icon: Terminal, detail: subject.Command.command };
-  }
-  if (/^(edit|write|create|delete|move)\b/i.test(request.title)) {
-    return { Icon: Pencil, detail: null };
-  }
-  if (/^(run|bash|exec)/i.test(request.title)) {
-    return { Icon: Terminal, detail: null };
-  }
-  return { Icon: ShieldCheck, detail: null };
-}
-
 function defaultsToNo(metadata?: string | null): boolean {
   if (!metadata) return false;
   try {
@@ -93,28 +63,22 @@ function defaultsToNo(metadata?: string | null): boolean {
   }
 }
 
-/** The diff a file permission would allow, when its waiting call has one. */
-function PendingEditPreview({ request }: { request: PermissionRequestItem }) {
+/** The diffs a file permission would allow, when its waiting call has them. */
+function usePendingDiffs(request: PermissionRequestItem) {
   const context = useInspectorClient();
   const session = useSessionState(context?.threadId ?? "");
-  const diffs = useMemo(() => {
+  return useMemo(() => {
     const call = pendingEditFor(request, session.entries);
     return call ? toolDiffs(call) : [];
   }, [request, session.entries]);
-  if (diffs.length === 0) return null;
-  return (
-    <div className="flex flex-col gap-sm">
-      {diffs.map((detail) => (
-        <FileDiffCard key={detail.path} detail={detail} />
-      ))}
-    </div>
-  );
 }
 
 /**
- * The inline permission card (PRM-01..04). Renders the Provider's own
- * `options` array in the Provider's order — never a hardcoded approve/reject
- * pair — and is never focus-trapped (DESIGN a11y).
+ * The permission card (PRM-01..04, DESIGN.md `permission-request-card`): the
+ * pending treatment — hairline, warning wash, breathing dot
+ * — around one line naming the request, what it would run or change, and the
+ * Provider's own `options` as a numbered choice list in the Provider's order.
+ * Never focus-trapped (DESIGN a11y).
  */
 export function PermissionRequestCard({
   entry,
@@ -126,21 +90,26 @@ export function PermissionRequestCard({
   compact?: boolean;
 }) {
   const context = useInspectorClient();
+  const session = useSessionState(context?.threadId ?? "");
   const { request } = entry;
   const resolution = request.resolution;
   const [pendingOption, setPendingOption] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const respond = async (optionId: string) => {
     if (!context) {
       return;
     }
     setPendingOption(optionId);
+    setErrorMessage(null);
     try {
       await context.client.permission.respond(
         context.threadId,
         request.reqId,
         optionId,
       );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setPendingOption(null);
     }
@@ -198,6 +167,42 @@ export function PermissionRequestCard({
     );
   }
 
+  if (session.status === "interrupted" || session.status === "error") {
+    if (compact) {
+      return (
+        <div
+          data-entry-kind="permission_request"
+          data-resolved="true"
+          className="flex items-center gap-sm text-label-sm text-(--tethys-text-muted)"
+        >
+          <StatusDot status="interrupted" inline />
+          <span>Request expired (session {session.status})</span>
+        </div>
+      );
+    }
+    return (
+      <section
+        data-entry-kind="permission_request"
+        data-resolved="true"
+        aria-label={`Expired permission: ${request.title}`}
+        className={cn(
+          "rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested) p-md",
+          className,
+        )}
+      >
+        <header className="flex items-center gap-sm">
+          <StatusDot status="interrupted" inline />
+          <h3 className="text-label-md text-(--tethys-text-secondary)">
+            {request.title}
+          </h3>
+        </header>
+        <p className="mt-1 text-body-sm text-(--tethys-text-muted)">
+          Request expired: session was {session.status}.
+        </p>
+      </section>
+    );
+  }
+
   if (compact) {
     return (
       <div
@@ -211,110 +216,112 @@ export function PermissionRequestCard({
     );
   }
 
-  const { Icon, detail } = requestSubject(request);
-  const isCommand = Boolean(request.subject?.Command);
+  return (
+    <PendingPermission
+      request={request}
+      busy={pendingOption !== null}
+      selectedOption={pendingOption}
+      errorMessage={errorMessage}
+      onChoose={(optionId) => void respond(optionId)}
+      className={className}
+    />
+  );
+}
+
+function PendingPermission({
+  request,
+  busy,
+  selectedOption,
+  errorMessage,
+  onChoose,
+  className,
+}: {
+  request: PermissionRequestItem;
+  busy: boolean;
+  selectedOption?: string | null;
+  errorMessage?: string | null;
+  onChoose: (optionId: string) => void;
+  className?: string;
+}) {
+  const diffs = usePendingDiffs(request);
+  const command = request.subject?.Command?.command ?? null;
+  const stat = diffs.reduce(
+    (sum, diff) => ({
+      additions: sum.additions + diff.additions,
+      deletions: sum.deletions + diff.deletions,
+    }),
+    { additions: 0, deletions: 0 },
+  );
 
   return (
     <section
       data-entry-kind="permission_request"
       data-pending="true"
       aria-label={`Permission requested: ${request.title}`}
-      onKeyDown={(event) => {
-        const index = Number.parseInt(event.key, 10);
-        if (Number.isNaN(index) || index < 1 || index > 9) return;
-        const option = request.options[index - 1];
-        if (option) {
-          event.preventDefault();
-          void respond(option.option_id);
-        }
-      }}
       className={cn(
-        "edge-lit flex flex-col gap-md rounded-lg border border-(--tethys-hairline) border-l-2 border-l-(--tethys-status-warning) bg-(--tethys-surface-nested) p-md",
+        "wash-warning flex flex-col gap-sm rounded-md border border-(--tethys-hairline) bg-(--tethys-surface-nested) p-md",
         className,
       )}
     >
-      <header className="flex min-w-0 items-start gap-md">
-        <span
-          aria-hidden="true"
-          className="flex size-8 shrink-0 items-center justify-center rounded-md bg-(--tethys-status-warning-soft) text-(--tethys-status-warning)"
-        >
-          <Icon className="size-4" />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h3 className="text-label-md text-(--tethys-text-primary)">
-            {request.title}
-          </h3>
-          {detail &&
-            (isCommand ? (
-              <code className="flex max-h-32 items-start gap-sm overflow-auto rounded-sm border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) px-sm py-1.5 font-mono text-mono-code whitespace-pre-wrap break-all text-(--tethys-text-on-sunken)">
-                <span
-                  aria-hidden="true"
-                  className="select-none text-(--tethys-text-on-sunken-muted)"
-                >
-                  $
-                </span>
-                {detail}
-              </code>
-            ) : (
-              <code
-                title={detail}
-                className="max-w-full self-start truncate rounded-xs bg-(--tethys-surface-hover) px-1.5 py-0.5 font-mono text-mono-micro text-(--tethys-text-secondary)"
-              >
-                {detail}
-              </code>
-            ))}
-          {request.description && (
-            <p className="text-body-sm text-(--tethys-text-secondary)">
-              {request.description}
-            </p>
-          )}
-          {defaultsToNo(request.metadata) && (
-            <p className="text-label-sm text-(--tethys-text-muted)">
-              Claude recommends denying this request by default.
-            </p>
-          )}
-        </div>
-      </header>
-      <PendingEditPreview request={request} />
-      <div className="flex flex-wrap gap-sm">
-        {request.options.map((option, index) => (
-          <div
-            key={option.option_id}
-            className="flex max-w-full flex-col gap-1"
+      <header className="flex min-w-0 items-center gap-sm">
+        <StatusDot status="awaiting_approval" inline />
+        <h3 className="min-w-0 flex-1 truncate text-label-md text-(--tethys-text-primary)">
+          {request.title}
+        </h3>
+        {diffs.length > 0 && (
+          <span
+            role="img"
+            aria-label={`${stat.additions} lines added, ${stat.deletions} lines removed`}
           >
-            <Button
-              size="sm"
-              variant={optionVariant(option.kind)}
-              aria-keyshortcuts={index < 9 ? String(index + 1) : undefined}
-              aria-describedby={
-                option.description
-                  ? `permission-option-${option.option_id}`
-                  : undefined
-              }
-              disabled={pendingOption !== null}
-              onClick={() => respond(option.option_id)}
-            >
-              {option.name}
-              {index < 9 && (
-                <span
-                  aria-hidden="true"
-                  className="ml-1 rounded-xs border border-current/25 px-1 font-mono text-mono-micro opacity-70"
-                >
-                  {index + 1}
-                </span>
-              )}
-            </Button>
-            {option.description && (
-              <span
-                id={`permission-option-${option.option_id}`}
-                className="max-w-64 text-body-sm text-(--tethys-text-muted)"
-              >
-                {option.description}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
+            <DiffStat additions={stat.additions} deletions={stat.deletions} />
+          </span>
+        )}
+      </header>
+      {request.description && (
+        <p className="text-body-sm text-(--tethys-text-secondary)">
+          {request.description}
+        </p>
+      )}
+      {command && (
+        <code className="flex max-h-32 items-start gap-sm overflow-auto rounded-sm border border-(--tethys-hairline-on-sunken) bg-(--tethys-surface-sunken) px-sm py-1.5 font-mono text-mono-code whitespace-pre-wrap break-all text-(--tethys-text-on-sunken)">
+          <span
+            aria-hidden="true"
+            className="select-none text-(--tethys-text-on-sunken-muted)"
+          >
+            $
+          </span>
+          {command}
+        </code>
+      )}
+      {diffs.map((detail) => (
+        <FileDiffCard key={detail.path} detail={detail} previewRows={6} />
+      ))}
+      {defaultsToNo(request.metadata) && (
+        <p className="text-label-sm text-(--tethys-text-muted)">
+          Claude recommends denying this request by default.
+        </p>
+      )}
+      {errorMessage && (
+        <p
+          role="alert"
+          className="rounded-xs border border-(--tethys-status-danger) bg-(--tethys-surface-nested) px-sm py-1 text-label-sm text-(--tethys-status-danger)"
+        >
+          {errorMessage}
+        </p>
+      )}
+      <ChoiceList
+        label={request.title}
+        disabled={busy}
+        selected={selectedOption ? [selectedOption] : []}
+        choices={request.options.map((option) => ({
+          id: option.option_id,
+          label: option.name,
+          description: option.description,
+          refuses: rejects(option.kind),
+        }))}
+        onChoose={onChoose}
+        className="-mx-sm"
+      />
     </section>
   );
 }

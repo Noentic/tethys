@@ -23,7 +23,13 @@ function isPendingRequest(entry: SessionEntry): entry is RequestEntry {
   return false;
 }
 
-export function RequestDock({ entries }: { entries: SessionEntry[] }) {
+export function RequestDock({
+  entries,
+  threadStatus,
+}: {
+  entries: SessionEntry[];
+  threadStatus?: string;
+}) {
   const requests = useMemo(() => entries.filter(isPendingRequest), [entries]);
   const [index, setIndex] = useState(0);
   const currentIndex = Math.min(index, Math.max(0, requests.length - 1));
@@ -33,7 +39,9 @@ export function RequestDock({ entries }: { entries: SessionEntry[] }) {
     if (index !== currentIndex) setIndex(currentIndex);
   }, [currentIndex, index]);
 
-  if (!current) return null;
+  if (!current || threadStatus === "interrupted" || threadStatus === "error") {
+    return null;
+  }
 
   return (
     <section

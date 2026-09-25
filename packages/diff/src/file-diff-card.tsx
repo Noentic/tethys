@@ -29,6 +29,8 @@ export interface FileDiffCardProps {
   verb?: string;
   /** Opens the file in the Changes panel; absent where there is no git. */
   onOpen?: () => void;
+  /** Rows shown before `Show all`; a docked preview keeps it short. */
+  previewRows?: number;
   highlighter?: DiffHighlighter;
   className?: string;
 }
@@ -65,12 +67,13 @@ export function FileDiffCard({
   detail,
   verb,
   onOpen,
+  previewRows = PREVIEW_ROWS,
   highlighter,
   className,
 }: FileDiffCardProps) {
   const [expanded, setExpanded] = useState(false);
   const rows = useMemo(() => buildDiffRows(detail, "unified"), [detail]);
-  const shown = expanded ? rows : rows.slice(0, PREVIEW_ROWS);
+  const shown = expanded ? rows : rows.slice(0, previewRows);
   const hidden = rows.length - shown.length;
   const longestLine = useMemo(
     () =>
